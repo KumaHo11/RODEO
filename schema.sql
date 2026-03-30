@@ -19,6 +19,7 @@ CREATE TABLE organizations (
     name VARCHAR(255) NOT NULL,
     total_area_ha DECIMAL(10, 2),
     boundaries GEOMETRY(POLYGON, 4326),
+    location GEOMETRY(POINT, 4326),
     region_id VARCHAR(50),
     drought_plan_buffer INT DEFAULT 20,
     subscription_plan_id UUID REFERENCES subscriptions_plans(id),
@@ -34,6 +35,8 @@ CREATE TABLE profiles (
     is_active BOOLEAN DEFAULT true,
     first_name VARCHAR(255),
     last_name VARCHAR(255),
+    onboarding_step INT DEFAULT 0,
+    country_code VARCHAR(2),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

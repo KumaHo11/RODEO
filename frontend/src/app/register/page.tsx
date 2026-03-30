@@ -2,55 +2,28 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import RodeoLogo from '@/components/RodeoLogo'
 import Link from 'next/link'
-import { Plus, Trash2 } from 'lucide-react'
+import { Globe, ArrowRight, CheckCircle } from 'lucide-react'
+import { motion } from 'framer-motion'
 
-interface Province {
-  id: string
-  nombre: string
+interface Country {
+  name: { common: string }
+  cca2: string
 }
-
-interface HerdInput {
-  species: string
-  head_count: number
-}
-
-const SIZE_CATEGORIES = [
-  "Menos de 50 hectáreas",
-  "50 a 100 hectáreas",
-  "100 a 200 hectáreas",
-  "200 a 500 hectáreas",
-  "500 a 2000 hectáreas",
-  "Más de 2000 hectáreas"
-]
-
-const ANIMAL_TYPES = [
-  "vacas",
-  "vaquillonas",
-  "ovejas",
-  "cabras",
-  "caballos"
-]
 
 export default function RegisterPage() {
-  const [step, setStep] = useState(1)
-  
-  // Step 1 State
+  // Form State
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [country, setCountry] = useState('')
+  const [countryCode, setCountryCode] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   
-  // Step 2 State
-  const [orgName, setOrgName] = useState('')
-  const [sizeCategory, setSizeCategory] = useState(SIZE_CATEGORIES[0])
-  const [region, setRegion] = useState('')
-  const [provinces, setProvinces] = useState<Province[]>([])
-  const [herds, setHerds] = useState<HerdInput[]>([{ species: 'vacas', head_count: 0 }])
-
+  const [countries, setCountries] = useState<Country[]>([])
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -58,21 +31,27 @@ export default function RegisterPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    fetch('https://apis.datos.gob.ar/georef/api/provincias')
+    fetch('https://restcountries.com/v3.1/all?fields=name,cca2')
       .then(res => res.json())
       .then(data => {
-        if (data && data.provincias) {
-          const sorted = data.provincias.sort((a: Province, b: Province) => a.nombre.localeCompare(b.nombre))
-          setProvinces(sorted)
-          if (sorted.length > 0) setRegion(sorted[0].nombre)
+        const sorted = data.sort((a: Country, b: Country) => 
+          a.name.common.localeCompare(b.name.common)
+        )
+        setCountries(sorted)
+        // Default to Argentina if found
+        const arg = sorted.find((c: Country) => c.cca2 === 'AR')
+        if (arg) {
+          setCountry(arg.name.common)
+          setCountryCode(arg.cca2)
         }
       })
-      .catch(err => console.error("Error fetching provinces", err))
+      .catch(err => console.error("Error fetching countries", err))
   }, [])
 
-  const handleNextStep = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg(null)
+    setSuccessMsg(null)
 
     if (password !== confirmPassword) {
       setErrorMsg("Las contraseñas no coinciden.")
@@ -82,45 +61,20 @@ export default function RegisterPage() {
       setErrorMsg("La contraseña debe tener al menos 6 caracteres.")
       return
     }
-    
-    setStep(2)
-  }
 
-  const handleAddHerd = () => {
-    setHerds([...herds, { species: ANIMAL_TYPES[0], head_count: 0 }])
-  }
-
-  const handleRemoveHerd = (index: number) => {
-    const newHerds = [...herds]
-    newHerds.splice(index, 1)
-    setHerds(newHerds)
-  }
-
-  const handleHerdChange = (index: number, field: keyof HerdInput, value: string | number) => {
-    const newHerds = [...herds]
-    newHerds[index] = { ...newHerds[index], [field]: value }
-    setHerds(newHerds)
-  }
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErrorMsg(null)
-    setSuccessMsg(null)
     setLoading(true)
 
     const { data, error } = await supabase.auth.signUp({ 
       email, 
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: `${window.location.origin}/`,
         data: {
           first_name: firstName,
           last_name: lastName,
           phone: phone,
-          org_name: orgName,
-          size_category: sizeCategory,
-          region_id: region,
-          herds: herds
+          country: country,
+          country_code: countryCode
         }
       }
     })
@@ -137,169 +91,142 @@ export default function RegisterPage() {
       return
     }
 
-    setSuccessMsg("¡Cuenta y campo creados con éxito! Revisa tu bandeja de entrada o spam para confirmar tu correo y activar la cuenta.")
+    setSuccessMsg("¡Cuenta creada con éxito! Revisa tu bandeja de entrada para confirmar tu correo y comenzar con el setup de tu campo.")
   }
 
   return (
-    <div className="flex min-h-screen flex-1 flex-col justify-center px-6 py-12 lg:px-8 bg-gray-50">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-10 text-center text-3xl font-bold leading-9 tracking-tight text-gray-900">
-          Crea tu cuenta
-        </h2>
-        
-        {/* Progress Stepper */}
-        {!successMsg && (
-          <div className="mt-6">
-            <div className="overflow-hidden rounded-full bg-gray-200">
-              <div className="h-2 rounded-full bg-green-600" style={{ width: step === 1 ? '50%' : '100%' }} />
-            </div>
-            <div className="mt-2 hidden sm:flex justify-between text-xs font-medium text-gray-500">
-              <div className={step === 1 ? 'text-green-600' : ''}>1. Datos del usuario</div>
-              <div className={step === 2 ? 'text-green-600' : ''}>2. Datos del campo</div>
-            </div>
-          </div>
-        )}
+    <div className="flex min-h-screen flex-col lg:flex-row bg-white font-sans text-gray-900">
+      {/* Visual Side */}
+      <div className="hidden lg:flex lg:w-1/2 bg-green-700 items-center justify-center p-12 overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)] relative">
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <RodeoLogo variant="dark" size="xl" showTagline={true} />
+          <p className="text-green-200 font-medium text-sm tracking-wide text-center">La plataforma de ganadería de precisión</p>
+        </div>
+        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md bg-white py-8 px-6 shadow sm:rounded-lg sm:px-10">
-        {successMsg ? (
-          <div>
-            <div className="bg-green-50 border border-green-200 text-green-800 rounded-md p-4 text-sm">
-              {successMsg}
-            </div>
-            <div className="mt-6 text-center">
-              <Link href="/" className="font-semibold text-green-600 hover:text-green-500">
-                Volver a Iniciar Sesión
-              </Link>
-            </div>
+      {/* Form Side */}
+      <div className="flex-1 flex items-center justify-center p-8 lg:p-24 overflow-y-auto">
+        <div className="w-full max-w-sm">
+          <div className="mb-12">
+            <h2 className="text-3xl font-black tracking-tight text-gray-950 mb-2">Crea tu cuenta</h2>
+            <p className="text-gray-500 text-sm">Comienza la transformación regenerativa de tu campo.</p>
           </div>
-        ) : step === 1 ? (
-          <form className="space-y-6" onSubmit={handleNextStep}>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium leading-6 text-gray-900">Nombre *</label>
-                <div className="mt-2">
-                  <input type="text" required className="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+
+          {successMsg ? (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              <div className="bg-green-50 border border-green-100 text-green-800 rounded-xl p-6 text-sm font-medium">
+                {successMsg}
+              </div>
+              <Link 
+                href="/login" 
+                className="flex items-center justify-center gap-2 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm hover:scale-[1.02] transition-all"
+              >
+                Volver al Login <ArrowRight className="w-4 h-4" />
+              </Link>
+            </motion.div>
+          ) : (
+            <form className="space-y-5" onSubmit={handleRegister}>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400  tracking-widest">Nombre</label>
+                  <input 
+                    type="text" required 
+                    className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all" 
+                    value={firstName} onChange={(e) => setFirstName(e.target.value)} 
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400  tracking-widest">Apellido</label>
+                  <input 
+                    type="text" required 
+                    className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all" 
+                    value={lastName} onChange={(e) => setLastName(e.target.value)} 
+                  />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium leading-6 text-gray-900">Apellido *</label>
-                <div className="mt-2">
-                  <input type="text" required className="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-                </div>
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium leading-6 text-gray-900">Correo electrónico *</label>
-              <div className="mt-2">
-                <input type="email" required className="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400">Correo electrónico</label>
+                <input 
+                  type="email" required 
+                  className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all" 
+                  value={email} onChange={(e) => setEmail(e.target.value)} 
+                />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium leading-6 text-gray-900">Teléfono (opcional)</label>
-              <div className="mt-2">
-                <input type="tel" className="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium leading-6 text-gray-900">Contraseña *</label>
-              <div className="mt-2">
-                <input type="password" required className="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium leading-6 text-gray-900">Confirmar Contraseña *</label>
-              <div className="mt-2">
-                <input type="password" required className="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-              </div>
-            </div>
-
-            {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
-
-            <div>
-              <button type="submit" className="flex w-full justify-center rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600">
-                Siguiente paso
-              </button>
-            </div>
-          </form>
-        ) : (
-          <form className="space-y-6" onSubmit={handleRegister}>
-            <div>
-              <label className="block text-sm font-medium leading-6 text-gray-900">Nombre del campo *</label>
-              <div className="mt-2">
-                <input type="text" required className="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" placeholder="Ej. Estancia La Paz" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium leading-6 text-gray-900">Tamaño del campo *</label>
-              <div className="mt-2">
-                <select required className="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" value={sizeCategory} onChange={(e) => setSizeCategory(e.target.value)}>
-                  {SIZE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium leading-6 text-gray-900">Región (Provincia) *</label>
-              <div className="mt-2">
-                <select required className="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" value={region} onChange={(e) => setRegion(e.target.value)}>
-                  {provinces.length === 0 ? <option value="Cargando...">Cargando provincias...</option> : provinces.map(prov => <option key={prov.id} value={prov.nombre}>{prov.nombre}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium leading-6 text-gray-900">Animales *</label>
-                <button type="button" onClick={handleAddHerd} className="text-sm text-green-600 flex items-center hover:text-green-500 font-semibold">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Agregar animal
-                </button>
-              </div>
-              
-              <div className="space-y-3">
-                {herds.map((herd, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <select className="block w-1/2 rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6 capitalize" value={herd.species} onChange={(e) => handleHerdChange(index, 'species', e.target.value)}>
-                      {ANIMAL_TYPES.map(type => <option key={type} value={type} className="capitalize">{type}</option>)}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400">País</label>
+                  <div className="relative">
+                    <select 
+                      required 
+                      className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 appearance-none" 
+                      value={country} 
+                      onChange={(e) => {
+                        setCountry(e.target.value)
+                        const code = countries.find(c => c.name.common === e.target.value)?.cca2 || ''
+                        setCountryCode(code)
+                      }}
+                    >
+                      {countries.length === 0 ? <option>Cargando...</option> : countries.map(c => <option key={c.cca2} value={c.name.common}>{c.name.common}</option>)}
                     </select>
-                    <input type="number" min="0" required placeholder="Cantidad" className="block w-1/3 rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6" value={herd.head_count || ''} onChange={(e) => handleHerdChange(index, 'head_count', parseInt(e.target.value) || 0)} />
-                    {herds.length > 1 && (
-                      <button type="button" onClick={() => handleRemoveHerd(index)} className="p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-md">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
+                    <Globe className="absolute right-3 top-2.5 w-4 h-4 text-gray-300 pointer-events-none" />
                   </div>
-                ))}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400">Teléfono</label>
+                  <input 
+                    type="tel" 
+                    className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all" 
+                    value={phone} onChange={(e) => setPhone(e.target.value)} 
+                  />
+                </div>
               </div>
-            </div>
 
-            {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400">Contraseña</label>
+                <input 
+                  type="password" required 
+                  className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all" 
+                  value={password} onChange={(e) => setPassword(e.target.value)} 
+                />
+              </div>
 
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setStep(1)} className="flex w-1/3 justify-center rounded-md bg-white border border-gray-300 px-3 py-1.5 text-sm font-semibold leading-6 text-gray-700 shadow-sm hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
-                Atrás
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400">Confirmar contraseña</label>
+                <input 
+                  type="password" required 
+                  className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all" 
+                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} 
+                />
+              </div>
+
+              {errorMsg && <p className="text-red-600 text-[11px] font-medium bg-red-50 p-3 rounded-lg border border-red-100 animate-in fade-in slide-in-from-top-1">{errorMsg}</p>}
+
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg shadow-green-600/20 hover:bg-green-700 hover:scale-[1.01] transition-all disabled:opacity-50 mt-4"
+              >
+                {loading ? 'Creando cuenta...' : 'Crear mi cuenta'}
               </button>
-              <button type="submit" disabled={loading} className="flex w-2/3 justify-center rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 disabled:opacity-50">
-                {loading ? 'Finalizando...' : 'Finalizar Registro'}
-              </button>
-            </div>
-          </form>
-        )}
+            </form>
+          )}
 
-        {!successMsg && (
-          <p className="mt-10 text-center text-sm text-gray-500">
-            ¿Ya tienes una cuenta?{' '}
-            <Link href="/" className="font-semibold leading-6 text-green-600 hover:text-green-500">
-              Inicia sesión
-            </Link>
-          </p>
-        )}
+          {!successMsg && (
+            <p className="mt-8 text-center text-xs text-gray-400 font-medium">
+              ¿Ya tienes una cuenta?{' '}
+              <Link href="/login" className="text-green-600 font-bold hover:underline">
+                Inicia sesión
+              </Link>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -1,28 +1,465 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
-import { Calendar as CalendarIcon, Plus, CheckCircle2, Clock, MapPin, PawPrint, Search, Filter, AlignJustify, CalendarDays, Lightbulb, CloudRain, Sun, Thermometer, Wind } from 'lucide-react'
+import {
+  Calendar, Plus, CheckCircle2, Clock, MapPin, Search, Filter,
+  AlignJustify, CalendarDays, Lightbulb, CloudRain, Sun, ChevronLeft, ChevronRight,
+  X, Check, Loader2, Droplets, AlertTriangle, Camera, Leaf, Users
+} from 'lucide-react'
 import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
 
+// ─────────────── CONSTANTS ───────────────
+const HERD_COLORS = [
+  '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed',
+  '#0891b2', '#be185d', '#65a30d', '#ea580c', '#4338ca'
+]
+
+const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
+  ACTIVE:    { label: 'Pastando',     color: 'text-green-700',  bg: 'bg-green-100' },
+  PLANNED:   { label: 'Planificado',  color: 'text-blue-700',   bg: 'bg-blue-100'  },
+  COMPLETED: { label: 'Completado',   color: 'text-gray-600',   bg: 'bg-gray-100'  },
+}
+
+// Season dict for southern hemisphere
+const getSeason = () => {
+  const m = new Date().getMonth() + 1
+  if (m >= 12 || m <= 2) return { name: 'Verano', type: 'Temporada abierta', icon: '🌿', color: 'bg-green-100 text-green-700' }
+  if (m >= 3 && m <= 5)  return { name: 'Otoño',   type: 'Temporada cerrada', icon: '🍂', color: 'bg-amber-100 text-amber-700' }
+  if (m >= 6 && m <= 8)  return { name: 'Invierno',type: 'Temporada cerrada', icon: '❄️', color: 'bg-blue-100 text-blue-700' }
+  return                         { name: 'Primavera',type: 'Temporada abierta', icon: '🌱', color: 'bg-lime-100 text-lime-700' }
+}
+
+// Format date as dd/MM
+const fmt = (iso: string) => {
+  const d = new Date(iso + 'T00:00:00')
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
+}
+
+// days between two ISO dates
+const daysBetween = (a: string, b: string) =>
+  Math.round((new Date(b+'T00:00:00').getTime() - new Date(a+'T00:00:00').getTime()) / 86400000)
+
+// Add n days to ISO date string
+const addDays = (iso: string, n: number): string => {
+  const d = new Date(iso + 'T00:00:00')
+  d.setDate(d.getDate() + n)
+  return d.toISOString().split('T')[0]
+}
+
+// Event type config used in Gantt badges and legend
+const EVT_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
+  SANITARIO:      { label: 'Sanitario',      emoji: '💉', color: '#7c3aed' },
+  REPRODUCCION:   { label: 'Reproducción',   emoji: '🐄', color: '#be185d' },
+  MANEJO:         { label: 'Manejo',          emoji: '🔧', color: '#d97706' },
+  INFRAESTRUCTURA:{ label: 'Infraestructura', emoji: '🏗️', color: '#0891b2' },
+  PASTOREO:       { label: 'Pastoreo',        emoji: '🌿', color: '#16a34a' },
+}
+
+// ─────────────── INTERACTIVE GANTT ───────────────
+interface GanttBlock {
+  plan: any
+  herdColor: string
+  herdIdx: number
+}
+
+function InteractiveGantt({
+  plans, paddocks, herds, farmEvents, windowStart, windowDays, onBlockClick, onBlockMove
+}: {
+  plans: any[]
+  paddocks: any[]
+  herds: any[]
+  farmEvents: any[]
+  windowStart: string
+  windowDays: number
+  onBlockClick: (plan: any) => void
+  onBlockMove: (planId: string, newEntry: string, newExit: string) => void
+}) {
+  const ROW_H = 56
+  const LABEL_W = 160
+  const HEADER_H = 40
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dragging = useRef<{ planId: string; startX: number; origEntry: string; origExit: string } | null>(null)
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null)
+  const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
+
+  const herdColorMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    herds.forEach((h, i) => { map[h.id] = HERD_COLORS[i % HERD_COLORS.length] })
+    return map
+  }, [herds])
+
+  // Adaptive time markers: weekly for <=90d, monthly for longer
+  const timeMarkers = useMemo(() => {
+    const marks: { label: string; day: number }[] = []
+    const step = windowDays <= 90 ? 7 : windowDays <= 180 ? 14 : 28
+    for (let d = 0; d < windowDays; d += step) {
+      const dt = new Date(windowStart + 'T00:00:00')
+      dt.setDate(dt.getDate() + d)
+      const label = step >= 28
+        ? `${dt.toLocaleString('es', { month: 'short' }).toUpperCase()} ${dt.getFullYear()}`
+        : `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`
+      marks.push({ label, day: d })
+    }
+    return marks
+  }, [windowStart, windowDays])
+
+  // Keep backward compat — week markers used in row grid lines
+  const weekMarkers = useMemo(() => {
+    const marks: { day: number }[] = []
+    const step = windowDays <= 90 ? 7 : windowDays <= 180 ? 14 : 28
+    for (let d = 0; d < windowDays; d += step) marks.push({ day: d })
+    return marks
+  }, [windowStart, windowDays])
+
+  const pxPerDay = useCallback((containerW: number) => {
+    return (containerW - LABEL_W) / windowDays
+  }, [windowDays, LABEL_W])
+
+  const handleMouseDown = (e: React.MouseEvent, plan: any) => {
+    e.preventDefault()
+    const container = containerRef.current
+    if (!container) return
+    dragging.current = {
+      planId: plan.id,
+      startX: e.clientX,
+      origEntry: plan.entry_date,
+      origExit: plan.exit_date || addDays(plan.entry_date, plan.planned_recovery_days || 14)
+    }
+  }
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragging.current || !containerRef.current) return
+      const ppd = pxPerDay(containerRef.current.clientWidth)
+      const dxDays = Math.round((e.clientX - dragging.current.startX) / ppd)
+      if (dxDays === 0) return
+      const origDuration = daysBetween(dragging.current.origEntry, dragging.current.origExit)
+      const newEntry = addDays(dragging.current.origEntry, dxDays)
+      const newExit = addDays(newEntry, origDuration)
+      onBlockMove(dragging.current.planId, newEntry, newExit)
+    }
+    const handleMouseUp = () => { dragging.current = null }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [onBlockMove, pxPerDay])
+
+  // Pre-compute popup to avoid IIFE-in-JSX parsing issues
+  const eventPopup = selectedEvent && popupPos ? (() => {
+    const px = popupPos.x
+    const py = popupPos.y
+    return (
+      <>
+        <div
+          className="fixed inset-0 z-[998]"
+          onClick={() => { setSelectedEvent(null); setPopupPos(null) }}
+        />
+        <div
+          className="fixed z-[999] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 w-60"
+          style={{
+            left: Math.min(px - 120, (typeof window !== 'undefined' ? window.innerWidth : 800) - 256),
+            top: py > 200 ? py - 160 : py + 20,
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base" style={{ backgroundColor: `${selectedEvent.cfg.color}18` }}>
+                {selectedEvent.cfg.emoji}
+              </div>
+              <div>
+                <p className="text-[9px] font-black tracking-widest uppercase" style={{ color: selectedEvent.cfg.color }}>
+                  {selectedEvent.cfg.label}
+                </p>
+                <p className="text-sm font-black text-gray-900 leading-tight">{selectedEvent.title}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => { setSelectedEvent(null); setPopupPos(null) }}
+              className="w-5 h-5 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 text-xs shrink-0 mt-0.5"
+            >✕</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-gray-50 rounded-xl px-3 py-2">
+              <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest">Fecha</p>
+              <p className="text-xs font-bold text-gray-800">{fmt(selectedEvent.event_date)}</p>
+            </div>
+            {selectedEvent.end_date && (
+              <div className="bg-gray-50 rounded-xl px-3 py-2">
+                <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest">Hasta</p>
+                <p className="text-xs font-bold text-gray-800">{fmt(selectedEvent.end_date)}</p>
+              </div>
+            )}
+          </div>
+          {selectedEvent.description && (
+            <p className="mt-2 text-[10px] text-gray-500 bg-gray-50 rounded-xl px-3 py-2 leading-relaxed">
+              {selectedEvent.description}
+            </p>
+          )}
+        </div>
+      </>
+    )
+  })() : null
+
+  return (
+    <>
+    <div
+      ref={containerRef}
+      className="select-none overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm"
+      onClick={() => { setSelectedEvent(null); setPopupPos(null) }}
+    >
+      <div style={{ minWidth: LABEL_W + windowDays * 8 }}>
+        {/* Header row */}
+        <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10" style={{ height: HEADER_H }}>
+          <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="px-4 flex items-center text-[10px] font-black text-gray-400 tracking-widest uppercase border-r border-gray-200 shrink-0">
+            Potrero
+          </div>
+          <div className="flex-1 relative overflow-hidden">
+            {timeMarkers.map(m => (
+              <div
+                key={m.day}
+                className="absolute top-0 bottom-0 border-l border-dashed border-gray-200 pointer-events-none"
+                style={{ left: `${(m.day / windowDays) * 100}%` }}
+              >
+                <span className="text-[9px] font-bold text-gray-400 ml-1 absolute top-2">{m.label}</span>
+              </div>
+            ))}
+            {/* Today line */}
+            {(() => {
+              const todayDiff = daysBetween(windowStart, new Date().toISOString().split('T')[0])
+              if (todayDiff >= 0 && todayDiff <= windowDays) {
+                return (
+                  <div
+                    className="absolute top-0 bottom-0 border-l-2 border-red-400 pointer-events-none z-20"
+                    style={{ left: `${(todayDiff / windowDays) * 100}%` }}
+                  >
+                    <span className="text-[8px] font-black text-red-500 ml-0.5 absolute top-2">HOY</span>
+                  </div>
+                )
+              }
+              return null
+            })()}
+          </div>
+        </div>
+
+        {/* Paddock rows */}
+        {paddocks.map((paddock, rowIdx) => {
+          const paddockPlans = plans.filter(p =>
+            p.paddock_id === paddock.id && p.status !== 'COMPLETED'
+          )
+          const isGrazing = paddockPlans.some(p => p.status === 'ACTIVE')
+
+          return (
+            <div
+              key={paddock.id}
+              className={`flex border-b border-gray-100 ${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+              style={{ height: ROW_H }}
+            >
+              {/* Label */}
+              <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="px-3 flex items-center gap-2 border-r border-gray-100 shrink-0">
+                <div className={`w-2 h-2 rounded-full shrink-0 ${isGrazing ? 'bg-orange-400' : 'bg-green-400'}`} />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-gray-900 truncate">{paddock.name}</p>
+                  <p className="text-[9px] text-gray-400">{Number(paddock.area_ha).toFixed(0)} ha</p>
+                </div>
+              </div>
+
+              {/* Timeline area */}
+              <div className="flex-1 relative overflow-hidden">
+                {/* Grid lines */}
+                {weekMarkers.map(m => (
+                  <div
+                    key={m.day}
+                    className="absolute top-0 bottom-0 border-l border-dashed border-gray-100 pointer-events-none"
+                    style={{ left: `${(m.day / windowDays) * 100}%` }}
+                  />
+                ))}
+                {/* Today line */}
+                {(() => {
+                  const todayDiff = daysBetween(windowStart, new Date().toISOString().split('T')[0])
+                  if (todayDiff >= 0 && todayDiff <= windowDays) {
+                    return (
+                      <div
+                        className="absolute top-0 bottom-0 border-l border-red-300 pointer-events-none z-10"
+                        style={{ left: `${(todayDiff / windowDays) * 100}%` }}
+                      />
+                    )
+                  }
+                  return null
+                })()}
+
+                {/* Plan blocks */}
+                {paddockPlans.map(plan => {
+                  const entryDiff = daysBetween(windowStart, plan.entry_date)
+                  const exitDate = plan.exit_date || addDays(plan.entry_date, 14)
+                  const duration = daysBetween(plan.entry_date, exitDate)
+                  const leftPct = Math.max(0, (entryDiff / windowDays) * 100)
+                  const widthPct = Math.max(0.5, (duration / windowDays) * 100)
+                  const color = herdColorMap[plan.herd_id] || '#16a34a'
+                  const herd = herds.find(h => h.id === plan.herd_id)
+                  const isActive = plan.status === 'ACTIVE'
+
+                  if (entryDiff > windowDays || (entryDiff + duration) < 0) return null
+
+                  return (
+                    <div
+                      key={plan.id}
+                      className={`absolute top-2 bottom-2 rounded-lg text-white text-[10px] font-bold flex items-center px-2 shadow-sm cursor-grab active:cursor-grabbing transition-opacity hover:opacity-90 z-20 ${isActive ? 'opacity-100 ring-2 ring-white ring-offset-1' : 'opacity-80'}`}
+                      style={{
+                        left: `${Math.min(leftPct, 99)}%`,
+                        width: `${Math.min(widthPct, 100 - Math.min(leftPct, 99))}%`,
+                        backgroundColor: color,
+                        minWidth: 8
+                      }}
+                      onMouseDown={e => handleMouseDown(e, plan)}
+                      onClick={() => onBlockClick(plan)}
+                      title={`${herd?.name} — ${fmt(plan.entry_date)} → ${fmt(exitDate)} (${duration}d)`}
+                    >
+                      {widthPct > 6 && (
+                        <span className="truncate">
+                          {isActive ? '● ' : ''}{herd?.name || 'Rebaño'}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+                {/* ── No more per-row event diamonds; they are now shown once in the Agenda header row above ── */}
+              </div>
+            </div>
+          )
+        })}
+
+        {/* ── Events header row: each event appears ONCE here, not repeated per paddock ── */}
+        {farmEvents.filter(evt => {
+          const d = daysBetween(windowStart, evt.event_date)
+          return d >= 0 && d <= windowDays
+        }).length > 0 && (
+          <div
+            className="flex border-b border-gray-100 bg-amber-50/40"
+            style={{ height: ROW_H * 0.75 }}
+          >
+            <div
+              style={{ width: LABEL_W, minWidth: LABEL_W }}
+              className="px-3 flex items-center border-r border-gray-100 shrink-0"
+            >
+              <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Agenda</p>
+            </div>
+            <div className="flex-1 relative overflow-hidden">
+              {farmEvents
+                .filter(evt => {
+                  const d = daysBetween(windowStart, evt.event_date)
+                  return d >= 0 && d <= windowDays
+                })
+                .map(evt => {
+                  const cfg = EVT_CONFIG[evt.event_type] || { label: evt.event_type, emoji: '📌', color: '#374151' }
+                  const evtDay = daysBetween(windowStart, evt.event_date)
+                  const leftPct = (evtDay / windowDays) * 100
+                  const isSelected = selectedEvent?.id === evt.id
+                  return (
+                    <div
+                      key={evt.id}
+                      className="absolute z-30"
+                      style={{ left: `calc(${leftPct}% - 6px)`, top: '50%', transform: 'translateY(-50%)' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation()
+                          if (isSelected) {
+                            setSelectedEvent(null)
+                            setPopupPos(null)
+                          } else {
+                            const rect = (e.target as HTMLElement).getBoundingClientRect()
+                            setPopupPos({ x: rect.left + rect.width / 2, y: rect.top })
+                            setSelectedEvent({ ...evt, cfg })
+                          }
+                        }}
+                        className={`w-3.5 h-3.5 rotate-45 block shadow-md border-2 border-white transition-transform hover:scale-125 ${
+                          isSelected ? 'scale-150' : ''
+                        }`}
+                        style={{ backgroundColor: cfg.color }}
+                        title={`${cfg.emoji} ${evt.title} — ${fmt(evt.event_date)}`}
+                        aria-label={`${cfg.label}: ${evt.title}`}
+                      />
+                    </div>
+                  )
+                })
+              }
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-100 bg-gray-50/50 flex-wrap">
+          {Object.entries(EVT_CONFIG).map(([key, cfg]) => (
+            <div key={key} className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rotate-45" style={{ backgroundColor: cfg.color }} />
+              <span className="text-[9px] font-bold text-gray-500">{cfg.emoji} {cfg.label}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5 ml-2">
+            <div className="w-3 h-0.5 bg-red-400" />
+            <span className="text-[9px] font-bold text-gray-400">Hoy</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    {eventPopup}
+    </>
+  )
+}
+
+// ─────────────── MAIN COMPONENT ───────────────
 export default function GrazingPlanner() {
   const { user } = useAuth()
   const supabase = createClient()
-  
+
   const [plans, setPlans] = useState<any[]>([])
   const [paddocks, setPaddocks] = useState<any[]>([])
   const [herds, setHerds] = useState<any[]>([])
+  const [farmEvents, setFarmEvents] = useState<any[]>([])
+  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+
+  const [viewMode, setViewMode] = useState<'gantt' | 'list'>('gantt')
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
-  const [viewMode, setViewMode] = useState<'cards' | 'list' | 'gantt'>('cards')
-  const [listMonths, setListMonths] = useState<number>(3)
-  
-  const [weather, setWeather] = useState<WeatherData | null>(null)
-  const [weatherLoading, setWeatherLoading] = useState(false)
-  
+  const [ganttPeriod, setGanttPeriod] = useState<'trimestral' | 'semestral' | 'anual'>('trimestral')
+  const [seasonalFilter, setSeasonalFilter] = useState<'all' | 'open' | 'closed'>('all')
+
+  // Dynamic window days based on period
+  const PERIODS = { trimestral: 84, semestral: 180, anual: 365 }
+  const WINDOW_DAYS = PERIODS[ganttPeriod]
+
+  // Gantt window: starts 4 weeks ago by default
+  const [ganttWindow, setGanttWindow] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 28)
+    return d.toISOString().split('T')[0]
+  })
+
+  // Jump to open/closed season when filter changes
+  useEffect(() => {
+    const year = new Date().getFullYear()
+    if (seasonalFilter === 'open') {
+      // Temporada abierta: Oct to Feb (spring/summer hemisphere sur)
+      const oct = new Date(year, 9, 1)  // Oct 1
+      setGanttWindow(oct.toISOString().split('T')[0])
+      setGanttPeriod('semestral')
+    } else if (seasonalFilter === 'closed') {
+      // Temporada cerrada: Mar to Sep
+      const mar = new Date(year, 2, 1)  // Mar 1
+      setGanttWindow(mar.toISOString().split('T')[0])
+      setGanttPeriod('semestral')
+    }
+  }, [seasonalFilter])
+
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
@@ -34,167 +471,140 @@ export default function GrazingPlanner() {
     planned_recovery_days: 60,
     status: 'PLANNED'
   })
-  
-  const [suggestion, setSuggestion] = useState({ days: 0, recovery: 60 })
+  // Temporary animals for a plan (e.g. bulls during service)
+  const [tempAnimals, setTempAnimals] = useState<{species: string; count: number; weight_kg: number}[]>([])
+  // Multi-herd (only if forage is limiting)
+  const [additionalHerdIds, setAdditionalHerdIds] = useState<string[]>([])
+  // Exit date warning (user shortened auto-calculated date)
+  const [exitDateWarning, setExitDateWarning] = useState(false)
+  const [suggestedExitDate, setSuggestedExitDate] = useState<string>('')
+  // Completion report
+  const [completionNote, setCompletionNote] = useState('')
+  const [completionPhoto, setCompletionPhoto] = useState<string>('')  // base64
+  const [analyzingRemnant, setAnalyzingRemnant] = useState(false)
+  const [remnantAnalysis, setRemnantAnalysis] = useState<any>(null)
 
-  useEffect(() => {
-    loadData()
-    fetchWeather()
-  }, [user, supabase])
+  const season = getSeason()
 
-  async function fetchWeather() {
-    setWeatherLoading(true)
-    // Default to a central location in Argentina (Tandil area) if no coordinates yet managed per org
-    const data = await getPaddockWeather(-37.32, -59.13)
-    setWeather(data)
-    setWeatherLoading(false)
-  }
+  // EV de la planificación (todos los rebaños seleccionados + temporales)
+  const totalPlanEV = useMemo(() => {
+    const primaryHerd = herds.find(h => h.id === formData.herd_id)
+    const primaryEV = Number(primaryHerd?.total_ev) || 0
+    const additionalEV = additionalHerdIds.reduce((sum, hid) => {
+      const h = herds.find(h => h.id === hid)
+      return sum + (Number(h?.total_ev) || 0)
+    }, 0)
+    const tempEV = tempAnimals.reduce((sum, a) =>
+      sum + (a.count * a.weight_kg) / 450, 0)
+    return primaryEV + additionalEV + tempEV
+  }, [formData.herd_id, herds, additionalHerdIds, tempAnimals])
 
-  useEffect(() => {
-    if (formData.paddock_id && formData.herd_id) {
-       const paddock = paddocks.find(p => p.id === formData.paddock_id)
-       const herd = herds.find(h => h.id === formData.herd_id)
-       if (paddock && herd) {
-          const area = Number(paddock.area_ha) || 0
-          const ev = Number(herd.total_ev) || 0
-          
-          const paddockAdh = Number(paddock.estimated_adh) || 0
-          const effectiveAdh = paddockAdh > 0 ? paddockAdh : 66
-          
-          const totalDa = effectiveAdh * area
-          const suggestedDays = ev > 0 ? Math.floor(totalDa / ev) : 0
-          
-          // Lógica de Temporada para el Descanso
-          let recovery = 60
-          if (weather?.currentSeason === 'SUMMER') recovery = 40
-          if (weather?.currentSeason === 'SPRING') recovery = 45
-          if (weather?.currentSeason === 'AUTUMN') recovery = 65
-          if (weather?.currentSeason === 'WINTER') recovery = 95
+  // Holistic suggestion using actual dry_matter_kg_ha (60% harvest, 40% remnant)
+  const suggestion = useMemo(() => {
+    const paddock = paddocks.find(p => p.id === formData.paddock_id)
+    if (!paddock || totalPlanEV === 0) return { days: 0, recovery: 60, availableMs: 0, paddockMaxEV: 0 }
+    const area = Number(paddock.area_ha) || 0
+    const ms = Number(paddock.dry_matter_kg_ha) || Number(paddock.estimated_adh) * 66 || 0
+    const totalMs = ms * area
+    const usableMs = totalMs * 0.6  // 60% harvest, 40% holistic remnant
+    const dailyConsumption = totalPlanEV * 11  // 11 kg MS/EV/day
+    const days = dailyConsumption > 0 && usableMs > 0 ? Math.floor(usableMs / dailyConsumption) : 0
+    // Max EV this paddock can support for the same days at 60% harvest
+    const paddockMaxEV = days > 0 ? Math.floor(usableMs / (days * 11)) : 0
+    let recovery = 60
+    if (weather?.currentSeason === 'SUMMER') recovery = 40
+    if (weather?.currentSeason === 'SPRING') recovery = 45
+    if (weather?.currentSeason === 'AUTUMN') recovery = 65
+    if (weather?.currentSeason === 'WINTER') recovery = 95
+    return { days, recovery, availableMs: Math.round(usableMs), paddockMaxEV }
+  }, [formData.paddock_id, totalPlanEV, paddocks, weather])
 
-          setSuggestion({ days: suggestedDays, recovery })
-          
-          // Auto-set recovery in form if it's a new plan
-          if (!formData.id) {
-             setFormData(prev => {
-               if (prev.planned_recovery_days === recovery) return prev
-               return { ...prev, planned_recovery_days: recovery }
-             })
-          }
-       }
-    }
-  }, [formData.paddock_id, formData.herd_id, paddocks, herds, weather])
+  // Detect if primary herd alone exceeds paddock capacity
+  const primaryHerdEV = useMemo(() => {
+    const h = herds.find(h => h.id === formData.herd_id)
+    return Number(h?.total_ev) || 0
+  }, [formData.herd_id, herds])
+  const isForageLimiting = suggestion.paddockMaxEV > 0 && primaryHerdEV > suggestion.paddockMaxEV
 
-  // Autocompletar la Fecha de Salida base a la carga animal sugerida
+  // Events in the selected date range
+  const eventsInRange = useMemo(() => {
+    if (!formData.entry_date || !formData.exit_date) return []
+    return farmEvents.filter(e =>
+      e.event_date >= formData.entry_date &&
+      e.event_date <= formData.exit_date
+    )
+  }, [farmEvents, formData.entry_date, formData.exit_date])
+
   useEffect(() => {
     if (suggestion.days > 0 && formData.entry_date && !formData.id) {
-       const eDate = new Date(formData.entry_date)
-       eDate.setDate(eDate.getDate() + suggestion.days)
-       const autoExit = eDate.toISOString().split('T')[0]
-       
-       setFormData(prev => {
-          if (prev.exit_date === autoExit) return prev
-          return { ...prev, exit_date: autoExit }
-       })
+      const exit = addDays(formData.entry_date, suggestion.days)
+      setSuggestedExitDate(exit)
+      setFormData(prev => prev.exit_date === exit ? prev : { ...prev, exit_date: exit })
+      setExitDateWarning(false)
     }
   }, [suggestion.days, formData.entry_date, formData.id])
-
-  // Cálculo en tiempo real del consumo para alertas de sobrepastoreo en el Modal
-  const currentPlanMetrics = useMemo(() => {
-    if (!formData.entry_date || !formData.exit_date || !formData.paddock_id || !formData.herd_id) return null
-    const paddock = paddocks.find(p => p.id === formData.paddock_id)
-    const herd = herds.find(h => h.id === formData.herd_id)
-    if (!paddock || !herd) return null
-
-    const area = Number(paddock.area_ha) || 0
-    const ev = Number(herd.total_ev) || 0
-    const paddockAdh = Number(paddock.estimated_adh) || 0
-    const effectiveAdh = paddockAdh > 0 ? paddockAdh : 66
-
-    const eDate = new Date(formData.entry_date)
-    const xDate = new Date(formData.exit_date)
-    const days = Math.max(1, (xDate.getTime() - eDate.getTime()) / (1000 * 3600 * 24))
-    
-    const consumedDa = ev * days
-    const consumedAdh = area > 0 ? (consumedDa / area) : 0
-    
-    return {
-      days,
-      consumedAdh,
-      effectiveAdh,
-      isOvergrazing: consumedAdh > effectiveAdh
-    }
-  }, [formData, paddocks, herds])
 
   async function loadData() {
     if (!user) return
     setLoading(true)
-    
     const { data: orgData } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
     if (!orgData?.organization_id) return setLoading(false)
+    setOrgId(orgData.organization_id)
 
-    const { data: paddocksData } = await supabase.from('paddocks').select('id, name, area_ha, current_status, estimated_adh').eq('org_id', orgData.organization_id)
-    if (paddocksData) setPaddocks(paddocksData)
+    const [{ data: pData }, { data: hData }, { data: evtsData }] = await Promise.all([
+      supabase.from('paddocks').select('id, name, area_ha, current_status, estimated_adh, is_active, dry_matter_kg_ha').eq('org_id', orgData.organization_id),
+      supabase.from('herds').select('id, name, head_count, total_ev, avg_weight_kg').eq('org_id', orgData.organization_id),
+      supabase.from('farm_events').select('id, title, event_type, event_date, end_date, herd_id, status').eq('org_id', orgData.organization_id)
+    ])
+    setPaddocks(pData || [])
+    setHerds(hData || [])
+    setFarmEvents(evtsData || [])
 
-    const { data: herdsData } = await supabase.from('herds').select('id, name, head_count, total_ev').eq('org_id', orgData.organization_id)
-    if (herdsData) setHerds(herdsData)
-
-    const paddockIds = paddocksData?.map(p => p.id) || []
+    const paddockIds = (pData || []).map(p => p.id)
     if (paddockIds.length > 0) {
       const { data: plansData } = await supabase
         .from('grazing_plans')
-        .select(`
-          *,
-          paddocks (name, area_ha),
-          herds (name, head_count, total_ev)
-        `)
+        .select('*, paddocks(name, area_ha), herds(name, head_count, total_ev), temporary_animals, notes')
         .in('paddock_id', paddockIds)
         .order('entry_date', { ascending: true })
-      
-      if (plansData) setPlans(plansData)
+      setPlans(plansData || [])
     }
+
+    try {
+      const wData = await getPaddockWeather(-37.32, -59.13)
+      setWeather(wData)
+    } catch { /* ignore */ }
 
     setLoading(false)
   }
 
-  const filteredPlans = useMemo(() => {
-    return plans.filter(p => {
-      const matchSearch = p.paddocks?.name?.toLowerCase().includes(search.toLowerCase()) || 
-                          p.herds?.name?.toLowerCase().includes(search.toLowerCase())
-      const matchFilter = filterStatus === 'all' || p.status === filterStatus
-      
-      // Add date filter for list view if necessary
-      if (viewMode === 'list') {
-        const entryDate = new Date(p.entry_date)
-        const cutoff = new Date()
-        cutoff.setMonth(cutoff.getMonth() + listMonths)
-        return matchSearch && matchFilter && entryDate <= cutoff
-      }
-
-      return matchSearch && matchFilter
-    })
-  }, [plans, search, filterStatus, viewMode, listMonths])
+  useEffect(() => { loadData() }, [user])
 
   const handleOpenModal = (plan: any = null) => {
     if (plan) {
       setFormData({
-        id: plan.id,
-        paddock_id: plan.paddock_id,
-        herd_id: plan.herd_id,
-        entry_date: plan.entry_date,
-        exit_date: plan.exit_date || '',
-        planned_recovery_days: plan.planned_recovery_days,
-        status: plan.status
+        id: plan.id, paddock_id: plan.paddock_id, herd_id: plan.herd_id,
+        entry_date: plan.entry_date, exit_date: plan.exit_date || '',
+        planned_recovery_days: plan.planned_recovery_days, status: plan.status
       })
+      setTempAnimals(plan.temporary_animals || [])
+      setAdditionalHerdIds(plan.herd_ids?.filter((id: string) => id !== plan.herd_id) || [])
+      setCompletionNote('')
+      setCompletionPhoto('')
+      setRemnantAnalysis(null)
+      setExitDateWarning(false)
     } else {
       setFormData({
-        id: '',
-        paddock_id: paddocks[0]?.id || '',
-        herd_id: herds[0]?.id || '',
-        entry_date: new Date().toISOString().split('T')[0],
-        exit_date: '',
-        planned_recovery_days: 60,
-        status: 'PLANNED'
+        id: '', paddock_id: paddocks[0]?.id || '', herd_id: herds[0]?.id || '',
+        entry_date: new Date().toISOString().split('T')[0], exit_date: '',
+        planned_recovery_days: 60, status: 'PLANNED'
       })
+      setTempAnimals([])
+      setAdditionalHerdIds([])
+      setCompletionNote('')
+      setCompletionPhoto('')
+      setRemnantAnalysis(null)
+      setExitDateWarning(false)
     }
     setIsModalOpen(true)
   }
@@ -202,416 +612,749 @@ export default function GrazingPlanner() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-
+    const allHerdIds = [formData.herd_id, ...additionalHerdIds].filter(Boolean)
     const payload = {
-      paddock_id: formData.paddock_id,
-      herd_id: formData.herd_id,
-      entry_date: formData.entry_date,
-      exit_date: formData.exit_date || null,
-      planned_recovery_days: formData.planned_recovery_days,
-      status: formData.status
+      paddock_id: formData.paddock_id, herd_id: formData.herd_id,
+      herd_ids: allHerdIds,
+      entry_date: formData.entry_date, exit_date: formData.exit_date || null,
+      planned_recovery_days: formData.planned_recovery_days, status: formData.status,
+      temporary_animals: tempAnimals,
+      exit_notes: formData.status === 'COMPLETED' ? completionNote : undefined,
+      exit_dry_matter_kg_ha: formData.status === 'COMPLETED' && remnantAnalysis?.dry_matter_kg_ha
+        ? remnantAnalysis.dry_matter_kg_ha : undefined,
     }
-
     if (formData.id) {
       await supabase.from('grazing_plans').update(payload).eq('id', formData.id)
     } else {
       await supabase.from('grazing_plans').insert([payload])
     }
-
     if (formData.status === 'ACTIVE') {
       await supabase.from('paddocks').update({ current_status: 'GRAZING' }).eq('id', formData.paddock_id)
     } else if (formData.status === 'COMPLETED') {
       await supabase.from('paddocks').update({ current_status: 'RESTING' }).eq('id', formData.paddock_id)
+      // Save paddock_observations record with photo + AI analysis
+      if ((completionPhoto || completionNote || remnantAnalysis) && orgId) {
+        await supabase.from('paddock_observations').insert([{
+          org_id: orgId,
+          paddock_id: formData.paddock_id,
+          plan_id: formData.id || undefined,
+          observation_type: 'EXIT',
+          observed_at: formData.exit_date || new Date().toISOString().split('T')[0],
+          dry_matter_kg_ha: remnantAnalysis?.dry_matter_kg_ha,
+          photo_data: completionPhoto || undefined,
+          notes: completionNote || undefined,
+          ai_analysis: remnantAnalysis || {},
+          created_by: (await supabase.auth.getUser()).data.user?.id,
+        }])
+      }
     }
-
     setIsModalOpen(false)
     setSaving(false)
     loadData()
   }
 
-  const getStatusBadge = (status: string) => {
-    if (status === 'ACTIVE') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Activo (Pastando)</span>
-    if (status === 'COMPLETED') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 flex items-center">Completado</span>
-    return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 flex items-center"><Clock className="w-3 h-3 mr-1" /> Planificado</span>
-  }
+  // Move a block by drag → update dates optimistically
+  const handleBlockMove = useCallback(async (planId: string, newEntry: string, newExit: string) => {
+    setPlans(prev => prev.map(p => p.id === planId
+      ? { ...p, entry_date: newEntry, exit_date: newExit }
+      : p
+    ))
+    // persist async
+    await supabase.from('grazing_plans').update({ entry_date: newEntry, exit_date: newExit }).eq('id', planId)
+  }, [supabase])
 
-  const calculateDaysDiff = (start: string, end: string) => {
-    return Math.round((new Date(end).getTime() - new Date(start).getTime()) / (1000 * 3600 * 24))
-  }
-
-  // --- Gantt View Logic ---
-  const today = new Date()
-  const d30 = new Date()
-  d30.setDate(today.getDate() + 30) // Show next 30 days
-
-  const GanttView = () => (
-    <div className="bg-white rounded-lg shadow border border-gray-200 overflow-x-auto p-4">
-      <div className="min-w-[800px]">
-        <h3 className="font-semibold text-gray-800 mb-4">Línea de tiempo (Próximos 30 días)</h3>
-        <div className="space-y-4">
-          {paddocks.map(paddock => {
-            const paddockPlans = filteredPlans.filter(p => p.paddock_id === paddock.id && ['ACTIVE', 'PLANNED'].includes(p.status))
-            
-            return (
-              <div key={paddock.id} className="relative flex items-center border-b border-gray-100 pb-2">
-                <div className="w-48 flex-shrink-0 font-medium text-sm text-gray-700 flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-green-600" /> {paddock.name}
-                </div>
-                <div className="flex-1 relative h-8 bg-gray-50 rounded">
-                  {paddockPlans.map(plan => {
-                    const eDate = new Date(plan.entry_date)
-                    const xDate = plan.exit_date ? new Date(plan.exit_date) : new Date(eDate.getTime() + (plan.planned_recovery_days * 24*60*60*1000))
-                    
-                    // Simplistic horizontal offset/width logic for 30-day window
-                    const startDiff = (eDate.getTime() - today.getTime()) / (1000*3600*24)
-                    const duration = (xDate.getTime() - eDate.getTime()) / (1000*3600*24)
-                    
-                    if (startDiff > 30 || startDiff + duration < 0) return null // Out of bounds
-
-                    const leftPct = Math.max(0, (startDiff / 30) * 100)
-                    const widthPct = Math.min(100 - leftPct, (duration / 30) * 100)
-
-                    // Calcular Holistic Alert para el Gantt
-                    let bgColor = plan.status === 'ACTIVE' ? 'bg-green-500' : 'bg-blue-400'
-                    const pArea = Number(paddock.area_ha) || 0
-                    const pEv = Number(plan.herds?.total_ev) || 0
-                    if (pArea > 0 && pEv > 0 && duration > 0) {
-                       const pAdh = Number(paddock.estimated_adh) || 66
-                       const cAdh = (pEv * duration) / pArea
-                       if (cAdh > pAdh) bgColor = 'bg-red-500' // Alerta Sobrepastoreo
-                    }
-
-                    return (
-                      <div 
-                        key={plan.id}
-                        onClick={() => handleOpenModal(plan)}
-                        className={`absolute top-1 bottom-1 rounded shadow-sm text-xs text-white overflow-hidden whitespace-nowrap px-2 flex items-center cursor-pointer ${bgColor}`}
-                        style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                        title={`${plan.herds?.name} ${bgColor === 'bg-red-500' ? '(Alerta Sobrepastoreo)' : ''}`}
-                      >
-                        {widthPct > 10 && <PawPrint className="h-3 w-3 mr-1 inline-block" />}
-                        {widthPct > 20 && plan.herds?.name}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
+  const filteredPlans = useMemo(() =>
+    plans.filter(p => {
+      const matchSearch = (p.paddocks?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+                         (p.herds?.name || '').toLowerCase().includes(search.toLowerCase())
+      const matchStatus = filterStatus === 'all' || p.status === filterStatus
+      return matchSearch && matchStatus
+    }),
+    [plans, search, filterStatus]
   )
 
-  const WeatherWidget = () => (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-100 rounded-2xl shadow-sm p-6 text-gray-800 flex flex-col md:flex-row items-center justify-between gap-6 mb-8 border border-blue-200/50">
-      <div className="flex items-center gap-4">
-    <div className="bg-white/50 p-3 rounded-full backdrop-blur-sm border border-white">
-           {weather?.droughtRisk === 'HIGH' ? <Sun className="w-8 h-8 text-orange-400" /> : <CloudRain className="w-8 h-8 text-blue-500" />}
-        </div>
-        <div>
-          <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
-            {weatherLoading ? 'Cargando clima...' : `Estado del Clima: ${weather?.currentSeason === 'SUMMER' ? 'Verano' : weather?.currentSeason === 'WINTER' ? 'Invierno' : weather?.currentSeason === 'SPRING' ? 'Primavera' : 'Otoño'}`}
-          </h2>
-          <p className="text-blue-600/70 text-sm font-medium">Pronóstico local inteligente</p>
-        </div>
-      </div>
+  // KPIs
+  const activePlans    = plans.filter(p => p.status === 'ACTIVE').length
+  const plannedPlans   = plans.filter(p => p.status === 'PLANNED').length
+  const restingPaddocks = paddocks.filter(p => p.current_status === 'RESTING').length
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 flex-1">
-        <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
-          <span className="text-[10px] uppercase font-black text-blue-400 tracking-wider mb-1">Lluvias (Últ. 30 días)</span>
-          <span className="text-2xl font-black text-gray-900">{weather ? weather.past30DaysRain : 0} <small className="text-xs font-normal text-gray-400">mm</small></span>
-        </div>
-        <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
-          <span className="text-[10px] uppercase font-black text-blue-400 tracking-wider mb-1">Pronóstico (Prox. 15 días)</span>
-          <span className="text-2xl font-black text-gray-900">{weather ? weather.next15DaysRain : 0} <small className="text-xs font-normal text-gray-400">mm</small></span>
-        </div>
-        <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
-          <span className="text-[10px] uppercase font-black text-blue-400 tracking-wider mb-1">Riesgo de Sequía</span>
-          <span className={`px-2 py-0.5 rounded text-[10px] font-black mt-1 ${weather?.droughtRisk === 'HIGH' ? 'bg-red-100 text-red-600 border border-red-200' : weather?.droughtRisk === 'MODERATE' ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'bg-green-100 text-green-600 border border-green-200'}`}>
-            {weather?.droughtRisk === 'HIGH' ? 'CRÍTICO' : weather?.droughtRisk === 'MODERATE' ? 'MODERADO' : 'BAJO'}
-          </span>
-        </div>
-        <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
-          <span className="text-[10px] uppercase font-black text-blue-400 tracking-wider mb-1">Descanso Sugerido</span>
-          <span className="text-2xl font-black text-green-600">{suggestion.recovery} <small className="text-xs font-normal text-green-400">días</small></span>
-        </div>
-      </div>
-    </div>
-  )
+  // Color map for herds (stable)
+  const herdColorMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    herds.forEach((h, i) => { map[h.id] = HERD_COLORS[i % HERD_COLORS.length] })
+    return map
+  }, [herds])
+
+  // Gantt window navigation
+  const shiftGantt = (weeks: number) => {
+    const d = new Date(ganttWindow + 'T00:00:00')
+    d.setDate(d.getDate() + weeks * 7)
+    setGanttWindow(d.toISOString().split('T')[0])
+  }
+
+  const ganttEnd = addDays(ganttWindow, WINDOW_DAYS)
+  const ganttStartLabel = fmt(ganttWindow)
+  const ganttEndLabel = fmt(ganttEnd)
 
   return (
-    <div className="space-y-6 relative pb-10">
-      <WeatherWidget />
+    <div className="space-y-5 pb-10">
+
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Planificador de pastoreo</h1>
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Planificador de pastoreo</h1>
+          <p className="text-sm text-gray-400 font-medium mt-0.5">
+            Carta de pastoreo rotacional — {season.icon} {season.name} · {season.type}
+          </p>
+        </div>
         <div className="flex items-center gap-3">
-          <div className="bg-white border rounded-lg p-1 flex items-center shadow-sm">
-            <button 
-              onClick={() => setViewMode('cards')} 
-              className={`p-1.5 rounded transition-all ${viewMode === 'cards' ? 'bg-gray-100 text-green-600 shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
-              title="Tarjetas"
-            >
-               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
-            </button>
-            <button 
-              onClick={() => setViewMode('list')} 
-              className={`p-1.5 rounded transition-all ${viewMode === 'list' ? 'bg-gray-100 text-green-600 shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
-              title="Lista"
-            >
-              <AlignJustify className="h-4.5 w-4.5" />
-            </button>
-            <button 
-              onClick={() => setViewMode('gantt')} 
-              className={`p-1.5 rounded transition-all ${viewMode === 'gantt' ? 'bg-gray-100 text-green-600 shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
-              title="Cronograma"
-            >
-              <CalendarDays className="h-4.5 w-4.5" />
-            </button>
+          {/* View toggle */}
+          <div className="bg-white border border-gray-200 rounded-xl p-1 flex items-center shadow-sm gap-0.5">
+            {[
+              { id: 'gantt', Icon: CalendarDays, label: 'Gantt' },
+              { id: 'list',  Icon: AlignJustify,  label: 'Lista' },
+            ].map(({ id, Icon, label }) => (
+              <button
+                key={id}
+                onClick={() => setViewMode(id as any)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === id ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <Icon className="w-3.5 h-3.5" />{label}
+              </button>
+            ))}
           </div>
-          <button 
-            onClick={() => handleOpenModal()} 
-            disabled={paddocks.length === 0 || herds.length === 0}
-            className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 shadow-sm font-medium text-sm disabled:opacity-50"
+          <button
+            onClick={() => handleOpenModal()}
+            disabled={loading || paddocks.length === 0 || herds.length === 0}
+            className="flex items-center gap-2 px-5 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 font-bold text-sm disabled:opacity-50 shadow-md shadow-green-200 transition-all"
           >
-            <Plus className="h-4 w-4 mr-2" /> Nueva Planificación
+            <Plus className="w-4 h-4" /> Nueva planificación
           </button>
         </div>
       </div>
 
-      {(paddocks.length === 0 || herds.length === 0) && (
-        <div className="bg-orange-50 p-4 rounded-md border border-orange-200 text-orange-800">
-          Para crear un planificador necesitas al menos <strong>1 Lote mapeado ({paddocks.length})</strong> y <strong>1 Rebaño registrado ({herds.length})</strong>.
+      {/* Empty state warning — only after load completes */}
+      {!loading && (paddocks.length === 0 || herds.length === 0) && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-sm text-orange-800 font-medium">
+          Necesitás al menos <strong>1 potrero</strong> y <strong>1 rebaño</strong> para planificar.
         </div>
       )}
 
-      {/* Filters & Search */}
-      <div className="bg-white p-4 rounded-lg shadow border border-gray-200 flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-gray-400" />
+      {/* KPI Strip — 3 cards, no redundancy */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: 'Activo ahora',  value: activePlans,    color: 'text-green-600',  bg: 'bg-green-50',  sub: `${activePlans === 1 ? 'plan activo' : 'planes activos'}` },
+          { label: 'Planificado',   value: plannedPlans,   color: 'text-blue-600',   bg: 'bg-blue-50',   sub: `${plannedPlans === 1 ? 'movimiento pendiente' : 'movimientos pendientes'}` },
+          { label: 'En descanso',   value: restingPaddocks,color: 'text-gray-600',   bg: 'bg-gray-50',   sub: `${restingPaddocks === 1 ? 'potrero recuperando' : 'potreros recuperando'}` },
+        ].map(({ label, value, color, bg, sub }) => (
+          <div key={label} className={`${bg} rounded-xl border border-gray-100 p-4`}>
+            <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-1">{label}</p>
+            <p className={`text-3xl font-black leading-none ${color}`}>{loading ? '—' : value}</p>
+            <p className="text-[9px] text-gray-400 mt-1">{!loading && sub}</p>
           </div>
+        ))}
+      </div>
+
+      {/* Climate pill */}
+      {weather && (() => {
+        const now = new Date()
+        const from30 = new Date(now); from30.setDate(now.getDate() - 30)
+        const to15 = new Date(now); to15.setDate(now.getDate() + 15)
+        const fmt = (d: Date) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
+        return (
+          <div className="bg-white border border-gray-100 rounded-xl px-5 py-3.5 shadow-sm space-y-1.5">
+            <div className="flex items-center gap-2">
+              {weather.droughtRisk === 'HIGH' ? <Sun className="w-4 h-4 text-orange-400 shrink-0" /> : <Droplets className="w-4 h-4 text-blue-400 shrink-0" />}
+              <p className="text-xs text-gray-600">
+                Del <strong>{fmt(from30)}</strong> al <strong>{fmt(now)}</strong> cayeron{' '}
+                <strong className="text-gray-900">{weather.past30DaysRain} mm</strong> en la zona de tu campo
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <CloudRain className="w-4 h-4 text-sky-400 shrink-0" />
+              <p className="text-xs text-gray-600">
+                Se proyectan <strong className="text-gray-900">{weather.next15DaysRain} mm</strong> de lluvia durante los próximos 15 días
+                {' '}(hasta el <strong>{fmt(to15)}</strong>)
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-0.5 flex-wrap">
+              <span className={`text-[9px] font-black px-2.5 py-1 rounded-full ${weather.droughtRisk === 'HIGH' ? 'bg-red-100 text-red-600' : weather.droughtRisk === 'MODERATE' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>
+                Riesgo sequía: {weather.droughtRisk === 'HIGH' ? 'CRÍTICO' : weather.droughtRisk === 'MODERATE' ? 'MODERADO' : 'BAJO'}
+              </span>
+              <span className={`text-[9px] font-black px-2.5 py-1 rounded-full ${season.color}`}>
+                {season.icon} {season.name} · {season.type}
+              </span>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Search & Filter */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            className="block w-full pl-10 rounded-md border-gray-300 py-2 text-gray-900 bg-white shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border"
-            placeholder="Buscar por lote o rebaño..."
+            placeholder="Buscar por potrero o rebaño..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-10 bg-white border border-gray-200 rounded-xl py-2.5 text-sm font-medium focus:ring-1 focus:ring-green-600 outline-none text-gray-900"
           />
         </div>
         <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Filter className="h-4 w-4 text-gray-400" />
-          </div>
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <select
-            className="block w-full pl-10 rounded-md border-gray-300 py-2 text-gray-900 bg-white shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border"
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="pl-10 bg-white border border-gray-200 rounded-xl py-2.5 text-sm font-medium focus:ring-1 focus:ring-green-600 outline-none text-gray-900 appearance-none pr-8"
           >
             <option value="all">Todos los estados</option>
-            <option value="ACTIVE">Activos</option>
+            <option value="ACTIVE">Pastando</option>
             <option value="PLANNED">Planificados</option>
             <option value="COMPLETED">Completados</option>
           </select>
         </div>
       </div>
 
-      {loading ? (
-        <p className="text-gray-500 text-center py-10">Cargando planificación...</p>
-      ) : plans.length === 0 ? (
-        <div className="bg-white p-10 rounded-lg shadow text-center text-gray-500 border border-gray-200">
-          <CalendarIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900">No hay planes de pastoreo</h3>
-          <p className="mt-1 text-sm text-gray-500">Crea uno asignando un rebaño a un potrero para comenzar a rotar.</p>
-        </div>
-      ) : viewMode === 'gantt' ? (
-        <GanttView />
-      ) : viewMode === 'list' ? (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-200 w-fit">
-            <span className="text-xs font-bold text-gray-400 uppercase ml-2">Filtrar por periodo:</span>
-            {[1, 3, 6, 9, 12].map(m => (
-              <button
-                key={m}
-                onClick={() => setListMonths(m)}
-                className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${listMonths === m ? 'bg-green-600 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
-              >
-                {m === 12 ? '1 AÑO' : `${m} MESES`}
-              </button>
-            ))}
-          </div>
-          <div className="bg-white shadow overflow-hidden rounded-xl border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Potrero / Rebaño</th>
-                  <th scope="col" className="px-6 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Estado</th>
-                  <th scope="col" className="px-6 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Fechas</th>
-                  <th scope="col" className="px-6 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Duración</th>
-                  <th scope="col" className="px-6 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Recup.</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPlans.map((plan) => (
-                  <tr key={plan.id} className="hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => handleOpenModal(plan)}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-900">{plan.paddocks?.name}</span>
-                        <span className="text-xs text-gray-500 flex items-center mt-0.5"><PawPrint className="w-3 h-3 mr-1"/> {plan.herds?.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(plan.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500 tabular-nums">
-                      {plan.entry_date} <br/> 
-                      <span className="opacity-50">→ {plan.exit_date}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-bold text-gray-900">
-                         {plan.exit_date ? calculateDaysDiff(plan.entry_date, plan.exit_date) : '--'}
-                      </span>
-                      <span className="text-[10px] text-gray-400 ml-1">días</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className="text-sm font-bold text-green-600">{plan.planned_recovery_days}d</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white shadow overflow-hidden sm:rounded-md border border-gray-200">
-          <ul role="list" className="divide-y divide-gray-200">
-            {filteredPlans.map((plan) => (
-              <li key={plan.id}>
-                <div className="px-4 py-4 sm:px-6 hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => handleOpenModal(plan)}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-green-600 truncate flex items-center">
-                      <MapPin className="h-4 w-4 mr-1" /> {plan.paddocks?.name}
-                    </p>
-                    <div className="ml-2 flex flex-shrink-0">
-                      {getStatusBadge(plan.status)}
-                    </div>
-                  </div>
-                  <div className="mt-2 sm:flex sm:justify-between">
-                    <div className="sm:flex flex-col gap-1">
-                      <p className="flex items-center text-sm text-gray-500">
-                        <PawPrint className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" aria-hidden="true" />
-                        {plan.herds?.name} ({plan.herds?.head_count} cabezas)
-                      </p>
-                      <p className="flex items-center text-sm text-gray-500">
-                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" aria-hidden="true" />
-                        Ingreso: {plan.entry_date} {plan.exit_date && `→ Salida: ${plan.exit_date}`}
-                      </p>
-                    </div>
-                    <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0 gap-4">
-                      {plan.exit_date && (
-                        <div className="text-right">
-                          <p className="text-gray-900 font-medium">{calculateDaysDiff(plan.entry_date, plan.exit_date)} días</p>
-                          <p className="text-xs">de pastoreo</p>
-                        </div>
-                      )}
-                      <div className="text-right">
-                        <p className="text-green-600 font-medium">{plan.planned_recovery_days} días</p>
-                        <p className="text-xs">de recuperación</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+      {/* Herd legend */}
+      {herds.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-[10px] font-black text-gray-400 tracking-widest uppercase mr-1">Rebaños:</span>
+          {herds.map((h, i) => (
+            <span key={h.id} className="flex items-center gap-1.5 text-[10px] font-bold text-gray-700 bg-white border border-gray-200 px-2.5 py-1 rounded-lg">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: HERD_COLORS[i % HERD_COLORS.length] }} />
+              {h.name}
+            </span>
+          ))}
         </div>
       )}
 
-      {/* Modal CRUD */}
+      {/* MAIN CONTENT */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
+        </div>
+      ) : plans.length === 0 && viewMode === 'gantt' ? (
+        <div className="bg-white border border-gray-100 rounded-2xl py-20 text-center shadow-sm">
+          <Calendar className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+          <p className="text-sm font-bold text-gray-400">Sin planificaciones aún</p>
+          <p className="text-xs text-gray-300 mt-1">Creá tu primera planificación usando el botón de arriba</p>
+        </div>
+      ) : viewMode === 'gantt' ? (
+        <div className="space-y-3">
+          {/* Gantt navigation + period + season controls */}
+          <div className="flex flex-wrap items-center gap-2 justify-between">
+            {/* Left: nav arrows + date label */}
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => shiftGantt(-4)} className="p-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-600 transition-all shadow-sm">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button onClick={() => shiftGantt(4)} className="p-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-600 transition-all shadow-sm">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-bold text-gray-600 bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm">
+                {ganttStartLabel} — {ganttEndLabel}
+              </span>
+              <button
+                onClick={() => { const d = new Date(); d.setDate(d.getDate() - 28); setGanttWindow(d.toISOString().split('T')[0]) }}
+                className="text-[10px] font-bold text-green-600 hover:text-green-700 bg-green-50 px-2.5 py-2 rounded-xl border border-green-100 transition-all"
+              >
+                Hoy
+              </button>
+            </div>
+
+            {/* Right: period selector + season filter */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Period selector */}
+              <div className="flex bg-gray-100 rounded-xl p-0.5 gap-0.5">
+                {(['trimestral', 'semestral', 'anual'] as const).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => { setGanttPeriod(p); setSeasonalFilter('all') }}
+                    className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all capitalize ${
+                      ganttPeriod === p && seasonalFilter === 'all'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Season filter */}
+              <div className="flex bg-gray-100 rounded-xl p-0.5 gap-0.5">
+                <button
+                  onClick={() => setSeasonalFilter('all')}
+                  className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
+                    seasonalFilter === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Todo el año
+                </button>
+                <button
+                  onClick={() => setSeasonalFilter('open')}
+                  className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
+                    seasonalFilter === 'open' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  🌿 T. Abierta
+                </button>
+                <button
+                  onClick={() => setSeasonalFilter('closed')}
+                  className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
+                    seasonalFilter === 'closed' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  ❄️ T. Cerrada
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <InteractiveGantt
+            plans={filteredPlans}
+            paddocks={paddocks}
+            herds={herds}
+            farmEvents={farmEvents}
+            windowStart={ganttWindow}
+            windowDays={WINDOW_DAYS}
+            onBlockClick={handleOpenModal}
+            onBlockMove={handleBlockMove}
+          />
+
+          <p className="text-[10px] text-gray-400 text-center font-medium">
+            Arrastrá los bloques para mover la planificación · Clic para editar · Clic en ♦ para ver eventos de agenda
+          </p>
+        </div>
+
+      ) : (
+        /* List View */
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                {['Potrero / Rebaño', 'Estado', 'Entrada', 'Salida', 'Días', 'Descanso', 'EV'].map(h => (
+                  <th key={h} className="px-5 py-3.5 text-left text-[10px] font-black text-gray-400 tracking-widest uppercase">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredPlans.map(plan => {
+                const st = STATUS_MAP[plan.status] || STATUS_MAP.PLANNED
+                const color = herdColorMap[plan.herd_id]
+                const days = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : null
+                return (
+                  <tr key={plan.id} className="hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => handleOpenModal(plan)}>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                        <div>
+                          <p className="text-sm font-bold text-gray-900">{plan.paddocks?.name}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{plan.herds?.name}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
+                    </td>
+                    <td className="px-5 py-4 text-xs text-gray-700 font-medium tabular-nums">{fmt(plan.entry_date)}</td>
+                    <td className="px-5 py-4 text-xs text-gray-700 font-medium tabular-nums">{plan.exit_date ? fmt(plan.exit_date) : '—'}</td>
+                    <td className="px-5 py-4 text-sm font-black text-gray-900">{days ?? '—'}<span className="text-[10px] font-normal text-gray-400 ml-1">d</span></td>
+                    <td className="px-5 py-4 text-sm font-bold text-green-700">{plan.planned_recovery_days}<span className="text-[10px] font-normal text-gray-400 ml-1">d</span></td>
+                    <td className="px-5 py-4 text-sm font-bold text-orange-600">{Number(plan.herds?.total_ev || 0).toFixed(1)}</td>
+                  </tr>
+                )
+              })}
+              {filteredPlans.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-gray-400 font-medium">
+                    No hay planificaciones que coincidan con la búsqueda
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-4 border-b pb-2">
-              {formData.id ? 'Modificar Planificación' : 'Nueva Planificación'}
-            </h3>
-            
-            <form onSubmit={handleSave} className="space-y-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Potrero (Lote)</label>
-                <select required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border p-2 text-gray-900 bg-white" value={formData.paddock_id} onChange={e => setFormData({ ...formData, paddock_id: e.target.value })}>
-                  <option value="" disabled>Selecciona un potrero...</option>
-                  {paddocks.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <h3 className="text-base font-black text-gray-950">
+                  {formData.id ? 'Editar planificación' : 'Nueva planificación'}
+                </h3>
+                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">Pastoreo rotacional holístico</p>
               </div>
+              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 text-gray-500 transition-all">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Rebaño</label>
-                <select required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border p-2 text-gray-900 bg-white" value={formData.herd_id} onChange={e => setFormData({ ...formData, herd_id: e.target.value })}>
-                  <option value="" disabled>Selecciona un rebaño...</option>
-                  {herds.map(h => <option key={h.id} value={h.id}>{h.name} ({h.head_count} cbz)</option>)}
-                </select>
-              </div>
+            <form onSubmit={handleSave}>
+              <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
 
-              {/* Holistic Calculation Box */}
-              {suggestion.days > 0 && (
-                <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-900">
-                  <h4 className="font-bold text-sm mb-1 flex items-center"><Lightbulb className="w-4 h-4 mr-1 text-green-600"/> Sugerencia de Manejo Holístico</h4>
-                  <ul className="text-sm space-y-1 mt-2 text-green-800">
-                    <li>Ocupación óptima calculada (Volumen Forraje): <strong>{suggestion.days}</strong> días</li>
-                    <li>Período de Descanso sugerido: <strong>{suggestion.recovery}</strong> días</li>
-                  </ul>
-                  <p className="text-xs text-green-700 mt-2 opacity-80">Cálculo en base a Ración ({paddocks.find(p => p.id === formData.paddock_id)?.estimated_adh || 66} DAH) y carga ({herds.find(h => h.id === formData.herd_id)?.total_ev || 0} UG).</p>
+                {/* Paddock & Herd */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Potrero *</label>
+                    <select
+                      required
+                      value={formData.paddock_id}
+                      onChange={e => setFormData({ ...formData, paddock_id: e.target.value })}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none text-gray-900"
+                    >
+                      <option value="" disabled>Seleccioná...</option>
+                      {paddocks.map(p => <option key={p.id} value={p.id}>{p.name} ({Number(p.area_ha).toFixed(0)} ha)</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Rebaño *</label>
+                    <select
+                      required
+                      value={formData.herd_id}
+                      onChange={e => setFormData({ ...formData, herd_id: e.target.value })}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none text-gray-900"
+                    >
+                      <option value="" disabled>Seleccioná...</option>
+                      {herds.map(h => <option key={h.id} value={h.id}>{h.name} ({Number(h.total_ev).toFixed(1)} EV)</option>)}
+                    </select>
+                  </div>
                 </div>
-              )}
 
-              {currentPlanMetrics?.isOvergrazing && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-900 animate-pulse">
-                  <h4 className="font-bold text-sm mb-1">⚠️ Riesgo de Sobrepastoreo</h4>
-                  <p className="text-sm text-red-800">
-                    Este plan requiere que el lote rinda <strong>{currentPlanMetrics.consumedAdh.toFixed(1)} DAH</strong>, pero su ración estimada es de sólo <strong>{currentPlanMetrics.effectiveAdh.toFixed(1)} DAH</strong>.
-                    <br/>Considera reducir los días de ocupación.
-                  </p>
+                {/* Holistic Suggestion */}
+                {suggestion.days > 0 && (
+                  <div className="bg-green-50 border border-green-100 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Lightbulb className="w-4 h-4 text-green-600" />
+                      <p className="text-[10px] font-black text-green-600 tracking-widest uppercase">Sugerencia holística</p>
+                      <span className="text-[9px] bg-green-200 text-green-800 px-1.5 py-0.5 rounded-full font-bold ml-auto">40% remanente</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-white rounded-lg p-2.5 text-center">
+                        <p className="text-xl font-black text-gray-900">{suggestion.days}</p>
+                        <p className="text-[9px] text-gray-400 font-bold">días pastoreo</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-2.5 text-center">
+                        <p className="text-xl font-black text-green-600">{suggestion.recovery}</p>
+                        <p className="text-[9px] text-gray-400 font-bold">días descanso</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-2.5 text-center">
+                        <p className="text-xl font-black text-amber-600">{suggestion.availableMs >= 1000 ? `${(suggestion.availableMs/1000).toFixed(1)}k` : suggestion.availableMs}</p>
+                        <p className="text-[9px] text-gray-400 font-bold">kg MS oferta</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dates */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Fecha de entrada *</label>
+                    <input
+                      required type="date"
+                      value={formData.entry_date}
+                      onChange={e => setFormData({ ...formData, entry_date: e.target.value })}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none text-gray-900"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase flex items-center gap-1">
+                      Fecha de salida {suggestedExitDate && formData.exit_date === suggestedExitDate && <span className="text-green-500">✓ auto</span>}
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.exit_date}
+                      onChange={e => {
+                        const val = e.target.value
+                        setFormData({ ...formData, exit_date: val })
+                        if (suggestedExitDate && val < suggestedExitDate) {
+                          setExitDateWarning(true)
+                        } else {
+                          setExitDateWarning(false)
+                        }
+                      }}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none text-gray-900"
+                    />
+                  </div>
                 </div>
-              )}
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Fecha de Ingreso</label>
-                  <input required type="date" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border p-2 text-gray-900 bg-white" value={formData.entry_date} onChange={e => setFormData({ ...formData, entry_date: e.target.value })} />
+
+                {/* EXIT DATE WARNING */}
+                {exitDateWarning && (
+                  <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[10px] font-black text-red-700">Atenção: estás consumiendo el remanente</p>
+                      <p className="text-[9px] text-red-600 mt-0.5">
+                        La salida anticipada reduce el forraje remanente ({'>'}40%) que el potrero necesita para recuperarse.
+                        Esto puede prolongar el tiempo de descanso y degradar el suelo a largo plazo.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* EVENTS IN RANGE */}
+                {eventsInRange.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1.5">
+                    <p className="text-[10px] font-black text-amber-700 tracking-widest uppercase flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3" /> Eventos en este período
+                    </p>
+                    {eventsInRange.map(evt => {
+                      const cfg = EVT_CONFIG[evt.event_type] || { emoji: '📅', label: evt.event_type }
+                      return (
+                        <div key={evt.id} className="flex items-center gap-2 text-[10px] text-amber-800 font-medium">
+                          <span>{cfg.emoji}</span>
+                          <span className="font-bold">{evt.title}</span>
+                          <span className="text-amber-500 ml-auto">{fmt(evt.event_date)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Recovery & Status */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Días de descanso</label>
+                    <input
+                      required type="number" min="0"
+                      value={formData.planned_recovery_days}
+                      onChange={e => setFormData({ ...formData, planned_recovery_days: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none text-gray-900"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Estado</label>
+                    <select
+                      value={formData.status}
+                      onChange={e => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none text-gray-900"
+                    >
+                      <option value="PLANNED">Planificado</option>
+                      <option value="ACTIVE">Activo (pastando)</option>
+                      <option value="COMPLETED">Completado</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Fecha de Salida</label>
-                  <input type="date" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border p-2 text-gray-900 bg-white" value={formData.exit_date} onChange={e => setFormData({ ...formData, exit_date: e.target.value })} />
-                  {!formData.id && formData.exit_date && suggestion.days > 0 && (
-                    <p className="text-xs text-green-600 mt-1">✓ Autocompletado (Cálculo Holístico)</p>
+
+                {/* ── Animales Temporales (toros de servicio, etc.) ── */}
+                <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black text-amber-700 tracking-widest uppercase">Animales temporales</p>
+                      <p className="text-[9px] text-amber-600 mt-0.5">Ej: toros de servicio — impactan el consumo de forraje</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTempAnimals(prev => [...prev, { species: 'Toro', count: 1, weight_kg: 550 }])}
+                      className="text-[10px] font-bold bg-amber-600 text-white px-2.5 py-1.5 rounded-lg hover:bg-amber-700 transition-all"
+                    >
+                      + Agregar
+                    </button>
+                  </div>
+
+                  {tempAnimals.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-amber-100">
+                        <div className="flex-1">
+                          <p className="text-[9px] text-gray-400 font-black uppercase">EV total del plan</p>
+                          <p className="text-sm font-black text-orange-600">{totalPlanEV.toFixed(1)} EV</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] text-gray-400 font-black uppercase">EV temporales</p>
+                          <p className="text-sm font-black text-amber-600">+{tempAnimals.reduce((s, a) => s + (a.count * a.weight_kg) / 450, 0).toFixed(1)} EV</p>
+                        </div>
+                      </div>
+                      {tempAnimals.map((a, i) => (
+                        <div key={i} className="grid grid-cols-[1fr_56px_66px_28px] gap-1.5 items-center">
+                          <input type="text" placeholder="Especie" value={a.species}
+                            onChange={e => { const c = [...tempAnimals]; c[i] = { ...c[i], species: e.target.value }; setTempAnimals(c) }}
+                            className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 outline-none"
+                          />
+                          <input type="number" min="1" placeholder="Cant." value={a.count}
+                            onChange={e => { const c = [...tempAnimals]; c[i] = { ...c[i], count: parseInt(e.target.value) || 1 }; setTempAnimals(c) }}
+                            className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 text-center outline-none"
+                          />
+                          <input type="number" min="1" placeholder="kg" value={a.weight_kg}
+                            onChange={e => { const c = [...tempAnimals]; c[i] = { ...c[i], weight_kg: parseInt(e.target.value) || 0 }; setTempAnimals(c) }}
+                            className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 text-center outline-none"
+                          />
+                          <button type="button" onClick={() => setTempAnimals(prev => prev.filter((_, idx) => idx !== i))}
+                            className="w-7 h-7 flex items-center justify-center bg-red-50 text-red-400 rounded-lg hover:bg-red-100 text-xs"
+                          >✕</button>
+                        </div>
+                      ))}
+                      <p className="text-[9px] text-amber-600 font-medium">1 EV = 450 kg peso vivo. Los animales temporales reducen los días óptimos de pastoreo.</p>
+                    </div>
                   )}
                 </div>
+
+                {/* ── Multi-rebaño: solo si el forraje es limitante ── */}
+                {isForageLimiting && (
+                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-[10px] font-black text-orange-700 tracking-widest uppercase">Capacidad limitada por forraje</p>
+                        <p className="text-[9px] text-orange-600 mt-0.5">
+                          El potrero soporta ~{suggestion.paddockMaxEV} EV. Tu rebaño tiene {primaryHerdEV.toFixed(1)} EV.
+                          Considerà dividir o ingresar solo parte del rebaño.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-[9px] font-black text-orange-700 uppercase tracking-wider">Agregar otro rebaño al mismo potrero:</p>
+                      {herds.filter(h => h.id !== formData.herd_id).map(h => (
+                        <label key={h.id} className="flex items-center gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={additionalHerdIds.includes(h.id)}
+                            onChange={e => {
+                              if (e.target.checked) setAdditionalHerdIds(prev => [...prev, h.id])
+                              else setAdditionalHerdIds(prev => prev.filter(id => id !== h.id))
+                            }}
+                            className="w-3.5 h-3.5 rounded accent-orange-600"
+                          />
+                          <span className="text-[10px] font-bold text-gray-800">
+                            {h.name} <span className="text-orange-600">({Number(h.total_ev).toFixed(1)} EV)</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {formData.status === 'ACTIVE' && (
+                  <p className="text-[10px] text-orange-600 bg-orange-50 p-2.5 rounded-lg font-medium">
+                    El potrero cambiará su estado a «En pastoreo» automáticamente.
+                  </p>
+                )}
+
+                {/* ── Reporte de cierre (solo COMPLETED) ── */}
+                {formData.status === 'COMPLETED' && (
+                  <div className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Leaf className="w-4 h-4 text-green-600" />
+                      <p className="text-[10px] font-black text-green-700 tracking-widest uppercase">Registro de cierre</p>
+                      <span className="text-[9px] bg-green-200 text-green-800 px-1.5 py-0.5 rounded-full font-bold ml-auto">Histórico de potrero</span>
+                    </div>
+
+                    {/* Description */}
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-green-700 uppercase tracking-wider">Descripción del remanente</label>
+                      <textarea
+                        rows={2}
+                        value={completionNote}
+                        onChange={e => setCompletionNote(e.target.value)}
+                        placeholder="Ej: Buen remanente visible, cobertura uniforme, sin plantas invasoras..."
+                        className="w-full bg-white border border-green-200 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-green-600 outline-none text-gray-900 resize-none"
+                      />
+                    </div>
+
+                    {/* Photo upload */}
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-green-700 uppercase tracking-wider">Foto del remanente</label>
+                      {!completionPhoto ? (
+                        <label className="flex flex-col items-center gap-2 bg-white border-2 border-dashed border-green-300 rounded-xl p-4 cursor-pointer hover:border-green-500 transition-all">
+                          <Camera className="w-6 h-6 text-green-400" />
+                          <span className="text-[10px] font-bold text-green-600">Tomar foto o seleccionar archivo</span>
+                          <input
+                            type="file" accept="image/*" capture="environment"
+                            className="hidden"
+                            onChange={async e => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              const reader = new FileReader()
+                              reader.onload = ev => {
+                                setCompletionPhoto(ev.target?.result as string)
+                                setRemnantAnalysis(null)
+                              }
+                              reader.readAsDataURL(file)
+                            }}
+                          />
+                        </label>
+                      ) : (
+                        <div className="relative">
+                          <img src={completionPhoto} alt="Remanente" className="w-full h-28 object-cover rounded-xl border border-green-200" />
+                          <button
+                            type="button"
+                            onClick={() => { setCompletionPhoto(''); setRemnantAnalysis(null) }}
+                            className="absolute top-2 right-2 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow text-gray-600 hover:bg-red-50 hover:text-red-500"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* AI Analysis */}
+                    {completionPhoto && (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          disabled={analyzingRemnant}
+                          onClick={async () => {
+                            setAnalyzingRemnant(true)
+                            try {
+                              const res = await fetch('/api/analyze-remnant', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ photo: completionPhoto, paddock_id: formData.paddock_id })
+                              })
+                              const data = await res.json()
+                              setRemnantAnalysis(data)
+                            } catch { setRemnantAnalysis({ error: true }) }
+                            setAnalyzingRemnant(false)
+                          }}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 bg-green-700 text-white rounded-xl text-[10px] font-black hover:bg-green-800 disabled:opacity-50 transition-all"
+                        >
+                          {analyzingRemnant ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lightbulb className="w-3.5 h-3.5" />}
+                          {analyzingRemnant ? 'Analizando con IA...' : 'Analizar remanente con IA'}
+                        </button>
+                        {remnantAnalysis && !remnantAnalysis.error && (
+                          <div className="bg-white rounded-xl border border-green-200 p-3 space-y-1">
+                            <p className="text-[9px] font-black text-green-700 uppercase tracking-wider">Resultado IA</p>
+                            {remnantAnalysis.dry_matter_kg_ha && (
+                              <p className="text-sm font-black text-gray-900">
+                                ~{remnantAnalysis.dry_matter_kg_ha.toLocaleString()} kg MS/ha
+                                <span className="text-[9px] text-gray-400 font-normal ml-1">estimado</span>
+                              </p>
+                            )}
+                            {remnantAnalysis.description && (
+                              <p className="text-[9px] text-gray-600">{remnantAnalysis.description}</p>
+                            )}
+                          </div>
+                        )}
+                        {remnantAnalysis?.error && (
+                          <p className="text-[9px] text-red-500 font-medium">Error al analizar. Verificá tu conexión.</p>
+                        )}
+                      </div>
+                    )}
+
+                    <p className="text-[9px] text-green-600 font-medium">
+                      Este registro queda guardado en el histórico del potrero para medir su mejora o degradación con el tiempo.
+                    </p>
+                  </div>
+                )}
+
+                {formData.status === 'COMPLETED' && !completionPhoto && !completionNote && (
+                  <p className="text-[10px] text-green-600 bg-green-50 p-2.5 rounded-lg font-medium">
+                    El potrero entrará en «Descanso» para iniciar su recuperación.
+                  </p>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 items-end">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Días Recuperación (Descanso)</label>
-                  <input required type="number" min="0" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border p-2 text-gray-900 bg-white" value={formData.planned_recovery_days} onChange={e => setFormData({ ...formData, planned_recovery_days: parseInt(e.target.value) || 0 })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Estado del Plan</label>
-                  <select required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border p-2 text-gray-900 bg-white" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-                    <option value="PLANNED">Planificado</option>
-                    <option value="ACTIVE">Activo (Pastando)</option>
-                    <option value="COMPLETED">Completado</option>
-                  </select>
-                </div>
-              </div>
 
-              {formData.status === 'ACTIVE' && <p className="text-xs text-orange-600 bg-orange-50 p-2 rounded">El potrero cambiará su estado automáticamente a "En Pastoreo".</p>}
-              {formData.status === 'COMPLETED' && <p className="text-xs text-green-600 bg-green-50 p-2 rounded">El potrero entrará en estado de "Descanso" para iniciar su recuperación.</p>}
-              
-              <div className="flex justify-end gap-3 pt-4 border-t mt-6">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+              <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
                   Cancelar
                 </button>
-                <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50">
-                  {saving ? 'Guardando...' : 'Guardar Plan'}
+                <button type="submit" disabled={saving} className="px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition-all">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {formData.id ? 'Actualizar' : 'Crear plan'}
                 </button>
               </div>
             </form>

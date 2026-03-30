@@ -1,13 +1,35 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
+import OfflineIndicator from '@/components/OfflineIndicator'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'RODEO',
-  description: 'AgTech platform for regenerative ranching',
+  title: 'RODEO — Gestión Ganadera Regenerativa',
+  description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rebaños, pastoreo rotacional y bitácora de campo con IA.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'RODEO',
+  },
+  formatDetection: { telephone: false },
+  openGraph: {
+    type: 'website',
+    siteName: 'RODEO',
+    title: 'RODEO — Gestión Ganadera Regenerativa',
+    description: 'Plataforma AgTech para ganadería holística y regenerativa',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#16a34a',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 }
 
 export default function RootLayout({
@@ -16,10 +38,19 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
+      <head>
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="icon" type="image/svg+xml" href="/icons/icon-512.svg" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="RODEO" />
+      </head>
       <body className={inter.className}>
         <AuthProvider>
           {children}
+          <OfflineIndicator />
         </AuthProvider>
       </body>
     </html>

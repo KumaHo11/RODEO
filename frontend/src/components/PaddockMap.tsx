@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import '@geoman-io/leaflet-geoman-free'
@@ -14,15 +14,12 @@ const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2
 const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png'
 const shadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
 
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: iconRetinaUrl,
-  iconUrl: iconUrl,
-  shadowUrl: shadowUrl,
-})
+L.Icon.Default.mergeOptions({ iconRetinaUrl, iconUrl, shadowUrl })
 
+// ─── Geoman toolbar: create / delete / edit ───────────────────────────────────
 function GeomanControl({ onPaddockDrawn }: { onPaddockDrawn: (geojson: any, layer: any) => void }) {
   const map = useMap()
-  
+
   useEffect(() => {
     map.pm.setLang('es')
     map.pm.addControls({
@@ -39,39 +36,31 @@ function GeomanControl({ onPaddockDrawn }: { onPaddockDrawn: (geojson: any, laye
     })
 
     const handleCreate = (e: any) => {
-      const layer = e.layer
-      const geojson = layer.toGeoJSON()
-      onPaddockDrawn(geojson, layer)
+      onPaddockDrawn(e.layer.toGeoJSON(), e.layer)
     }
-
     map.on('pm:create', handleCreate)
 
-    // Listen to global delete events
     const handleRemove = async (e: any) => {
-      const id = e.layer.feature?.properties?.id;
+      const id = e.layer.feature?.properties?.id
       if (id) {
-        const supabase = createClient()
-        await supabase.from('paddocks').delete().eq('id', id)
+        const sb = createClient()
+        await sb.from('paddocks').delete().eq('id', id)
       }
     }
     map.on('pm:remove', handleRemove)
 
-    // Attach update listeners to layers as they are added (including GeoJSON)
+    // Persist geometry edits automatically
     const handleLayerAdd = (e: any) => {
-      if (e.layer && e.layer.pm) {
+      if (e.layer?.pm) {
         e.layer.on('pm:update', async (x: any) => {
-          const id = x.layer.feature?.properties?.id;
-          if (!id) return;
-          const newGeo = x.layer.toGeoJSON();
-          const { area } = await import('@turf/area');
-          const newArea = area(newGeo) / 10000;
-          const supabase = createClient()
-          await supabase.rpc('update_paddock_geom', { 
-            p_id: id, 
-            p_geojson: newGeo.geometry, 
-            p_area_ha: newArea 
-          });
-        });
+          const id = x.layer.feature?.properties?.id
+          if (!id) return
+          const newGeo = x.layer.toGeoJSON()
+          const { area: turfArea } = await import('@turf/area')
+          const newArea = turfArea(newGeo) / 10000
+          const sb = createClient()
+          await sb.rpc('update_paddock_geom', { p_id: id, p_geojson: newGeo.geometry, p_area_ha: newArea })
+        })
       }
     }
     map.on('layeradd', handleLayerAdd)
@@ -87,19 +76,20 @@ function GeomanControl({ onPaddockDrawn }: { onPaddockDrawn: (geojson: any, laye
   return null
 }
 
+// ─── Fit map to loaded paddocks ───────────────────────────────────────────────
 function FitBounds({ geoData }: { geoData: any }) {
   const map = useMap()
   useEffect(() => {
-    if (geoData && geoData.features && geoData.features.length > 0) {
+    if (geoData?.features?.length > 0) {
       try {
-        const geoJsonLayer = L.geoJSON(geoData)
-        map.fitBounds(geoJsonLayer.getBounds(), { padding: [50, 50], maxZoom: 16 })
-      } catch(e) { console.error("Error fit bounds", e) }
+        map.fitBounds(L.geoJSON(geoData).getBounds(), { padding: [50, 50], maxZoom: 16 })
+      } catch (e) { console.error('fitBounds error', e) }
     }
   }, [map, geoData])
   return null
 }
 
+// ─── Location search bar ──────────────────────────────────────────────────────
 function MapSearch() {
   const map = useMap()
   const [query, setQuery] = useState('')
@@ -112,34 +102,26 @@ function MapSearch() {
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
       const data = await res.json()
-      if (data && data.length > 0) {
-        const { lat, lon } = data[0]
-        map.flyTo([lat, lon], 14)
+      if (data?.length > 0) {
+        map.flyTo([data[0].lat, data[0].lon], 14)
       } else {
-        alert("Lugar no encontrado. Intenta agregar la provincia (ej: Tandil, Buenos Aires).")
+        alert('Lugar no encontrado. Intenta con provincia (ej: Tandil, Buenos Aires).')
       }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setSearching(false)
-    }
+    } catch (e) { console.error(e) }
+    setSearching(false)
   }
 
   return (
     <div className="absolute top-4 left-16 z-[1000]">
       <form onSubmit={handleSearch} className="flex bg-white rounded-md shadow-md overflow-hidden border border-gray-200">
-        <input 
-          type="text" 
-          placeholder="Buscar zona o ciudad..." 
-          className="px-3 py-2 w-64 outline-none text-sm text-gray-900 bg-white" 
-          value={query} 
-          onChange={e => setQuery(e.target.value)} 
+        <input
+          type="text"
+          placeholder="Buscar zona o ciudad..."
+          className="px-3 py-2 w-64 outline-none text-sm text-gray-900 bg-white"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
         />
-        <button 
-          type="submit" 
-          disabled={searching}
-          className="bg-green-600 text-white px-3 flex items-center justify-center hover:bg-green-700 disabled:opacity-50"
-        >
+        <button type="submit" disabled={searching} className="bg-green-600 text-white px-3 flex items-center justify-center hover:bg-green-700 disabled:opacity-50">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         </button>
       </form>
@@ -147,244 +129,371 @@ function MapSearch() {
   )
 }
 
-interface DraftPaddock {
-  geojson: any;
-  layer: any;
-  area_ha: number;
+// ─── NDVI helper ──────────────────────────────────────────────────────────────
+const getNdviStatus = (ndvi: number) => {
+  if (ndvi >= 0.5) return { label: 'Óptimo', color: 'bg-green-100 text-green-800 border-green-200' }
+  if (ndvi >= 0.3) return { label: 'Medio',  color: 'bg-orange-100 text-orange-800 border-orange-200' }
+  return { label: 'Bajo', color: 'bg-red-100 text-red-800 border-red-200' }
 }
 
+interface DraftPaddock { geojson: any; layer: any; area_ha: number }
+
+// ─── MAIN COMPONENT ────────────────────────────────────────────────────────────
 export default function PaddockMap() {
+  const supabase = createClient()
+  const { user } = useAuth()
+
   const [geoData, setGeoData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  
-  // Modal State (Draft)
+  const [boundaries, setBoundaries] = useState<any>(null)
+
+  // Stable layer registry: id → Leaflet layer (survives re-renders)
+  const paddockLayersRef = useRef<Record<string, any>>({})
+  const boundaryLayerRef = useRef<any>(null)
+
+  // UI states
   const [draft, setDraft] = useState<DraftPaddock | null>(null)
   const [draftName, setDraftName] = useState('')
   const [saving, setSaving] = useState(false)
-
-  // Edit Modal State (Existing Paddock)
   const [selectedPaddock, setSelectedPaddock] = useState<any>(null)
   const [editName, setEditName] = useState('')
+  const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null)
+  const [editingBoundary, setEditingBoundary] = useState(false)
+  const [savingBoundary, setSavingBoundary] = useState(false)
+  const [activeFromDate, setActiveFromDate] = useState('')
 
-  const supabase = createClient()
-  const { user } = useAuth()
-  
+  const center: [number, number] = [-34.604, -58.3805]
+
+  // ─── Data fetching ──────────────────────────────────────────────────────────
   const fetchPaddocks = useCallback(async () => {
     if (!user) return
     setLoading(true)
     const { data, error } = await supabase.rpc('get_paddocks_geojson')
-    if (error) {
-      console.error('Error fetching paddocks:', error)
-    } else {
-      setGeoData(data)
+    if (error) console.error('Error fetching paddocks:', error)
+    else setGeoData(data)
+
+    const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
+    if (profile?.organization_id) {
+      const { data: org } = await supabase.from('organizations').select('boundaries').eq('id', profile.organization_id).single()
+      if (org?.boundaries) setBoundaries(org.boundaries)
     }
     setLoading(false)
   }, [supabase, user])
 
-  useEffect(() => {
-    fetchPaddocks()
-  }, [fetchPaddocks])
+  useEffect(() => { fetchPaddocks() }, [fetchPaddocks])
 
+  // ─── Draw new paddock ───────────────────────────────────────────────────────
   const handlePaddockDrawn = (geojson: any, layer: any) => {
-    // Calculate area via turf logic using GeoJSON Feature
-    const sqMeters = area(geojson)
-    const area_ha = sqMeters / 10000
-    
-    setDraft({ geojson, layer, area_ha })
+    setDraft({ geojson, layer, area_ha: area(geojson) / 10000 })
     setDraftName('')
   }
 
   const handleSaveDraft = async () => {
     if (!draft || !draftName) return
     setSaving(true)
-
     const { error } = await supabase.rpc('create_paddock', {
-      p_name: draftName,
-      p_area_ha: draft.area_ha,
-      p_geojson: draft.geojson.geometry
+      p_name: draftName, p_area_ha: draft.area_ha, p_geojson: draft.geojson.geometry
     })
-    
     setSaving(false)
-
     if (error) {
-      console.error("Error creating paddock:", error.message, error.details || '', error.hint || '')
       alert(`Error al guardar el lote: ${error.message}`)
     } else {
       fetchPaddocks()
     }
-    
     draft.layer.remove()
     setDraft(null)
   }
 
   const handleCancelDraft = () => {
-    if (draft) {
-      draft.layer.remove()
-      setDraft(null)
-    }
+    if (draft) { draft.layer.remove(); setDraft(null) }
   }
 
-  // Assuming a static center for now
-  const center: [number, number] = [-34.604, -58.3805] 
-  
-  const getNdviStatus = (ndvi: number) => {
-    if (ndvi >= 0.5) return { label: 'Óptimo', color: 'bg-green-100 text-green-800 border-green-200' }
-    if (ndvi >= 0.3) return { label: 'Medio', color: 'bg-orange-100 text-orange-800 border-orange-200' }
-    return { label: 'Bajo', color: 'bg-red-100 text-red-800 border-red-200' }
-  }
-
-  const getGeoQualityColor = (quality: number) => {
-    if (!quality) return 'gray'
-    if (quality <= 3) return '#ffb3b3' // pastel red
-    if (quality <= 6) return '#ffffcc' // pastel yellow
-    return '#b3ffb3' // pastel green
-  }
-
-  const onEachFeature = (feature: any, layer: any) => {
-    if (feature.properties) {
-      const { name, status, area_ha, id } = feature.properties
-      const fillColor = status === 'GRAZING' ? 'orange' : 'green'
-      
-      const pathOptions = { color: fillColor, fillColor: fillColor, fillOpacity: 0.5, weight: 2 }
-      layer.setStyle(pathOptions)
-
-      // Replace bindPopup with custom React state click
-      layer.on('click', () => {
-        setSelectedPaddock({ ...feature.properties, layer })
-        setEditName(name)
-      })
-    }
-  }
-
+  // ─── Edit existing paddock name ─────────────────────────────────────────────
   const handleUpdateDetails = async () => {
     if (!selectedPaddock) return
     setSaving(true)
     const { error } = await supabase.rpc('update_paddock_details', {
-      p_id: selectedPaddock.id,
-      p_name: editName
+      p_id: selectedPaddock.id, p_name: editName
     })
     setSaving(false)
     if (error) {
-      console.error("Error updating paddock:", error.message)
       alert(`Error al actualizar: ${error.message}`)
     } else {
       setSelectedPaddock(null)
-      fetchPaddocks() 
+      fetchPaddocks()
     }
   }
 
+  // ─── Edit paddock POLYGON geometry ─────────────────────────────────────────
+  // Uses stable ref registry to avoid stale layer issues after re-renders
+  const handleEditPaddockPolygon = (paddockId: string) => {
+    const layer = paddockLayersRef.current[paddockId]
+    if (!layer) {
+      alert('No se pudo obtener la capa. Intentá refrescar el mapa.')
+      return
+    }
+    setEditingPolygonId(paddockId)
+    setSelectedPaddock(null)
+    layer.pm.enable({ allowSelfIntersection: false })
+    layer.once('pm:disable', () => setEditingPolygonId(null))
+  }
+
+  // ─── Toggle paddock active / inactive ──────────────────────────────────────
+  const handleTogglePaddockActive = async (paddockId: string, currentlyActive: boolean) => {
+    const { error } = await supabase.rpc('update_paddock_active_state', {
+      p_id: paddockId,
+      p_is_active: !currentlyActive,
+      p_active_from: currentlyActive ? null : undefined   // clear date when reactivating
+    })
+    if (error) { alert('Error al cambiar estado: ' + error.message); return }
+    fetchPaddocks()
+    setSelectedPaddock(null)
+    setActiveFromDate('')
+  }
+
+  // ─── Edit field boundary ────────────────────────────────────────────────────
+  const handleEditBoundary = () => {
+    if (!boundaryLayerRef.current) return
+    setEditingBoundary(true)
+    boundaryLayerRef.current.pm.enable()
+  }
+
+  const handleSaveBoundary = async () => {
+    if (!boundaryLayerRef.current) return
+    setSavingBoundary(true)
+    boundaryLayerRef.current.pm.disable()
+    const updatedGeoJson = boundaryLayerRef.current.toGeoJSON()
+    const geom = updatedGeoJson.geometry ?? updatedGeoJson
+    const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user!.id).single()
+    if (profile?.organization_id) {
+      await supabase.rpc('update_org_boundary', { p_org_id: profile.organization_id, p_geojson: geom })
+    }
+    setEditingBoundary(false)
+    setSavingBoundary(false)
+    fetchPaddocks()
+  }
+
+  // ─── GeoJSON onEachFeature ──────────────────────────────────────────────────
+  const onEachFeature = (feature: any, layer: any) => {
+    if (!feature.properties) return
+    const { name, status, id, is_active } = feature.properties
+
+    // Color legend: inactive=gray dashed, grazing=orange, resting=green
+    const isActive = is_active !== false
+    const fillColor = !isActive ? '#9ca3af' : status === 'GRAZING' ? '#f97316' : '#16a34a'
+    layer.setStyle({
+      color: fillColor,
+      fillColor,
+      fillOpacity: isActive ? 0.45 : 0.15,
+      weight: isActive ? 2 : 1.5,
+      dashArray: isActive ? undefined : '6,4'
+    })
+
+    // Register in stable ref map so polygon edit always gets the current layer
+    paddockLayersRef.current[id] = layer
+
+    layer.on('click', () => {
+      setSelectedPaddock({ ...feature.properties, layer })
+      setEditName(name)
+      setActiveFromDate(feature.properties.active_from || '')
+    })
+  }
+
+  // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="h-[calc(100vh-14rem)] min-h-[500px] w-full rounded-lg overflow-hidden border border-gray-300 shadow-sm relative z-0">
-      
-      {/* Existing Paddock Edit Modal */}
-      {selectedPaddock && (
-        <div className="absolute top-4 right-4 z-[1000] bg-white p-4 rounded-lg shadow-xl border border-gray-200 w-80">
-          <h3 className="font-bold text-lg text-gray-900 mb-2 border-b pb-2">Detalles del Lote</h3>
-          
-          <div className="space-y-4 mt-3">
+
+      {/* Loading overlay */}
+      {loading && (
+        <div className="absolute inset-0 bg-white/60 z-50 flex items-center justify-center">
+          <div className="bg-white px-4 py-2 rounded-lg shadow text-green-600 font-semibold text-sm">Cargando mapa...</div>
+        </div>
+      )}
+
+      {/* Boundary editing toolbar */}
+      {editingBoundary && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1001] flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-xl border border-gray-200">
+          <span className="text-xs font-bold text-gray-700">Editando perímetro del campo — arrastrá los vértices</span>
+          <button onClick={handleSaveBoundary} disabled={savingBoundary} className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 disabled:opacity-50">
+            {savingBoundary ? 'Guardando...' : '✓ Guardar'}
+          </button>
+          <button onClick={() => { boundaryLayerRef.current?.pm.disable(); setEditingBoundary(false) }} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-lg hover:bg-gray-200">
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {/* Polygon editing indicator */}
+      {editingPolygonId && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1001] flex items-center gap-3 bg-indigo-600 px-4 py-2.5 rounded-xl shadow-xl text-white">
+          <span className="text-xs font-bold">Editando polígono — arrastrá los vértices</span>
+          <button
+            onClick={() => {
+              paddockLayersRef.current[editingPolygonId]?.pm.disable()
+              setEditingPolygonId(null)
+            }}
+            className="px-3 py-1.5 bg-white text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-50"
+          >
+            ✓ Listo
+          </button>
+        </div>
+      )}
+
+      {/* Field boundary edit button */}
+      {boundaries && !editingBoundary && !editingPolygonId && (
+        <div className="absolute bottom-4 left-4 z-[1000]">
+          <button onClick={handleEditBoundary} className="flex items-center gap-2 px-3 py-2 bg-white text-gray-700 text-xs font-bold rounded-xl shadow-md border border-gray-200 hover:bg-gray-50 transition-all">
+            ✏️ Editar perímetro del campo
+          </button>
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="absolute bottom-4 right-4 z-[1000] bg-white/90 backdrop-blur-sm border border-gray-200 rounded-xl px-3 py-2 shadow-md flex flex-col gap-1">
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-orange-400" /><span className="text-[9px] font-bold text-gray-600">En pastoreo</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-green-500" /><span className="text-[9px] font-bold text-gray-600">En descanso</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-gray-400 opacity-50" style={{backgroundImage:'repeating-linear-gradient(45deg,transparent,transparent 2px,#9ca3af 2px,#9ca3af 4px)'}} /><span className="text-[9px] font-bold text-gray-600">Inactivo</span></div>
+      </div>
+
+      {/* ── Paddock edit modal ── */}
+      {selectedPaddock && !editingPolygonId && (
+        <div className="absolute top-4 right-4 z-[1000] bg-white rounded-xl shadow-xl border border-gray-200 w-80 max-h-[calc(100%-2rem)] overflow-y-auto">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <h3 className="font-bold text-sm text-gray-900">Detalles del Potrero</h3>
+            <button onClick={() => setSelectedPaddock(null)} className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded-full hover:bg-gray-200 text-gray-500 text-xs">✕</button>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {/* Name input */}
             <div>
-              <label className="block text-sm font-medium text-gray-700">Nombre</label>
-              <input type="text" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm p-2 border text-gray-900 bg-white" value={editName} onChange={e => setEditName(e.target.value)} />
+              <label className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Nombre</label>
+              <input
+                type="text"
+                className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-900 focus:ring-1 focus:ring-green-600 outline-none"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+              />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="bg-gray-50 p-2 rounded border border-gray-100 flex flex-col items-center justify-center text-center">
-                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-tight">Área Geográfica</p>
-                <p className="font-bold text-gray-800 text-base">{Number(selectedPaddock.area_ha).toFixed(2)} ha</p>
+            {/* Area summary */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-2 text-center">
+                <p className="text-[9px] text-gray-400 font-black uppercase">Área</p>
+                <p className="text-sm font-black text-gray-900">{Number(selectedPaddock.area_ha || 0).toFixed(1)} ha</p>
               </div>
-              <div className="bg-green-50 p-2 rounded border border-green-100 flex flex-col items-center justify-center text-center">
-                <p className="text-[10px] text-green-600 uppercase font-bold tracking-tight">Área Pastoreable</p>
-                <p className="font-bold text-green-800 text-base">{Number(selectedPaddock.grazable_area_ha || selectedPaddock.area_ha).toFixed(2)} ha</p>
+              <div className="bg-green-50 rounded-lg border border-green-100 p-2 text-center">
+                <p className="text-[9px] text-green-500 font-black uppercase">Pastoreable</p>
+                <p className="text-sm font-black text-green-800">{Number(selectedPaddock.grazable_area_ha || selectedPaddock.area_ha || 0).toFixed(1)} ha</p>
               </div>
             </div>
 
-            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm mt-3">
-              <p className="text-[10px] text-gray-500 uppercase font-bold tracking-tight mb-2">Salud de Pastura (Satélite)</p>
+            {/* Active / Inactive toggle */}
+            <div className={`rounded-xl border p-3 ${selectedPaddock.is_active !== false ? 'bg-green-50 border-green-100' : 'bg-gray-50 border-gray-200'}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-black text-gray-900 leading-tight">
-                    {selectedPaddock.current_ndvi ? Number(selectedPaddock.current_ndvi).toFixed(2) : '--'}
+                  <p className="text-xs font-bold text-gray-800">Estado del potrero</p>
+                  <p className={`text-[10px] font-bold mt-0.5 ${selectedPaddock.is_active !== false ? 'text-green-600' : 'text-gray-400'}`}>
+                    {selectedPaddock.is_active !== false ? '● Activo' : '○ Inactivo'}
                   </p>
-                  <p className="text-[10px] text-gray-400">Índice NDVI</p>
                 </div>
-                {selectedPaddock.current_ndvi && (
-                  <div className={`px-3 py-1 rounded-full border text-xs font-bold ${getNdviStatus(selectedPaddock.current_ndvi).color}`}>
-                    {getNdviStatus(selectedPaddock.current_ndvi).label}
-                  </div>
-                )}
+                <button
+                  onClick={() => handleTogglePaddockActive(selectedPaddock.id, selectedPaddock.is_active !== false)}
+                  className={`w-11 h-6 rounded-full transition-all relative flex-shrink-0 ${selectedPaddock.is_active !== false ? 'bg-green-400' : 'bg-gray-300'}`}
+                >
+                  <div className={`w-4 h-4 bg-white rounded-full shadow absolute top-1 transition-all ${selectedPaddock.is_active !== false ? 'left-6' : 'left-1'}`} />
+                </button>
               </div>
+
+              {/* Reactivation date (shows when inactive) */}
+              {selectedPaddock.is_active === false && (
+                <div className="mt-2 space-y-1.5">
+                  <label className="text-[9px] font-black text-gray-500 uppercase">Fecha de reactivación</label>
+                  <input
+                    type="date"
+                    value={activeFromDate}
+                    onChange={e => setActiveFromDate(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-green-500 outline-none"
+                  />
+                  {activeFromDate && (
+                    <button
+                      onClick={async () => {
+                        await supabase.rpc('update_paddock_active_state', {
+                          p_id: selectedPaddock.id, p_is_active: false, p_active_from: activeFromDate
+                        })
+                        fetchPaddocks()
+                        setSelectedPaddock(null)
+                      }}
+                      className="w-full text-[10px] font-bold bg-gray-800 text-white py-1.5 rounded-lg hover:bg-gray-700"
+                    >
+                      Guardar fecha de reactivación
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
-            <div className="mt-4 flex flex-col gap-2">
-              <button 
-                onClick={() => {
-                  selectedPaddock.layer.pm.enable();
-                  setSelectedPaddock(null);
-                  alert("Modo de edición activado. Arrastra los bordes del polígono y los cambios se guardarán automáticamente.");
-                }} 
-                className="w-full text-xs bg-indigo-50 text-indigo-700 py-2 rounded-lg font-bold border border-indigo-100 hover:bg-indigo-100 transition-colors"
+            {/* NDVI */}
+            {selectedPaddock.current_ndvi && (
+              <div className="flex items-center justify-between bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
+                <div>
+                  <p className="text-[9px] text-gray-400 font-black uppercase">NDVI satelital</p>
+                  <p className="text-base font-black text-gray-900">{Number(selectedPaddock.current_ndvi).toFixed(2)}</p>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getNdviStatus(selectedPaddock.current_ndvi).color}`}>
+                  {getNdviStatus(selectedPaddock.current_ndvi).label}
+                </span>
+              </div>
+            )}
+
+            {/* Edit polygon */}
+            <button
+              onClick={() => handleEditPaddockPolygon(selectedPaddock.id)}
+              className="w-full text-xs bg-indigo-50 text-indigo-700 py-2.5 rounded-xl font-bold border border-indigo-100 hover:bg-indigo-100 transition-colors"
+            >
+              ✏️ Editar polígono geográfico
+            </button>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <button onClick={() => setSelectedPaddock(null)} className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Cerrar</button>
+              <button
+                onClick={handleUpdateDetails}
+                disabled={saving || !editName}
+                className="px-3 py-1.5 text-sm font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
-                Editar Polígono Geográfico
-              </button>
-            </div>
-
-            <div className="bg-green-50 p-2 rounded border border-green-100 italic text-[10px] text-green-700">
-               📍 Use la sección "Potreros" para registrar Aforos físicos o ver biomasa satelital detallada.
-            </div>
-
-            <div className="flex justify-end gap-2 mt-4 pt-2 border-t border-gray-100">
-              <button onClick={() => setSelectedPaddock(null)} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cerrar</button>
-              <button 
-                onClick={handleUpdateDetails} 
-                disabled={saving || !editName} 
-                className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
-              >
-                {saving ? 'Guardando...' : 'Guardar Nombre'}
+                {saving ? 'Guardando...' : 'Guardar nombre'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* New Draft Paddock Modal */}
+      {/* ── New Paddock Draft Modal ── */}
       {draft && (
-        <div className="absolute top-4 right-4 z-[1000] bg-white p-4 rounded-lg shadow-xl border border-gray-200 w-80">
-          <h3 className="font-bold text-lg text-gray-900 mb-4">Guardar Nuevo Lote</h3>
-          
+        <div className="absolute top-4 right-4 z-[1000] bg-white p-4 rounded-xl shadow-xl border border-gray-200 w-80">
+          <h3 className="font-bold text-base text-gray-900 mb-4">Guardar Nuevo Potrero</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Nombre del lote *</label>
-              <input 
-                type="text" 
-                required 
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm p-2 border text-gray-900 bg-white"
+              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Nombre del potrero *</label>
+              <input
+                type="text"
+                required
+                className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-900 focus:ring-1 focus:ring-green-600 outline-none"
                 value={draftName}
                 onChange={e => setDraftName(e.target.value)}
                 placeholder="Ej. Lote Norte"
               />
             </div>
-            
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-1">Área Calculada</p>
-              <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded border border-gray-200">{draft.area_ha.toFixed(2)} hectáreas</p>
+            <div className="bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
+              <p className="text-[9px] text-gray-400 font-black uppercase">Área calculada</p>
+              <p className="text-sm font-black text-gray-900">{draft.area_ha.toFixed(2)} ha</p>
             </div>
-
-            <div className="bg-blue-50 p-2 rounded border border-blue-100 text-[10px] text-blue-700">
-               Una vez creado, podrá registrar la biomasa real (Aforo) desde la sección de Potreros para calibrar este lote.
+            <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 text-[10px] text-blue-700">
+              Una vez creado, podés registrar aforos reales desde la sección de Potreros.
             </div>
-
-            <div className="flex justify-end gap-2 mt-4">
-              <button 
-                onClick={handleCancelDraft}
-                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={handleSaveDraft}
-                disabled={!draftName || saving}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
-              >
+            <div className="flex justify-end gap-2">
+              <button onClick={handleCancelDraft} className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
+              <button onClick={handleSaveDraft} disabled={!draftName || saving} className="px-3 py-1.5 text-sm font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
                 {saving ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
@@ -392,12 +501,8 @@ export default function PaddockMap() {
         </div>
       )}
 
-      {loading && (
-        <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center">
-          <div className="text-green-600 font-semibold bg-white px-4 py-2 rounded-md shadow">Cargando mapa...</div>
-        </div>
-      )}
-      <MapContainer center={center} zoom={15} scrollWheelZoom={true} className="h-full w-full">
+      {/* ── Leaflet Map ── */}
+      <MapContainer center={center} zoom={15} scrollWheelZoom className="h-full w-full">
         <MapSearch />
         <FitBounds geoData={geoData} />
         <TileLayer
@@ -405,11 +510,20 @@ export default function PaddockMap() {
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         />
         <GeomanControl onPaddockDrawn={handlePaddockDrawn} />
-        {geoData && geoData.features && geoData.features.length > 0 && (
-          <GeoJSON 
-            key={JSON.stringify(geoData)} 
-            data={geoData} 
-            onEachFeature={onEachFeature} 
+
+        {boundaries && (
+          <GeoJSON
+            data={boundaries}
+            ref={(ref: any) => { if (ref) boundaryLayerRef.current = ref }}
+            style={{ color: '#374151', weight: 2, dashArray: '5,10', fillOpacity: 0, interactive: !editingBoundary }}
+          />
+        )}
+
+        {geoData?.features?.length > 0 && (
+          <GeoJSON
+            key={JSON.stringify(geoData)}
+            data={geoData}
+            onEachFeature={onEachFeature}
           />
         )}
       </MapContainer>

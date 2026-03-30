@@ -3,24 +3,39 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
-import { User, Mail, Phone, Camera, Loader2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import {
+  User, Mail, Phone, Camera, Loader2, LogOut, Lock,
+  CreditCard, Clock, ChevronRight, CheckCircle, AlertCircle, Building
+} from 'lucide-react'
 import Image from 'next/image'
 
+const ROLES = [
+  { value: 'producer', label: 'Productor ganadero' },
+  { value: 'manager', label: 'Administrador de campo' },
+  { value: 'consultant', label: 'Asesor / consultor' },
+  { value: 'other', label: 'Otro' },
+]
+
 export default function ProfilePage() {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
+  const router = useRouter()
   const supabase = createClient()
-  
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [success, setSuccess] = useState('')
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  
+  const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState<'perfil' | 'facturacion'>('perfil')
+
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     phone: '',
     role: '',
-    avatar_url: ''
+    avatar_url: '',
   })
 
   useEffect(() => {
@@ -34,7 +49,7 @@ export default function ProfilePage() {
           last_name: data.last_name || '',
           phone: data.phone || '',
           role: data.role || '',
-          avatar_url: data.avatar_url || ''
+          avatar_url: data.avatar_url || '',
         })
       }
       setLoading(false)
@@ -42,137 +57,313 @@ export default function ProfilePage() {
     load()
   }, [user, supabase])
 
+  const handleAvatarClick = () => fileInputRef.current?.click()
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+    setUploadingAvatar(true)
+    setError('')
+
+    // Upload to storage
+    const ext = file.name.split('.').pop()
+    const path = `${user.id}/avatar.${ext}`
+    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (uploadErr) { setError('Error al subir la imagen: ' + uploadErr.message); setUploadingAvatar(false); return }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+    const publicUrl = urlData.publicUrl + '?v=' + Date.now()
+
+    // Save to profile
+    await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id)
+    setFormData(prev => ({ ...prev, avatar_url: publicUrl }))
+    setUploadingAvatar(false)
+    setSuccess('Foto de perfil actualizada.')
+    setTimeout(() => setSuccess(''), 3000)
+  }
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setSuccess('')
-    
+    setError('')
     if (user) {
-      await supabase.from('profiles').update({
+      const { error: err } = await supabase.from('profiles').update({
         first_name: formData.first_name,
         last_name: formData.last_name,
-        phone: formData.phone
+        phone: formData.phone,
+        role: formData.role,
       }).eq('id', user.id)
-      
-      setSuccess('Perfil actualizado exitosamente.')
+      if (err) setError('Error al guardar: ' + err.message)
+      else { setSuccess('Perfil guardado correctamente.'); setTimeout(() => setSuccess(''), 3000) }
     }
     setSaving(false)
   }
 
-  const handleUploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !user) return
-    const file = e.target.files[0]
-    const fileExt = file.name.split('.').pop()
-    const filePath = `${user.id}-${Math.random()}.${fileExt}`
-
-    try {
-      setLoading(true)
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
-      if (uploadError) throw uploadError
-
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
-      
-      const newAvatarUrl = data.publicUrl
-      setFormData({ ...formData, avatar_url: newAvatarUrl })
-      
-      await supabase.from('profiles').update({ avatar_url: newAvatarUrl }).eq('id', user.id)
-      
-    } catch (error) {
-      console.error('Error uploading avatar:', error)
-      alert('Error subiendo foto. Asegúrate de que tienes permisos.')
-    } finally {
-      setLoading(false)
-    }
+  const handleSignOut = async () => {
+    await signOut()
+    router.push('/login')
   }
 
+  const handlePasswordReset = async () => {
+    if (!user?.email) return
+    await supabase.auth.resetPasswordForEmail(user.email)
+    setSuccess('Te enviamos un correo para restablecer tu contraseña.')
+    setTimeout(() => setSuccess(''), 5000)
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[300px]">
+      <Loader2 className="w-6 h-6 text-green-600 animate-spin" />
+    </div>
+  )
+
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Tu Perfil</h1>
-        <p className="mt-2 text-sm text-gray-500">
-          Gestiona tu información personal y opciones de contacto.
-        </p>
+    <div className="max-w-2xl mx-auto space-y-6">
+
+      {/* === Avatar + Identity card === */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        {/* Green banner */}
+        <div className="h-24 bg-gradient-to-r from-green-600 to-emerald-500" />
+
+        <div className="px-6 pb-6">
+          {/* Avatar */}
+          <div className="flex items-end justify-between -mt-12 mb-4">
+            <div className="relative">
+              <button
+                onClick={handleAvatarClick}
+                className="w-20 h-20 rounded-2xl ring-4 ring-white overflow-hidden bg-green-100 flex items-center justify-center hover:opacity-90 transition-opacity relative"
+                disabled={uploadingAvatar}
+              >
+                {formData.avatar_url ? (
+                  <Image src={formData.avatar_url} alt="Avatar" fill className="object-cover" />
+                ) : (
+                  <span className="text-3xl font-black text-green-700">
+                    {formData.first_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+                  </span>
+                )}
+                <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                  {uploadingAvatar ? (
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                  ) : (
+                    <Camera className="w-6 h-6 text-white" />
+                  )}
+                </div>
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+            </div>
+            <p className="text-[10px] text-gray-400 font-medium pb-1">Miembro desde {new Date(user?.created_at || '').toLocaleDateString('es', { month: 'long', year: 'numeric' })}</p>
+          </div>
+
+          <h2 className="text-xl font-black text-gray-900">
+            {formData.first_name || formData.last_name
+              ? `${formData.first_name} ${formData.last_name}`.trim()
+              : user?.email}
+          </h2>
+          <p className="text-sm text-gray-500 mt-0.5">{user?.email}</p>
+        </div>
       </div>
 
-      <div className="bg-white shadow rounded-lg border border-gray-200">
-        <div className="p-6 sm:p-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-8 pb-8 border-b border-gray-100">
-            <div className="relative group flex-shrink-0">
-              <div className="h-24 w-24 rounded-full bg-green-100 flex items-center justify-center text-green-600 relative overflow-hidden ring-4 ring-white shadow-md">
-                {formData.avatar_url ? (
-                  <img src={formData.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
-                ) : (
-                  <User className="h-12 w-12" />
-                )}
-                {loading && (
-                  <div className="absolute inset-0 bg-white/50 flex items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-green-600" />
-                  </div>
-                )}
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  title="Cambiar foto de perfil" 
-                  disabled={loading}
-                  className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-xs flex flex-col items-center justify-center pb-1 pt-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                >
-                  <Camera className="h-4 w-4 mb-0.5" />
-                  <span>Subir</span>
-                </button>
+      {/* === Tabs === */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
+        {(['perfil', 'facturacion'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all capitalize ${
+              activeTab === tab ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab === 'perfil' ? 'Mi perfil' : 'Facturación'}
+          </button>
+        ))}
+      </div>
+
+      {/* Feedback messages */}
+      {success && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+          <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+          <p className="text-sm text-green-700 font-medium">{success}</p>
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+          <p className="text-sm text-red-700 font-medium">{error}</p>
+        </div>
+      )}
+
+      {/* === PERFIL TAB === */}
+      {activeTab === 'perfil' && (
+        <form onSubmit={handleSave} className="space-y-4">
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
+            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Datos personales</h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-widest">Nombre</label>
+                <input
+                  value={formData.first_name}
+                  onChange={e => setFormData(p => ({ ...p, first_name: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-shadow"
+                  placeholder="Tu nombre"
+                />
               </div>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleUploadAvatar} 
-                accept="image/*" 
-                className="hidden" 
-              />
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-widest">Apellido</label>
+                <input
+                  value={formData.last_name}
+                  onChange={e => setFormData(p => ({ ...p, last_name: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-shadow"
+                  placeholder="Tu apellido"
+                />
+              </div>
             </div>
+
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">{formData.first_name || 'Desconocido'} {formData.last_name}</h2>
-              <p className="text-gray-500 flex items-center mt-1">
-                <Mail className="h-4 w-4 mr-2 text-gray-400" /> <span className="text-gray-900">{user?.email}</span>
-              </p>
-              <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                Rol: {formData.role === 'OWNER' ? 'Propietario' : formData.role}
+              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-widest">Correo electrónico</label>
+              <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-2.5 bg-gray-50">
+                <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+                <span className="text-sm text-gray-500">{user?.email}</span>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-widest">Teléfono</label>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={formData.phone}
+                  onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="+54 9 11 1234 5678"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-widest">Rol</label>
+              <select
+                value={formData.role}
+                onChange={e => setFormData(p => ({ ...p, role: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+              >
+                <option value="">Seleccionar rol...</option>
+                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
             </div>
           </div>
 
-          {loading ? (
-            <p className="text-gray-500 animate-pulse">Cargando datos...</p>
-          ) : (
-            <form onSubmit={handleSave} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Nombre</label>
-                  <input type="text" required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border p-2 text-gray-900 bg-white" value={formData.first_name} onChange={e => setFormData({ ...formData, first_name: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Apellido</label>
-                  <input type="text" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm border p-2 text-gray-900 bg-white" value={formData.last_name} onChange={e => setFormData({ ...formData, last_name: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Teléfono</label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Phone className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <input type="tel" className="block w-full pl-10 rounded-md border-gray-300 focus:border-green-500 focus:ring-green-500 sm:text-sm border p-2 text-gray-900 bg-white" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="+54 9 11 1234-5678" />
-                  </div>
-                </div>
-              </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" />Guardando...</> : 'Guardar cambios'}
+          </button>
+        </form>
+      )}
 
-              {success && <p className="text-sm text-green-600 bg-green-50 p-3 rounded-md border border-green-200 flex items-center">{success}</p>}
-
-              <div className="flex justify-end pt-4">
-                <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 shadow-sm disabled:opacity-50 transition-colors">
-                  {saving ? 'Guardando...' : 'Guardar Cambios'}
-                </button>
+      {/* === Seguridad === */}
+      {activeTab === 'perfil' && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-4">Seguridad</h3>
+          <button
+            onClick={handlePasswordReset}
+            className="flex items-center justify-between w-full p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
+                <Lock className="w-4 h-4 text-blue-600" />
               </div>
-            </form>
-          )}
+              <div className="text-left">
+                <p className="text-sm font-bold text-gray-800">Cambiar contraseña</p>
+                <p className="text-xs text-gray-400">Recibirás un correo con el enlace</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+          </button>
         </div>
+      )}
+
+      {/* === FACTURACIÓN TAB === */}
+      {activeTab === 'facturacion' && (
+        <div className="space-y-4">
+          {/* Plan actual */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-4">Plan actual</h3>
+            <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+                  <Building className="w-5 h-5 text-green-700" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-green-800">Plan Pro</p>
+                  <p className="text-xs text-green-600">Activo · Vence el 01/05/2026</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold bg-green-600 text-white px-3 py-1 rounded-full">Vigente</span>
+            </div>
+          </div>
+
+          {/* Histórico de pagos */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-4">Historial de pagos</h3>
+            <div className="space-y-3">
+              {[
+                { date: '01/04/2026', amount: '$29.99', status: 'Completado', method: 'Tarjeta •••• 4242' },
+                { date: '01/03/2026', amount: '$29.99', status: 'Completado', method: 'Tarjeta •••• 4242' },
+                { date: '01/02/2026', amount: '$29.99', status: 'Completado', method: 'Tarjeta •••• 4242' },
+              ].map((payment, i) => (
+                <div key={i} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center">
+                      <CreditCard className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-800">{payment.amount}</p>
+                      <p className="text-xs text-gray-400">{payment.method} · {payment.date}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-green-700 bg-green-50 px-2 py-1 rounded-lg">{payment.status}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-3 italic text-center">La integración de pagos estará disponible próximamente.</p>
+          </div>
+
+          {/* Próximos vencimientos */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-4">Próximos vencimientos</h3>
+            <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-xl border border-yellow-100">
+              <Clock className="w-5 h-5 text-yellow-600 shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-yellow-800">Renovación automática</p>
+                <p className="text-xs text-yellow-600 mt-0.5">Tu plan se renueva el 01/05/2026. Te notificaremos 7 días antes.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === Cerrar sesión === */}
+      <div className="bg-white rounded-2xl border border-red-100 p-4">
+        <button
+          onClick={handleSignOut}
+          className="flex items-center gap-3 w-full p-3 rounded-xl hover:bg-red-50 transition-colors group"
+        >
+          <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
+            <LogOut className="w-4 h-4 text-red-500" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-bold text-red-600">Cerrar sesión</p>
+            <p className="text-xs text-gray-400">Finalizarás tu sesión en este dispositivo</p>
+          </div>
+        </button>
       </div>
+
     </div>
   )
 }

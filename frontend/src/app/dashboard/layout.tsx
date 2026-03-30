@@ -1,119 +1,536 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useAuth } from '@/components/AuthProvider'
+import { usePermissions, ROLE_LABELS, ROLE_COLORS } from '@/lib/usePermissions'
+import { ALL_NAV_ITEMS, type NavItem } from '@/lib/navigation'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { useEffect } from 'react'
-import { LayoutDashboard, Map as MapIcon, Calendar, User, Settings, LogOut, TestTube, Lightbulb, MapPin, Menu, X, List } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import {
+  LogOut, ChevronLeft, ChevronRight, Menu,
+  Bell, X, Check, AlertCircle, ClipboardList, WifiOff,
+  CalendarDays, Users
+} from 'lucide-react'
 import clsx from 'clsx'
+import Image from 'next/image'
+import { createClient } from '@/lib/supabase/client'
+import RodeoLogo from '@/components/RodeoLogo'
 
-const CowIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M11.5 19C10 19 8.5 18 8 16V13L6 10V7L8 5H16L18 7V10L16 13V16C15.5 18 14 19 12.5 19H11.5Z" />
-    <path d="M6 7C4 7 3 8 3 10C3 11.5 4.5 12 5.5 11" />
-    <path d="M18 7C20 7 21 8 21 10C21 11.5 19.5 12 18.5 11" />
-    <path d="M9 7L10 3L11.5 5" />
-    <path d="M15 7L14 3L12.5 5" />
-    <circle cx="10" cy="11" r="1" />
-    <circle cx="14" cy="11" r="1" />
-  </svg>
-)
+const NOTIF_ICONS: Record<string, React.ComponentType<any>> = {
+  EVENTO:    CalendarDays,
+  TAREA:     ClipboardList,
+  ALERTA:    AlertCircle,
+  INVITACION: Users,
+  SISTEMA:   Bell,
+}
 
-const navigation = [
-  { name: 'Panel', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Mapa', href: '/dashboard/map', icon: MapIcon },
-  { name: 'Potreros', href: '/dashboard/paddocks-list', icon: List },
-  { name: 'Rebaños', href: '/dashboard/herds', icon: CowIcon },
-  { name: 'Planificador', href: '/dashboard/grazing', icon: Calendar },
-  { name: 'Insights', href: '/dashboard/insights', icon: Lightbulb },
-  { name: 'Perfil', href: '/dashboard/profile', icon: User },
-]
+const NOTIF_COLORS: Record<string, string> = {
+  EVENTO:    'bg-blue-100 text-blue-700',
+  TAREA:     'bg-green-100 text-green-700',
+  ALERTA:    'bg-amber-100 text-amber-700',
+  INVITACION:'bg-violet-100 text-violet-700',
+  SISTEMA:   'bg-gray-100 text-gray-600',
+}
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+const PAGE_NAMES: Record<string, string> = {
+  '/dashboard':            'Panel principal',
+  '/dashboard/mi-campo':   'Mi campo',
+  '/dashboard/herds':      'Rebaños',
+  '/dashboard/agenda':     'Agenda',
+  '/dashboard/grazing':    'Planificador',
+  '/dashboard/bitacora':   'Bitácora de potreros',
+  '/dashboard/insights':   'Insights',
+  '/dashboard/profile':    'Mi perfil',
+  '/dashboard/equipo':     'Equipo',
+  '/dashboard/tareas':     'Tareas',
+  '/dashboard/guest-setup':'Configuración de cuenta',
+}
+
+// ── Layout ─────────────────────────────────────────────────────────────────────
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const supabase = createClient()
   const { user, isLoading, signOut } = useAuth()
+  const { can, isOwner, teamRole, roleLabel, roleColors } = usePermissions()
   const router = useRouter()
   const pathname = usePathname()
 
+  const [sidebarOpen, setSidebarOpen]       = useState(true)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [profile, setProfile]               = useState<{ first_name?: string; avatar_url?: string } | null>(null)
+  const [notifications, setNotifications]   = useState<any[]>([])
+  const [notifOpen, setNotifOpen]           = useState(false)
+  const [pendingTasks, setPendingTasks]     = useState(0)
+  const [isOnline, setIsOnline]             = useState(true)
+  const notifRef = useRef<HTMLDivElement>(null)
+
+  // ── Build filtered navigation based on user permissions ────────────────────
+  const filteredNav = useMemo<NavItem[]>(() => {
+    return ALL_NAV_ITEMS.filter(item => {
+      if (isOwner) return true // owners see everything
+      if (item.permissionKey === null) return true // always visible (Panel, Equipo)
+      return can(item.permissionKey as any)
+    })
+  }, [isOwner, can])
+
+  // Mobile bottom nav: up to 5 most-used items from filtered nav
+  const mobileNav = useMemo<NavItem[]>(() => {
+    const priority = ['Panel', 'Mi campo', 'Bitácora', 'Planificador', 'Tareas', 'Insights']
+    const sorted = filteredNav
+      .filter(i => priority.includes(i.name))
+      .sort((a, b) => priority.indexOf(a.name) - priority.indexOf(b.name))
+    return sorted.slice(0, 5)
+  }, [filteredNav])
+
+  // ── Online/Offline detection ─────────────────────────────────────────────
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push('/')
+    setIsOnline(navigator.onLine)
+    const onOnline  = () => setIsOnline(true)
+    const onOffline = () => setIsOnline(false)
+    window.addEventListener('online',  onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online',  onOnline)
+      window.removeEventListener('offline', onOffline)
     }
-  }, [user, isLoading, router])
+  }, [])
 
-  if (isLoading || !user) {
-    return <div className="min-h-screen flex items-center justify-center">Cargando tablero...</div>
+  // ── Sidebar persistence ────────────────────────────────────────────────────
+  useEffect(() => {
+    const saved = localStorage.getItem('rodeo_sidebar')
+    if (saved !== null) setSidebarOpen(saved === 'true')
+  }, [])
+
+  const toggleSidebar = () => {
+    const next = !sidebarOpen
+    setSidebarOpen(next)
+    localStorage.setItem('rodeo_sidebar', String(next))
   }
 
-  const handleSignOut = async () => {
-    await signOut()
-    router.push('/')
+  // ── Load profile ──────────────────────────────────────────────────────────
+  const loadProfile = useCallback(async () => {
+    if (!user) return
+    const { data } = await supabase.from('profiles').select('first_name,avatar_url').eq('id', user.id).single()
+    if (data) setProfile(data)
+  }, [supabase, user])
+
+  useEffect(() => { loadProfile() }, [loadProfile])
+
+  // ── Load notifications + pending tasks ────────────────────────────────────
+  const loadNotifications = useCallback(async () => {
+    if (!user) return
+    const [{ data: notifs }, { count }] = await Promise.all([
+      supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
+      supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('assigned_to', user.id).eq('status', 'PENDIENTE'),
+    ])
+    setNotifications(notifs || [])
+    setPendingTasks(count || 0)
+  }, [supabase, user])
+
+  useEffect(() => { loadNotifications() }, [loadNotifications])
+
+  // ── Close notif panel on outside click ────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false)
+      }
+    }
+    if (notifOpen) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [notifOpen])
+
+  const markAllRead = async () => {
+    if (!user) return
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
-  return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="hidden md:flex md:w-64 md:flex-col">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 bg-white px-6 pb-4">
-          <div className="flex h-16 shrink-0 items-center text-2xl font-bold text-green-700">
-            RODEO
+  const unreadCount = notifications.filter(n => !n.is_read).length
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const isMiCampo = pathname === '/dashboard/mi-campo'
+  const currentPageName = Object.entries(PAGE_NAMES).find(
+    ([path]) => pathname === path || (path !== '/dashboard' && pathname.startsWith(path))
+  )?.[1] ?? 'Rodeo'
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
+        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-400 font-bold tracking-widest text-[10px]">Cargando panel...</p>
+      </div>
+    )
+  }
+
+  if (!user) return null
+
+  const handleSignOut = async () => { await signOut(); router.push('/login') }
+
+  const avatarInitials = profile?.first_name
+    ? profile.first_name[0].toUpperCase()
+    : (user.email?.[0]?.toUpperCase() ?? 'U')
+
+  // Nav item renderer
+  const renderNavItem = (item: NavItem) => {
+    const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+    const showBadge = item.href === '/dashboard/tareas' && pendingTasks > 0
+    return (
+      <li key={item.name}>
+        <Link
+          href={item.href}
+          title={!sidebarOpen ? item.name : undefined}
+          className={clsx(
+            isActive ? 'bg-green-50 text-green-700' : 'text-gray-500 hover:bg-gray-50 hover:text-green-700',
+            'group flex items-center gap-x-3 rounded-xl p-2.5 text-sm font-bold leading-6 transition-all duration-200',
+            !sidebarOpen && 'justify-center'
+          )}
+        >
+          <div className="relative">
+            <item.icon className={clsx(isActive ? 'text-green-600' : 'text-gray-400 group-hover:text-green-600', 'h-5 w-5 shrink-0')} aria-hidden="true" />
+            {showBadge && !sidebarOpen && (
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white text-[7px] font-black rounded-full flex items-center justify-center">
+                {pendingTasks > 9 ? '9+' : pendingTasks}
+              </span>
+            )}
           </div>
-          <nav className="flex flex-1 flex-col">
-            <ul role="list" className="flex flex-1 flex-col gap-y-7">
-              <li>
-                <ul role="list" className="-mx-2 space-y-1">
-                  {navigation.map((item) => (
-                    <li key={item.name}>
-                      <Link
-                        href={item.href}
-                        className={clsx(
-                          pathname === item.href
-                            ? 'bg-gray-50 text-green-600'
-                            : 'text-gray-700 hover:bg-gray-50 hover:text-green-600',
-                          'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6'
-                        )}
-                      >
-                        <item.icon
-                          className={clsx(
-                            pathname === item.href ? 'text-green-600' : 'text-gray-400 group-hover:text-green-600',
-                            'h-6 w-6 shrink-0'
-                          )}
-                          aria-hidden="true"
-                        />
-                        {item.name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-              <li className="mt-auto">
+          {sidebarOpen && (
+            <span className="flex-1 truncate flex items-center justify-between">
+              {item.name}
+              {showBadge && (
+                <span className="ml-auto w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center shrink-0">
+                  {pendingTasks > 9 ? '9+' : pendingTasks}
+                </span>
+              )}
+            </span>
+          )}
+        </Link>
+      </li>
+    )
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  return (
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
+
+      {/* ── Desktop Sidebar ─────────────────────────────────────────────────── */}
+      <aside className={clsx(
+        'hidden md:flex flex-col shrink-0 transition-all duration-300 ease-in-out relative',
+        sidebarOpen ? 'w-60' : 'w-16'
+      )}>
+        <div className="flex grow flex-col bg-white border-r border-gray-100 h-full overflow-hidden">
+
+          {/* Logo + collapse toggle */}
+          <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-gray-100">
+            {sidebarOpen && (
+              <Link href="/landing">
+                <RodeoLogo variant="light" size="md" />
+              </Link>
+            )}
+            <button
+              onClick={toggleSidebar}
+              className={clsx(
+                'w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-green-700 transition-colors',
+                !sidebarOpen && 'mx-auto'
+              )}
+              aria-label={sidebarOpen ? 'Colapsar menú' : 'Expandir menú'}
+            >
+              {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* Guest role badge */}
+          {!isOwner && sidebarOpen && teamRole && (
+            <div className="px-4 pt-3 pb-0">
+              <span className={clsx('inline-flex items-center gap-1.5 text-[9px] font-black px-2.5 py-1 rounded-full', roleColors.badge)}>
+                <span className={clsx('w-1.5 h-1.5 rounded-full', roleColors.dot)} />
+                {roleLabel}
+              </span>
+            </div>
+          )}
+
+          {sidebarOpen && (
+            <div className="px-4 pt-3 pb-1">
+              <span className="text-[9px] font-black tracking-widest text-gray-400 uppercase">Menú</span>
+            </div>
+          )}
+
+          {/* Nav items */}
+          <nav className="flex flex-1 flex-col px-2 py-2 overflow-y-auto">
+            <ul role="list" className="flex flex-1 flex-col gap-y-1">
+              {filteredNav.map(renderNavItem)}
+
+              {/* Sign out — bottom */}
+              <li className="mt-auto pt-2 border-t border-gray-100">
                 <button
                   onClick={handleSignOut}
-                  className="group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-gray-700 hover:bg-gray-50 hover:text-red-600 w-full"
+                  title={!sidebarOpen ? 'Cerrar sesión' : undefined}
+                  className={clsx(
+                    'group flex items-center gap-x-3 rounded-xl p-2.5 text-sm font-semibold text-gray-500 hover:bg-red-50 hover:text-red-600 w-full transition-colors',
+                    !sidebarOpen && 'justify-center'
+                  )}
                 >
-                  <LogOut
-                    className="h-6 w-6 shrink-0 text-gray-400 group-hover:text-red-600"
-                    aria-hidden="true"
-                  />
-                  Cerrar sesión
+                  <LogOut className="h-5 w-5 shrink-0 text-gray-400 group-hover:text-red-500" />
+                  {sidebarOpen && <span>Cerrar sesión</span>}
                 </button>
               </li>
             </ul>
           </nav>
         </div>
-      </div>
+      </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="py-10">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {children}
+      {/* ── Mobile drawer overlay ──────────────────────────────────────────────── */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
+          <div className="absolute left-0 top-0 bottom-0 w-72 bg-white flex flex-col shadow-2xl">
+            <div className="flex h-14 items-center justify-between px-4 border-b border-gray-100">
+              <Link href="/landing">
+                <RodeoLogo variant="light" size="md" />
+              </Link>
+              <button onClick={() => setMobileMenuOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Guest badge in mobile drawer */}
+            {!isOwner && teamRole && (
+              <div className="px-4 pt-3 pb-0">
+                <span className={clsx('inline-flex items-center gap-1.5 text-[9px] font-black px-2.5 py-1 rounded-full', roleColors.badge)}>
+                  <span className={clsx('w-1.5 h-1.5 rounded-full', roleColors.dot)} />
+                  {roleLabel}
+                </span>
+              </div>
+            )}
+
+            <nav className="flex-1 overflow-y-auto px-2 py-3">
+              <ul className="space-y-1">
+                {filteredNav.map(item => {
+                  const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                  return (
+                    <li key={item.name}>
+                      <Link
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={clsx(
+                          isActive ? 'bg-green-50 text-green-700' : 'text-gray-500 hover:bg-gray-50',
+                          'flex items-center gap-3 rounded-xl p-3 text-sm font-bold transition-all'
+                        )}
+                      >
+                        <item.icon className={clsx(isActive ? 'text-green-600' : 'text-gray-400', 'h-5 w-5')} />
+                        {item.name}
+                        {item.href === '/dashboard/tareas' && pendingTasks > 0 && (
+                          <span className="ml-auto w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                            {pendingTasks}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </nav>
+            <div className="px-2 pb-4 border-t border-gray-100 pt-3">
+              <Link
+                href="/dashboard/profile"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-xl p-3 text-sm font-bold text-gray-500 hover:bg-gray-50"
+              >
+                {profile?.avatar_url ? (
+                  <Image src={profile.avatar_url} alt="Avatar" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-black">
+                    {avatarInitials}
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-bold text-gray-800">{profile?.first_name || user.email?.split('@')[0]}</p>
+                  <p className="text-[10px] text-gray-400">Ver perfil</p>
+                </div>
+              </Link>
+              <button
+                onClick={handleSignOut}
+                className="w-full mt-2 flex items-center gap-3 rounded-xl p-3 text-sm font-bold text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+              >
+                <LogOut className="h-5 w-5" />
+                Cerrar sesión
+              </button>
+            </div>
           </div>
         </div>
-      </main>
+      )}
+
+      {/* ── Main column ────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+
+        {/* ── Top header ──────────────────────────────────────────────────── */}
+        <header className="h-14 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 z-30">
+          {/* Left: mobile hamburger + page title */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button
+              className="md:hidden p-2 rounded-xl text-gray-500 hover:bg-gray-100 shrink-0"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <h1 className="text-sm sm:text-base font-black text-gray-800 tracking-tight truncate">{currentPageName}</h1>
+          </div>
+
+          {/* Right: offline badge + role badge (desktop) + bell + avatar */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0" ref={notifRef}>
+
+            {/* Offline indicator */}
+            {!isOnline && (
+              <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full border border-amber-200">
+                <WifiOff className="w-3 h-3" /> Sin conexión
+              </span>
+            )}
+
+            {/* Guest role badge in header (desktop) */}
+            {!isOwner && teamRole && (
+              <span className={clsx('hidden sm:flex items-center gap-1.5 text-[9px] font-black px-2.5 py-1 rounded-full', roleColors.badge)}>
+                <span className={clsx('w-1.5 h-1.5 rounded-full', roleColors.dot)} />
+                {roleLabel}
+              </span>
+            )}
+
+            <div className="relative">
+              <button
+                onClick={() => setNotifOpen(!notifOpen)}
+                className="relative w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+                )}
+              </button>
+
+              {/* Notification panel */}
+              {notifOpen && (
+                <div className="absolute right-0 top-11 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-gray-600" />
+                      <h3 className="text-sm font-black text-gray-900">Notificaciones</h3>
+                      {unreadCount > 0 && (
+                        <span className="w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-[10px] font-bold text-green-600 hover:text-green-700 flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Marcar todas leídas
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="text-center py-10">
+                        <Bell className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                        <p className="text-sm font-bold text-gray-400">Sin notificaciones</p>
+                      </div>
+                    ) : (
+                      notifications.map(notif => {
+                        const Icon = NOTIF_ICONS[notif.type] || Bell
+                        const colorClass = NOTIF_COLORS[notif.type] || NOTIF_COLORS.SISTEMA
+                        const date = new Date(notif.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                        return (
+                          <div
+                            key={notif.id}
+                            className={clsx(
+                              'flex items-start gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors',
+                              !notif.is_read && 'bg-green-50/40'
+                            )}
+                          >
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${colorClass}`}>
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-gray-900 leading-snug">{notif.title}</p>
+                              {notif.body && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{notif.body}</p>}
+                              <p className="text-[9px] text-gray-400 mt-1">{date}</p>
+                            </div>
+                            {!notif.is_read && <div className="w-2 h-2 bg-green-500 rounded-full mt-2 shrink-0" />}
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Avatar → profile link */}
+            <Link
+              href="/dashboard/profile"
+              className="flex items-center gap-2 rounded-xl p-1.5 hover:bg-gray-50 transition-colors"
+            >
+              <div className="text-right hidden sm:block">
+                <p className="text-xs font-bold text-gray-800 leading-none">{profile?.first_name || user.email?.split('@')[0]}</p>
+                <p className="text-[9px] text-gray-400 mt-0.5 truncate max-w-[100px]">{user.email}</p>
+              </div>
+              {profile?.avatar_url ? (
+                <Image
+                  src={profile.avatar_url}
+                  alt="Avatar"
+                  width={32}
+                  height={32}
+                  className="w-8 h-8 rounded-full object-cover ring-2 ring-green-100 shrink-0"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-black ring-2 ring-green-100 shrink-0">
+                  {avatarInitials}
+                </div>
+              )}
+            </Link>
+          </div>
+        </header>
+
+        {/* ── Page content ─────────────────────────────────────────────────── */}
+        <main className="flex-1 overflow-hidden flex flex-col">
+          {isMiCampo ? (
+            <div className="flex-1 overflow-hidden h-full">{children}</div>
+          ) : (
+            <div className="flex-1 overflow-hidden flex flex-col h-full">
+              <div className="flex flex-col h-full px-3 sm:px-6 lg:px-8 py-4 max-w-[1800px] w-full mx-auto">
+                {children}
+              </div>
+            </div>
+          )}
+        </main>
+
+        {/* ── Mobile bottom nav ─────────────────────────────────────────────── */}
+        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 z-40 safe-area-pb">
+          <div className="flex items-center justify-around px-2 py-2">
+            {mobileNav.map(item => {
+              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={clsx(
+                    'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative',
+                    isActive ? 'text-green-700' : 'text-gray-400'
+                  )}
+                >
+                  <div className="relative">
+                    <item.icon className={clsx('h-5 w-5', isActive ? 'text-green-600' : 'text-gray-400')} />
+                    {item.href === '/dashboard/tareas' && pendingTasks > 0 && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" />
+                    )}
+                  </div>
+                  <span className={clsx('text-[9px] font-bold', isActive ? 'text-green-700' : 'text-gray-400')}>
+                    {item.name}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      </div>
     </div>
   )
 }

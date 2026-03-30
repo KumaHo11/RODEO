@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="96" height="96">
+  <!-- Background circle -->
+  <rect width="96" height="96" rx="96" fill="#16a34a"/>
+  
+  <!-- Grass/field base -->
+  <ellipse cx="256" cy="380" rx="180" ry="24" fill="#15803d" opacity="0.6"/>
+  
+  <!-- Cow silhouette - simplified clean bovine -->
+  <!-- Body -->
+  <ellipse cx="256" cy="280" rx="100" ry="70" fill="white"/>
+  <!-- Head -->
+  <ellipse cx="340" cy="235" rx="48" ry="40" fill="white"/>
+  <!-- Neck connection -->
+  <rect x="295" y="225" width="50" height="40" rx="8" fill="white"/>
+  
+  <!-- Legs -->
+  <rect x="185" y="335" width="22" height="65" rx="9" fill="white"/>
+  <rect x="220" y="335" width="22" height="65" rx="9" fill="white"/>
+  <rect x="280" y="335" width="22" height="65" rx="9" fill="white"/>
+  <rect x="315" y="335" width="22" height="65" rx="9" fill="white"/>
+  
+  <!-- Ear -->
+  <ellipse cx="363" cy="205" rx="14" ry="20" fill="white" transform="rotate(-20 363 205)"/>
+  
+  <!-- Eye -->
+  <circle cx="350" cy="240" r="6" fill="#16a34a"/>
+  
+  <!-- Nose -->
+  <ellipse cx="378" cy="262" rx="16" ry="10" fill="#f0fdf4"/>
+  <circle cx="372" cy="262" r="4" fill="#15803d"/>
+  <circle cx="384" cy="262" r="4" fill="#15803d"/>
+  
+  <!-- Horns -->
+  <path d="M 345 198 Q 335 175 350 165" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M 375 195 Q 390 172 380 160" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/>
+  
+  <!-- Tail -->
+  <path d="M 158 275 Q 130 290 145 320 Q 150 340 135 355" stroke="white" stroke-width="10" fill="none" stroke-linecap="round"/>
+  
+  <!-- Grass blades at bottom -->
+  <path d="M 100 390 Q 106 365 112 390" stroke="#86efac" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M 120 388 Q 128 358 136 388" stroke="#86efac" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M 370 388 Q 378 358 386 388" stroke="#86efac" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M 390 390 Q 396 365 402 390" stroke="#86efac" stroke-width="5" fill="none" stroke-linecap="round"/>
+</svg>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import RodeoLogo from '@/components/RodeoLogo'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -36,8 +37,11 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="flex min-h-screen flex-1 flex-col justify-center px-6 py-12 lg:px-8 bg-gray-50">
+      <div className="flex flex-col items-center gap-3 mb-6">
+        <RodeoLogo variant="light" size="lg" showTagline={false} />
+      </div>
       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-        <h2 className="mt-10 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
+        <h2 className="mt-4 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
           Recupera tu contraseña
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
@@ -50,7 +54,7 @@ export default function ForgotPasswordPage() {
           <div className="bg-green-50 border border-green-200 text-green-800 rounded-md p-4 text-sm mt-4 text-center">
             {successMsg}
             <div className="mt-4">
-              <Link href="/" className="font-semibold text-green-600 hover:text-green-500">
+              <Link href="/login" className="font-semibold text-green-600 hover:text-green-500">
                 Volver a Iniciar Sesión
               </Link>
             </div>
@@ -85,7 +89,7 @@ export default function ForgotPasswordPage() {
         )}
 
         <div className="mt-10 text-center text-sm">
-          <Link href="/" className="font-semibold text-green-600 hover:text-green-500">
+          <Link href="/login" className="font-semibold text-green-600 hover:text-green-500">
             &larr; Volver al inicio de sesión
           </Link>
         </div>

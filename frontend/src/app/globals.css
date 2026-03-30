@@ -1,31 +1,72 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+@import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #111827; /* gray-900 */
+
+  /* ── Rodeo Design Tokens ─────────────────────────── */
+  /* Brand */
+  --rodeo-green:       #16a34a;
+  --rodeo-green-dark:  #15803d;
+  --rodeo-green-light: #bbf7d0;
+
+  /* Semáforo operativo */
+  --signal-ok:         #16a34a;
+  --signal-warning:    #d97706;
+  --signal-critical:   #dc2626;
+
+  /* Neutros técnicos */
+  --surface-base:      #ffffff;
+  --surface-subtle:    #f9fafb;
+  --surface-muted:     #f3f4f6;
+  --border-default:    #e5e7eb;
+  --border-subtle:     #f3f4f6;
+  --text-primary:      #030712;
+  --text-secondary:    #374151;
+  --text-muted:        #9ca3af;
+  --text-placeholder:  #d1d5db;
+
+  /* NDVI semánticos */
+  --ndvi-optimal:      #16a34a;
+  --ndvi-good:         #65a30d;
+  --ndvi-fair:         #ca8a04;
+  --ndvi-low:          #dc2626;
+
+  /* Radios */
+  --radius-card:       16px;
+  --radius-button:     12px;
+  --radius-badge:      999px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: 'Inter', Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #ffffff;
-    --foreground: #171717;
+    --foreground: #111827;
   }
 }
 
-input, select, textarea {
-  color: #171717 !important;
-  background-color: #ffffff;
+* {
+  box-sizing: border-box;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Buttons (Base styles) */
+button {
+  transition: all 0.2s;
+  cursor: pointer;
 }

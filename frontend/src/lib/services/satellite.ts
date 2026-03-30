@@ -1,56 +1,82 @@
 /**
- * Satellite Service Wrapper for Sentinel-2 / Sentinel Hub API
- * Used for Normalized Difference Vegetation Index (NDVI) calculations.
+ * Satellite Service — Real NDVI via Earth Search (Sentinel-2) + TiTiler
+ * Free, no API key required. Fallback to deterministic mock if unavailable.
  */
 
 export interface SatelliteData {
-  averageNdvi: number;
-  grazableAreaPct: number; // Excludes water bodies / bare soil (NDVI < 0.1)
-  estimatedAvailableDryMatterHa: number; // Kg MS / Ha estimated from NDVI
-  captureDate: string;
+  averageNdvi: number
+  grazableAreaPct: number
+  estimatedAvailableDryMatterHa: number
+  captureDate: string
+  source: 'sentinel-2-l2a' | 'estimated'
+  cloudCover?: number | null
 }
 
-/**
- * Mocks or connects to Sentinel Hub API.
- * 
- * TODO PHASE 3: To enable the real API, you will need a SENTINEL_HUB_CLIENT_ID 
- * and SENTINEL_HUB_CLIENT_SECRET. We will authenticate, get an OAuth token, 
- * and use the Statistical API using the paddock's GeoJSON geometry.
- */
-export async function getPaddockNDVI(geojsonPolygon: any, area_ha: number): Promise<SatelliteData> {
-  const isProd = process.env.NEXT_PUBLIC_USE_REAL_SATELLITE_API === 'true';
+// In-memory cache to avoid repeated API calls (per paddock per session)
+const ndviCache = new Map<string, SatelliteData>()
 
-  if (isProd) {
-    // 1. Get OAuth Token from Sentinel Hub
-    // 2. Build Statistical API request using geojsonPolygon
-    // 3. Process the response to get mean NDVI and histogram (to exclude NDVI < 0.1)
-    throw new Error("Sentinel Hub API implies async auth. Missing credentials in env.");
-  } else {
-    // --- Mock Implementation for Prototype / Phase 2 ---
-    // We simulate a realistic satellite response to build the UI immediately.
-    
-    // Delay to simulate network
-    await new Promise(resolve => setTimeout(resolve, 800));
+export async function getPaddockNDVI(
+  geojsonPolygon: any,
+  paddock_id: string,
+  area_ha: number
+): Promise<SatelliteData> {
+  // Return cached result if available
+  if (ndviCache.has(paddock_id)) {
+    return ndviCache.get(paddock_id)!
+  }
 
-    // Randomize a decent NDVI between 0.3 and 0.8
-    const randomNdvi = 0.3 + (Math.random() * 0.5);
-    
-    // Assume 90% is grazable, 10% might be lagoons or roads if area > 10ha
-    const grazableAreaPct = area_ha > 10 ? 90 + Math.random() * 8 : 100;
-    
-    // Rough heuristic: NDVI 0.8 = ~3000 Kg MS/Ha, NDVI 0.3 = ~800 Kg MS/Ha
-    const baseKg = 800;
-    const maxKg = 3000;
-    const estimatedAvailableDryMatterHa = Math.round(baseKg + ((randomNdvi - 0.3) / 0.5) * (maxKg - baseKg));
+  // If no geometry, return deterministic estimate based on area + id
+  if (!geojsonPolygon) {
+    return deterministicFallback(paddock_id, area_ha)
+  }
 
-    const pastWeek = new Date();
-    pastWeek.setDate(pastWeek.getDate() - Math.floor(Math.random() * 5));
+  try {
+    const res = await fetch('/api/ndvi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        geojson: geojsonPolygon,
+        paddock_id,
+      }),
+    })
 
-    return {
-      averageNdvi: Number(randomNdvi.toFixed(2)),
-      grazableAreaPct: Number(grazableAreaPct.toFixed(1)),
-      estimatedAvailableDryMatterHa,
-      captureDate: pastWeek.toISOString().split('T')[0]
-    };
+    if (!res.ok) throw new Error(`NDVI API error ${res.status}`)
+
+    const data = await res.json()
+    const result: SatelliteData = {
+      averageNdvi: data.averageNdvi,
+      grazableAreaPct: data.grazableAreaPct,
+      estimatedAvailableDryMatterHa: data.estimatedAvailableDryMatterHa,
+      captureDate: data.captureDate,
+      source: data.source,
+      cloudCover: data.cloudCover,
+    }
+
+    ndviCache.set(paddock_id, result)
+    return result
+  } catch (err) {
+    console.warn('[Satellite] Falling back to estimate:', err)
+    return deterministicFallback(paddock_id, area_ha)
+  }
+}
+
+function deterministicFallback(paddock_id: string, area_ha: number): SatelliteData {
+  // Deterministic hash from paddock ID — consistent per paddock
+  let hash = 0
+  for (let i = 0; i < paddock_id.length; i++) {
+    hash = ((hash << 5) - hash) + paddock_id.charCodeAt(i)
+    hash |= 0
+  }
+  const normalized = (Math.abs(hash) % 1000) / 1000
+  const ndvi = Number((0.35 + normalized * 0.43).toFixed(3))
+  const dryMatterKgHa = Math.round(600 + normalized * 1800)
+
+  return {
+    averageNdvi: ndvi,
+    grazableAreaPct: Number((84 + normalized * 12).toFixed(1)),
+    estimatedAvailableDryMatterHa: dryMatterKgHa,
+    captureDate: new Date().toISOString().split('T')[0],
+    source: 'estimated',
+    cloudCover: null,
   }
 }
