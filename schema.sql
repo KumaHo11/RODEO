@@ -47,6 +47,7 @@ CREATE TABLE paddocks (
     geom GEOMETRY(POLYGON, 4326),
     is_grazable BOOLEAN DEFAULT true,
     current_status VARCHAR(50) CHECK (current_status IN ('RESTING', 'GRAZING')) DEFAULT 'RESTING',
+    estimated_adh DECIMAL(10, 2) DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -75,6 +76,7 @@ CREATE TABLE grazing_plans (
     exit_date DATE,
     planned_recovery_days INT,
     status VARCHAR(50) CHECK (status IN ('PLANNED', 'ACTIVE', 'COMPLETED')) DEFAULT 'PLANNED',
+    actual_adh_consumed DECIMAL(10, 2) DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
