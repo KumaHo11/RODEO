@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useOnboarding } from '../OnboardingContext'
+import { useAuth } from '@/components/AuthProvider'
 import { Loader2, ArrowRight, ArrowLeft, Trash2, Ruler, Map, MapPin, SkipForward, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import turfArea from '@turf/area'
@@ -29,6 +30,7 @@ interface DraftShape { geojson: any; area_ha: number; layer: any }
 
 export default function Step2Map() {
   const { data, updateData, nextStep, prevStep } = useOnboarding()
+  const { user } = useAuth()
 
   // Map center from location selected in step 1
   const mapCenter: [number, number] = data.location
@@ -36,8 +38,9 @@ export default function Step2Map() {
     : [-34.6037, -58.3816]
 
   const phase = data.fieldBoundary ? 'paddock' : 'field'
-  const [draft,     setDraft]     = useState<DraftShape | null>(null)
-  const [draftName, setDraftName] = useState('')
+  const [draft,          setDraft]          = useState<DraftShape | null>(null)
+  const [draftName,      setDraftName]      = useState('')
+  const [draftFieldName, setDraftFieldName] = useState(data.fieldName || '') // pre-fill from Step1
   const [showSkipWarning, setShowSkipWarning] = useState(false)
 
   const handleShapeDrawn = useCallback((geojson: any, layer: any) => {
@@ -47,17 +50,23 @@ export default function Step2Map() {
   }, [])
 
   const confirmField = () => {
-    if (!draft) return
+    if (!draft || !draftFieldName.trim()) return
+    // Save boundary + name together — this is the definitive write to context
     updateData({
       fieldBoundary:   draft.geojson,
       fieldBoundaryHa: draft.area_ha,
       totalArea:       draft.area_ha,
+      fieldName:       draftFieldName.trim(),
     })
     setDraft(null)
     setDraftName('')
   }
 
-  const cancelDraft = () => { draft?.layer?.remove(); setDraft(null) }
+  const cancelDraft = () => {
+    draft?.layer?.remove()
+    setDraft(null)
+    setDraftFieldName(data.fieldName || '') // restore
+  }
 
   const confirmPaddock = () => {
     if (!draft || !draftName.trim()) return
@@ -77,14 +86,29 @@ export default function Step2Map() {
     setDraft(null)
   }
 
+  // Persist step to DB
+  const persistStep = async (step: number) => {
+    try {
+      if (!user) return
+      const idToken = await user.getIdToken()
+      await fetch('/api/auth/onboarding-step', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ step }),
+      })
+    } catch (e) { console.warn('Could not persist step 2:', e) }
+  }
+
   // Skip handler: mark skipped and advance
-  const handleSkip = () => {
+  const handleSkip = async () => {
     updateData({ skippedMap: true })
+    await persistStep(2)
     nextStep()
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     updateData({ skippedMap: false })
+    await persistStep(2)
     nextStep()
   }
 
@@ -334,14 +358,36 @@ export default function Step2Map() {
           <AnimatePresence>
             {phase === 'field' && draft && (
               <motion.div initial={{ opacity: 0, scale: 0.96, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }}
-                className="absolute top-4 right-4 z-[1000] bg-white rounded-2xl shadow-xl border border-gray-100 w-64 p-5">
-                <h3 className="text-sm font-bold text-gray-900 mb-1 tracking-tight">Perímetro del campo</h3>
-                <p className="text-[10px] text-gray-400 mb-5 font-normal">
+                className="absolute top-4 right-4 z-[1000] bg-white rounded-2xl shadow-xl border border-gray-100 w-72 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
+                    <Ruler className="w-3.5 h-3.5 text-blue-600" />
+                  </div>
+                  <h3 className="text-sm font-bold text-gray-900 tracking-tight">Confirmar campo</h3>
+                </div>
+                <p className="text-[10px] text-gray-400 mb-4 font-normal">
                   Superficie total: <strong className="text-gray-700 font-bold">{draft.area_ha} ha</strong>
                 </p>
+                {/* Field name input — key moment to confirm the name */}
+                <div className="space-y-1.5 mb-4">
+                  <label className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Nombre del establecimiento</label>
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Ej: La Posta, Estancia El Ombú..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none placeholder:text-gray-300 font-normal transition-all"
+                    value={draftFieldName}
+                    onChange={e => setDraftFieldName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && draftFieldName.trim() && confirmField()}
+                  />
+                </div>
                 <div className="flex gap-2">
                   <button onClick={cancelDraft} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition-all">Cancelar</button>
-                  <button onClick={confirmField} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all">Confirmar campo</button>
+                  <button
+                    onClick={confirmField}
+                    disabled={!draftFieldName.trim()}
+                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all disabled:opacity-30"
+                  >Confirmar campo</button>
                 </div>
               </motion.div>
             )}

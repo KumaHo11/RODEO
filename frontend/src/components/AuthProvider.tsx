@@ -1,100 +1,101 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { createClient } from '../lib/supabase/client'
-import { Session, User } from '@supabase/supabase-js'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { auth } from '@/lib/firebase/client'
+import {
+  onAuthStateChanged,
+  signOut as firebaseSignOut,
+  User,
+} from 'firebase/auth'
+
+type Profile = {
+  id: string
+  firebase_uid: string
+  email: string
+  first_name?: string
+  last_name?: string
+  avatar_url?: string
+  organization_id?: string
+  onboarding_step?: number
+  team_role?: string
+  permissions?: Record<string, boolean>
+  country_code?: string
+  role?: string
+  is_first_login?: boolean
+}
 
 type AuthContextType = {
-  session: Session | null
   user: User | null
-  profile: any | null
+  profile: Profile | null
   isLoading: boolean
   signOut: () => Promise<void>
+  refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
-  session: null,
   user: null,
   profile: null,
   isLoading: true,
   signOut: async () => {},
+  refreshProfile: async () => {},
 })
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null)
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<any | null>(null)
+  const [user, setUser]       = useState<User | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const supabase = createClient()
-
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = useCallback(async (firebaseUser: User) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      
-      if (error) {
-        console.error('Error fetching profile:', error)
-        setProfile(null)
+      const idToken = await firebaseUser.getIdToken()
+      const res = await fetch('/api/auth/profile', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setProfile(data.profile)
       } else {
-        setProfile(data)
+        setProfile(null)
       }
     } catch (err) {
-      console.error('Exception fetching profile:', err)
+      console.error('Error fetching profile:', err)
       setProfile(null)
-    }
-  }
-
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
-        if (session?.user) {
-          fetchProfile(session.user.id).finally(() => {
-            setIsLoading(false)
-          })
-        } else {
-          setProfile(null)
-          setIsLoading(false)
-        }
-      }
-    )
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id).finally(() => {
-          setIsLoading(false)
-        })
-      } else {
-        setIsLoading(false)
-      }
-    }).catch(err => {
-      console.error('Session check error:', err)
-      setIsLoading(false)
-    })
-
-    return () => {
-      subscription.unsubscribe()
     }
   }, [])
 
+  const refreshProfile = useCallback(async () => {
+    if (user) await fetchProfile(user)
+  }, [user, fetchProfile])
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser)
+      if (firebaseUser) {
+        // Guarda el token en cookie para el middleware
+        const token = await firebaseUser.getIdToken()
+        document.cookie = `__session=${token}; path=/; max-age=3600; SameSite=Lax`
+        await fetchProfile(firebaseUser)
+      } else {
+        // Limpiar cookie al cerrar sesión
+        document.cookie = '__session=; path=/; max-age=0'
+        setProfile(null)
+      }
+      setIsLoading(false)
+    })
+
+    return () => unsubscribe()
+  }, [fetchProfile])
+
   const signOut = async () => {
-    await supabase.auth.signOut()
+    await firebaseSignOut(auth)
+    document.cookie = '__session=; path=/; max-age=0'
   }
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, isLoading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, isLoading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-export const useAuth = () => {
-  return useContext(AuthContext)
-}
+export const useAuth = () => useContext(AuthContext)

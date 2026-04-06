@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
+import { apiFetch } from '@/lib/apiFetch'
 import {
   TrendingUp, TrendingDown, Minus, Leaf, AlertTriangle,
   CheckCircle, Info, Sparkles, BarChart3, Target, Camera,
@@ -75,7 +75,6 @@ function holismoScore(paddocks: any[], plans: any[], herds: any[], weather: any)
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function InsightsPage() {
   const { user } = useAuth()
-  const supabase = createClient()
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -95,30 +94,20 @@ export default function InsightsPage() {
   async function loadData() {
     if (!user) return
     setRefreshing(true)
-    const { data: profileData } = await supabase
-      .from('profiles').select('organization_id').eq('id', user.id).single()
-    const orgId = profileData?.organization_id
-    if (!orgId) { setLoading(false); setRefreshing(false); return }
 
-    const [
-      { data: paddockData },
-      { data: planData },
-      { data: herdData },
-      { data: evData },
-      { data: noteData },
-    ] = await Promise.all([
-      supabase.from('paddocks').select('*').eq('org_id', orgId),
-      supabase.from('grazing_plans').select('*').eq('org_id', orgId).order('entry_date', { ascending: false }),
-      supabase.from('herds').select('*').eq('org_id', orgId),
-      supabase.from('farm_events').select('*').eq('org_id', orgId).order('event_date', { ascending: false }).limit(20),
-      supabase.from('field_notes').select('*').eq('org_id', orgId).order('created_at', { ascending: false }).limit(100),
+    const [paddocksRes, plansRes, herdsRes, eventsRes, notesRes] = await Promise.all([
+      apiFetch('/api/paddocks'),
+      apiFetch('/api/grazing-plans'),
+      apiFetch('/api/herds'),
+      apiFetch('/api/farm-events'),
+      apiFetch('/api/field-notes'),
     ])
 
-    setPaddocks(paddockData || [])
-    setPlans(planData || [])
-    setHerds(herdData || [])
-    setFarmEvents(evData || [])
-    setFieldNotes(noteData || [])
+    setPaddocks(paddocksRes.ok ? (await paddocksRes.json()).paddocks ?? [] : [])
+    setPlans(plansRes.ok ? (await plansRes.json()).plans ?? [] : [])
+    setHerds(herdsRes.ok ? (await herdsRes.json()).herds ?? [] : [])
+    setFarmEvents(eventsRes.ok ? (await eventsRes.json()).events ?? [] : [])
+    setFieldNotes(notesRes.ok ? (await notesRes.json()).notes ?? [] : [])
     setLoading(false)
     setRefreshing(false)
   }

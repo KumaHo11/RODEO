@@ -2,11 +2,14 @@
 
 import React, { useState } from 'react'
 import { useOnboarding } from '../OnboardingContext'
+import { useAuth } from '@/components/AuthProvider'
 import { Search, Loader2, ArrowRight, MapPin, Building2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export default function Step1Location() {
   const { data, updateData, nextStep } = useOnboarding()
+  const { user } = useAuth()
+  const [saving, setSaving] = useState(false)
 
   const [searchQuery, setSearchQuery]  = useState(data.location?.address || '')
   const [searching,   setSearching]    = useState(false)
@@ -64,6 +67,13 @@ export default function Step1Location() {
 
   const isValid = !!(data.fieldName.trim() && data.location)
 
+  const handleNext = () => {
+    if (!isValid) return
+    // No API call here — all DB writes happen in finishOnboarding (Step4)
+    // This prevents partial writes that conflict with the complete Step4 write
+    nextStep()
+  }
+
   return (
     <div className="flex-1 flex items-center justify-center px-8 py-10">
       <motion.div
@@ -75,11 +85,12 @@ export default function Step1Location() {
         {/* Card */}
         <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-100/60 overflow-hidden">
 
-          {/* Accent header */}
-          <div className="bg-gradient-to-r from-green-600 to-emerald-500 px-8 py-6">
-            <p className="text-[10px] font-black text-green-100 tracking-widest uppercase mb-1">Paso 1 de 4</p>
-            <h2 className="text-xl font-black text-white tracking-tight">Identificá tu establecimiento</h2>
-            <p className="text-sm text-green-100/80 mt-1 font-normal">Nombre y ubicación de tu campo</p>
+
+          {/* Simple white header — no green */}
+          <div className="px-8 pt-8 pb-2">
+            <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-1">Paso 1 de 4</p>
+            <h2 className="text-xl font-black text-gray-900 tracking-tight">Identificá tu establecimiento</h2>
+            <p className="text-sm text-gray-500 mt-1">Nombre y ubicación de tu campo</p>
           </div>
 
           <div className="px-8 py-8 space-y-6">
@@ -180,11 +191,11 @@ export default function Step1Location() {
 
             {/* CTA */}
             <button
-              onClick={nextStep}
-              disabled={!isValid}
+              onClick={handleNext}
+              disabled={!isValid || saving}
               className="w-full bg-green-600 hover:bg-green-700 active:scale-[0.98] disabled:opacity-30 disabled:grayscale text-white font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-green-600/20"
             >
-              Siguiente <ArrowRight className="w-4 h-4" />
+              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</> : <>Siguiente <ArrowRight className="w-4 h-4" /></>}
             </button>
 
             {!isValid && (

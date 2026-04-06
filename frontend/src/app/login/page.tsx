@@ -1,48 +1,45 @@
 'use client'
 
 import { useAuth } from '@/components/AuthProvider'
+import { auth } from '@/lib/firebase/client'
+import {
+  signInWithEmailAndPassword,
+} from 'firebase/auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, Suspense } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import RodeoLogo from '@/components/RodeoLogo'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { ArrowRight, Loader2 } from 'lucide-react'
+import { ArrowRight, Loader2, Eye, EyeOff, Mail, CheckCircle } from 'lucide-react'
 
 function LoginContent() {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, profile } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const nextPath = searchParams.get('next')
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [errorMSG, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [email, setEmail]               = useState('')
+  const [password, setPassword]         = useState('')
+  const [errorMSG, setError]            = useState<string | null>(null)
+  const [loading, setLoading]           = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
+  const justVerified = searchParams.get('verified') === '1'
 
-  const supabase = createClient()
-
-  // If already authenticated, redirect away immediately
   useEffect(() => {
-    if (!isLoading && user) {
+    // Only redirect if email is verified
+    if (!isLoading && user && user.emailVerified) {
       redirectAfterAuth()
     }
-  }, [user, isLoading])
+  }, [user, isLoading, profile])
 
-  const redirectAfterAuth = async () => {
-    // If middleware sent a ?next param, go there
+  const redirectAfterAuth = () => {
     if (nextPath && nextPath !== '/login') {
       router.replace(nextPath)
       return
     }
-    // Otherwise check onboarding step
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('onboarding_step')
-      .eq('id', (await supabase.auth.getUser()).data.user?.id || '')
-      .single()
-
-    if (profile && (profile.onboarding_step || 0) < 3) {
+    // Redirect to onboarding if not completed (step 4 = complete)
+    if (profile && (profile.onboarding_step ?? 0) < 4) {
       router.replace('/onboarding')
     } else {
       router.replace('/dashboard')
@@ -59,22 +56,38 @@ function LoginContent() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setUnverifiedEmail(null)
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    try {
+      const credential = await signInWithEmailAndPassword(auth, email, password)
+      const firebaseUser = credential.user
 
-    if (error) {
-      setLoading(false)
-      if (error.message.includes('Email not confirmed')) {
-        setError('Por favor verifica tu correo electrónico antes de ingresar.')
-      } else {
-        setError('Correo electrónico o contraseña incorrectos.')
+      // Reload user to get fresh emailVerified status from Firebase server
+      // (the cached credential.user may still show emailVerified=false even after clicking the link)
+      await firebaseUser.reload()
+      const refreshedUser = auth.currentUser!
+
+      // Block login if email is not verified
+      if (!refreshedUser.emailVerified) {
+        await auth.signOut() // sign them back out
+        setUnverifiedEmail(email)
+        setLoading(false)
+        return
       }
-      return
-    }
 
-    // Login OK — redirect based on onboarding step
-    await redirectAfterAuth()
+      // Auth state change triggers useEffect → redirectAfterAuth()
+    } catch (err: any) {
+      setLoading(false)
+      const code = err.code || ''
+      if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        setError('Correo electrónico o contraseña incorrectos.')
+      } else if (code === 'auth/too-many-requests') {
+        setError('Demasiados intentos fallidos. Intenta más tarde.')
+      } else {
+        setError('Error al iniciar sesión. Intenta nuevamente.')
+      }
+    }
   }
 
   return (
@@ -85,7 +98,6 @@ function LoginContent() {
           <RodeoLogo variant="dark" size="xl" showTagline={true} />
           <p className="text-green-200 font-medium mt-3 text-sm tracking-wide">Gestión ganadera inteligente</p>
         </div>
-        {/* Background texture */}
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
       </div>
 
@@ -96,6 +108,20 @@ function LoginContent() {
             <h2 className="text-3xl font-black tracking-tight text-gray-950 mb-2">Inicia sesión</h2>
             <p className="text-gray-500 text-sm">Ingresa a tu cuenta para gestionar tu campo.</p>
           </div>
+
+          {/* Email verified success banner */}
+          {justVerified && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+              className="mb-6 bg-green-50 border border-green-200 rounded-2xl p-4 flex items-start gap-3"
+            >
+              <CheckCircle className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-green-900 text-xs font-black mb-0.5">¡Email verificado!</p>
+                <p className="text-green-700 text-xs">Tu cuenta está activa. Ingresá con tus credenciales para continuar.</p>
+              </div>
+            </motion.div>
+          )}
 
           <form className="space-y-5" onSubmit={handleLogin}>
             <div className="space-y-1.5">
@@ -116,15 +142,39 @@ function LoginContent() {
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>
-              <input
-                type="password" required
-                placeholder="••••••••"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-300 font-medium"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'} required
+                  placeholder="••••••••"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-300 font-medium"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
+            {/* Email not verified warning */}
+            {unverifiedEmail && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3"
+              >
+                <Mail className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-amber-800 text-xs font-black mb-0.5">Email no verificado</p>
+                  <p className="text-amber-700 text-xs">
+                    Revisá tu casilla <strong>{unverifiedEmail}</strong> y hacé clic en el link de verificación antes de ingresar.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Login error */}
             {errorMSG && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}

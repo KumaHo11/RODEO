@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
-import { Plus, Search, Edit2, Trash2, X, Check, Camera, Sparkles, Loader2, HeartPulse, Beef } from 'lucide-react'
+import { apiFetch } from '@/lib/apiFetch'
+import { Plus, Search, Edit2, Trash2, X, Check, Camera, Sparkles, Loader2, HeartPulse, PawPrint, Paperclip } from 'lucide-react'
 
 
 const ANIMAL_TYPES = [
@@ -27,7 +27,8 @@ const BREED_OPTIONS: Record<string, string[]> = {
 }
 
 const EMPTY_FORM = {
-  id: '', name: '', species: 'vacas', breed: '', head_count: 0, avg_weight_kg: 0, age_years: 0
+  id: '', name: '', species: 'vacas', breed: '', head_count: 0, avg_weight_kg: 0, age_years: 0,
+  photo_url: null as string | null,
 }
 
 async function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
@@ -51,7 +52,6 @@ function calculateEV(weight: number, headCount: number, speciesId: string): numb
 
 export default function HerdsPage() {
   const { user } = useAuth()
-  const supabase = createClient()
   const [herds, setHerds] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -70,12 +70,9 @@ export default function HerdsPage() {
   const loadHerds = async () => {
     if (!user) return
     setLoading(true)
-    const { data: orgData } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
-    if (orgData?.organization_id) {
-      const { data } = await supabase
-        .from('herds').select('*')
-        .eq('org_id', orgData.organization_id)
-        .order('created_at', { ascending: false })
+    const res = await apiFetch('/api/herds')
+    if (res.ok) {
+      const { herds: data } = await res.json()
       setHerds(data || [])
     }
     setLoading(false)
@@ -93,14 +90,14 @@ export default function HerdsPage() {
 
   const totalAnimals = herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)
   const totalEV      = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
-  // Consumo ms diario total del campo (3% del PV)
   const totalDailyMS = herds.reduce((s, h) => s + (Number(h.head_count) || 0) * (Number(h.avg_weight_kg) || 0) * 0.03, 0)
 
   const openCreate = () => { setForm(EMPTY_FORM); setModalBcsFile(null); setModalBcsPreview(null); setModalBcsResult(null); setModalBcsError(null); setModalOpen(true) }
   const openEdit = (herd: any) => {
     setForm({
       id: herd.id, name: herd.name, species: herd.species, breed: herd.breed || '',
-      head_count: herd.head_count, avg_weight_kg: herd.avg_weight_kg || 0, age_years: herd.age_years || 0
+      head_count: herd.head_count, avg_weight_kg: herd.avg_weight_kg || 0, age_years: herd.age_years || 0,
+      photo_url: herd.photo_url || null,
     })
     setModalBcsFile(null)
     setModalBcsPreview(herd.photo_url || null)
@@ -133,23 +130,21 @@ export default function HerdsPage() {
   const handleSave = async () => {
     if (!form.name || !form.head_count) return
     setSaving(true)
-    const { data: orgData } = await supabase.from('profiles').select('organization_id').eq('id', user?.id).single()
-    if (!orgData) { setSaving(false); return }
-    let photo_url = null
+
+    // Upload BCS photo to GCS if a new file was selected
+    let photo_url: string | null = form.photo_url || null
     if (modalBcsFile) {
-      const { data: orgData2 } = await supabase.from('profiles').select('organization_id').eq('id', user?.id).single()
-      if (orgData2?.organization_id) {
-        const ext = modalBcsFile.name.split('.').pop()
-        const path = `herds/${orgData2.organization_id}/${Date.now()}.${ext}`
-        const { data: uploaded } = await supabase.storage.from('field-photos').upload(path, modalBcsFile, { upsert: true })
-        if (uploaded) {
-          const { data: pub } = supabase.storage.from('field-photos').getPublicUrl(path)
-          photo_url = pub.publicUrl
-        }
+      const fd = new FormData()
+      fd.append('file', modalBcsFile)
+      fd.append('folder', 'herds')
+      const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd })
+      if (uploadRes.ok) {
+        const { url } = await uploadRes.json()
+        photo_url = url
       }
     }
+
     const payload = {
-      org_id: orgData.organization_id,
       name: form.name,
       species: form.species,
       breed: form.breed,
@@ -157,14 +152,16 @@ export default function HerdsPage() {
       avg_weight_kg: form.avg_weight_kg,
       age_years: form.age_years,
       total_ev: calculateEV(form.avg_weight_kg, form.head_count, form.species),
-      ...(photo_url ? { photo_url } : {}),
+      photo_url,
       ...(modalBcsResult ? { bcs_data: modalBcsResult, bcs_score: modalBcsResult.bcs_score, bcs_label: modalBcsResult.condition_label } : {}),
     }
+
     if (form.id) {
-      await supabase.from('herds').update(payload).eq('id', form.id)
+      await apiFetch(`/api/herds/${form.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
     } else {
-      await supabase.from('herds').insert([payload])
+      await apiFetch('/api/herds', { method: 'POST', body: JSON.stringify(payload) })
     }
+
     setSaving(false)
     setModalOpen(false)
     loadHerds()
@@ -172,7 +169,7 @@ export default function HerdsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('¿Eliminar este rebaño?')) return
-    await supabase.from('herds').delete().eq('id', id)
+    await apiFetch(`/api/herds/${id}`, { method: 'DELETE' })
     loadHerds()
   }
 
@@ -255,7 +252,7 @@ export default function HerdsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
-          <Beef className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+          <PawPrint className="w-12 h-12 text-gray-200 mx-auto mb-3" />
           <p className="text-sm font-bold text-gray-400">No hay rebaños que mostrar</p>
           <p className="text-[10px] text-gray-300 mt-1">Crea tu primer rebaño o cambia los filtros</p>
         </div>
@@ -271,7 +268,7 @@ export default function HerdsPage() {
                 <div className="px-5 pt-5 pb-3 flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${at.color}`}>
-                <Beef className="w-5 h-5" />
+                      <PawPrint className="w-5 h-5" />
                     </div>
                     <div>
                       <h3 className="text-sm font-black text-gray-950 tracking-tight leading-tight">{herd.name}</h3>
@@ -292,7 +289,6 @@ export default function HerdsPage() {
 
                 {/* Stats */}
                 <div className="px-5 py-3 border-t border-gray-50">
-                  {/* Primary: Consumo diario */}
                   <div className="mb-3">
                     <p className="text-[9px] font-black text-amber-500 tracking-widest uppercase mb-0.5">Consumo Diario</p>
                     <div className="flex items-baseline gap-2">
@@ -302,7 +298,6 @@ export default function HerdsPage() {
                       <span className="text-xs font-bold text-gray-400">kg MS/día</span>
                     </div>
                   </div>
-                  {/* Secondary: Cabezas + EV */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Cabezas</p>
@@ -384,7 +379,7 @@ export default function HerdsPage() {
                 />
               </div>
 
-              {/* Especie / Categoría */}
+              {/* Especie */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Especie / Categoría *</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -450,7 +445,10 @@ export default function HerdsPage() {
 
               {/* BCS Photo Section */}
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Foto del Rebaño + Condición Corporal IA</label>
+                <div className="mb-1">
+                  <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Analísis de Condición Corporal AI</label>
+                  <p className="text-[9px] text-gray-400 mt-0.5">Sacá o subí una foto del rebaño para que la IA evalúe su condición corporal</p>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -465,8 +463,8 @@ export default function HerdsPage() {
                     onClick={() => modalGalleryRef.current?.click()}
                     className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-2xl border-2 border-sky-200 bg-sky-50 hover:border-sky-400 transition-all active:scale-95"
                   >
-                    <span className="text-lg">🖼</span>
-                    <span className="text-[10px] font-black text-sky-700">Galería</span>
+                    <Paperclip className="w-5 h-5 text-sky-600" />
+                    <span className="text-[10px] font-black text-sky-700">Adjuntar foto</span>
                   </button>
                 </div>
                 <input ref={modalCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if(f){ setModalBcsFile(f); setModalBcsPreview(URL.createObjectURL(f)); setModalBcsResult(null) }}} />

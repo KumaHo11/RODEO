@@ -1,62 +1,58 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { auth } from '@/lib/firebase/client'
+import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth'
+import { Suspense } from 'react'
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [email, setEmail] = useState<string | null>(null)
   
   const router = useRouter()
-  const supabase = createClient()
+  const searchParams = useSearchParams()
+  const oobCode = searchParams.get('oobCode')
 
-  // Verify the user is actually in a recovery session
+  // Verify the reset code on mount
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      // If no session, they probably didn't use the link correctly
-      if (!session) {
-        setErrorMsg("Session expired or invalid link. Please request a new password reset.")
-      }
-    })
-  }, [supabase.auth])
+    if (!oobCode) {
+      setErrorMsg('Enlace inválido o expirado. Por favor solicita un nuevo restablecimiento de contraseña.')
+      return
+    }
+    verifyPasswordResetCode(auth, oobCode)
+      .then(email => setEmail(email))
+      .catch(() => setErrorMsg('Enlace inválido o expirado. Por favor solicita un nuevo restablecimiento de contraseña.'))
+  }, [oobCode])
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg(null)
     setSuccessMsg(null)
 
-    // Unhappy paths
     if (password !== confirmPassword) {
-      setErrorMsg("Passwords do not match.")
+      setErrorMsg('Las contraseñas no coinciden.')
       return
     }
     if (password.length < 6) {
-      setErrorMsg("Password must be at least 6 characters.")
+      setErrorMsg('La contraseña debe tener al menos 6 caracteres.')
       return
     }
+    if (!oobCode) return
 
     setLoading(true)
-
-    const { error } = await supabase.auth.updateUser({
-      password: password
-    })
-
-    setLoading(false)
-
-    if (error) {
-      setErrorMsg(error.message)
-      return
+    try {
+      await confirmPasswordReset(auth, oobCode, password)
+      setSuccessMsg('¡Contraseña actualizada! Redirigiendo...')
+      setTimeout(() => router.push('/login'), 2000)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error al actualizar la contraseña.')
     }
-
-    // Happy path
-    setSuccessMsg("Password updated successfully! Redirecting...")
-    setTimeout(() => {
-      router.push('/dashboard')
-    }, 2000)
+    setLoading(false)
   }
 
   return (
@@ -65,6 +61,11 @@ export default function ResetPasswordPage() {
         <h2 className="mt-10 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
           Actualiza tu contraseña
         </h2>
+        {email && (
+          <p className="mt-2 text-center text-sm text-gray-500">
+            Para <strong>{email}</strong>
+          </p>
+        )}
       </div>
 
       <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
@@ -80,6 +81,7 @@ export default function ResetPasswordPage() {
                 <input
                   type="password"
                   required
+                  disabled={!!errorMsg && !email}
                   className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -93,6 +95,7 @@ export default function ResetPasswordPage() {
                 <input
                   type="password"
                   required
+                  disabled={!!errorMsg && !email}
                   className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-600 sm:text-sm sm:leading-6"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -105,7 +108,7 @@ export default function ResetPasswordPage() {
             <div>
               <button
                 type="submit"
-                disabled={loading || errorMsg === "Session expired or invalid link. Please request a new password reset."}
+                disabled={loading || (!!errorMsg && !email)}
                 className="flex w-full justify-center rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 disabled:opacity-50"
               >
                 {loading ? 'Actualizando...' : 'Actualizar Contraseña'}
@@ -115,5 +118,13 @@ export default function ResetPasswordPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Cargando...</div>}>
+      <ResetPasswordForm />
+    </Suspense>
   )
 }

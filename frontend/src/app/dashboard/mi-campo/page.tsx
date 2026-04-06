@@ -3,8 +3,8 @@
 import dynamic from 'next/dynamic'
 import PaddockSidePanel from './components/PaddockSidePanel'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
+import { apiFetch } from '@/lib/apiFetch'
 import { getPaddockNDVI, SatelliteData } from '@/lib/services/satellite'
 import { X, Check, MapPin } from 'lucide-react'
 
@@ -27,11 +27,9 @@ const STATUS_OPTIONS = [
 
 export default function MiCampoPage() {
   const { user } = useAuth()
-  const supabase = createClient()
   const [paddocks, setPaddocks] = useState<any[]>([])
   const [org, setOrg] = useState<any>(null)
   const [fieldBoundary, setFieldBoundary] = useState<any>(null)
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [selectedPaddockId, setSelectedPaddockId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [ndviData, setNdviData] = useState<Record<string, SatelliteData>>({})
@@ -45,53 +43,42 @@ export default function MiCampoPage() {
   const [newPaddockName, setNewPaddockName] = useState('')
   const [newPaddockStatus, setNewPaddockStatus] = useState('RESTING')
   const [savingNewPaddock, setSavingNewPaddock] = useState(false)
+  const [newPaddockError, setNewPaddockError] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     if (!user) return
     setLoading(true)
 
-    const { data: profile } = await supabase
-      .from('profiles').select('organization_id').eq('id', user.id).single()
-    if (!profile?.organization_id) { setLoading(false); return }
-    setOrgId(profile.organization_id)
+    const [paddocksRes, orgRes, plansRes] = await Promise.all([
+      apiFetch('/api/paddocks'),
+      apiFetch('/api/organizations'),
+      apiFetch('/api/grazing-plans'),
+    ])
 
-    const { data: orgData } = await supabase
-      .from('organizations').select('*').eq('id', profile.organization_id).single()
+    const paddocksData = paddocksRes.ok ? (await paddocksRes.json()).paddocks || [] : []
+    const orgData      = orgRes.ok      ? (await orgRes.json()).organization : null
+    const plansData    = plansRes.ok    ? (await plansRes.json()).plans || [] : []
+
     setOrg(orgData)
 
-    const { data: fieldBoundaryData } = await supabase
-      .rpc('get_org_field_boundary', { p_org_id: profile.organization_id })
-    setFieldBoundary(fieldBoundaryData)
-
-    const { data: paddocksData } = await supabase
-      .rpc('get_paddocks_with_geojson', { p_org_id: profile.organization_id })
-
-    // Load active grazing plans for herd badges on map
-    const { data: grazingData } = await supabase
-      .from('grazing_plans')
-      .select('paddock_id, herds(name, head_count)')
-      .eq('status', 'ACTIVE')
-      .in('paddock_id', (paddocksData || []).map((p: any) => p.id))
-
-    if (grazingData) {
-      setActiveGrazingPlans(
-        grazingData
-          .filter((g: any) => g.herds)
-          .map((g: any) => ({
-            paddock_id: g.paddock_id,
-            herd_name: (g.herds as any).name || 'Rebaño',
-            head_count: (g.herds as any).head_count || 0,
-          }))
-      )
+    // Set field boundary from org.boundaries (GeoJSON Polygon saved during onboarding)
+    if (orgData?.boundaries) {
+      setFieldBoundary(orgData.boundaries)
     }
 
-    if (paddocksData) {
-      setPaddocks(paddocksData)
-      setLoading(false)
-      loadNdviForPaddocks(paddocksData)
-    } else {
-      setLoading(false)
-    }
+    // Build active grazing badges from plans
+    const activePlans = plansData
+      .filter((p: any) => p.status === 'ACTIVE')
+      .map((p: any) => ({
+        paddock_id: p.paddock_id,
+        herd_name: p.herds?.name || 'Rebaño',
+        head_count: p.herds?.head_count || 0,
+      }))
+    setActiveGrazingPlans(activePlans)
+
+    setPaddocks(paddocksData)
+    setLoading(false)
+    loadNdviForPaddocks(paddocksData)
   }, [user])
 
   const loadNdviForPaddocks = async (paddocks: any[]) => {
@@ -102,14 +89,13 @@ export default function MiCampoPage() {
         try {
           const ndvi = await getPaddockNDVI(p.boundary, p.id, Number(p.area_ha))
           results[p.id] = ndvi
-          try {
-            await supabase.rpc('update_paddock_ndvi', {
-              p_paddock_id: p.id,
-              p_ndvi: ndvi.averageNdvi,
-              p_dry_matter_kg_ha: p.dry_matter_kg_ha ? undefined : ndvi.estimatedAvailableDryMatterHa,
+          // Update paddock dry_matter_kg_ha via API if not already set
+          if (!p.dry_matter_kg_ha) {
+            await apiFetch(`/api/paddocks/${p.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ dry_matter_kg_ha: ndvi.estimatedAvailableDryMatterHa }),
             })
-          } catch {}
-
+          }
         } catch {}
       })
     )
@@ -122,7 +108,7 @@ export default function MiCampoPage() {
   const handlePaddockSaved = async (paddockId: string, technicalData: Record<string, any>, dryMatter?: number) => {
     const updates: Record<string, any> = { technical_data: technicalData }
     if (dryMatter !== undefined) updates.dry_matter_kg_ha = dryMatter
-    await supabase.from('paddocks').update(updates).eq('id', paddockId)
+    await apiFetch(`/api/paddocks/${paddockId}`, { method: 'PATCH', body: JSON.stringify(updates) })
     setPaddocks(prev => prev.map(p => p.id === paddockId ? { ...p, ...updates } : p))
   }
 
@@ -140,47 +126,36 @@ export default function MiCampoPage() {
   }, [])
 
   const handleCreatePaddock = async () => {
-    if (!newPaddockName.trim() || !newPaddockGeom || !orgId) return
+    if (!newPaddockName.trim() || !newPaddockGeom) return
     setSavingNewPaddock(true)
+    setNewPaddockError(null)
 
-    const { data: profile } = await supabase
-      .from('profiles').select('organization_id').eq('id', user?.id).single()
+    try {
+      const res = await apiFetch('/api/paddocks', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newPaddockName.trim(),
+          area_ha: newPaddockAreaHa,
+          current_status: newPaddockStatus,
+          geojson: newPaddockGeom,
+        }),
+      })
 
-    if (profile?.organization_id) {
-      // Try create_paddock RPC first
-      let id: string | null = null
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('create_paddock', {
-          p_name: newPaddockName.trim(),
-          p_area_ha: newPaddockAreaHa,
-          p_geojson: newPaddockGeom,
-        })
-
-      if (!rpcError) {
-        id = rpcData
-      } else {
-        // Fallback: direct insert without geom
-        const { data: inserted } = await supabase
-          .from('paddocks')
-          .insert({
-            org_id: profile.organization_id,
-            name: newPaddockName.trim(),
-            area_ha: newPaddockAreaHa,
-            current_status: newPaddockStatus,
-          })
-          .select('id')
-          .single()
-        id = inserted?.id
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setNewPaddockError(errData.error || `Error ${res.status}: no se pudo guardar el potrero.`)
+        setSavingNewPaddock(false)
+        return
       }
 
-      if (id) {
-        await supabase.from('paddocks').update({ current_status: newPaddockStatus }).eq('id', id)
-      }
+      setSavingNewPaddock(false)
+      setNewPaddockModal(false)
+      setNewPaddockError(null)
+      await loadData()
+    } catch (err: any) {
+      setNewPaddockError('Error de red: ' + (err.message || 'Intenta de nuevo'))
+      setSavingNewPaddock(false)
     }
-
-    setSavingNewPaddock(false)
-    setNewPaddockModal(false)
-    await loadData()
   }
 
   const avgNdvi = Object.values(ndviData).length > 0
@@ -280,6 +255,11 @@ export default function MiCampoPage() {
               </div>
             </div>
 
+            {newPaddockError && (
+              <div className="px-6 pb-0 pt-0">
+                <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{newPaddockError}</p>
+              </div>
+            )}
             <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
               <button
                 onClick={() => setNewPaddockModal(false)}

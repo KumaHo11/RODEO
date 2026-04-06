@@ -1,9 +1,9 @@
 'use client'
 
 import React, { useState, useCallback, useRef } from 'react'
-import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, ChevronRight, X, Check, Satellite, TrendingUp, Loader2, Plus, NotebookPen, BarChart3, AlertTriangle, BookOpen, Camera, Images, RefreshCw, Scale } from 'lucide-react'
+import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, ChevronRight, X, Check, Satellite, TrendingUp, Loader2, Plus, NotebookPen, BarChart3, AlertTriangle, BookOpen, Camera, Images, RefreshCw, Scale, Map, Settings } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
-import { createClient } from '@/lib/supabase/client'
+import { apiFetch } from '@/lib/apiFetch'
 
 interface Paddock {
   id: string
@@ -33,8 +33,9 @@ interface Props {
   ndviData: Record<string, SatelliteData>
   ndviLoading: boolean
   avgNdvi: number | null
-  herds?: any[]  // for demand calculation
+  herds?: any[]
   totalEV?: number
+  onDrawFieldBoundary?: () => void   // NEW: trigger field boundary drawing mode on map
 }
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -91,10 +92,10 @@ const NOTE_CAT_COLORS: Record<string, string> = {
 
 export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
-  ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0
+  ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0, onDrawFieldBoundary
 }: Props) {
-  const supabase = createClient()
   const [search, setSearch] = useState('')
+  const [sideTab, setSideTab] = useState<'campo' | 'potreros'>('campo')
   const [modalOpen, setModalOpen] = useState(false)
   const [modalTab, setModalTab] = useState<'tecnico' | 'bitacora'>('tecnico')
   const [editingPaddock, setEditingPaddock] = useState<Paddock | null>(null)
@@ -118,15 +119,10 @@ export default function PaddockSidePanel({
   const loadPaddockNotes = useCallback(async (paddockId: string) => {
     setNotesLoading(true)
     setPaddockNotes([])
-    const { data } = await supabase
-      .from('field_notes')
-      .select('*')
-      .eq('paddock_id', paddockId)
-      .order('created_at', { ascending: false })
-      .limit(20)
-    setPaddockNotes(data || [])
+    const res = await apiFetch(`/api/field-notes?paddock_id=${paddockId}`)
+    setPaddockNotes(res.ok ? (await res.json()).notes || [] : [])
     setNotesLoading(false)
-  }, [supabase])
+  }, [])
 
   // Multi-photo: analyze up to 5 photos and average the MS result
   const analyzeBioPhotos = useCallback(async () => {
@@ -168,39 +164,41 @@ export default function PaddockSidePanel({
     if (!paddock) return
     setNdviRefreshing(true)
     try {
-      const { data: geoData } = await supabase.from('paddocks').select('geometry').eq('id', paddock.id).single()
-      if (!geoData?.geometry) return
+      // Fetch geometry via API
+      const geoRes = await apiFetch(`/api/paddocks/${paddock.id}`)
+      if (!geoRes.ok) return
+      const { paddock: geoData } = await geoRes.json()
+      if (!geoData?.boundary) return
+
       const resp = await fetch('/api/ndvi', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ geojson: geoData.geometry, paddock_id: paddock.id }),
+        body: JSON.stringify({ geojson: geoData.boundary, paddock_id: paddock.id }),
       })
       if (!resp.ok) return
       const res = await resp.json()
       const newMs = res.estimatedAvailableDryMatterHa
       const currentMs = Number(paddock.dry_matter_kg_ha) || 0
-      // Calculate growth rate if we have previous data
       const prevMs = Number(paddock.previous_dry_matter_kg_ha) || 0
       const prevDate = paddock.previous_ndvi_date
       if (prevMs > 0 && prevDate) {
         const days = Math.max(1, Math.round((Date.now() - new Date(prevDate).getTime()) / 86400000))
         setGrowthRate((newMs - prevMs) / days)
       }
-      // Persist: save new as current, old current as previous
-      const today = new Date().toISOString().split('T')[0]
-      await supabase.from('paddocks').update({
-        current_ndvi: res.averageNdvi,
-        dry_matter_kg_ha: newMs,
-        previous_dry_matter_kg_ha: currentMs > 0 ? currentMs : undefined,
-        previous_ndvi_date: currentMs > 0 ? today : undefined,
-        previous_ndvi: Number(paddock.current_ndvi) || undefined,
-      }).eq('id', paddock.id)
+      // Persist via API
+      await apiFetch(`/api/paddocks/${paddock.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          current_ndvi: res.averageNdvi,
+          dry_matter_kg_ha: newMs,
+        }),
+      })
       setDryMatter(newMs)
     } catch (e) {
       console.error('[NDVI refresh]', e)
     }
     setNdviRefreshing(false)
-  }, [supabase])
+  }, [])
 
 
   const filtered = paddocks.filter(p =>
@@ -250,24 +248,41 @@ export default function PaddockSidePanel({
   return (
     <>
       <div className="flex flex-col h-full bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
-        {/* Header */}
-        <div className="px-5 pt-5 pb-4 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-0.5">
+        {/* ── Header ────────────────────────────────────────────────── */}
+        <div className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-black text-gray-950 tracking-tight">{org?.name || 'Mi Campo'}</h2>
             {ndviLoading && <Loader2 className="w-4 h-4 text-green-500 animate-spin" />}
           </div>
-          <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">
-            {totalArea.toFixed(1)} ha · {paddocks.length} Potreros · {grazingCount} en pastoreo
-          </p>
 
-          {/* NDVI Summary Bar */}
+          {/* Perimeter badge */}
+          {org?.boundaries ? (
+            <div className="flex items-center gap-2 p-2.5 bg-blue-50 rounded-xl border border-blue-100">
+              <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                <Map className="w-3 h-3 text-white" />
+              </div>
+              <div>
+                <p className="text-[8px] font-black text-blue-500 tracking-widest uppercase">Perímetro</p>
+                <p className="text-xs font-black text-gray-900">{Number(org.total_area_ha).toFixed(1)} ha · {paddocks.length} potreros · {grazingCount} en pastoreo</p>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => onDrawFieldBoundary?.()}
+              className="w-full py-2 bg-blue-50 border border-dashed border-blue-300 text-blue-700 text-[10px] font-black rounded-xl hover:bg-blue-100 transition-all flex items-center justify-center gap-1.5"
+            >
+              <Map className="w-3 h-3" /> Dibujar contorno del campo
+            </button>
+          )}
+
+          {/* NDVI promedio */}
           {avgNdvi !== null && (
-            <div className="mt-3 p-2.5 bg-green-50 rounded-xl border border-green-100 flex items-center gap-3">
-              <Satellite className="w-4 h-4 text-green-600 shrink-0" />
+            <div className="mt-2 p-2.5 bg-green-50 rounded-xl border border-green-100 flex items-center gap-2.5">
+              <Satellite className="w-3.5 h-3.5 text-green-600 shrink-0" />
               <div className="flex-1">
-                <p className="text-[9px] font-black text-green-600 tracking-widest uppercase">NDVI Promedio del Campo</p>
+                <p className="text-[8px] font-black text-green-600 tracking-widest uppercase">NDVI Promedio del Campo</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-base font-black text-gray-900">{avgNdvi.toFixed(3)}</p>
+                  <p className="text-sm font-black text-gray-900">{avgNdvi.toFixed(3)}</p>
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${getNdviLabel(avgNdvi).color}`}>
                     {getNdviLabel(avgNdvi).label}
                   </span>
@@ -275,26 +290,28 @@ export default function PaddockSidePanel({
               </div>
             </div>
           )}
-
-          {/* Search */}
-          <div className="relative mt-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar potrero..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm font-normal text-gray-900 placeholder:text-gray-300 focus:ring-1 focus:ring-green-600 outline-none transition-all"
-            />
-          </div>
         </div>
 
-        {/* Paddock List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {/* ── Paddock list — single scroll, no tabs ───────────────── */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-5 py-2.5 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-50 z-10">
+            <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Potreros ({paddocks.length})</p>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-300" />
+              <input
+                type="text"
+                placeholder="Buscar..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="bg-gray-50 border border-gray-100 rounded-lg pl-6 pr-2 py-1 text-[10px] text-gray-700 placeholder:text-gray-300 focus:ring-1 focus:ring-green-500 outline-none w-24"
+              />
+            </div>
+          </div>
+          <div className="p-3 space-y-1.5">
           {loading ? (
             <div className="space-y-2 pt-2">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />
+                <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
@@ -376,9 +393,10 @@ export default function PaddockSidePanel({
               )
             })
           )}
-        </div>
+          </div>{/* p-3 */}
+        </div>{/* flex-1 scroll */}
 
-        {/* Footer */}
+        {/* Footer — always visible */}
         <div className="px-5 py-4 border-t border-gray-100 shrink-0">
           <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">
             {enrichedCount}/{paddocks.length} potreros con detalle técnico

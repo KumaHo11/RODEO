@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
+import { apiFetch } from '@/lib/apiFetch'
 import {
   Plus, CheckSquare, Clock, AlertTriangle, X, Check,
   ChevronDown, Loader2, User, Calendar, MapPin,
   Wrench, Stethoscope, Tractor, TextCursor, Flag,
-  Filter, List, Kanban
+  Filter, List, Kanban, ArrowRight, RotateCcw, ChevronRight
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ function TaskCard({ task, onStatusChange, isOwner }: {
             {TASK_TYPES.find(t => t.id === task.task_type)?.label}
           </span>
         </div>
-        <span className={`text-[8px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 ${pCfg.color}`}>
+        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 ${pCfg.color}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${pCfg.dot}`} />
           {pCfg.label}
         </span>
@@ -121,27 +121,30 @@ function TaskCard({ task, onStatusChange, isOwner }: {
         </span>
       </div>
 
-      {/* Status controls */}
+      {/* Status controls — clearly interactive action buttons */}
       {task.status !== 'CANCELADA' && (
-        <div className="flex gap-1.5 flex-wrap">
-          {task.status !== 'PENDIENTE' && (
-            <button onClick={() => onStatusChange(task.id, 'PENDIENTE')}
-              className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
-              Pendiente
-            </button>
-          )}
-          {task.status !== 'EN_PROCESO' && (
-            <button onClick={() => onStatusChange(task.id, 'EN_PROCESO')}
-              className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors">
-              En proceso
-            </button>
-          )}
-          {task.status !== 'COMPLETADA' && (
-            <button onClick={() => onStatusChange(task.id, 'COMPLETADA')}
-              className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors flex items-center gap-1">
-              <Check className="w-3 h-3" /> Completar
-            </button>
-          )}
+        <div className="pt-2 border-t border-gray-100">
+          <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1.5">Mover a</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {task.status !== 'PENDIENTE' && (
+              <button onClick={() => onStatusChange(task.id, 'PENDIENTE')}
+                className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 active:scale-95 transition-all">
+                <RotateCcw className="w-3 h-3" /> Pendiente
+              </button>
+            )}
+            {task.status !== 'EN_PROCESO' && (
+              <button onClick={() => onStatusChange(task.id, 'EN_PROCESO')}
+                className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 active:scale-95 transition-all">
+                <ChevronRight className="w-3 h-3" /> En proceso
+              </button>
+            )}
+            {task.status !== 'COMPLETADA' && (
+              <button onClick={() => onStatusChange(task.id, 'COMPLETADA')}
+                className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 active:scale-95 transition-all">
+                <Check className="w-3 h-3" /> Completar
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -150,13 +153,11 @@ function TaskCard({ task, onStatusChange, isOwner }: {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function TareasPage() {
-  const supabase = createClient()
   const { user } = useAuth()
 
   const [tasks, setTasks]         = useState<Task[]>([])
   const [members, setMembers]     = useState<any[]>([])
   const [paddocks, setPaddocks]   = useState<any[]>([])
-  const [orgId, setOrgId]         = useState<string | null>(null)
   const [isOwner, setIsOwner]     = useState(false)
   const [loading, setLoading]     = useState(true)
   const [view, setView]           = useState<'kanban' | 'list'>('kanban')
@@ -174,74 +175,58 @@ export default function TareasPage() {
   const load = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
-    if (!profile?.organization_id) { setLoading(false); return }
-    setOrgId(profile.organization_id)
 
-    const { data: org } = await supabase.from('organizations').select('owner_id').eq('id', profile.organization_id).single()
-    if (org) setIsOwner(org.owner_id === user.id)
-
-    const [{ data: tasksData }, { data: membersData }, { data: paddocksData }] = await Promise.all([
-      supabase.from('tasks').select('*').eq('org_id', profile.organization_id).order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id,first_name,last_name').eq('organization_id', profile.organization_id),
-      supabase.from('paddocks').select('id,name').eq('org_id', profile.organization_id).order('name'),
+    const [tasksRes, teamRes, paddocksRes, orgRes] = await Promise.all([
+      apiFetch('/api/tasks'),
+      apiFetch('/api/team'),
+      apiFetch('/api/paddocks'),
+      apiFetch('/api/organizations'),
     ])
 
-    // Enrich tasks with paddock + assignee names
-    const enriched = (tasksData || []).map(t => ({
-      ...t,
-      paddock: paddocksData?.find(p => p.id === t.paddock_id),
-      assignee: membersData?.find(m => m.id === t.assigned_to),
-    }))
+    const tasksData   = tasksRes.ok   ? (await tasksRes.json()).tasks : []
+    const teamData    = teamRes.ok    ? (await teamRes.json()).members : []
+    const paddocksData = paddocksRes.ok ? (await paddocksRes.json()).paddocks : []
+    const orgData     = orgRes.ok     ? (await orgRes.json()).org : null
 
-    setTasks(enriched)
-    setMembers(membersData || [])
+    if (orgData) setIsOwner(orgData.owner_id === user.uid)
+
+    // Tasks already come enriched with paddock + assignee from the API
+    setTasks(tasksData || [])
+    setMembers(teamData || [])
     setPaddocks(paddocksData || [])
     setLoading(false)
-  }, [supabase, user])
+  }, [user])
 
   useEffect(() => { load() }, [load])
 
   // ── Change task status ──────────────────────────────────────────────────
   const changeStatus = async (taskId: string, status: Status) => {
-    await supabase.from('tasks').update({ status, updated_at: new Date().toISOString() }).eq('id', taskId)
+    await apiFetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    })
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
-
-    // Notify owner if task completed
-    if (status === 'COMPLETADA' && !isOwner && orgId) {
-      const task = tasks.find(t => t.id === taskId)
-      const me = members.find(m => m.id === user?.id)
-      if (task && me) {
-        await supabase.from('notifications').insert([{
-          org_id: orgId,
-          user_id: user?.id,
-          type: 'TAREA',
-          title: `Tarea completada: ${task.title}`,
-          body: `${me.first_name || 'Un miembro'} completó la tarea asignada.`,
-          link: '/dashboard/tareas',
-        }])
-      }
-    }
   }
 
   // ── Create task ─────────────────────────────────────────────────────────
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!orgId || !form.title) return
+    if (!form.title) return
     setSaving(true)
 
-    await supabase.from('tasks').insert([{
-      org_id: orgId,
-      created_by: user?.id,
-      title: form.title,
-      description: form.description || null,
-      task_type: form.task_type,
-      paddock_id: form.paddock_id || null,
-      assigned_to: form.assigned_to || null,
-      due_date: form.due_date || null,
-      priority: form.priority,
-      status: 'PENDIENTE',
-    }])
+    await apiFetch('/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: form.title,
+        description: form.description || null,
+        task_type: form.task_type,
+        paddock_id: form.paddock_id || null,
+        assigned_to: form.assigned_to || null,
+        due_date: form.due_date || null,
+        priority: form.priority,
+        status: 'PENDIENTE',
+      }),
+    })
 
     setSaving(false)
     setModalOpen(false)

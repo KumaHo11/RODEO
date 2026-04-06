@@ -6,8 +6,8 @@ import 'leaflet/dist/leaflet.css'
 import '@geoman-io/leaflet-geoman-free'
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css'
 import L from 'leaflet'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
+import { apiFetch } from '@/lib/apiFetch'
 import { area } from '@turf/area'
 
 const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png'
@@ -43,8 +43,7 @@ function GeomanControl({ onPaddockDrawn }: { onPaddockDrawn: (geojson: any, laye
     const handleRemove = async (e: any) => {
       const id = e.layer.feature?.properties?.id
       if (id) {
-        const sb = createClient()
-        await sb.from('paddocks').delete().eq('id', id)
+        await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
       }
     }
     map.on('pm:remove', handleRemove)
@@ -58,8 +57,10 @@ function GeomanControl({ onPaddockDrawn }: { onPaddockDrawn: (geojson: any, laye
           const newGeo = x.layer.toGeoJSON()
           const { area: turfArea } = await import('@turf/area')
           const newArea = turfArea(newGeo) / 10000
-          const sb = createClient()
-          await sb.rpc('update_paddock_geom', { p_id: id, p_geojson: newGeo.geometry, p_area_ha: newArea })
+          await apiFetch(`/api/paddocks/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ geojson: newGeo.geometry, area_ha: newArea }),
+          })
         })
       }
     }
@@ -140,7 +141,6 @@ interface DraftPaddock { geojson: any; layer: any; area_ha: number }
 
 // ─── MAIN COMPONENT ────────────────────────────────────────────────────────────
 export default function PaddockMap() {
-  const supabase = createClient()
   const { user } = useAuth()
 
   const [geoData, setGeoData] = useState<any>(null)
@@ -168,17 +168,31 @@ export default function PaddockMap() {
   const fetchPaddocks = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    const { data, error } = await supabase.rpc('get_paddocks_geojson')
-    if (error) console.error('Error fetching paddocks:', error)
-    else setGeoData(data)
-
-    const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
-    if (profile?.organization_id) {
-      const { data: org } = await supabase.from('organizations').select('boundaries').eq('id', profile.organization_id).single()
-      if (org?.boundaries) setBoundaries(org.boundaries)
+    const paddocksRes = await apiFetch('/api/paddocks?geojson=1')
+    if (paddocksRes.ok) {
+      const json = await paddocksRes.json()
+      // Convert paddock list to GeoJSON FeatureCollection
+      const features = (json.paddocks || []).filter((p: any) => p.boundary).map((p: any) => ({
+        type: 'Feature',
+        geometry: p.boundary,
+        properties: {
+          id: p.id, name: p.name, status: p.current_status,
+          area_ha: p.area_ha, current_ndvi: p.current_ndvi,
+          is_active: p.is_active, grazable_area_ha: p.grazable_area_ha,
+          dry_matter_kg_ha: p.dry_matter_kg_ha,
+        }
+      }))
+      setGeoData({ type: 'FeatureCollection', features })
     }
+
+    const orgRes = await apiFetch('/api/organizations')
+    if (orgRes.ok) {
+      const orgJson = await orgRes.json()
+      if (orgJson.organization?.boundaries) setBoundaries(orgJson.organization.boundaries)
+    }
+
     setLoading(false)
-  }, [supabase, user])
+  }, [user])
 
   useEffect(() => { fetchPaddocks() }, [fetchPaddocks])
 
@@ -191,12 +205,18 @@ export default function PaddockMap() {
   const handleSaveDraft = async () => {
     if (!draft || !draftName) return
     setSaving(true)
-    const { error } = await supabase.rpc('create_paddock', {
-      p_name: draftName, p_area_ha: draft.area_ha, p_geojson: draft.geojson.geometry
+    const res = await apiFetch('/api/paddocks', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: draftName, area_ha: draft.area_ha,
+        geojson: draft.geojson.geometry,
+        current_status: 'RESTING',
+      }),
     })
     setSaving(false)
-    if (error) {
-      alert(`Error al guardar el lote: ${error.message}`)
+    if (!res.ok) {
+      const err = await res.json()
+      alert(`Error al guardar el lote: ${err.error || 'Error desconocido'}`)
     } else {
       fetchPaddocks()
     }
@@ -212,12 +232,13 @@ export default function PaddockMap() {
   const handleUpdateDetails = async () => {
     if (!selectedPaddock) return
     setSaving(true)
-    const { error } = await supabase.rpc('update_paddock_details', {
-      p_id: selectedPaddock.id, p_name: editName
+    const res = await apiFetch(`/api/paddocks/${selectedPaddock.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: editName }),
     })
     setSaving(false)
-    if (error) {
-      alert(`Error al actualizar: ${error.message}`)
+    if (!res.ok) {
+      alert('Error al actualizar')
     } else {
       setSelectedPaddock(null)
       fetchPaddocks()
@@ -240,12 +261,11 @@ export default function PaddockMap() {
 
   // ─── Toggle paddock active / inactive ──────────────────────────────────────
   const handleTogglePaddockActive = async (paddockId: string, currentlyActive: boolean) => {
-    const { error } = await supabase.rpc('update_paddock_active_state', {
-      p_id: paddockId,
-      p_is_active: !currentlyActive,
-      p_active_from: currentlyActive ? null : undefined   // clear date when reactivating
+    const res = await apiFetch(`/api/paddocks/${paddockId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: !currentlyActive }),
     })
-    if (error) { alert('Error al cambiar estado: ' + error.message); return }
+    if (!res.ok) { alert('Error al cambiar estado'); return }
     fetchPaddocks()
     setSelectedPaddock(null)
     setActiveFromDate('')
@@ -264,10 +284,10 @@ export default function PaddockMap() {
     boundaryLayerRef.current.pm.disable()
     const updatedGeoJson = boundaryLayerRef.current.toGeoJSON()
     const geom = updatedGeoJson.geometry ?? updatedGeoJson
-    const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user!.id).single()
-    if (profile?.organization_id) {
-      await supabase.rpc('update_org_boundary', { p_org_id: profile.organization_id, p_geojson: geom })
-    }
+    await apiFetch('/api/organizations', {
+      method: 'PATCH',
+      body: JSON.stringify({ boundaries: geom }),
+    })
     setEditingBoundary(false)
     setSavingBoundary(false)
     fetchPaddocks()
@@ -417,8 +437,9 @@ export default function PaddockMap() {
                   {activeFromDate && (
                     <button
                       onClick={async () => {
-                        await supabase.rpc('update_paddock_active_state', {
-                          p_id: selectedPaddock.id, p_is_active: false, p_active_from: activeFromDate
+                        await apiFetch(`/api/paddocks/${selectedPaddock.id}`, {
+                          method: 'PATCH',
+                          body: JSON.stringify({ is_active: false, active_from: activeFromDate }),
                         })
                         fetchPaddocks()
                         setSelectedPaddock(null)

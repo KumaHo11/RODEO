@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
+import { apiFetch } from '@/lib/apiFetch'
 import {
   Calendar, Plus, CheckCircle2, Clock, MapPin, Search, Filter,
   AlignJustify, CalendarDays, Lightbulb, CloudRain, Sun, ChevronLeft, ChevronRight,
@@ -417,13 +417,11 @@ function InteractiveGantt({
 // ─────────────── MAIN COMPONENT ───────────────
 export default function GrazingPlanner() {
   const { user } = useAuth()
-  const supabase = createClient()
 
   const [plans, setPlans] = useState<any[]>([])
   const [paddocks, setPaddocks] = useState<any[]>([])
   const [herds, setHerds] = useState<any[]>([])
   const [farmEvents, setFarmEvents] = useState<any[]>([])
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [weather, setWeather] = useState<WeatherData | null>(null)
 
@@ -547,30 +545,26 @@ export default function GrazingPlanner() {
   async function loadData() {
     if (!user) return
     setLoading(true)
-    const { data: orgData } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
-    if (!orgData?.organization_id) return setLoading(false)
-    setOrgId(orgData.organization_id)
 
-    const [{ data: pData }, { data: hData }, { data: evtsData }] = await Promise.all([
-      supabase.from('paddocks').select('id, name, area_ha, current_status, estimated_adh, is_active, dry_matter_kg_ha').eq('org_id', orgData.organization_id),
-      supabase.from('herds').select('id, name, head_count, total_ev, avg_weight_kg').eq('org_id', orgData.organization_id),
-      supabase.from('farm_events').select('id, title, event_type, event_date, end_date, herd_id, status').eq('org_id', orgData.organization_id)
+    const [paddocksRes, herdsRes, plansRes, eventsRes] = await Promise.all([
+      apiFetch('/api/paddocks'),
+      apiFetch('/api/herds'),
+      apiFetch('/api/grazing-plans'),
+      apiFetch('/api/farm-events'),
     ])
-    setPaddocks(pData || [])
-    setHerds(hData || [])
-    setFarmEvents(evtsData || [])
 
-    const paddockIds = (pData || []).map(p => p.id)
-    if (paddockIds.length > 0) {
-      const { data: plansData } = await supabase
-        .from('grazing_plans')
-        .select('*, paddocks(name, area_ha), herds(name, head_count, total_ev), temporary_animals, notes')
-        .in('paddock_id', paddockIds)
-        .order('entry_date', { ascending: true })
-      setPlans(plansData || [])
-    }
+    const pData   = paddocksRes.ok  ? (await paddocksRes.json()).paddocks  : []
+    const hData   = herdsRes.ok     ? (await herdsRes.json()).herds        : []
+    const plData  = plansRes.ok     ? (await plansRes.json()).plans        : []
+    const evtData = eventsRes.ok    ? (await eventsRes.json()).events      : []
+
+    setPaddocks(pData  || [])
+    setHerds(hData     || [])
+    setPlans(plData    || [])
+    setFarmEvents(evtData || [])
 
     try {
+      // Use first paddock location or default to Buenos Aires
       const wData = await getPaddockWeather(-37.32, -59.13)
       setWeather(wData)
     } catch { /* ignore */ }
@@ -624,29 +618,15 @@ export default function GrazingPlanner() {
         ? remnantAnalysis.dry_matter_kg_ha : undefined,
     }
     if (formData.id) {
-      await supabase.from('grazing_plans').update(payload).eq('id', formData.id)
+      await apiFetch(`/api/grazing-plans/${formData.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
     } else {
-      await supabase.from('grazing_plans').insert([payload])
+      await apiFetch('/api/grazing-plans', { method: 'POST', body: JSON.stringify(payload) })
     }
+    // Update paddock status
     if (formData.status === 'ACTIVE') {
-      await supabase.from('paddocks').update({ current_status: 'GRAZING' }).eq('id', formData.paddock_id)
+      await apiFetch(`/api/paddocks/${formData.paddock_id}`, { method: 'PATCH', body: JSON.stringify({ current_status: 'GRAZING' }) })
     } else if (formData.status === 'COMPLETED') {
-      await supabase.from('paddocks').update({ current_status: 'RESTING' }).eq('id', formData.paddock_id)
-      // Save paddock_observations record with photo + AI analysis
-      if ((completionPhoto || completionNote || remnantAnalysis) && orgId) {
-        await supabase.from('paddock_observations').insert([{
-          org_id: orgId,
-          paddock_id: formData.paddock_id,
-          plan_id: formData.id || undefined,
-          observation_type: 'EXIT',
-          observed_at: formData.exit_date || new Date().toISOString().split('T')[0],
-          dry_matter_kg_ha: remnantAnalysis?.dry_matter_kg_ha,
-          photo_data: completionPhoto || undefined,
-          notes: completionNote || undefined,
-          ai_analysis: remnantAnalysis || {},
-          created_by: (await supabase.auth.getUser()).data.user?.id,
-        }])
-      }
+      await apiFetch(`/api/paddocks/${formData.paddock_id}`, { method: 'PATCH', body: JSON.stringify({ current_status: 'RESTING' }) })
     }
     setIsModalOpen(false)
     setSaving(false)
@@ -660,8 +640,11 @@ export default function GrazingPlanner() {
       : p
     ))
     // persist async
-    await supabase.from('grazing_plans').update({ entry_date: newEntry, exit_date: newExit }).eq('id', planId)
-  }, [supabase])
+    await apiFetch(`/api/grazing-plans/${planId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ entry_date: newEntry, exit_date: newExit }),
+    })
+  }, [])
 
   const filteredPlans = useMemo(() =>
     plans.filter(p => {

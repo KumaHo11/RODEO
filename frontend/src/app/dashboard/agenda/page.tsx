@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
+import { apiFetch } from '@/lib/apiFetch'
 import { Plus, X, Check, Calendar, Trash2, ChevronDown, Edit2 } from 'lucide-react'
 
 const EVENT_TYPES = [
@@ -25,6 +25,15 @@ const STATUS_OPTIONS = [
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
+// Safe date parser — handles both '2026-03-15' and '2026-03-15T00:00:00.000Z'
+function safeDate(raw: string | null | undefined): Date | null {
+  if (!raw) return null
+  // date-only string → append time to avoid UTC shift
+  const s = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw + 'T00:00:00' : raw
+  const d = new Date(s)
+  return isNaN(d.getTime()) ? null : d
+}
+
 const EMPTY_FORM = {
   title: '',
   event_type: 'servicio',
@@ -37,10 +46,8 @@ const EMPTY_FORM = {
 
 export default function AgendaPage() {
   const { user } = useAuth()
-  const supabase = createClient()
   const [events, setEvents] = useState<any[]>([])
   const [herds, setHerds] = useState<any[]>([])
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<any | null>(null)
@@ -49,26 +56,19 @@ export default function AgendaPage() {
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
 
-  useEffect(() => {
-    async function load() {
-      if (!user) return
-      setLoading(true)
-      const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
-      if (profile?.organization_id) {
-        setOrgId(profile.organization_id)
-        const { data: eventsData } = await supabase
-          .from('farm_events')
-          .select('*')
-          .eq('org_id', profile.organization_id)
-          .order('event_date', { ascending: true })
-        setEvents(eventsData || [])
-        const { data: herdsData } = await supabase.from('herds').select('id, name').eq('org_id', profile.organization_id)
-        setHerds(herdsData || [])
-      }
-      setLoading(false)
-    }
-    load()
-  }, [user])
+  const loadData = async () => {
+    if (!user) return
+    setLoading(true)
+    const [eventsRes, herdsRes] = await Promise.all([
+      apiFetch('/api/farm-events'),
+      apiFetch('/api/herds'),
+    ])
+    setEvents(eventsRes.ok ? (await eventsRes.json()).events || [] : [])
+    setHerds(herdsRes.ok ? (await herdsRes.json()).herds || [] : [])
+    setLoading(false)
+  }
+
+  useEffect(() => { loadData() }, [user])
 
   const openCreate = () => {
     setEditingEvent(null)
@@ -91,10 +91,9 @@ export default function AgendaPage() {
   }
 
   const handleSave = async () => {
-    if (!form.title || !form.event_date || !orgId) return
+    if (!form.title || !form.event_date) return
     setSaving(true)
     const payload = {
-      org_id: orgId,
       title: form.title,
       event_type: form.event_type,
       event_date: form.event_date,
@@ -102,41 +101,23 @@ export default function AgendaPage() {
       description: form.description || null,
       status: form.status,
       herd_id: form.herd_id || null,
-      created_by: user!.id,
     }
 
-    let saveError: any = null
     if (editingEvent) {
-      const { error } = await supabase.from('farm_events').update(payload).eq('id', editingEvent.id)
-      saveError = error
+      await apiFetch(`/api/farm-events/${editingEvent.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
     } else {
-      const { error } = await supabase.from('farm_events').insert(payload)
-      saveError = error
+      await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify(payload) })
     }
-
-    if (saveError) {
-      console.error('Error saving event:', saveError)
-      alert(`Error al guardar el evento: ${saveError.message}`)
-      setSaving(false)
-      return
-    }
-
-    // Always refetch to avoid stale/null state after save
-    const { data: eventsData } = await supabase
-      .from('farm_events')
-      .select('*')
-      .eq('org_id', orgId)
-      .order('event_date', { ascending: true })
-    setEvents(eventsData || [])
 
     setSaving(false)
     setModalOpen(false)
     setForm(EMPTY_FORM)
     setEditingEvent(null)
+    loadData()
   }
 
   const handleDelete = async (id: string) => {
-    await supabase.from('farm_events').delete().eq('id', id)
+    await apiFetch(`/api/farm-events/${id}`, { method: 'DELETE' })
     setEvents(prev => prev.filter(e => e.id !== id))
   }
 
@@ -146,16 +127,17 @@ export default function AgendaPage() {
     return matchType && matchStatus
   })
 
-  // Group by month
+  // Group by month — skip events with invalid dates
   const grouped = filtered.reduce((acc: Record<string, any[]>, event) => {
-    const d = new Date(event.event_date + 'T00:00:00')
+    const d = safeDate(event.event_date)
+    if (!d) return acc
     const key = `${d.getFullYear()}-${d.getMonth()}`
     if (!acc[key]) acc[key] = []
     acc[key].push(event)
     return acc
   }, {})
 
-  const upcoming = events.filter(e => new Date(e.event_date + 'T00:00:00') >= new Date() && e.status === 'pendiente').length
+  const upcoming = events.filter(e => { const d = safeDate(e.event_date); return d && d >= new Date() && e.status === 'pendiente' }).length
   const completed = events.filter(e => e.status === 'completado').length
 
   return (
@@ -261,7 +243,7 @@ export default function AgendaPage() {
                   {(groupEvents as any[]).map((event: any) => {
                     const et = getEventType(event.event_type)
                     const stat = STATUS_OPTIONS.find(s => s.id === event.status) || STATUS_OPTIONS[0]
-                    const d = new Date(event.event_date + 'T00:00:00')
+                    const d = safeDate(event.event_date)
 
                     return (
                       <div
@@ -270,8 +252,12 @@ export default function AgendaPage() {
                       >
                         {/* Date badge */}
                         <div className="shrink-0 w-14 text-center">
-                          <p className="text-xl font-black text-gray-900 leading-none">{d.getDate()}</p>
-                          <p className="text-[9px] font-bold text-gray-400 uppercase">{MONTH_NAMES[d.getMonth()]}</p>
+                          <p className="text-xl font-black text-gray-900 leading-none">
+                            {d ? d.getDate() : '—'}
+                          </p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">
+                            {d ? MONTH_NAMES[d.getMonth()] : ''}
+                          </p>
                         </div>
 
                         {/* Color dot */}
@@ -281,10 +267,10 @@ export default function AgendaPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-bold text-gray-900">{event.title}</p>
-                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${et.bg} ${et.text}`}>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${et.bg} ${et.text}`}>
                               {et.label}
                             </span>
-                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${stat.color}`}>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${stat.color}`}>
                               {stat.label}
                             </span>
                           </div>

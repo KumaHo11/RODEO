@@ -1,0 +1,92 @@
+/**
+ * POST /api/auth/register
+ * 1. Verifica el ID token de Firebase del usuario recién creado
+ * 2. Crea perfil + organización en Cloud SQL
+ * 3. Genera link de verificación de email con Firebase Admin
+ * 4. Envía email de bienvenida con el link via SendGrid
+ */
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
+import { adminAuth } from '@/lib/firebase/admin'
+import { mutate, query } from '@/lib/db'
+import { sendEmail } from '@/lib/email'
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const { idToken, firstName, lastName, phone, country, countryCode } = body
+
+    if (!idToken) {
+      return NextResponse.json({ error: 'ID Token requerido' }, { status: 400 })
+    }
+
+    // 1. Verificar el ID Token de Firebase
+    const decodedToken = await verifyFirebaseToken(idToken)
+    if (!decodedToken) {
+      return NextResponse.json({ error: 'Token inválido o expirado' }, { status: 401 })
+    }
+
+    const { uid, email } = decodedToken
+
+    // 2. Verificar si ya existe un perfil (idempotente por UID)
+    const existing = await query(
+      `SELECT id FROM profiles WHERE firebase_uid = $1`,
+      [uid]
+    )
+    if (existing.length > 0) {
+      return NextResponse.json({ success: true, uid }, { status: 200 })
+    }
+
+    // 2.5 Verificar si existe por email (Prevención de Error 500 de Base de Datos)
+    // Esto ocurre si borraste tu usuario en Firebase Console a mano pero 
+    // su perfil SQL siguió existiendo.
+    const existingEmail = await query(`SELECT id FROM profiles WHERE email = $1`, [email])
+    if (existingEmail.length > 0) {
+      return NextResponse.json({ error: 'El correo electrónico ya se encuentra registrado. Por favor inicia sesión.' }, { status: 400 })
+    }
+
+    // 3. Crear organización + perfil en Cloud SQL
+    const orgResult = await mutate(
+      `INSERT INTO organizations (owner_id, name) VALUES ($1, $2) RETURNING id`,
+      [uid, `${firstName || 'Mi'} Ranch`]
+    )
+    const orgId = orgResult.rows[0]?.id
+
+    await mutate(
+      `INSERT INTO profiles
+        (firebase_uid, email, first_name, last_name, phone, organization_id,
+         role, onboarding_step, country_code)
+       VALUES ($1, $2, $3, $4, $5, $6, 'OWNER', 0, $7)`,
+      [uid, email, firstName, lastName, phone || null, orgId, countryCode || 'AR']
+    )
+
+    // 4. Generar link de verificación de email con Firebase Admin
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    let verifyUrl = `${appUrl}/login?verified=1`  // fallback if admin link fails
+
+    try {
+      verifyUrl = await adminAuth.generateEmailVerificationLink(email!, {
+        url: `${appUrl}/login?verified=1`,
+        handleCodeInApp: false,
+      })
+    } catch (adminErr: any) {
+      console.warn('[Register] Could not generate Firebase verify link:', adminErr.message)
+    }
+
+    // 5. Enviar email de bienvenida + verificación via SendGrid
+    try {
+      await sendEmail('verify_email', email!, {
+        firstName: firstName || 'Usuario',
+        verifyUrl,
+      })
+    } catch (emailErr: any) {
+      console.warn('[Register] Email send error:', emailErr.message)
+      // Don't block registration if email fails
+    }
+
+    return NextResponse.json({ success: true, uid }, { status: 201 })
+  } catch (err: any) {
+    console.error('POST /api/auth/register error:', err)
+    return NextResponse.json({ error: 'Error al crear el perfil. Intenta nuevamente.' }, { status: 500 })
+  }
+}

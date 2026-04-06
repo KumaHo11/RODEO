@@ -10,7 +10,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/components/AuthProvider'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Check } from 'lucide-react'
 import RodeoLogo from '@/components/RodeoLogo'
 
@@ -23,25 +22,17 @@ const STEPS = [
 
 function OnboardingWizard() {
   const { step } = useOnboarding()
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, profile } = useAuth()
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
-    async function checkCompletion() {
-      if (!isLoading && user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('onboarding_step')
-          .eq('id', user.id)
-          .single()
-        if (profile && (profile.onboarding_step || 0) >= 3) {
-          router.push('/dashboard')
-        }
+    if (!isLoading && user && profile) {
+      // Only redirect to dashboard if onboarding is fully complete (step 4)
+      if ((profile.onboarding_step ?? 0) >= 4) {
+        router.push('/dashboard')
       }
     }
-    checkCompletion()
-  }, [user, isLoading, router, supabase])
+  }, [user, isLoading, profile, router])
 
   if (isLoading) return null
 
@@ -57,8 +48,8 @@ function OnboardingWizard() {
       </header>
 
       {/* Stepper */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-center z-20">
-        <div className="flex items-center gap-0">
+      <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-3 sm:py-4 flex justify-center z-20 overflow-x-auto">
+        <div className="flex items-center gap-0 min-w-0">
           {STEPS.map((s, idx) => {
             const isCompleted = step > s.id
             const isActive    = step === s.id
@@ -68,16 +59,16 @@ function OnboardingWizard() {
               <React.Fragment key={s.id}>
                 <div className="flex flex-col items-center">
                   <div className={`
-                    w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-500
+                    w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-500
                     ${isCompleted
                       ? 'bg-green-600 text-white shadow-md shadow-green-600/20'
                       : isActive
                       ? 'bg-green-700 text-white shadow-lg shadow-green-700/30 ring-4 ring-green-50'
                       : 'bg-gray-100 text-gray-400 border border-gray-200'}
                   `}>
-                    {isCompleted ? <Check className="w-3.5 h-3.5" strokeWidth={3} /> : s.id}
+                    {isCompleted ? <Check className="w-3 h-3" strokeWidth={3} /> : s.id}
                   </div>
-                  <div className="mt-1.5 text-center">
+                  <div className="mt-1 text-center hidden sm:block">
                     <p className={`text-xs font-semibold tracking-tight leading-tight ${isActive || isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>
                       {s.title}
                     </p>
@@ -85,9 +76,15 @@ function OnboardingWizard() {
                       {s.subtitle}
                     </p>
                   </div>
+                  {/* Mobile: show only step title if active */}
+                  <div className="mt-1 text-center sm:hidden">
+                    <p className={`text-[8px] font-bold tracking-tight ${isActive ? 'text-green-700' : 'text-gray-300'}`}>
+                      {isActive ? s.title : ''}
+                    </p>
+                  </div>
                 </div>
                 {!isLast && (
-                  <div className={`w-16 h-0.5 mb-6 mx-2 transition-all duration-500 ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}`} />
+                  <div className={`w-8 sm:w-16 h-0.5 mb-4 sm:mb-6 mx-1 sm:mx-2 transition-all duration-500 ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}`} />
                 )}
               </React.Fragment>
             )

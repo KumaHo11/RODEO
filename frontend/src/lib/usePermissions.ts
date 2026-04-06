@@ -44,7 +44,7 @@ export const ROLE_COLORS: Record<TeamRole | string, { badge: string; dot: string
 export function usePermissions() {
   const { profile } = useAuth()
 
-  const teamRole: TeamRole | null = profile?.team_role ?? null
+  const teamRole = (profile?.team_role ?? null) as TeamRole | null
 
   // Owner: no team_role or team_role === 'OWNER'
   const isOwner = !teamRole || teamRole === 'OWNER'
@@ -55,9 +55,10 @@ export function usePermissions() {
    */
   const can = (key: PermissionKey): boolean => {
     if (isOwner) return true
-    const perms = profile?.permissions as Record<string, boolean> | null
+    const perms = profile?.permissions as Record<string, any> | null
     if (!perms) return key === 'dashboard' // fallback: only panel
-    return perms[key] === true
+    // Cast to boolean: handles stored values that might be string "true", number 1, or real boolean
+    return Boolean(perms[key]) === true
   }
 
   /**

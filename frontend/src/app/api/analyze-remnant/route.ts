@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
+    const decoded = token ? await verifyFirebaseToken(token) : null
+    if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { photo, paddock_id } = await req.json()
     if (!photo) return NextResponse.json({ error: 'No photo provided' }, { status: 400 })

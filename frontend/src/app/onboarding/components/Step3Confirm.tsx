@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { useOnboarding } from '../OnboardingContext'
 import { finishOnboarding } from '../actions'
+import { useAuth } from '@/components/AuthProvider'
 import { ArrowLeft, Loader2, Check, MapPin, Users, Map } from 'lucide-react'
 
 const SPECIES_LABELS: Record<string, string> = {
@@ -12,6 +13,7 @@ const SPECIES_LABELS: Record<string, string> = {
 
 export default function Step3Confirm() {
   const { data, prevStep } = useOnboarding()
+  const { user } = useAuth()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -24,6 +26,7 @@ export default function Step3Confirm() {
     setError(null)
     try {
       const res = await finishOnboarding({
+        firebaseUid:     user?.uid ?? '',
         fieldName:       data.fieldName,
         totalArea:       data.totalArea || totalPaddockHa,
         location:        data.location!,

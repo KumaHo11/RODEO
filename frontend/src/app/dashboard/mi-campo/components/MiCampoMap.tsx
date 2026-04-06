@@ -6,7 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import '@geoman-io/leaflet-geoman-free'
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css'
 import L from 'leaflet'
-import { createClient } from '@/lib/supabase/client'
+import { apiFetch } from '@/lib/apiFetch'
 import { area } from '@turf/area'
 
 L.Icon.Default.mergeOptions({
@@ -47,7 +47,6 @@ function MapController({
   const layerGroupRef = useRef<L.LayerGroup | null>(null)
   const fieldLayerRef = useRef<L.Layer | null>(null)
   const badgeGroupRef = useRef<L.LayerGroup | null>(null)
-  const supabase = createClient()
   const hasInitialFitRef = useRef(false)
 
   // ── Geoman init + pm:create handler ──────────────────────────────────────
@@ -101,12 +100,29 @@ function MapController({
     }
     if (!fieldBoundary) return
     try {
-      const layer = L.geoJSON(fieldBoundary, {
-        style: { color: '#3b82f6', weight: 2.5, opacity: 0.8, fillOpacity: 0, dashArray: '8 4' },
+      // Leaflet needs a Feature or FeatureCollection — wrap raw Geometry if needed
+      const featureOrCollection =
+        fieldBoundary.type === 'Feature' || fieldBoundary.type === 'FeatureCollection'
+          ? fieldBoundary
+          : { type: 'Feature', geometry: fieldBoundary, properties: {} }
+
+      const layer = L.geoJSON(featureOrCollection, {
+        style: { color: '#3b82f6', weight: 2.5, opacity: 0.8, fillOpacity: 0.04, dashArray: '8 4' },
       })
       layer.addTo(map)
       fieldLayerRef.current = layer
-    } catch {}
+
+      // Fit map to field boundary on first load if no paddocks have been fit yet
+      if (!hasInitialFitRef.current) {
+        const bounds = layer.getBounds()
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [40, 40] })
+          hasInitialFitRef.current = true
+        }
+      }
+    } catch (err) {
+      console.warn('Could not render field boundary:', err)
+    }
   }, [fieldBoundary, map])
 
   // ── Paddock polygons ──────────────────────────────────────────────────────
@@ -153,7 +169,10 @@ function MapController({
         const updatedGeoJSON = editedLayer.toGeoJSON()
         const areaHa = area(updatedGeoJSON) / 10000
         try {
-          await supabase.from('paddocks').update({ area_ha: parseFloat(areaHa.toFixed(2)) }).eq('id', paddock.id)
+          await apiFetch(`/api/paddocks/${paddock.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ area_ha: parseFloat(areaHa.toFixed(2)) }),
+          })
         } catch {}
         onPaddockGeomUpdated(paddock.id, updatedGeoJSON.geometry || updatedGeoJSON, areaHa)
       })

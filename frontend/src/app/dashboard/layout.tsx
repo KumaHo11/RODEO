@@ -15,8 +15,8 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import Image from 'next/image'
-import { createClient } from '@/lib/supabase/client'
 import RodeoLogo from '@/components/RodeoLogo'
+import { WelcomeScreen } from '@/components/WelcomeScreen'
 
 const NOTIF_ICONS: Record<string, React.ComponentType<any>> = {
   EVENTO:    CalendarDays,
@@ -50,20 +50,33 @@ const PAGE_NAMES: Record<string, string> = {
 
 // ── Layout ─────────────────────────────────────────────────────────────────────
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient()
-  const { user, isLoading, signOut } = useAuth()
+  const { user, isLoading, signOut, profile: authProfile } = useAuth()
   const { can, isOwner, teamRole, roleLabel, roleColors } = usePermissions()
   const router = useRouter()
   const pathname = usePathname()
 
   const [sidebarOpen, setSidebarOpen]       = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [profile, setProfile]               = useState<{ first_name?: string; avatar_url?: string } | null>(null)
   const [notifications, setNotifications]   = useState<any[]>([])
   const [notifOpen, setNotifOpen]           = useState(false)
   const [pendingTasks, setPendingTasks]     = useState(0)
   const [isOnline, setIsOnline]             = useState(true)
+  const [showWelcome, setShowWelcome]       = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
+
+  // ── Guard: redirect to onboarding (in useEffect — never during render) ───────────
+  useEffect(() => {
+    // Wait until Firebase auth AND profile fetch are both complete
+    if (isLoading) return          // still loading Firebase auth
+    if (!user) return              // not logged in (other guards handle this)
+    if (authProfile === null) return // profile still fetching — do NOT redirect yet
+
+    const isGuest = !!(authProfile.team_role)
+    const onboardingDone = (authProfile.onboarding_step ?? 0) >= 4
+    if (!isGuest && !onboardingDone) {
+      router.push('/onboarding')
+    }
+  }, [isLoading, user, authProfile, router])
 
   // ── Build filtered navigation based on user permissions ────────────────────
   const filteredNav = useMemo<NavItem[]>(() => {
@@ -108,25 +121,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     localStorage.setItem('rodeo_sidebar', String(next))
   }
 
-  // ── Load profile ──────────────────────────────────────────────────────────
-  const loadProfile = useCallback(async () => {
-    if (!user) return
-    const { data } = await supabase.from('profiles').select('first_name,avatar_url').eq('id', user.id).single()
-    if (data) setProfile(data)
-  }, [supabase, user])
+  // ── Load profile (from AuthProvider) ───────────────────────────
+  const profile = authProfile
 
-  useEffect(() => { loadProfile() }, [loadProfile])
-
-  // ── Load notifications + pending tasks ────────────────────────────────────
+  // ── Load notifications + pending tasks ──────────────────────────────────────
   const loadNotifications = useCallback(async () => {
     if (!user) return
-    const [{ data: notifs }, { count }] = await Promise.all([
-      supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
-      supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('assigned_to', user.id).eq('status', 'PENDIENTE'),
-    ])
-    setNotifications(notifs || [])
-    setPendingTasks(count || 0)
-  }, [supabase, user])
+    try {
+      const idToken = await user.getIdToken()
+      const res = await fetch('/api/notifications', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setNotifications(data.notifications || [])
+        setPendingTasks(data.pendingTasks || 0)
+      }
+    } catch (err) {
+      console.error('Error loading notifications:', err)
+    }
+  }, [user])
 
   useEffect(() => { loadNotifications() }, [loadNotifications])
 
@@ -143,8 +157,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const markAllRead = async () => {
     if (!user) return
-    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    try {
+      const idToken = await user.getIdToken()
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${idToken}` },
+      })
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    } catch (err) {
+      console.error('Error marking notifications as read:', err)
+    }
   }
 
   const unreadCount = notifications.filter(n => !n.is_read).length
@@ -165,6 +187,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   if (!user) return null
+
+  // While profile is still loading, show the loading spinner (never redirect)
+  // This avoids the blank screen + false redirect when profile hasn't fetched yet
+  if (authProfile === null && !isLoading) {
+    // Profile fetch finished but returned null = profile not found (edge case)
+    // Don't redirect here, let the useEffect handle it after confirming
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
+        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-400 font-bold tracking-widest text-[10px]">Cargando perfil...</p>
+      </div>
+    )
+  }
+
+  const isGuest = !!(authProfile?.team_role)
+  const onboardingDone = (authProfile?.onboarding_step ?? 0) >= 4
+  // Show spinner (not blank) while profile loads or redirect is pending
+  if (!isGuest && !onboardingDone && authProfile !== null) return null
+
+  // ── Welcome screen for first-time guests ─────────────────────────────────────
+  const shouldShowWelcome = isGuest && authProfile?.is_first_login === true
 
   const handleSignOut = async () => { await signOut(); router.push('/login') }
 
@@ -213,6 +256,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+
+      {/* ── Welcome overlay (first login of guests) ───────────────────────── */}
+      {shouldShowWelcome && (
+        <WelcomeScreen
+          orgName={profile?.organization_id ? undefined : undefined}
+          onDismiss={() => {
+            // WelcomeScreen handles the API call + refreshProfile internally
+          }}
+        />
+      )}
 
       {/* ── Desktop Sidebar ─────────────────────────────────────────────────── */}
       <aside className={clsx(
@@ -489,15 +542,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        {/* ── Page content ─────────────────────────────────────────────────── */}
-        <main className="flex-1 overflow-hidden flex flex-col">
+        {/* ── Page content ───────────────────────────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto flex flex-col min-h-0">
           {isMiCampo ? (
             <div className="flex-1 overflow-hidden h-full">{children}</div>
           ) : (
-            <div className="flex-1 overflow-hidden flex flex-col h-full">
-              <div className="flex flex-col h-full px-3 sm:px-6 lg:px-8 py-4 max-w-[1800px] w-full mx-auto">
-                {children}
-              </div>
+            <div className="flex flex-col min-h-full px-3 sm:px-6 lg:px-8 py-4 max-w-[1800px] w-full mx-auto">
+              {children}
             </div>
           )}
         </main>

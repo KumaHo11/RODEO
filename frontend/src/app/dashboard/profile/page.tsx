@@ -1,26 +1,111 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
+import { apiFetch } from '@/lib/apiFetch'
 import { useRouter } from 'next/navigation'
 import {
-  User, Mail, Phone, Camera, Loader2, LogOut, Lock,
-  CreditCard, Clock, ChevronRight, CheckCircle, AlertCircle, Building
+  User, Mail, Phone, Camera, Loader2, LogOut, Lock, Eye, EyeOff,
+  CreditCard, Clock, ChevronRight, CheckCircle, AlertCircle, Building, Check
 } from 'lucide-react'
 import Image from 'next/image'
 
-const ROLES = [
-  { value: 'producer', label: 'Productor ganadero' },
-  { value: 'manager', label: 'Administrador de campo' },
-  { value: 'consultant', label: 'Asesor / consultor' },
-  { value: 'other', label: 'Otro' },
-]
+// ── Inline password change using Admin SDK (no re-auth required) ──────────────
+function PasswordChangeSection() {
+  const [open, setOpen] = useState(false)
+  const [pwd, setPwd] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [show, setShow] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (pwd.length < 8) { setError('Mínimo 8 caracteres'); return }
+    if (pwd !== confirm) { setError('Las contraseñas no coinciden'); return }
+    setSaving(true); setError('')
+    const res = await apiFetch('/api/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify({ password: pwd }),
+    })
+    if (res.ok) {
+      setSuccess(true)
+      setTimeout(() => { setOpen(false); setSuccess(false); setPwd(''); setConfirm('') }, 2000)
+    } else {
+      const d = await res.json()
+      setError(d.error || 'Error al cambiar contraseña.')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-6">
+      <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-4">Seguridad</h3>
+      {!open ? (
+        <button onClick={() => setOpen(true)}
+          className="flex items-center justify-between w-full p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors group">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
+              <Lock className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold text-gray-800">Cambiar contraseña</p>
+              <p className="text-xs text-gray-400">Actualizar contraseña de acceso</p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+        </button>
+      ) : success ? (
+        <div className="flex items-center gap-3 p-4 bg-green-50 rounded-xl border border-green-100">
+          <Check className="w-5 h-5 text-green-600" />
+          <p className="text-sm font-bold text-green-700">Contraseña actualizada exitosamente</p>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type={show ? 'text' : 'password'} required value={pwd}
+              onChange={e => { setPwd(e.target.value); setError('') }}
+              placeholder="Nueva contraseña (mín. 8 caract.)"
+              className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500/30 focus:border-green-500 outline-none"
+            />
+            <button type="button" onClick={() => setShow(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type={show ? 'text' : 'password'} required value={confirm}
+              onChange={e => { setConfirm(e.target.value); setError('') }}
+              placeholder="Confirmar contraseña"
+              className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-green-500/30 outline-none ${
+                confirm && confirm !== pwd ? 'border-red-300' : confirm && confirm === pwd ? 'border-green-400' : 'border-gray-200 focus:border-green-500'
+              }`}
+            />
+          </div>
+          {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+          <div className="flex gap-3">
+            <button type="button" onClick={() => { setOpen(false); setPwd(''); setConfirm(''); setError('') }}
+              className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl text-sm hover:bg-gray-200 transition-all">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving || pwd.length < 8 || pwd !== confirm}
+              className="flex-1 py-2.5 bg-green-600 text-white font-bold rounded-xl text-sm hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Guardar
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth()
   const router = useRouter()
-  const supabase = createClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
@@ -42,45 +127,30 @@ export default function ProfilePage() {
     async function load() {
       if (!user) return
       setLoading(true)
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      if (data) {
-        setFormData({
-          first_name: data.first_name || '',
-          last_name: data.last_name || '',
-          phone: data.phone || '',
-          role: data.role || '',
-          avatar_url: data.avatar_url || '',
-        })
+      const res = await apiFetch('/api/auth/profile')
+      if (res.ok) {
+        const { profile: data } = await res.json()
+        if (data) {
+          setFormData({
+            first_name: data.first_name || '',
+            last_name: data.last_name || '',
+            phone: data.phone || '',
+            role: data.role || '',
+            avatar_url: data.avatar_url || '',
+          })
+        }
       }
       setLoading(false)
     }
     load()
-  }, [user, supabase])
+  }, [user])
 
   const handleAvatarClick = () => fileInputRef.current?.click()
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !user) return
-    setUploadingAvatar(true)
-    setError('')
-
-    // Upload to storage
-    const ext = file.name.split('.').pop()
-    const path = `${user.id}/avatar.${ext}`
-    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (uploadErr) { setError('Error al subir la imagen: ' + uploadErr.message); setUploadingAvatar(false); return }
-
-    // Get public URL
-    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
-    const publicUrl = urlData.publicUrl + '?v=' + Date.now()
-
-    // Save to profile
-    await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id)
-    setFormData(prev => ({ ...prev, avatar_url: publicUrl }))
-    setUploadingAvatar(false)
-    setSuccess('Foto de perfil actualizada.')
-    setTimeout(() => setSuccess(''), 3000)
+    // Avatar upload via GCS not yet implemented — stub for now
+    setError('La actualización de foto estará disponible próximamente.')
+    setTimeout(() => setError(''), 3000)
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -88,16 +158,17 @@ export default function ProfilePage() {
     setSaving(true)
     setSuccess('')
     setError('')
-    if (user) {
-      const { error: err } = await supabase.from('profiles').update({
+    const res = await apiFetch('/api/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({
         first_name: formData.first_name,
         last_name: formData.last_name,
         phone: formData.phone,
         role: formData.role,
-      }).eq('id', user.id)
-      if (err) setError('Error al guardar: ' + err.message)
-      else { setSuccess('Perfil guardado correctamente.'); setTimeout(() => setSuccess(''), 3000) }
-    }
+      }),
+    })
+    if (!res.ok) { setError('Error al guardar el perfil.') }
+    else { setSuccess('Perfil guardado correctamente.'); setTimeout(() => setSuccess(''), 3000) }
     setSaving(false)
   }
 
@@ -106,12 +177,6 @@ export default function ProfilePage() {
     router.push('/login')
   }
 
-  const handlePasswordReset = async () => {
-    if (!user?.email) return
-    await supabase.auth.resetPasswordForEmail(user.email)
-    setSuccess('Te enviamos un correo para restablecer tu contraseña.')
-    setTimeout(() => setSuccess(''), 5000)
-  }
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[300px]">
@@ -120,7 +185,7 @@ export default function ProfilePage() {
   )
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 pb-12">
 
       {/* === Avatar + Identity card === */}
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -153,7 +218,7 @@ export default function ProfilePage() {
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
             </div>
-            <p className="text-[10px] text-gray-400 font-medium pb-1">Miembro desde {new Date(user?.created_at || '').toLocaleDateString('es', { month: 'long', year: 'numeric' })}</p>
+            <p className="text-[10px] text-gray-400 font-medium pb-1">Miembro desde {user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('es', { month: 'long', year: 'numeric' }) : ''}</p>
           </div>
 
           <h2 className="text-xl font-black text-gray-900">
@@ -243,17 +308,6 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-widest">Rol</label>
-              <select
-                value={formData.role}
-                onChange={e => setFormData(p => ({ ...p, role: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
-              >
-                <option value="">Seleccionar rol...</option>
-                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
-            </div>
           </div>
 
           <button
@@ -268,24 +322,7 @@ export default function ProfilePage() {
 
       {/* === Seguridad === */}
       {activeTab === 'perfil' && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-4">Seguridad</h3>
-          <button
-            onClick={handlePasswordReset}
-            className="flex items-center justify-between w-full p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
-                <Lock className="w-4 h-4 text-blue-600" />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-bold text-gray-800">Cambiar contraseña</p>
-                <p className="text-xs text-gray-400">Recibirás un correo con el enlace</p>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
-          </button>
-        </div>
+        <PasswordChangeSection />
       )}
 
       {/* === FACTURACIÓN TAB === */}

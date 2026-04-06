@@ -3,15 +3,16 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
+import { apiFetch } from '@/lib/apiFetch'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
 import {
   TrendingUp, CloudRain, AlertTriangle, Calendar, ArrowRight,
   Layers, Navigation, Droplets, ChevronRight, CheckSquare, Leaf,
-  Beef, Scale, RefreshCw, Loader2, Satellite, TrendingDown, Sun, Wind,
-  Lightbulb, Target, RotateCcw
+  Scale, RefreshCw, Loader2, Satellite, TrendingDown, Sun, Wind,
+  Lightbulb, Target, RotateCcw, PawPrint, Beef
 } from 'lucide-react'
 
 const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 51: '🌦️', 61: '🌧️', 80: '🌩️', 95: '⛈️' }
@@ -31,8 +32,8 @@ const TASK_PRIORITY_COLORS: Record<string, string> = {
 }
 
 export default function DashboardOverview() {
-  const { user } = useAuth()
-  const supabase = createClient()
+  const { user, profile, isLoading: authLoading } = useAuth()
+  const router = useRouter()
   const [loading, setLoading]             = useState(true)
   const [herds, setHerds]                 = useState<any[]>([])
   const [paddocks, setPaddocks]           = useState<any[]>([])
@@ -40,7 +41,6 @@ export default function DashboardOverview() {
   const [weather, setWeather]             = useState<WeatherData | null>(null)
   const [nextMoves, setNextMoves]         = useState<any[]>([])
   const [upcomingTasks, setUpcomingTasks] = useState<any[]>([])
-  const [orgId, setOrgId]                 = useState<string | null>(null)
 
   // NDVI Growth widget state
   const [ndviLoading, setNdviLoading]     = useState(false)
@@ -48,75 +48,91 @@ export default function DashboardOverview() {
   const [growthRates, setGrowthRates]     = useState<Record<string, number>>({})
   const [avgGrowthRate, setAvgGrowthRate] = useState<number | null>(null)
   const [lastUpdated, setLastUpdated]     = useState<string | null>(null)
+  const [dataLoaded, setDataLoaded]       = useState(false)
 
   useEffect(() => {
+    // Wait until Firebase auth + profile fetch are both complete
+    if (authLoading) return
+
+    // No user → middleware handles redirect to /login
+    if (!user) return
+
+    // Unverified email → sign out and redirect
+    if (!user.emailVerified) {
+      router.replace('/login')
+      return
+    }
+
+    // Wait until profile is loaded
+    if (profile === null) return
+
+    // Guard: if owner hasn't completed onboarding, send back
+    // A guest (team_role set) skips owner onboarding
+    const isGuest = !!(profile?.team_role)
+    const onboardingDone = (profile?.onboarding_step ?? 0) >= 4
+    if (!isGuest && !onboardingDone) {
+      router.replace('/onboarding')
+      return
+    }
+
+    // Only load data once
+    if (dataLoaded) return
+
     async function load() {
       if (!user) return
       setLoading(true)
 
-      const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
-      if (profile?.organization_id) {
-        const id = profile.organization_id
-        setOrgId(id)
+      try {
+        const [orgRes, paddocksRes, herdsRes, plansRes, tasksRes] = await Promise.all([
+          apiFetch('/api/organizations'),
+          apiFetch('/api/paddocks'),
+          apiFetch('/api/herds'),
+          apiFetch('/api/grazing-plans'),
+          apiFetch(`/api/tasks?from_date=${new Date().toISOString().split('T')[0]}&limit=4`),
+        ])
 
-        const { data: orgData } = await supabase.from('organizations').select('*').eq('id', id).single()
+        const orgData = orgRes.ok ? (await orgRes.json()).organization : null
+        const paddocksData = paddocksRes.ok ? (await paddocksRes.json()).paddocks : []
+        const herdsData = herdsRes.ok ? (await herdsRes.json()).herds : []
+        const plansData = plansRes.ok ? (await plansRes.json()).plans : []
+        const tasksData = tasksRes.ok ? (await tasksRes.json()).tasks : []
+
         setOrg(orgData)
 
-        // Weather
+        const sorted = (paddocksData || []).sort((a: any, b: any) =>
+          (Number(b.dry_matter_kg_ha) || 0) - (Number(a.dry_matter_kg_ha) || 0)
+        )
+        setPaddocks(sorted)
+        buildGrowthRates(sorted)
+        setHerds(herdsData || [])
+        setUpcomingTasks(
+          (tasksData || [])
+            .filter((t: any) => t.status !== 'COMPLETADA' && t.status !== 'completada')
+            .slice(0, 4)
+        )
+        setNextMoves(
+          (plansData || [])
+            .filter((p: any) => p.status === 'PLANNED' || p.status === 'ACTIVE')
+            .sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date))
+            .slice(0, 5)
+        )
+
+        // Weather from org location
         let lat = -34.6, lon = -58.4
-        if (orgData?.location) {
-          if (typeof orgData.location === 'object' && orgData.location.coordinates) {
-            lon = orgData.location.coordinates[0]; lat = orgData.location.coordinates[1]
-          } else if (typeof orgData.location === 'string') {
-            const m = orgData.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/)
-            if (m) { lon = parseFloat(m[1]); lat = parseFloat(m[2]) }
-          }
+        if (orgData?.location?.coordinates) {
+          lon = orgData.location.coordinates[0]; lat = orgData.location.coordinates[1]
         }
         const wData = await getPaddockWeather(lat, lon)
         setWeather(wData)
-
-        // Paddocks sorted by dry_matter_kg_ha desc
-        const { data: pData } = await supabase.from('paddocks').select('*').eq('org_id', id)
-        const sorted = (pData || []).sort((a, b) => (Number(b.dry_matter_kg_ha) || 0) - (Number(a.dry_matter_kg_ha) || 0))
-        setPaddocks(sorted)
-
-        // Compute growth rates from stored history
-        buildGrowthRates(sorted)
-
-        // Herds
-        const { data: hData } = await supabase.from('herds').select('*').eq('org_id', id)
-        setHerds(hData || [])
-
-        // Tasks
-        const today = new Date().toISOString().split('T')[0]
-        const { data: taskData } = await supabase
-          .from('tasks')
-          .select('id, title, due_date, priority, status')
-          .eq('org_id', id)
-          .not('status', 'eq', 'completada')
-          .gte('due_date', today)
-          .order('due_date', { ascending: true })
-          .limit(4)
-        setUpcomingTasks(taskData || [])
-
-        // Moves — fix Supabase join syntax
-        const { data: movesData } = await supabase
-          .from('grazing_plans')
-          .select(`
-            id, status, entry_date, exit_date,
-            paddock:paddocks(name),
-            herd:herds(name)
-          `)
-          .eq('org_id', id)
-          .in('status', ['PLANNED', 'ACTIVE'])
-          .order('entry_date', { ascending: true })
-          .limit(5)
-        setNextMoves(movesData || [])
+      } catch (err) {
+        console.error('Dashboard load error:', err)
       }
+
       setLoading(false)
+      setDataLoaded(true)
     }
     load()
-  }, [user])
+  }, [authLoading, user, profile, dataLoaded, router])
 
   function buildGrowthRates(pList: any[]) {
     const rates: Record<string, number> = {}
@@ -147,51 +163,42 @@ export default function DashboardOverview() {
     await Promise.all(
       toProcess.map(async (p: any) => {
         try {
-          // Get geometry
-          const { data: geoData } = await supabase
-            .from('paddocks')
-            .select('geometry')
-            .eq('id', p.id)
-            .single()
-
-          if (!geoData?.geometry) {
+          if (!p.boundary) {
             processed++
             setNdviStatus(`Procesando ${processed}/${toProcess.length} potreros...`)
             return
           }
 
-          // Call NDVI API
           const resp = await fetch('/api/ndvi', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ geojson: geoData.geometry, paddock_id: p.id }),
+            body: JSON.stringify({ geojson: p.boundary, paddock_id: p.id }),
           })
-          if (!resp.ok) {
-            processed++
-            return
-          }
+          if (!resp.ok) { processed++; return }
 
           const res = await resp.json()
           const newMs = res.estimatedAvailableDryMatterHa
           const currMs = Number(p.dry_matter_kg_ha) || 0
 
-          // Calculate growth rate
           if (currMs > 0) {
             const prevForCalc = Number(p.previous_dry_matter_kg_ha) || currMs
             const prevDateForCalc = p.previous_ndvi_date || new Date(Date.now() - 7 * 86400000).toISOString()
             const days = Math.max(1, Math.round((Date.now() - new Date(prevDateForCalc).getTime()) / 86400000))
             rates[p.id] = (newMs - prevForCalc) / days
           } else {
-            rates[p.id] = (newMs - 500) / 7 // baseline estimate
+            rates[p.id] = (newMs - 500) / 7
           }
 
-          // Save to DB
-          await supabase.from('paddocks').update({
-            current_ndvi: res.averageNdvi,
-            dry_matter_kg_ha: newMs,
-            previous_dry_matter_kg_ha: currMs > 0 ? currMs : newMs,
-            previous_ndvi_date: new Date().toISOString().split('T')[0],
-          }).eq('id', p.id)
+          // Save to DB via API route
+          await apiFetch(`/api/paddocks/${p.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              current_ndvi: res.averageNdvi,
+              dry_matter_kg_ha: newMs,
+              previous_dry_matter_kg_ha: currMs > 0 ? currMs : newMs,
+              previous_ndvi_date: new Date().toISOString().split('T')[0],
+            }),
+          })
 
           processed++
           setNdviStatus(`Procesando ${processed}/${toProcess.length} potreros...`)
@@ -201,10 +208,13 @@ export default function DashboardOverview() {
       })
     )
 
-    // Refresh paddock data from DB
-    if (orgId) {
-      const { data: pData } = await supabase.from('paddocks').select('*').eq('org_id', orgId)
-      const sorted = (pData || []).sort((a, b) => (Number(b.dry_matter_kg_ha) || 0) - (Number(a.dry_matter_kg_ha) || 0))
+    // Refresh paddock data from API
+    const paddocksRes = await apiFetch('/api/paddocks')
+    if (paddocksRes.ok) {
+      const { paddocks: pData } = await paddocksRes.json()
+      const sorted = (pData || []).sort((a: any, b: any) =>
+        (Number(b.dry_matter_kg_ha) || 0) - (Number(a.dry_matter_kg_ha) || 0)
+      )
       setPaddocks(sorted)
     }
 
@@ -214,7 +224,15 @@ export default function DashboardOverview() {
     setLastUpdated(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }))
     setNdviStatus('')
     setNdviLoading(false)
-  }, [paddocks, ndviLoading, supabase, orgId, growthRates])
+  }, [paddocks, ndviLoading, growthRates])
+
+  // Auto-trigger NDVI when paddocks load with no dry_matter_kg_ha
+  useEffect(() => {
+    if (!dataLoaded || ndviLoading || paddocks.length === 0) return
+    const needsNdvi = paddocks.every(p => !p.dry_matter_kg_ha)
+    if (needsNdvi) refreshAllNdvi()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoaded])
 
   // ── Derived values ────────────────────────────────────────────────────────
   const totalArea    = org?.total_area_ha || paddocks.reduce((s, p) => s + (Number(p.area_ha) || 0), 0)
@@ -432,7 +450,6 @@ export default function DashboardOverview() {
 
         {/* Widget 3 — Insights holístico */}
         {(() => {
-          const month = new Date().toLocaleString('es', { month: 'long' })
           const monthN = new Date().getMonth() + 1
           const season = monthN >= 12 || monthN <= 2 ? { name: 'Verano', rest: '45-65d', color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' }
             : monthN >= 3 && monthN <= 5 ? { name: 'Otoño', rest: '60-80d', color: 'text-orange-600', bg: 'bg-orange-50 border-orange-100' }
@@ -457,7 +474,6 @@ export default function DashboardOverview() {
                 </div>
               ) : (
                 <>
-                  {/* Season */}
                   <div className={`px-3 py-2.5 rounded-xl border ${season.bg}`}>
                     <p className="text-[7px] font-black uppercase tracking-widest text-gray-400">Temporada actual</p>
                     <div className="flex items-center justify-between mt-0.5">
@@ -465,7 +481,6 @@ export default function DashboardOverview() {
                       <p className="text-[8px] font-bold text-gray-500">Descanso: {season.rest}</p>
                     </div>
                   </div>
-                  {/* Rotation quality */}
                   <div className="px-3 py-2.5 rounded-xl border border-gray-100 bg-gray-50">
                     <p className="text-[7px] font-black uppercase tracking-widest text-gray-400">Rotación</p>
                     <div className="flex items-center justify-between mt-0.5">
@@ -476,7 +491,6 @@ export default function DashboardOverview() {
                       <div className={`h-1 rounded-full ${rotationPct >= 65 ? 'bg-green-500' : rotationPct >= 40 ? 'bg-amber-400' : 'bg-red-400'}`} style={{ width: `${rotationPct}%` }} />
                     </div>
                   </div>
-                  {/* Forage autonomy */}
                   <div className={`px-3 py-2.5 rounded-xl border ${autonomyBg}`}>
                     <p className="text-[7px] font-black uppercase tracking-widest text-gray-400">Autonomía forrajera</p>
                     <div className="flex items-center justify-between mt-0.5">
@@ -506,7 +520,6 @@ export default function DashboardOverview() {
             </div>
           ) : (
             <>
-              {/* Consumo diario */}
               <div>
                 <p className="text-[8px] font-black text-amber-500 tracking-widest uppercase">Consumo diario</p>
                 <div className="flex items-baseline gap-1.5 mt-0.5">
@@ -516,8 +529,6 @@ export default function DashboardOverview() {
                   <span className="text-xs font-bold text-gray-500">kg MS/día</span>
                 </div>
               </div>
-
-              {/* EV/ha */}
               <div className={`px-3 py-2 rounded-xl bg-white/70 border ${caBg.split(' ')[1]}`}>
                 <div className="flex items-center justify-between">
                   <div>
@@ -530,8 +541,17 @@ export default function DashboardOverview() {
                   </div>
                 </div>
               </div>
-
-              {/* Oferta vs Demanda */}
+              {/* Field name + total area */}
+              <div className="px-3 py-2 rounded-xl border border-gray-100 bg-white/60">
+                <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Establecimiento</p>
+                <p className="text-sm font-black text-gray-800 mt-0.5 truncate">{org?.name || '—'}</p>
+                <div className="flex items-center justify-between mt-0.5">
+                  <p className="text-[9px] font-bold text-gray-500">
+                    {Number(totalArea) > 0 ? `${Number(totalArea).toFixed(1)} ha totales` : `${paddocks.length} potrero${paddocks.length !== 1 ? 's' : ''}`}
+                  </p>
+                  <p className="text-[9px] font-bold text-gray-400">{paddocks.length} potreros</p>
+                </div>
+              </div>
               <div className={`px-3 py-2 rounded-xl border ${balanceDeficit ? 'bg-red-50 border-red-200' : 'bg-white/60 border-white/40'}`}>
                 <div className="flex items-center justify-between">
                   <div>
@@ -545,7 +565,6 @@ export default function DashboardOverview() {
                   </p>
                 </div>
               </div>
-
               <Link href="/dashboard/herds" className="text-[9px] font-black text-green-600 hover:underline flex items-center gap-1 mt-auto">
                 Ver rebaños <ArrowRight className="w-3 h-3" />
               </Link>
@@ -621,7 +640,7 @@ export default function DashboardOverview() {
               <div className="flex-1 flex flex-col items-center justify-center py-4 text-center gap-2">
                 <Satellite className="w-8 h-8 text-gray-200" />
                 <p className="text-[10px] font-bold text-gray-400">Sin datos de crecimiento</p>
-                <p className="text-[9px] text-gray-300">Presioná "Actualizar" para<br/>consultar el satélite Sentinel-2.<br/>Requiere 2+ lecturas NDVI.</p>
+                <p className="text-[9px] text-gray-300">Presioná &quot;Actualizar&quot; para<br/>consultar el satélite Sentinel-2.<br/>Requiere 2+ lecturas NDVI.</p>
               </div>
             )}
           </div>
@@ -652,7 +671,7 @@ export default function DashboardOverview() {
                 const diffDays = Math.round((d.getTime() - new Date().getTime()) / 86400000)
                 const dateLabel = diffDays === 0 ? 'Hoy' : diffDays === 1 ? 'Mañana' : `${d.getDate()}/${d.getMonth() + 1}`
                 const isUrgent = diffDays <= 1
-                const pColorCls = TASK_PRIORITY_COLORS[task.priority] || TASK_PRIORITY_COLORS.baja
+                const pColorCls = TASK_PRIORITY_COLORS[task.priority?.toLowerCase()] || TASK_PRIORITY_COLORS.baja
                 return (
                   <Link
                     key={task.id}
@@ -662,7 +681,7 @@ export default function DashboardOverview() {
                     <div className={`px-1.5 py-1 rounded-lg text-[7px] font-black border shrink-0 ${pColorCls}`}>{dateLabel}</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[10px] font-bold text-gray-900 truncate">{task.title}</p>
-                      <p className="text-[8px] text-gray-400 capitalize">{task.priority || 'normal'}</p>
+                      <p className="text-[8px] text-gray-400 capitalize">{task.priority?.toLowerCase() || 'normal'}</p>
                     </div>
                     {isUrgent && <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
                   </Link>
@@ -717,7 +736,7 @@ export default function DashboardOverview() {
                     }`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[10px] font-bold text-gray-900 truncate">
-                        {(move.herd as any)?.name || (move.herds as any)?.name || 'Rebaño'} → {(move.paddock as any)?.name || (move.paddocks as any)?.name || 'Potrero'}
+                        {(move.herds as any)?.name || 'Rebaño'} → {(move.paddocks as any)?.name || 'Potrero'}
                       </p>
                       <p className="text-[8px] text-gray-500">{dateLabel}</p>
                     </div>
@@ -734,7 +753,7 @@ export default function DashboardOverview() {
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div>
               <h3 className="text-xs font-black text-gray-950 flex items-center gap-1.5">
-                <Beef className="w-3.5 h-3.5 text-green-600" /> Rebaños
+                <PawPrint className="w-3.5 h-3.5 text-green-600" /> Rebaños
               </h3>
               <p className="text-[8px] text-gray-400 font-bold mt-0.5">{totalEV.toFixed(1)} EV · {herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)} animales</p>
             </div>
@@ -747,7 +766,7 @@ export default function DashboardOverview() {
               <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-11 bg-gray-100 animate-pulse rounded-xl" />)}</div>
             ) : herds.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
-                <Beef className="w-7 h-7 text-gray-200" />
+                <PawPrint className="w-7 h-7 text-gray-200" />
                 <p className="text-[10px] text-gray-400 font-bold">Sin rebaños registrados</p>
               </div>
             ) : (() => {

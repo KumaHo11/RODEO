@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/AuthProvider'
+import { apiFetch } from '@/lib/apiFetch'
 import { addToOfflineQueue } from '@/components/OfflineIndicator'
 import {
   NotebookPen, Mic, MicOff, Camera, MapPin, X, Plus,
@@ -131,12 +131,10 @@ async function fileToBase64(file: File): Promise<{ base64: string; mimeType: str
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BitacoraPage() {
-  const supabase = createClient()
   const { user } = useAuth()
 
   const [notes, setNotes] = useState<any[]>([])
   const [paddocks, setPaddocks] = useState<any[]>([])
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Filters
@@ -160,10 +158,19 @@ export default function BitacoraPage() {
   })
 
   // Voice
-  const [isRecording, setIsRecording] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const recognitionRef = useRef<any>(null)
+  const [isRecording, setIsRecording]     = useState(false)
+  const [transcript, setTranscript]       = useState('')
+  const [voiceLang, setVoiceLang]         = useState('es-AR')
+  const recognitionRef                    = useRef<any>(null)
   const [voiceSupported, setVoiceSupported] = useState(false)
+  // Audio recording (MediaRecorder)
+  const mediaRecorderRef                  = useRef<MediaRecorder | null>(null)
+  const audioChunksRef                    = useRef<Blob[]>([])
+  const [audioBlob, setAudioBlob]         = useState<Blob | null>(null)
+  const audioGcsUrlRef = useRef<string | null>(null) // ref avoids stale closure in handleSave
+  const [audioUrl, setAudioUrl]           = useState<string | null>(null)
+  const [audioGcsUploaded, setAudioGcsUploaded] = useState(false) // UI indicator only
+  const [audioUploading, setAudioUploading] = useState(false)
 
   // Photo
   const [photoFile, setPhotoFile] = useState<File | null>(null)
@@ -190,17 +197,14 @@ export default function BitacoraPage() {
   const loadData = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
-    if (!profile?.organization_id) { setLoading(false); return }
-    setOrgId(profile.organization_id)
-    const [{ data: notesData }, { data: paddocksData }] = await Promise.all([
-      supabase.from('field_notes').select('*').eq('org_id', profile.organization_id).order('created_at', { ascending: false }),
-      supabase.from('paddocks').select('id, name').eq('org_id', profile.organization_id).order('name'),
+    const [notesRes, paddocksRes] = await Promise.all([
+      apiFetch('/api/field-notes'),
+      apiFetch('/api/paddocks'),
     ])
-    setNotes(notesData || [])
-    setPaddocks(paddocksData || [])
+    setNotes(notesRes.ok ? (await notesRes.json()).notes || [] : [])
+    setPaddocks(paddocksRes.ok ? (await paddocksRes.json()).paddocks || [] : [])
     setLoading(false)
-  }, [supabase, user])
+  }, [user])
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { setVoiceSupported('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) }, [])
@@ -213,32 +217,82 @@ export default function BitacoraPage() {
   }, [notes])
 
   // ── Voice ───────────────────────────────────────────────────────────────────
-  const startRecording = () => {
+  const startRecording = async () => {
+    // Start Speech Recognition for transcript
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) return
-    const rec = new SR()
-    rec.continuous = true
-    rec.interimResults = true
-    rec.lang = 'es-AR'
-    rec.onresult = (e: any) => {
-      let full = ''
-      for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript
-      setTranscript(full)
-      const detectedTags = detectTags(full)
-      setForm(prev => ({
-        ...prev,
-        content: full,
-        tags: detectedTags,
-        title: prev.title || full.split('.')[0].slice(0, 60),
-      }))
+    if (SR) {
+      const rec = new SR()
+      rec.continuous = true
+      rec.interimResults = true
+      rec.lang = voiceLang
+      rec.onresult = (e: any) => {
+        let full = ''
+        for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript
+        setTranscript(full)
+        const detectedTags = detectTags(full)
+        setForm(prev => ({
+          ...prev,
+          content: full,
+          tags: detectedTags,
+          title: prev.title || full.split('.')[0].slice(0, 60),
+        }))
+      }
+      rec.start()
+      recognitionRef.current = rec
     }
-    rec.start()
-    recognitionRef.current = rec
+    // Simultaneously capture MediaRecorder audio
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      audioChunksRef.current = []
+      mr.ondataavailable = (ev) => { if (ev.data.size > 0) audioChunksRef.current.push(ev.data) }
+      mr.onstop = async () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        setAudioBlob(blob)
+        setAudioUrl(URL.createObjectURL(blob))
+        stream.getTracks().forEach(t => t.stop())
+        // Upload to GCS
+        try {
+          setAudioUploading(true)
+          const fd = new FormData()
+          fd.append('file', new File([blob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
+          fd.append('folder', 'bitacora-audio')
+          const res = await apiFetch('/api/upload', { method: 'POST', body: fd })
+          if (res.ok) {
+            const { url } = await res.json()
+            audioGcsUrlRef.current = url  // sync ref — safe in handleSave
+            setAudioGcsUploaded(true)     // trigger UI update
+          }
+        } catch (err) { console.warn('Audio upload failed:', err) }
+        finally { setAudioUploading(false) }
+      }
+      mr.start()
+      mediaRecorderRef.current = mr
+    } catch (err) {
+      console.warn('MediaRecorder not available:', err)
+    }
     setIsRecording(true)
     setTranscript('')
+    setAudioBlob(null)
+    setAudioUrl(null)
   }
 
-  const stopRecording = () => { recognitionRef.current?.stop(); setIsRecording(false) }
+  const stopRecording = async () => {
+    recognitionRef.current?.stop()
+    mediaRecorderRef.current?.stop()
+    setIsRecording(false)
+    // Audio blob will be ready after onstop fires (~200ms)
+    // Upload happens in onstop handler below
+  }
+
+  const downloadAudio = () => {
+    if (!audioBlob) return
+    const a = document.createElement('a')
+    a.href = audioUrl!
+    a.download = `bitacora-audio-${Date.now()}.webm`
+    a.click()
+  }
+
   const getLocation = () => {
     navigator.geolocation?.getCurrentPosition(pos => {
       setForm(prev => ({ ...prev, lat: pos.coords.latitude, lng: pos.coords.longitude }))
@@ -329,10 +383,10 @@ export default function BitacoraPage() {
   const handleApplyToPaddock = async () => {
     if (!aiResult || !form.paddock_id) return
     setApplyingToPaddock(true)
-    await supabase
-      .from('paddocks')
-      .update({ dry_matter_kg_ha: aiResult.dry_matter_kg_ha })
-      .eq('id', form.paddock_id)
+    await apiFetch(`/api/paddocks/${form.paddock_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ dry_matter_kg_ha: aiResult.dry_matter_kg_ha }),
+    })
     setApplyingToPaddock(false)
     setPaddockUpdated(true)
   }
@@ -357,17 +411,18 @@ export default function BitacoraPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!orgId || !form.title) return
+    if (!form.title) return
     setSaving(true)
 
+    // Offline queue (unchanged)
     if (!navigator.onLine) {
       addToOfflineQueue({
         type: 'field_note',
         data: {
-          org_id: orgId, created_by: user!.id,
+          created_by: user?.uid,
           paddock_id: form.paddock_id || null,
           tags: form.tags,
-          category: form.tags[0],  // backward compat
+          category: form.tags[0],
           title: form.title, content: form.content || null,
           lat: form.lat, lng: form.lng, sync_status: 'PENDING',
         },
@@ -379,14 +434,16 @@ export default function BitacoraPage() {
       return
     }
 
-    let photo_url = null
+    // Photo upload via /api/upload (FormData multipart)
+    let photo_url: string | null = null
     if (photoFile) {
-      const ext = photoFile.name.split('.').pop()
-      const path = `field-notes/${orgId}/${Date.now()}.${ext}`
-      const { data: uploaded } = await supabase.storage.from('field-photos').upload(path, photoFile, { upsert: true })
-      if (uploaded) {
-        const { data: pub } = supabase.storage.from('field-photos').getPublicUrl(path)
-        photo_url = pub.publicUrl
+      const fd = new FormData()
+      fd.append('file', photoFile)
+      fd.append('folder', 'field-notes')
+      const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd })
+      if (uploadRes.ok) {
+        const { url } = await uploadRes.json()
+        photo_url = url
       }
     }
 
@@ -396,29 +453,33 @@ export default function BitacoraPage() {
     } : {}
 
     if (editingNote) {
-      await supabase.from('field_notes').update({
-        paddock_id: form.paddock_id || null,
-        tags: form.tags,
-        category: form.tags[0],
-        title: form.title,
-        content: form.content || null,
-        lat: form.lat,
-        lng: form.lng,
-        photo_url: photo_url || editingNote.photo_url,
-        ...biomassData,
-      }).eq('id', editingNote.id)
+      await apiFetch(`/api/field-notes/${editingNote.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          paddock_id: form.paddock_id || null,
+          tags: form.tags,
+          title: form.title,
+          content: form.content || null,
+          lat: form.lat,
+          lng: form.lng,
+          photo_url: photo_url || editingNote.photo_url,
+          ...biomassData,
+        }),
+      })
     } else {
-      await supabase.from('field_notes').insert([{
-        org_id: orgId, created_by: user!.id,
-        paddock_id: form.paddock_id || null,
-        tags: form.tags,
-        category: form.tags[0],
-        title: form.title,
-        content: form.content || null,
-        lat: form.lat, lng: form.lng,
-        photo_url,
-        ...biomassData,
-      }])
+      await apiFetch('/api/field-notes', {
+        method: 'POST',
+        body: JSON.stringify({
+          paddock_id: form.paddock_id || null,
+          tags: (biomassData as any).tags || form.tags,
+          title: form.title,
+          content: form.content || null,
+          lat: form.lat, lng: form.lng,
+          photo_url,
+          audio_url: audioGcsUrlRef.current || null,
+          analysis_result: aiResult || null,
+        }),
+      })
     }
 
     setSaving(false)
@@ -436,7 +497,10 @@ export default function BitacoraPage() {
     setAiError(null)
     setBcsResult(null)
     setBcsError(null)
-    setAnalysisStep(0)
+    setAudioBlob(null)
+    setAudioUrl(null)
+    audioGcsUrlRef.current = null
+    setAudioGcsUploaded(false)
     setApplyingToPaddock(false)
     setPaddockUpdated(false)
     setEditingNote(null)
@@ -454,8 +518,8 @@ export default function BitacoraPage() {
       tags,
       title: note.title || '',
       content: note.content || '',
-      lat: note.lat || null,
-      lng: note.lng || null,
+      lat: note.lat != null ? Number(note.lat) : null,
+      lng: note.lng != null ? Number(note.lng) : null,
     })
     setPhotoPreview(note.photo_url || null)
     setAiResult(note.analysis_result || null)
@@ -701,7 +765,7 @@ export default function BitacoraPage() {
                       )}
                       {note.lat && (
                         <span className="text-[10px] text-blue-400 font-medium">
-                          📍 {note.lat.toFixed(4)}, {note.lng?.toFixed(4)}
+                          📍 {Number(note.lat).toFixed(4)}, {note.lng != null ? Number(note.lng).toFixed(4) : ''}
                         </span>
                       )}
                     </div>
@@ -716,7 +780,7 @@ export default function BitacoraPage() {
       {/* ── Modal: Nueva / Editar nota ── */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[96vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-2xl max-h-[96vh] sm:max-h-[92vh] overflow-y-auto shadow-2xl">
 
             {/* ── Sticky header ── */}
             <div className="sticky top-0 bg-white/98 backdrop-blur-sm border-b border-gray-100 px-5 py-4 flex items-center justify-between rounded-t-3xl z-10">
@@ -772,10 +836,26 @@ export default function BitacoraPage() {
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isRecording ? 'bg-red-500' : 'bg-green-600'} shadow-md`}>
                       {isRecording ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
                     </div>
-                    <div className="text-center">
-                      <p className={`text-sm font-black ${isRecording ? 'text-red-600' : 'text-green-800'}`}>
-                        {isRecording ? 'Detener' : 'Dictar voz'}
-                      </p>
+                  {/* Language selector for voice */}
+                  {!isRecording && voiceSupported && (
+                    <div className="absolute bottom-2 left-0 right-0 flex justify-center">
+                      <select
+                        value={voiceLang}
+                        onChange={e => setVoiceLang(e.target.value)}
+                        className="text-[9px] font-bold text-gray-400 bg-transparent border-0 outline-none cursor-pointer hover:text-gray-600"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <option value="es-AR">ES 🇬🇧</option>
+                        <option value="es-ES">ES 🇪🇸</option>
+                        <option value="en-US">EN 🇺🇸</option>
+                        <option value="pt-BR">PT 🇧🇷</option>
+                      </select>
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <p className={`text-sm font-black ${isRecording ? 'text-red-600' : 'text-green-800'}`}>
+                      {isRecording ? 'Detener' : 'Dictar voz'}
+                    </p>
                       <p className={`text-[10px] ${isRecording ? 'text-red-400' : 'text-green-500'} leading-tight`}>
                         {isRecording ? 'Toca para parar' : 'a caballo, en campo'}
                       </p>
@@ -836,12 +916,22 @@ export default function BitacoraPage() {
                 {/* ── Voice transcript live ── */}
                 {(transcript || isRecording) && (
                   <div className={`mt-3 p-3.5 rounded-2xl border ${isRecording ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                    <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${isRecording ? 'text-red-500' : 'text-green-600'}`}>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isRecording ? 'text-red-500' : 'text-green-600'}`}>
                       {isRecording ? '🔴 Escuchando...' : '✅ Transcripción lista'}
                     </p>
                     <p className="text-sm text-gray-800 leading-relaxed font-medium">
                       {transcript || <span className="text-gray-400 italic">Empezá a hablar...</span>}
                     </p>
+                    {/* Audio playback + download */}
+                    {!isRecording && audioUrl && (
+                      <div className="mt-3 flex items-center gap-2 pt-3 border-t border-green-200">
+                        <audio src={audioUrl} controls className="h-8 flex-1" style={{ minWidth: 0 }} />
+                        <button type="button" onClick={downloadAudio}
+                          className="text-[10px] font-bold text-green-700 bg-green-100 hover:bg-green-200 px-3 py-1.5 rounded-xl flex items-center gap-1 shrink-0 transition-colors">
+                          ⬇ Guardar audio
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1117,7 +1207,7 @@ export default function BitacoraPage() {
               )}
 
               {/* Actions */}
-              <div className="flex gap-3 pt-1">
+              <div className="flex gap-3 px-5 pb-6 pt-4">
                 <button type="button" onClick={() => { setIsOpen(false); resetForm() }}
                   className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-colors">
                   Cancelar
