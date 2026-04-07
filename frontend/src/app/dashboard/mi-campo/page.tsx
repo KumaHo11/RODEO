@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { getPaddockNDVI, SatelliteData } from '@/lib/services/satellite'
-import { X, Check, MapPin } from 'lucide-react'
+import { X, Check, MapPin, Plus } from 'lucide-react'
 
 const MiCampoMap = dynamic(() => import('./components/MiCampoMap'), {
   ssr: false,
@@ -44,6 +44,10 @@ export default function MiCampoPage() {
   const [newPaddockStatus, setNewPaddockStatus] = useState('RESTING')
   const [savingNewPaddock, setSavingNewPaddock] = useState(false)
   const [newPaddockError, setNewPaddockError] = useState<string | null>(null)
+
+  // ── Draw mode trigger for MiCampoMap ─────────────────────────────────────
+  const [drawModeActive, setDrawModeActive] = useState(false)
+  const triggerDrawRef = useRef<(() => void) | null>(null)
 
   const loadData = useCallback(async () => {
     if (!user) return
@@ -118,6 +122,7 @@ export default function MiCampoPage() {
 
   // ── Handle new polygon drawn from map ─────────────────────────────────────
   const handleNewPaddockDrawn = useCallback((geojson: any, areaHa: number) => {
+    setDrawModeActive(false)
     setNewPaddockGeom(geojson)
     setNewPaddockAreaHa(areaHa)
     setNewPaddockName('')
@@ -190,7 +195,32 @@ export default function MiCampoPage() {
           onPaddockGeomUpdated={handlePaddockGeomUpdated}
           onNewPaddockDrawn={handleNewPaddockDrawn}
           activeGrazingPlans={activeGrazingPlans}
+          drawModeActive={drawModeActive}
+          onDrawModeChange={setDrawModeActive}
         />
+
+        {/* ── FAB: Nuevo Potrero ──────────────────────────────────────────── */}
+        <div className="absolute bottom-5 right-5 z-[1000] flex flex-col items-end gap-2">
+          {drawModeActive && (
+            <button
+              onClick={() => setDrawModeActive(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-xs font-black rounded-xl shadow-lg hover:bg-red-600 transition-all animate-pulse"
+            >
+              <X className="w-3.5 h-3.5" /> Cancelar dibujo
+            </button>
+          )}
+          <button
+            onClick={() => setDrawModeActive(v => !v)}
+            title={drawModeActive ? 'Cancelar' : 'Nuevo potrero'}
+            className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl transition-all ${
+              drawModeActive
+                ? 'bg-red-500 hover:bg-red-600 rotate-45'
+                : 'bg-green-600 hover:bg-green-700'
+            } text-white`}
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        </div>
       </div>
 
       {/* ── New Paddock Creation Modal ──────────────────────────────────────── */}

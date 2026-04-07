@@ -14,6 +14,7 @@ export type PermissionKey =
   | 'planificador'
   | 'bitacora'
   | 'insights'
+  | 'valuacion'
   | 'equipo'
   | 'tareas'
 
@@ -56,8 +57,7 @@ export function usePermissions() {
   const can = (key: PermissionKey): boolean => {
     if (isOwner) return true
     const perms = profile?.permissions as Record<string, any> | null
-    if (!perms) return key === 'dashboard' // fallback: only panel
-    // Cast to boolean: handles stored values that might be string "true", number 1, or real boolean
+    if (!perms) return key === 'dashboard' || key === 'equipo' // minimal fallback
     return Boolean(perms[key]) === true
   }
 

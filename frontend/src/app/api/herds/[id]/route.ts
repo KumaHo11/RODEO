@@ -35,6 +35,7 @@ export async function PATCH(
       age_years: 'age_years', total_ev: 'total_ev',
       bcs_score: 'bcs_score', bcs_label: 'bcs_label',
       bcs_data: 'bcs_data', photo_url: 'photo_url',
+      categoria: 'categoria',
     }
 
     const sets: string[] = ['updated_at = NOW()']

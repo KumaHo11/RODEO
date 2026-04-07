@@ -31,19 +31,40 @@ const getSeason = () => {
   return                         { name: 'Primavera',type: 'Temporada abierta', icon: '🌱', color: 'bg-lime-100 text-lime-700' }
 }
 
+// Safe date string normalizer — handles null, undefined, JS Date objects, and ISO strings
+const safeIso = (val: any): string => {
+  if (!val) return ''
+  if (val instanceof Date) return val.toISOString().split('T')[0]
+  const s = String(val)
+  return s.includes('T') ? s.split('T')[0] : s
+}
+
 // Format date as dd/MM
-const fmt = (iso: string) => {
-  const d = new Date(iso + 'T00:00:00')
+const fmt = (iso: any): string => {
+  const s = safeIso(iso)
+  if (!s) return '—'
+  const d = new Date(s + 'T00:00:00')
+  if (isNaN(d.getTime())) return '—'
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
 }
 
 // days between two ISO dates
-const daysBetween = (a: string, b: string) =>
-  Math.round((new Date(b+'T00:00:00').getTime() - new Date(a+'T00:00:00').getTime()) / 86400000)
+const daysBetween = (a: any, b: any): number => {
+  const sa = safeIso(a)
+  const sb = safeIso(b)
+  if (!sa || !sb) return 0
+  const da = new Date(sa + 'T00:00:00')
+  const db = new Date(sb + 'T00:00:00')
+  if (isNaN(da.getTime()) || isNaN(db.getTime())) return 0
+  return Math.round((db.getTime() - da.getTime()) / 86400000)
+}
 
 // Add n days to ISO date string
-const addDays = (iso: string, n: number): string => {
-  const d = new Date(iso + 'T00:00:00')
+const addDays = (iso: any, n: number): string => {
+  const s = safeIso(iso)
+  if (!s) return new Date().toISOString().split('T')[0]
+  const d = new Date(s + 'T00:00:00')
+  if (isNaN(d.getTime())) return new Date().toISOString().split('T')[0]
   d.setDate(d.getDate() + n)
   return d.toISOString().split('T')[0]
 }
@@ -533,43 +554,46 @@ export default function GrazingPlanner() {
     )
   }, [farmEvents, formData.entry_date, formData.exit_date])
 
+  // Auto-suggest exit date ONLY for NEW plans (not editing existing ones)
   useEffect(() => {
     if (suggestion.days > 0 && formData.entry_date && !formData.id) {
       const exit = addDays(formData.entry_date, suggestion.days)
       setSuggestedExitDate(exit)
-      setFormData(prev => prev.exit_date === exit ? prev : { ...prev, exit_date: exit })
+      setFormData(prev => ({
+        ...prev,
+        exit_date: prev.exit_date === exit ? prev.exit_date : exit,
+        // Sync recovery days with holistic suggestion for new plans
+        planned_recovery_days: suggestion.recovery,
+      }))
       setExitDateWarning(false)
     }
-  }, [suggestion.days, formData.entry_date, formData.id])
+  }, [suggestion.days, suggestion.recovery, formData.entry_date]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadData() {
     if (!user) return
     setLoading(true)
-
-    const [paddocksRes, herdsRes, plansRes, eventsRes] = await Promise.all([
-      apiFetch('/api/paddocks'),
-      apiFetch('/api/herds'),
-      apiFetch('/api/grazing-plans'),
-      apiFetch('/api/farm-events'),
-    ])
-
-    const pData   = paddocksRes.ok  ? (await paddocksRes.json()).paddocks  : []
-    const hData   = herdsRes.ok     ? (await herdsRes.json()).herds        : []
-    const plData  = plansRes.ok     ? (await plansRes.json()).plans        : []
-    const evtData = eventsRes.ok    ? (await eventsRes.json()).events      : []
-
-    setPaddocks(pData  || [])
-    setHerds(hData     || [])
-    setPlans(plData    || [])
-    setFarmEvents(evtData || [])
-
     try {
-      // Use first paddock location or default to Buenos Aires
-      const wData = await getPaddockWeather(-37.32, -59.13)
-      setWeather(wData)
-    } catch { /* ignore */ }
+      const [paddocksRes, herdsRes, plansRes, eventsRes] = await Promise.all([
+        apiFetch('/api/paddocks').catch(() => null),
+        apiFetch('/api/herds').catch(() => null),
+        apiFetch('/api/grazing-plans').catch(() => null),
+        apiFetch('/api/farm-events').catch(() => null),
+      ])
 
-    setLoading(false)
+      setPaddocks(paddocksRes?.ok ? (await paddocksRes.json()).paddocks ?? [] : [])
+      setHerds(herdsRes?.ok ? (await herdsRes.json()).herds ?? [] : [])
+      setPlans(plansRes?.ok ? (await plansRes.json()).plans ?? [] : [])
+      setFarmEvents(eventsRes?.ok ? (await eventsRes.json()).events ?? [] : [])
+
+      try {
+        const wData = await getPaddockWeather(-37.32, -59.13)
+        setWeather(wData)
+      } catch { /* ignore — weather is optional */ }
+    } catch (err) {
+      console.error('Grazing loadData error:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { loadData() }, [user])
@@ -1040,20 +1064,41 @@ export default function GrazingPlanner() {
                     <input
                       required type="date"
                       value={formData.entry_date}
-                      onChange={e => setFormData({ ...formData, entry_date: e.target.value })}
+                      onChange={e => {
+                        const val = e.target.value
+                        // If exit_date is before new entry_date, push it 1 day forward
+                        const newExit = formData.exit_date && formData.exit_date <= val ? addDays(val, 1) : formData.exit_date
+                        setFormData({ ...formData, entry_date: val, exit_date: newExit })
+                        // Optimistic Gantt update
+                        if (formData.id) {
+                          setPlans(prev => prev.map(p => p.id === formData.id
+                            ? { ...p, entry_date: val, exit_date: newExit }
+                            : p
+                          ))
+                        }
+                      }}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none text-gray-900"
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase flex items-center gap-1">
-                      Fecha de salida {suggestedExitDate && formData.exit_date === suggestedExitDate && <span className="text-green-500">✓ auto</span>}
+                      Fecha de salida
+                      {suggestedExitDate && formData.exit_date === suggestedExitDate && !formData.id && <span className="text-green-500">✓ auto</span>}
                     </label>
                     <input
                       type="date"
+                      min={formData.entry_date ? addDays(formData.entry_date, 1) : undefined}
                       value={formData.exit_date}
                       onChange={e => {
                         const val = e.target.value
                         setFormData({ ...formData, exit_date: val })
+                        // Optimistic Gantt update
+                        if (formData.id) {
+                          setPlans(prev => prev.map(p => p.id === formData.id
+                            ? { ...p, exit_date: val }
+                            : p
+                          ))
+                        }
                         if (suggestedExitDate && val < suggestedExitDate) {
                           setExitDateWarning(true)
                         } else {

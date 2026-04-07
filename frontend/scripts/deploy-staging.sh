@@ -1,92 +1,73 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # RODEO — Deploy a staging en GCP Cloud Run
-# Uso: ./scripts/deploy-staging.sh [PROJECT_ID_o_NUMBER]
-# Si no pasás argumento, intenta detectar el proyecto activo de gcloud
+# Uso: ./scripts/deploy-staging.sh [PROJECT_ID]
 # ─────────────────────────────────────────────────────────────────────────────
 
-set -e  # Falla si cualquier comando falla
+set -e
 
-# Auto-detectar Project ID si no se pasa como argumento
-if [ -z "$1" ]; then
-  echo "▶ Detectando proyecto GCP activo..."
-  PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
-  if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "(unset)" ]; then
-    echo "❌ No se pudo detectar el proyecto. Pasalo como argumento:"
-    echo "   ./scripts/deploy-staging.sh TU_PROJECT_ID"
-    exit 1
-  fi
-  echo "  ✓ Proyecto detectado: $PROJECT_ID"
-else
-  PROJECT_ID=$1
-fi
-
+PROJECT_ID="${1:-rodeo-app-fac50}"
 REGION="southamerica-east1"
 SERVICE_NAME="rodeo-staging"
 REGISTRY="$REGION-docker.pkg.dev"
 IMAGE="$REGISTRY/$PROJECT_ID/rodeo-images/rodeo-frontend:staging"
+STAGING_URL="https://rodeo-staging-831756494147.southamerica-east1.run.app"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  🐄 RODEO — Deploy to Staging"
-echo "  Proyecto: $PROJECT_ID"
-echo "  Región:   $REGION"
-echo "  Imagen:   $IMAGE"
+echo "  Proyecto: $PROJECT_ID | Imagen: $IMAGE"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# ── Verificar gcloud configurado ─────────────────────────────────────────────
-echo ""
-echo "▶ [1/5] Verificando configuración GCP..."
-gcloud config set project $PROJECT_ID
+# ── Config GCP ───────────────────────────────────────────────────────────────
+echo "▶ [1/5] Configurando GCP..."
+gcloud config set project $PROJECT_ID --quiet
 gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
 
-# ── Habilitar APIs necesarias ─────────────────────────────────────────────────
-echo ""
-echo "▶ [2/5] Habilitando APIs GCP..."
-gcloud services enable \
-  run.googleapis.com \
-  artifactregistry.googleapis.com \
-  cloudbuild.googleapis.com \
-  secretmanager.googleapis.com --quiet
+# ── Enable APIs ───────────────────────────────────────────────────────────────
+echo "▶ [2/5] Habilitando APIs..."
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com --quiet 2>/dev/null || true
 
-# ── Crear Artifact Registry si no existe ─────────────────────────────────────
-echo ""
-echo "▶ [3/5] Configurando Artifact Registry..."
-gcloud artifacts repositories describe rodeo-images \
-  --location=$REGION 2>/dev/null || \
+# ── Artifact Registry ─────────────────────────────────────────────────────────
+echo "▶ [3/5] Artifact Registry..."
+gcloud artifacts repositories describe rodeo-images --location=$REGION --project=$PROJECT_ID 2>/dev/null || \
 gcloud artifacts repositories create rodeo-images \
   --repository-format=docker \
   --location=$REGION \
-  --description="RODEO Docker images"
+  --project=$PROJECT_ID \
+  --description="RODEO Docker images" --quiet
 
-# ── Cargar variables de entorno desde .env.local ──────────────────────────────
-echo ""
-echo "▶ [4/5] Cargando variables de entorno..."
+# ── Cargar .env.local ─────────────────────────────────────────────────────────
+echo "▶ [4/5] Cargando variables de .env.local..."
 if [ -f ".env.local" ]; then
-  export $(grep -v '^#' .env.local | xargs)
+  export $(grep -v '^#' .env.local | grep -v '^$' | xargs)
   echo "  ✓ .env.local cargado"
 else
-  echo "  ⚠️  No se encontró .env.local — usando variables del sistema"
+  echo "  ⚠️  No se encontró .env.local"
 fi
 
-# ── Build y Push ──────────────────────────────────────────────────────────────
-echo ""
-echo "▶ [5/5] Build + Push de imagen Docker..."
+# ── Docker Build + Push ───────────────────────────────────────────────────────
+echo "▶ [5/5] Docker build + push..."
 docker build \
-  --build-arg NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" \
-  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
   --platform linux/amd64 \
+  --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="$NEXT_PUBLIC_FIREBASE_API_KEY" \
+  --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" \
+  --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="$NEXT_PUBLIC_FIREBASE_PROJECT_ID" \
+  --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
+  --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" \
+  --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="$NEXT_PUBLIC_FIREBASE_APP_ID" \
+  --build-arg NEXT_PUBLIC_APP_URL="$STAGING_URL" \
   -t $IMAGE \
   .
 
 docker push $IMAGE
 
-# ── Deploy a Cloud Run ────────────────────────────────────────────────────────
-echo ""
+# ── Deploy Cloud Run ──────────────────────────────────────────────────────────
 echo "▶ Desplegando en Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
   --image=$IMAGE \
   --platform=managed \
   --region=$REGION \
+  --project=$PROJECT_ID \
   --allow-unauthenticated \
   --port=3000 \
   --memory=1Gi \
@@ -94,23 +75,18 @@ gcloud run deploy $SERVICE_NAME \
   --min-instances=0 \
   --max-instances=3 \
   --set-env-vars="NODE_ENV=production" \
-  --set-env-vars="NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" \
-  --set-env-vars="NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
+  --set-env-vars="NEXT_PUBLIC_APP_URL=$STAGING_URL" \
+  --set-env-vars="DATABASE_URL=$DATABASE_URL" \
+  --set-env-vars="FIREBASE_ADMIN_PROJECT_ID=$FIREBASE_ADMIN_PROJECT_ID" \
+  --set-env-vars="FIREBASE_ADMIN_CREDENTIALS_BASE64=$FIREBASE_ADMIN_CREDENTIALS_BASE64" \
   --set-env-vars="GEMINI_API_KEY=$GEMINI_API_KEY" \
-  --set-env-vars="RESEND_API_KEY=$RESEND_API_KEY" \
+  --set-env-vars="SENDGRID_API_KEY=$SENDGRID_API_KEY" \
+  --set-env-vars="SENDGRID_FROM_EMAIL=$SENDGRID_FROM_EMAIL" \
   --quiet
 
-# ── Resultado ─────────────────────────────────────────────────────────────────
+# ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Deploy completado!"
-echo ""
-SERVICE_URL=$(gcloud run services describe $SERVICE_NAME \
-  --region=$REGION \
-  --format='value(status.url)')
-echo "  🌐 URL: $SERVICE_URL"
-echo ""
-echo "  Próximos pasos:"
-echo "  1. Agregar $SERVICE_URL en Supabase → Auth → Redirect URLs"
-echo "  2. Ver logs: gcloud run logs read --service=$SERVICE_NAME --region=$REGION"
+echo "  🌐 URL: $STAGING_URL"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

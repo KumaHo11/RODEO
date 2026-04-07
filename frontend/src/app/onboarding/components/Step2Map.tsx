@@ -14,6 +14,7 @@ type PaddockDrawMapProps = {
   mode: 'field' | 'paddock'
   paddockCount: number
   onShapeDrawn: (geojson: any, layer: any) => void
+  onMidDraw?: (areaHa: number | null) => void
 }
 
 const PaddockDrawMap = dynamic<PaddockDrawMapProps>(() => import('./PaddockDrawMap'), {
@@ -41,6 +42,7 @@ export default function Step2Map() {
   const [draft,          setDraft]          = useState<DraftShape | null>(null)
   const [draftName,      setDraftName]      = useState('')
   const [draftFieldName, setDraftFieldName] = useState(data.fieldName || '') // pre-fill from Step1
+  const [midDrawArea,    setMidDrawArea]    = useState<number | null>(null)
   const [showSkipWarning, setShowSkipWarning] = useState(false)
 
   const handleShapeDrawn = useCallback((geojson: any, layer: any) => {
@@ -124,7 +126,7 @@ export default function Step2Map() {
             <Map className="w-3.5 h-3.5 text-green-600" />
           </div>
           <div>
-            <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Paso 2 de 4 · Delimitación cartográfica</p>
+            <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Paso 2 de 3 · Delimitación cartográfica</p>
             <p className="text-sm font-black text-gray-900 tracking-tight">{data.fieldName || 'Tu establecimiento'}</p>
           </div>
         </div>
@@ -314,7 +316,23 @@ export default function Step2Map() {
             mode={phase}
             paddockCount={data.paddocks.length}
             onShapeDrawn={handleShapeDrawn}
+            onMidDraw={setMidDrawArea}
           />
+
+          {/* Floating badge — real-time area while drawing */}
+          {midDrawArea !== null && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1200] pointer-events-none">
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl shadow-lg backdrop-blur-sm border ${
+                phase === 'field'
+                  ? 'bg-blue-600/90 border-blue-400/50 text-white'
+                  : 'bg-green-600/90 border-green-400/50 text-white'
+              }`}>
+                <Ruler className="w-3.5 h-3.5" />
+                <p className="text-sm font-black">{midDrawArea.toFixed(1)} <span className="text-xs font-bold opacity-80">ha</span></p>
+                <p className="text-[10px] font-normal opacity-70">{phase === 'field' ? '· perímetro campo' : '· potrero'}</p>
+              </div>
+            </div>
+          )}
 
           {/* Tooltip — Phase 1 */}
           {phase === 'field' && !draft && (

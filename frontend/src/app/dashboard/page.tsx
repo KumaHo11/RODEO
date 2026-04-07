@@ -12,7 +12,7 @@ import {
   TrendingUp, CloudRain, AlertTriangle, Calendar, ArrowRight,
   Layers, Navigation, Droplets, ChevronRight, CheckSquare, Leaf,
   Scale, RefreshCw, Loader2, Satellite, TrendingDown, Sun, Wind,
-  Lightbulb, Target, RotateCcw, PawPrint, Beef
+  Lightbulb, Target, RotateCcw, PawPrint, Beef, MapPin
 } from 'lucide-react'
 
 const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 51: '🌦️', 61: '🌧️', 80: '🌩️', 95: '⛈️' }
@@ -57,17 +57,11 @@ export default function DashboardOverview() {
     // No user → middleware handles redirect to /login
     if (!user) return
 
-    // Unverified email → sign out and redirect
-    if (!user.emailVerified) {
-      router.replace('/login')
-      return
-    }
-
     // Wait until profile is loaded
     if (profile === null) return
 
     // Guard: if owner hasn't completed onboarding, send back
-    // A guest (team_role set) skips owner onboarding
+    // A guest (team_role set) skips owner onboarding AND email verification requirement
     const isGuest = !!(profile?.team_role)
     const onboardingDone = (profile?.onboarding_step ?? 0) >= 4
     if (!isGuest && !onboardingDone) {
@@ -189,12 +183,12 @@ export default function DashboardOverview() {
             rates[p.id] = (newMs - 500) / 7
           }
 
-          // Save to DB via API route
+          // Save NDVI to estimated_adh — DO NOT overwrite user-declared dry_matter_kg_ha
           await apiFetch(`/api/paddocks/${p.id}`, {
             method: 'PATCH',
             body: JSON.stringify({
               current_ndvi: res.averageNdvi,
-              dry_matter_kg_ha: newMs,
+              estimated_adh: newMs,
               previous_dry_matter_kg_ha: currMs > 0 ? currMs : newMs,
               previous_ndvi_date: new Date().toISOString().split('T')[0],
             }),
@@ -226,11 +220,10 @@ export default function DashboardOverview() {
     setNdviLoading(false)
   }, [paddocks, ndviLoading, growthRates])
 
-  // Auto-trigger NDVI when paddocks load with no dry_matter_kg_ha
+  // Auto-trigger NDVI when paddocks load — always refresh on first load
   useEffect(() => {
     if (!dataLoaded || ndviLoading || paddocks.length === 0) return
-    const needsNdvi = paddocks.every(p => !p.dry_matter_kg_ha)
-    if (needsNdvi) refreshAllNdvi()
+    refreshAllNdvi()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoaded])
 
@@ -239,12 +232,21 @@ export default function DashboardOverview() {
   const totalEV      = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
   const totalDailyMS = herds.reduce((s, h) => s + (Number(h.head_count) || 0) * (Number(h.avg_weight_kg) || 0) * 0.03, 0)
 
+  // totalMS = user-declared forage only (dry_matter_kg_ha)
+  // If no user value, fall back to satellite estimate (estimated_adh)
   const totalMS = useMemo(() =>
     paddocks.reduce((s, p) => {
-      const ms = Number(p.dry_matter_kg_ha) || 0
+      const userMs  = Number(p.dry_matter_kg_ha) || 0
+      const ndviMs  = Number((p as any).estimated_adh) || 0
+      const ms = userMs > 0 ? userMs : ndviMs
       const ha = Number(p.area_ha) || 0
       return s + ms * ha
     }, 0)
+  , [paddocks])
+
+  // Track which paddocks have user-declared forraje
+  const paddocksWithUserForraje = useMemo(() =>
+    paddocks.filter(p => Number(p.dry_matter_kg_ha) > 0).length
   , [paddocks])
 
   const autonomyDays  = useMemo(() => {
@@ -271,523 +273,301 @@ export default function DashboardOverview() {
   const droughtLabels: Record<string, string> = { LOW: 'Normal', MODERATE: 'Sequía', HIGH: 'Riesgo' }
 
   return (
-    <div className="flex flex-col h-full gap-3">
+    <div className="flex flex-col h-full gap-5 overflow-y-auto pb-8">
+      {/* ══ HEADER ══ */}
+      <div className="flex items-center justify-between shrink-0">
+        <h1 className="text-xl font-black text-gray-900 tracking-tight">Panel principal</h1>
+        {loading && <Loader2 className="w-4 h-4 text-green-600 animate-spin" />}
+      </div>
 
-      {/* ══ ALERTA GLOBAL BALANCE MS ══ */}
-      {!loading && balanceDeficit && (
-        <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-3.5">
-          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-black text-red-700">Alerta: déficit de forraje</p>
-            <p className="text-xs text-red-600 mt-0.5">
-              Oferta ajustada ({Math.round(totalMSOffer).toLocaleString()} kg MS) no cubre la demanda ({dailyDemand.toFixed(0)} kg MS/día).
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ══ FILA 1: 4 widgets iguales ══ */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 flex-1 min-h-0">
-
-        {/* Widget 1 — Forraje disponible + lista de potreros */}
-        <div className={`rounded-2xl border shadow-sm flex flex-col overflow-hidden h-full ${autonomyBg}`}>
-          <div className="px-4 pt-4 pb-3 flex items-center justify-between shrink-0">
-            <div>
-              <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase flex items-center gap-1.5">
-                <Layers className="w-3 h-3" /> Forraje Disponible
-              </p>
-              <div className="flex items-baseline gap-2 mt-1">
-                {loading
-                  ? <div className="h-9 w-24 bg-white/60 animate-pulse rounded-lg" />
-                  : <>
-                      <p className={`text-3xl font-black leading-none ${autonomyColor}`}>
-                        {totalMS >= 1000 ? `${(totalMS / 1000).toFixed(1)}k` : Math.round(totalMS).toLocaleString()}
-                      </p>
-                      <span className="text-xs font-bold text-gray-500">kg MS</span>
-                      <span className={`ml-auto text-[9px] font-black px-2 py-0.5 rounded-full bg-white/70 border ${autonomyColor}`}>
-                        {autonomyDays}d · {autonomyLabel}
-                      </span>
-                    </>
-                }
-              </div>
-            </div>
-            <Link href="/dashboard/mi-campo" className="text-[9px] font-black text-green-600 hover:underline flex items-center gap-0.5 shrink-0">
-              Mi Campo <ChevronRight className="w-3 h-3" />
+      {/* ══ FILA 1: Pilares del campo (2/3 + 1/3) ══ */}
+      <div className="flex flex-col lg:flex-row gap-4 shrink-0">
+        {/* IZQUIERDA: Potreros (2/3) */}
+        <div className="flex-[2] bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-green-900 to-green-800 text-white shrink-0">
+            <h2 className="text-sm font-black flex items-center gap-2">
+              <Layers className="w-4 h-4" /> Potreros
+            </h2>
+            <Link href="/dashboard/mi-campo" className="text-xs font-bold hover:underline flex items-center gap-1 text-green-100">
+              Ver mapa <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-
-          {/* Paddock list */}
-          <div className="border-t border-white/40 flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="p-3 space-y-2">
-                {[...Array(3)].map((_, i) => <div key={i} className="h-9 bg-white/40 animate-pulse rounded-xl" />)}
-              </div>
-            ) : paddocks.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="text-xs text-gray-400 font-bold">Sin potreros</p>
-                <Link href="/dashboard/mi-campo" className="text-[10px] text-green-600 font-bold hover:underline mt-1 inline-block">Agregar →</Link>
-              </div>
-            ) : (() => {
-              const maxMS = Math.max(...paddocks.map(p => Number(p.dry_matter_kg_ha) || 0), 1)
-              const dd = totalEV * 12
-              return (
-                <div className="divide-y divide-white/30">
-                  {paddocks.map((p, idx) => {
-                    const ms   = Number(p.dry_matter_kg_ha) || 0
-                    const ha   = Number(p.area_ha) || 0
-                    const ndvi = Number(p.current_ndvi) || 0
-                    const totalPaddockMS = ms * ha
-                    const paddockDays = dd > 0 && totalPaddockMS > 0 ? Math.round(totalPaddockMS / dd) : null
-                    const pct = maxMS > 0 ? (ms / maxMS) * 100 : 0
-                    const barColor = ms >= 1500 ? '#16a34a' : ms >= 800 ? '#d97706' : '#dc2626'
-                    const msColor  = ms >= 1500 ? 'text-green-700' : ms >= 800 ? 'text-amber-700' : ms > 0 ? 'text-red-600' : 'text-gray-400'
-                    const gr = growthRates[p.id]
-                    return (
-                      <Link
-                        key={p.id}
-                        href="/dashboard/mi-campo"
-                        className="flex items-center gap-2 px-4 py-2 hover:bg-white/30 transition-all"
-                      >
-                        <span className="w-4 h-4 rounded-full bg-white/70 flex items-center justify-center text-[8px] font-black text-gray-500 shrink-0">{idx + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <p className="text-[11px] font-black text-gray-900 truncate">{p.name}</p>
-                            {ndvi > 0 && <span className="text-[7px] font-bold text-gray-400 bg-white/60 px-1 py-0.5 rounded-full shrink-0">NDVI {ndvi.toFixed(2)}</span>}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {ms > 0
-                              ? <span className={`text-[9px] font-black ${msColor}`}>{ms.toLocaleString()} kg/ha</span>
-                              : <span className="text-[9px] text-gray-400 font-bold">Sin análisis</span>
-                            }
-                            <span className="text-[8px] text-gray-400">{ha.toFixed(1)} ha</span>
-                            {gr !== undefined && (
-                              <span className={`text-[8px] font-bold ${gr >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                {gr >= 0 ? '↑' : '↓'}{Math.abs(gr).toFixed(1)}/d
-                              </span>
-                            )}
-                          </div>
-                          {ms > 0 && (
-                            <div className="w-full bg-white/40 rounded-full h-0.5 mt-1 overflow-hidden">
-                              <div className="h-0.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: barColor }} />
-                            </div>
-                          )}
-                        </div>
-                        {paddockDays !== null && (
-                          <div className="shrink-0 text-center">
-                            <p className={`text-sm font-black leading-none ${msColor}`}>{paddockDays}</p>
-                            <p className="text-[7px] text-gray-400 font-bold">días</p>
-                          </div>
-                        )}
-                      </Link>
-                    )
-                  })}
-                </div>
-              )
-            })()}
-          </div>
-          {!loading && totalEV > 0 && (
-            <div className="px-4 py-2 border-t border-white/30 shrink-0">
-              <p className="text-[9px] text-gray-500">
-                Demanda: <span className="font-black text-gray-700">{dailyDemand.toFixed(0)} kg MS/día</span> · {totalEV.toFixed(1)} EV
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Widget 2 — Clima */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3 h-full">
-          <div className="flex items-center justify-between shrink-0">
-            <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase flex items-center gap-1.5">
-              <Sun className="w-3 h-3" /> Clima
-            </p>
-            {weather && (
-              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${droughtColors[weather.droughtRisk]}`}>
-                {droughtLabels[weather.droughtRisk]}
-              </span>
-            )}
-          </div>
-          {loading ? (
-            <div className="flex-1 space-y-2">
-              <div className="h-16 bg-gray-100 animate-pulse rounded-xl" />
-              <div className="h-12 bg-gray-100 animate-pulse rounded-xl" />
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-blue-50 rounded-xl px-3 py-2.5 border border-blue-100">
-                  <p className="text-[7px] font-black text-blue-400 uppercase tracking-widest">Últ. 30d</p>
-                  <p className="text-2xl font-black text-gray-900 leading-none mt-0.5">{weather?.past30DaysRain ?? '—'}<span className="text-[9px] font-bold text-gray-400"> mm</span></p>
-                </div>
-                <div className="bg-indigo-50 rounded-xl px-3 py-2.5 border border-indigo-100">
-                  <p className="text-[7px] font-black text-indigo-400 uppercase tracking-widest">Próx. 15d</p>
-                  <p className="text-2xl font-black text-gray-900 leading-none mt-0.5">{weather?.next15DaysRain ?? '—'}<span className="text-[9px] font-bold text-gray-400"> mm</span></p>
-                </div>
-              </div>
-              {weather?.agriAdvice && (
-                <div className="bg-green-50 rounded-xl px-3 py-2 border border-green-100 flex items-start gap-1.5">
-                  <Leaf className="w-3 h-3 text-green-600 shrink-0 mt-0.5" />
-                  <p className="text-[9px] text-green-800 font-medium leading-snug line-clamp-2">{weather.agriAdvice}</p>
-                </div>
-              )}
-              {(weather?.forecastDays || []).length > 0 && (
-                <div className="grid grid-cols-4 gap-1 mt-auto">
-                  {(weather?.forecastDays || []).slice(0, 4).map((day, i) => {
-                    const d = new Date(day.date + 'T00:00:00')
-                    return (
-                      <div key={i} className="bg-gray-50 rounded-lg p-1.5 text-center border border-gray-100">
-                        <p className="text-[7px] font-black text-gray-400 uppercase">{WEEK_DAYS[d.getDay()]}</p>
-                        <p className="text-base leading-none my-0.5">{getWeatherIcon(day.weatherCode)}</p>
-                        <p className="text-[9px] font-black text-gray-800">{day.maxTemp}°</p>
-                        {day.precipitationSum > 0 && <p className="text-[7px] font-bold text-blue-500">{day.precipitationSum}mm</p>}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Widget 3 — Insights holístico */}
-        {(() => {
-          const monthN = new Date().getMonth() + 1
-          const season = monthN >= 12 || monthN <= 2 ? { name: 'Verano', rest: '45-65d', color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' }
-            : monthN >= 3 && monthN <= 5 ? { name: 'Otoño', rest: '60-80d', color: 'text-orange-600', bg: 'bg-orange-50 border-orange-100' }
-            : monthN >= 6 && monthN <= 8 ? { name: 'Invierno', rest: '80-110d', color: 'text-sky-600', bg: 'bg-sky-50 border-sky-100' }
-            : { name: 'Primavera', rest: '35-50d', color: 'text-green-600', bg: 'bg-green-50 border-green-100' }
-          const restingPaddocks = paddocks.filter(p => p.current_status !== 'GRAZING').length
-          const rotationPct = paddocks.length > 0 ? Math.round((restingPaddocks / paddocks.length) * 100) : 0
-          const scoreColor = rotationPct >= 65 ? 'text-green-600' : rotationPct >= 40 ? 'text-amber-500' : 'text-red-500'
-          return (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3 h-full">
-              <div className="flex items-center justify-between shrink-0">
-                <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase flex items-center gap-1.5">
-                  <Lightbulb className="w-3 h-3 text-green-600" /> Insights
-                </p>
-                <Link href="/dashboard/insights" className="text-[9px] font-black text-green-600 hover:underline flex items-center gap-0.5">
-                  Ver más <ChevronRight className="w-3 h-3" />
-                </Link>
-              </div>
+          
+          <div className="flex-1 flex flex-col md:flex-row min-h-0">
+            {/* Dato Principal */}
+            <div className="p-6 md:w-1/2 flex flex-col justify-center bg-green-50/30">
               {loading ? (
-                <div className="flex-1 space-y-2">
-                  {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-100 animate-pulse rounded-xl" />)}
-                </div>
+                <div className="space-y-2"><div className="h-10 w-24 bg-gray-200 animate-pulse rounded-lg"/><div className="h-4 w-32 bg-gray-200 animate-pulse rounded-lg"/></div>
               ) : (
                 <>
-                  <div className={`px-3 py-2.5 rounded-xl border ${season.bg}`}>
-                    <p className="text-[7px] font-black uppercase tracking-widest text-gray-400">Temporada actual</p>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <p className={`text-sm font-black ${season.color}`}>{season.name}</p>
-                      <p className="text-[8px] font-bold text-gray-500">Descanso: {season.rest}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-5xl font-black text-green-900 leading-none">
+                      {totalArea > 0 ? Math.round(totalMS / totalArea).toLocaleString() : 0}
+                    </p>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-400 leading-tight">kg por</span>
+                      <span className="text-sm font-bold text-gray-400 leading-tight">hectárea</span>
                     </div>
                   </div>
-                  <div className="px-3 py-2.5 rounded-xl border border-gray-100 bg-gray-50">
-                    <p className="text-[7px] font-black uppercase tracking-widest text-gray-400">Rotación</p>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <p className={`text-lg font-black leading-none ${scoreColor}`}>{rotationPct}%</p>
-                      <p className="text-[8px] font-bold text-gray-400">{restingPaddocks}/{paddocks.length} en descanso</p>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1 mt-1.5 overflow-hidden">
-                      <div className={`h-1 rounded-full ${rotationPct >= 65 ? 'bg-green-500' : rotationPct >= 40 ? 'bg-amber-400' : 'bg-red-400'}`} style={{ width: `${rotationPct}%` }} />
-                    </div>
-                  </div>
-                  <div className={`px-3 py-2.5 rounded-xl border ${autonomyBg}`}>
-                    <p className="text-[7px] font-black uppercase tracking-widest text-gray-400">Autonomía forrajera</p>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <p className={`text-lg font-black leading-none ${autonomyColor}`}>{autonomyDays > 0 ? `${autonomyDays} días` : '—'}</p>
-                      <p className="text-[8px] font-bold text-gray-400">{autonomyDays > 0 ? autonomyLabel : 'Sin datos'}</p>
-                    </div>
+                  <div className="mt-4 p-3 bg-white rounded-xl border border-green-100 inline-block shadow-sm">
+                    <p className={`text-xl font-black ${autonomyDays > 30 ? 'text-green-600' : autonomyDays > 15 ? 'text-amber-500' : 'text-red-600'}`}>
+                      {autonomyDays > 0 ? `${autonomyDays} días` : '—'} <span className="text-xs font-bold text-gray-500">de autonomía</span>
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Con la hacienda actual y el forraje disponible</p>
                   </div>
                 </>
               )}
             </div>
-          )
-        })()}
+            
+            {/* Lista mini */}
+            <div className="border-t md:border-t-0 md:border-l border-gray-100 md:w-1/2 flex flex-col">
+              <div className="px-4 py-2 bg-gray-50/50 border-b border-gray-100">
+                <p className="text-[10px] font-black tracking-widest uppercase text-gray-400">Distribución de forraje</p>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2">
+                {paddocks.slice(0, 5).map(p => {
+                  const ha = Number(p.area_ha) || 0
+                  const ms = Number(p.dry_matter_kg_ha) || Number((p as any).estimated_adh) || 0
+                  const pct = (ms / 3000) * 100 // Visual baseline
+                  return (
+                    <div key={p.id} className="p-2 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-end mb-1">
+                          <p className="text-xs font-bold text-gray-700 truncate">{p.name}</p>
+                          <p className="text-xs font-black text-green-700">{ms.toLocaleString()} <span className="text-[9px] font-bold text-gray-400">kg/ha</span></p>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-1.5">
+                          <div className={`h-1.5 rounded-full ${ms > 1500 ? 'bg-green-500' : ms > 800 ? 'bg-amber-400' : 'bg-red-400'}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
 
-        {/* Widget 4 — Carga Animal */}
-        <div className={`rounded-2xl border shadow-sm p-4 flex flex-col gap-3 h-full ${caBg}`}>
-          <div className="flex items-center justify-between shrink-0">
-            <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase flex items-center gap-1.5">
-              <Beef className="w-3 h-3" /> Carga Animal
-            </p>
-            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full bg-white/70 border ${caColor}`}>{caLabel}</span>
+        {/* DERECHA: Rebaños y Clima (1/3) */}
+        <div className="flex-1 flex flex-col gap-4">
+          {/* Rebaños */}
+          <div className="bg-[#fffbeb] rounded-2xl border border-[#fde68a] shadow-sm flex flex-col p-4 flex-1">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-[10px] font-black tracking-widest uppercase text-amber-700/60 flex items-center gap-1">
+                  <Beef className="w-3 h-3" /> Carga animal
+                </h3>
+                <p className="text-base font-black text-amber-900 mt-1">{herds.length} rebaños · {herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)} animales</p>
+              </div>
+            </div>
+            
+            <div className="mt-4 flex items-end gap-2">
+              <p className="text-4xl font-black text-[#92400e] leading-none">{cargaAnimal.toFixed(2)}</p>
+              <div className="pb-1 group relative">
+                <p className="text-xs font-bold text-amber-800">EV por hectárea <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-amber-200/50 rounded-full text-[9px] cursor-help">?</span></p>
+                {/* TOOLTIP */}
+                <div className="absolute opacity-0 group-hover:opacity-100 bg-gray-900 text-white text-[10px] p-2 rounded-lg w-48 bottom-full mb-1 left-0 transition-opacity pointer-events-none z-10 shadow-xl">
+                  Un Equivalente Vaca (EV) es la unidad de referencia para medir cuánto consume un animal adulto de 400 kg por día (aprox. 12 kg de materia seca).
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-3 flex items-center gap-1.5">
+              <div className="flex gap-1">
+                <div className={`w-2.5 h-2.5 rounded-full ${cargaAnimal <= 0.8 ? 'bg-green-500 scale-125' : 'bg-gray-200'}`} />
+                <div className={`w-2.5 h-2.5 rounded-full ${cargaAnimal > 0.8 && cargaAnimal <= 1.2 ? 'bg-amber-500 scale-125' : 'bg-gray-200'}`} />
+                <div className={`w-2.5 h-2.5 rounded-full ${cargaAnimal > 1.2 ? 'bg-red-500 scale-125' : 'bg-gray-200'}`} />
+              </div>
+              <p className="text-[10px] font-bold text-amber-900 ml-1">
+                {cargaAnimal <= 0.8 ? 'Bajo' : cargaAnimal <= 1.2 ? 'Normal' : 'Alto'}
+              </p>
+            </div>
           </div>
 
-          {loading ? (
-            <div className="flex-1 space-y-2">
-              <div className="h-14 bg-white/60 animate-pulse rounded-xl" />
-              <div className="h-10 bg-white/60 animate-pulse rounded-xl" />
+          {/* Clima */}
+          <div className="bg-[#f0f9ff] rounded-2xl border border-[#bae6fd] shadow-sm p-4 flex-1 flex flex-col justify-between relative overflow-hidden">
+            <div className="absolute -top-6 -right-6 text-blue-200/40 w-24 h-24">
+               <Sun className="w-full h-full" />
             </div>
-          ) : (
-            <>
-              <div>
-                <p className="text-[8px] font-black text-amber-500 tracking-widest uppercase">Consumo diario</p>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <p className="text-3xl font-black text-gray-950 leading-none">
-                    {totalDailyMS >= 1000 ? `${(totalDailyMS / 1000).toFixed(1)}k` : Math.round(totalDailyMS).toLocaleString()}
-                  </p>
-                  <span className="text-xs font-bold text-gray-500">kg MS/día</span>
-                </div>
+            <div className="relative z-10">
+              <h3 className="text-[10px] font-black tracking-widest uppercase text-blue-800/60 flex items-center gap-1">
+                <CloudRain className="w-3 h-3" /> Clima
+              </h3>
+              <div className="mt-1 flex items-center gap-3">
+                {loading ? <div className="h-8 w-16 bg-blue-100/50 animate-pulse rounded-lg" /> : (
+                  <>
+                    <p className="text-3xl font-black text-blue-900">{weather?.forecastDays[0]?.maxTemp || '—'}°</p>
+                    {weather?.next15DaysRain !== undefined && (
+                      <p className="text-sm font-bold text-blue-800 leading-tight">
+                        {weather.next15DaysRain} mm lluvia<br/><span className="text-[10px] font-medium opacity-80">próximos 15 días</span>
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
-              <div className={`px-3 py-2 rounded-xl bg-white/70 border ${caBg.split(' ')[1]}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest">EV/ha</p>
-                    <p className={`text-xl font-black leading-none ${caColor}`}>{cargaAnimal.toFixed(2)}</p>
+            </div>
+            
+            {!loading && weather?.forecastDays?.length && (
+              <div className="flex gap-2 mt-4 relative z-10 justify-between">
+                {weather.forecastDays.slice(0,4).map((d, i) => (
+                  <div key={i} className="text-center">
+                    <p className="text-[9px] font-black uppercase text-blue-800/80">{WEEK_DAYS[new Date(d.date + 'T00:00:00').getDay()]}</p>
+                    <p className="text-xs my-0.5">{d.precipitationSum > 0 ? '🌧️' : '☀️'}</p>
+                    <p className="text-[10px] font-bold text-blue-900">{d.precipitationSum} mm</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Total EV</p>
-                    <p className="text-xl font-black text-gray-700 leading-none">{totalEV.toFixed(1)}</p>
-                  </div>
-                </div>
+                ))}
               </div>
-              {/* Field name + total area */}
-              <div className="px-3 py-2 rounded-xl border border-gray-100 bg-white/60">
-                <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Establecimiento</p>
-                <p className="text-sm font-black text-gray-800 mt-0.5 truncate">{org?.name || '—'}</p>
-                <div className="flex items-center justify-between mt-0.5">
-                  <p className="text-[9px] font-bold text-gray-500">
-                    {Number(totalArea) > 0 ? `${Number(totalArea).toFixed(1)} ha totales` : `${paddocks.length} potrero${paddocks.length !== 1 ? 's' : ''}`}
-                  </p>
-                  <p className="text-[9px] font-bold text-gray-400">{paddocks.length} potreros</p>
-                </div>
-              </div>
-              <div className={`px-3 py-2 rounded-xl border ${balanceDeficit ? 'bg-red-50 border-red-200' : 'bg-white/60 border-white/40'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[7px] font-black uppercase tracking-widest text-gray-400">Oferta ajustada</p>
-                    <p className={`text-sm font-black ${balanceDeficit ? 'text-red-600' : 'text-gray-800'}`}>
-                      {Math.round(totalMSOffer).toLocaleString()} <span className="text-[9px] font-bold text-gray-400">kg MS</span>
-                    </p>
-                  </div>
-                  <p className={`text-xs font-black ${balanceDeficit ? 'text-red-600' : 'text-green-600'}`}>
-                    {balanceDeficit ? '⚠ Déficit' : '✓ OK'}
-                  </p>
-                </div>
-              </div>
-              <Link href="/dashboard/herds" className="text-[9px] font-black text-green-600 hover:underline flex items-center gap-1 mt-auto">
-                Ver rebaños <ArrowRight className="w-3 h-3" />
-              </Link>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ══ FILA 2: 4 widgets iguales ══ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1 min-h-0">
+      {/* ══ FILA 2: Planificación estratégica ══ */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm shrink-0 flex flex-col w-full">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-black flex items-center gap-2 text-gray-900">
+            <Lightbulb className="w-4 h-4 text-green-600" /> Planificación estratégica
+          </h2>
+          <Link href="/dashboard/insights" className="text-xs font-bold text-green-600 hover:underline flex items-center gap-1">
+            Ver análisis completo <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+          {/* Rotación */}
+          {(() => {
+            const resting = paddocks.filter(p => p.current_status !== 'GRAZING').length
+            const rotPct = paddocks.length > 0 ? Math.round((resting / paddocks.length) * 100) : 0
+            return (
+              <div className="p-5 flex items-center gap-4">
+                <div className="relative w-16 h-16 shrink-0">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                    <path className="text-gray-100" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path className="text-green-500" strokeWidth="3" strokeDasharray={`${rotPct}, 100`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[11px] font-black text-gray-700">{rotPct}%</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Rotación actual</p>
+                  <p className="text-sm font-black text-gray-900 leading-tight">{resting}/{paddocks.length}<br/><span className="text-xs font-normal text-gray-500 line-clamp-1">potreros en descanso</span></p>
+                </div>
+              </div>
+            )
+          })()}
 
-        {/* ── Widget Crecimiento del Pasto (NDVI) ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
-            <div>
-              <h3 className="text-xs font-black text-gray-950 flex items-center gap-1.5">
-                <Satellite className="w-3.5 h-3.5 text-emerald-600" /> Crecimiento Pasto
-              </h3>
-              <p className="text-[8px] text-gray-400 font-bold mt-0.5">NDVI · kg MS/ha/día</p>
+          {/* Balance forrajero */}
+          {(() => {
+            const totalMSOffer   = totalMS * 0.5
+            const dailyDemand    = totalEV * 12
+            const deficit = dailyDemand > 0 && totalMSOffer < dailyDemand
+            return (
+              <div className="p-5 flex flex-col justify-center">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 pb-1">Balance forrajero</p>
+                <div className="flex items-baseline gap-2">
+                  <p className={`text-2xl font-black ${deficit ? 'text-red-600' : 'text-green-600'}`}>
+                    {deficit ? 'Déficit' : 'Superávit'}
+                  </p>
+                </div>
+                <p className="text-xs font-medium text-gray-900 mt-0.5">
+                  {(totalMSOffer - dailyDemand).toLocaleString()} kg MS/día <span className="text-gray-500">{deficit ? 'faltantes' : 'de reserva'}</span>
+                </p>
+              </div>
+            )
+          })()}
+
+          {/* Recomendación IA estática/placeholder */}
+          <div className="p-5 flex items-start gap-3 bg-gray-50/50">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+              <Lightbulb className="w-4 h-4" />
             </div>
-            <button
-              onClick={refreshAllNdvi}
-              disabled={ndviLoading || loading}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-[9px] font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-all shrink-0"
-            >
-              {ndviLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-              {ndviLoading ? 'Actualizando' : 'Actualizar'}
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-1">Recomendación IA</p>
+              <p className="text-[11px] text-gray-700 font-medium leading-relaxed">
+                Mover el rebaño principal en {autonomyDays > 0 ? Math.min(autonomyDays, 7) : 3} días. El nivel de forraje está {autonomyDays > 15 ? 'estable' : 'crítico'}.
+              </p>
+              <Link href="/dashboard/grazing" className="inline-flex items-center gap-1 mt-2 px-3 py-1.5 text-[10px] font-bold bg-white border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-all shadow-sm">
+                Planificar movimiento →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ══ FILA 3: Próximas acciones ══ */}
+      <div className="flex flex-col md:flex-row gap-4 shrink-0 min-h-[px]">
+        
+        {/* Tareas */}
+        <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-50 flex justify-between items-center bg-violet-50/30">
+            <h3 className="text-xs font-black text-violet-900 flex items-center gap-1.5"><CheckSquare className="w-3.5 h-3.5" /> Próximas tareas</h3>
+            <Link href="/dashboard/tareas" className="text-[10px] font-bold text-violet-700 hover:underline">Ir a tareas</Link>
+          </div>
+          <div className="p-2 flex-1">
+            {upcomingTasks.length === 0 ? (
+              <p className="p-4 text-xs text-gray-400 text-center font-bold">Sin tareas pendientes</p>
+            ) : upcomingTasks.map(t => (
+              <div key={t.id} className="p-3 flex items-start gap-3 hover:bg-gray-50 rounded-xl transition-all group">
+                <input type="checkbox" className="mt-1 w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" readOnly />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-900 truncate">{t.title}</p>
+                  {t.paddocks?.name && <p className="text-[10px] items-center gap-1 text-gray-500 truncate flex"><MapPin className="w-3 h-3"/> {t.paddocks.name}</p>}
+                  {t.herds?.name && <p className="text-[10px] items-center gap-1 text-gray-500 truncate flex"><Beef className="w-3 h-3"/> {t.herds.name}</p>}
+                  <span className={`inline-block mt-1 text-[8px] font-black px-1.5 py-0.5 rounded-full ${TASK_PRIORITY_COLORS[t.priority?.toLowerCase()] || TASK_PRIORITY_COLORS.baja}`}>{t.priority || 'Normal'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Movimientos */}
+        <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-50 flex justify-between items-center bg-blue-50/30">
+            <h3 className="text-xs font-black text-blue-900 flex items-center gap-1.5"><Navigation className="w-3.5 h-3.5" /> Movimientos planificados</h3>
+            <Link href="/dashboard/grazing" className="text-[10px] font-bold text-blue-700 hover:underline">Planificador</Link>
+          </div>
+          <div className="p-2 flex-1">
+            {nextMoves.length === 0 ? (
+              <p className="p-4 text-xs text-gray-400 text-center font-bold">Sin movimientos programados</p>
+            ) : nextMoves.slice(0,3).map(m => {
+              const isActive = m.status === 'ACTIVE'
+              return (
+                <div key={m.id} className="p-3 flex items-center gap-3 hover:bg-gray-50 rounded-xl transition-all">
+                  <div className={`w-8 h-8 rounded-full flex flex-col items-center justify-center shrink-0 border ${isActive ? 'bg-green-50 border-green-200 text-green-700' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-gray-900 truncate">{(m.herds as any)?.name} → {(m.paddocks as any)?.name}</p>
+                    {isActive ? <span className="text-[9px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">En curso</span> : <span className="text-[10px] text-gray-500">Próximamente</span>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Crecimiento (NDVI) */}
+        <div className="flex-1 bg-[#ecfdf5] rounded-2xl border border-[#6ee7b7] shadow-sm flex flex-col overflow-hidden">
+          <div className="px-5 py-3 border-b border-emerald-200/50 flex justify-between items-center">
+            <h3 className="text-xs font-black text-emerald-900 flex items-center gap-1.5"><Satellite className="w-3.5 h-3.5" /> Crecimiento del pasto</h3>
+            <button onClick={refreshAllNdvi} className="text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-1">
+              <RefreshCw className={`w-3 h-3 ${ndviLoading ? 'animate-spin' : ''}`} /> Actualizar
             </button>
           </div>
-          <div className="p-4 flex-1 flex flex-col gap-3">
-            {ndviLoading && ndviStatus && (
-              <div className="flex items-center gap-2 bg-emerald-50 rounded-xl px-3 py-2 border border-emerald-100">
-                <Loader2 className="w-3 h-3 text-emerald-600 animate-spin shrink-0" />
-                <p className="text-[9px] text-emerald-700 font-bold">{ndviStatus}</p>
-              </div>
-            )}
-            {!ndviLoading && loading ? (
-              <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-9 bg-gray-100 animate-pulse rounded-xl" />)}</div>
-            ) : avgGrowthRate !== null ? (
-              <>
-                <div className={`rounded-xl px-3 py-2.5 border ${avgGrowthRate >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-                  <p className="text-[7px] font-black uppercase tracking-widest text-gray-400">Promedio del campo</p>
-                  <div className="flex items-baseline gap-1 mt-0.5">
-                    {avgGrowthRate >= 0
-                      ? <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                      : <TrendingDown className="w-3.5 h-3.5 text-red-500" />
-                    }
-                    <p className={`text-xl font-black leading-none ${avgGrowthRate >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                      {avgGrowthRate >= 0 ? '+' : ''}{avgGrowthRate.toFixed(1)}
-                    </p>
-                    <span className="text-[8px] font-bold text-gray-400">kg MS/ha/día</span>
-                  </div>
-                </div>
-                <div className="space-y-1.5 flex-1">
-                  {Object.entries(growthRates).slice(0, 4).map(([pid, rate]) => {
-                    const p = paddocks.find(pp => pp.id === pid)
-                    if (!p) return null
-                    return (
-                      <div key={pid} className="flex items-center justify-between text-xs">
-                        <p className="font-bold text-gray-600 truncate flex-1 text-[10px]">{p.name}</p>
-                        <p className={`shrink-0 font-black text-[9px] ml-2 ${rate >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {rate >= 0 ? '+' : ''}{rate.toFixed(1)} kg/d
-                        </p>
-                      </div>
-                    )
-                  })}
-                </div>
-                {lastUpdated && (
-                  <p className="text-[8px] text-gray-300 font-bold mt-auto">Actualizado: {lastUpdated}</p>
-                )}
-              </>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center py-4 text-center gap-2">
-                <Satellite className="w-8 h-8 text-gray-200" />
-                <p className="text-[10px] font-bold text-gray-400">Sin datos de crecimiento</p>
-                <p className="text-[9px] text-gray-300">Presioná &quot;Actualizar&quot; para<br/>consultar el satélite Sentinel-2.<br/>Requiere 2+ lecturas NDVI.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Próximas Tareas ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
-            <h3 className="text-xs font-black text-gray-950 flex items-center gap-1.5">
-              <CheckSquare className="w-3.5 h-3.5 text-violet-600" /> Próximas Tareas
-            </h3>
-            <Link href="/dashboard/tareas" className="text-[9px] font-black text-green-600 hover:underline flex items-center gap-0.5">
-              Ver todas <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <div className="p-3 flex-1 flex flex-col gap-2">
-            {loading ? (
-              <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-11 bg-gray-100 animate-pulse rounded-xl" />)}</div>
-            ) : upcomingTasks.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
-                <CheckSquare className="w-7 h-7 text-gray-200" />
-                <p className="text-[10px] text-gray-400 font-bold">Sin tareas pendientes</p>
-                <Link href="/dashboard/tareas" className="text-[9px] text-green-600 font-bold hover:underline">Crear tarea</Link>
-              </div>
-            ) : (
-              upcomingTasks.map((task) => {
-                const d = new Date(task.due_date + 'T00:00:00')
-                const diffDays = Math.round((d.getTime() - new Date().getTime()) / 86400000)
-                const dateLabel = diffDays === 0 ? 'Hoy' : diffDays === 1 ? 'Mañana' : `${d.getDate()}/${d.getMonth() + 1}`
-                const isUrgent = diffDays <= 1
-                const pColorCls = TASK_PRIORITY_COLORS[task.priority?.toLowerCase()] || TASK_PRIORITY_COLORS.baja
-                return (
-                  <Link
-                    key={task.id}
-                    href="/dashboard/tareas"
-                    className="flex items-center gap-2.5 p-2.5 bg-gray-50 rounded-xl border border-gray-100 hover:border-gray-200 transition-all"
-                  >
-                    <div className={`px-1.5 py-1 rounded-lg text-[7px] font-black border shrink-0 ${pColorCls}`}>{dateLabel}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-bold text-gray-900 truncate">{task.title}</p>
-                      <p className="text-[8px] text-gray-400 capitalize">{task.priority?.toLowerCase() || 'normal'}</p>
-                    </div>
-                    {isUrgent && <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
-                  </Link>
-                )
-              })
-            )}
-          </div>
-        </div>
-
-        {/* ── Próximos Movimientos ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
-            <h3 className="text-xs font-black text-gray-950 flex items-center gap-1.5">
-              <Navigation className="w-3.5 h-3.5 text-blue-600" /> Próx. Movimientos
-            </h3>
-            <Link href="/dashboard/grazing" className="text-[9px] font-black text-green-600 hover:underline flex items-center gap-0.5">
-              Planificador <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <div className="p-3 flex-1 flex flex-col gap-2">
-            {loading ? (
-              <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-11 bg-gray-100 rounded-xl animate-pulse" />)}</div>
-            ) : nextMoves.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
-                <Navigation className="w-7 h-7 text-gray-200" />
-                <p className="text-[10px] font-bold text-gray-400">Sin movimientos</p>
-                <Link href="/dashboard/grazing" className="text-[9px] text-green-600 font-bold hover:underline">Crear planificación →</Link>
-              </div>
-            ) : (
-              nextMoves.map((move) => {
-                const isActive = move.status === 'ACTIVE'
-                const entryDate = new Date(move.entry_date + 'T00:00:00')
-                const diffDays = Math.round((entryDate.getTime() - new Date().getTime()) / 86400000)
-                const dateLabel = isActive ? '● En curso'
-                  : diffDays === 0 ? 'Hoy'
-                  : diffDays === 1 ? 'Mañana'
-                  : diffDays < 0 ? `Hace ${Math.abs(diffDays)}d`
-                  : `En ${diffDays}d`
-                const isUrgent = !isActive && diffDays <= 1 && diffDays >= 0
-                return (
-                  <Link
-                    key={move.id}
-                    href="/dashboard/grazing"
-                    className={`p-2.5 rounded-xl border flex items-center gap-2.5 hover:shadow-sm transition-all ${
-                      isActive ? 'bg-green-50 border-green-200' :
-                      isUrgent ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'
-                    }`}
-                  >
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${
-                      isActive ? 'bg-green-500 animate-pulse' :
-                      isUrgent ? 'bg-red-500' : 'bg-blue-400'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-bold text-gray-900 truncate">
-                        {(move.herds as any)?.name || 'Rebaño'} → {(move.paddocks as any)?.name || 'Potrero'}
-                      </p>
-                      <p className="text-[8px] text-gray-500">{dateLabel}</p>
-                    </div>
-                    {isActive && <span className="text-[7px] font-black text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full shrink-0">ACTIVO</span>}
-                  </Link>
-                )
-              })
-            )}
-          </div>
-        </div>
-
-        {/* ── Rebaños ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
-            <div>
-              <h3 className="text-xs font-black text-gray-950 flex items-center gap-1.5">
-                <PawPrint className="w-3.5 h-3.5 text-green-600" /> Rebaños
-              </h3>
-              <p className="text-[8px] text-gray-400 font-bold mt-0.5">{totalEV.toFixed(1)} EV · {herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)} animales</p>
+          <div className="p-4 flex-1 flex flex-col justify-center relative">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700/60 mb-2">Velocidad de crecimiento</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-4xl font-black text-emerald-700 leading-none">
+                {avgGrowthRate !== null ? `${avgGrowthRate >= 0 ? '+' : ''}${avgGrowthRate.toFixed(1)}` : '—'}
+              </p>
+              {avgGrowthRate !== null && <TrendingUp className="w-6 h-6 text-emerald-600" />}
             </div>
-            <Link href="/dashboard/herds" className="text-[9px] font-black text-green-600 hover:underline flex items-center gap-0.5">
-              Ver todos <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <div className="p-3 flex-1 flex flex-col gap-2.5">
-            {loading ? (
-              <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-11 bg-gray-100 animate-pulse rounded-xl" />)}</div>
-            ) : herds.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
-                <PawPrint className="w-7 h-7 text-gray-200" />
-                <p className="text-[10px] text-gray-400 font-bold">Sin rebaños registrados</p>
-              </div>
-            ) : (() => {
-              const evTotal = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
-              return herds.slice(0, 5).map((h) => {
-                const dailyMs = Math.round((Number(h.head_count) || 0) * (Number(h.avg_weight_kg) || 0) * 0.03)
-                const pct = evTotal > 0 ? (h.total_ev / evTotal) * 100 : 0
-                return (
-                  <div key={h.id} className="flex flex-col gap-0.5">
-                    <div className="flex justify-between items-center">
-                      <p className="text-[10px] font-bold text-gray-900 truncate flex-1">{h.name}</p>
-                      <p className="text-[9px] font-black text-amber-600 shrink-0 ml-2">{dailyMs > 0 ? `${dailyMs} kg/d` : '—'}</p>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden">
-                      <div className="bg-amber-400 h-1 rounded-full" style={{ width: `${pct}%` }} />
-                    </div>
-                    <p className="text-[8px] text-gray-400">{h.head_count} animales · {Number(h.total_ev).toFixed(1)} EV</p>
-                  </div>
-                )
-              })
-            })()}
+            <p className="text-xs font-bold text-emerald-800/80 mt-1 pb-4">kg de materia seca · por hectárea · por día</p>
+            
+            <div className="mt-auto border-t border-emerald-200/50 pt-3">
+              <p className="text-[9px] text-emerald-700/70 font-medium">Promedio de campos medidos · Fuente: satélite Sentinel-2</p>
+            </div>
           </div>
         </div>
 

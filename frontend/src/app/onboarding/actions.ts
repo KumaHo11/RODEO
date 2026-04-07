@@ -34,7 +34,7 @@ export async function finishOnboarding(formData: {
   fieldBoundary: any
   fieldBoundaryHa: number
   herds: any[]
-  paddocks: Array<{ name: string; geojson: any; area_ha: number }>
+  paddocks: Array<{ name: string; geojson: any; area_ha: number; dry_matter_kg_ha?: number }>
 }) {
   if (!formData.firebaseUid) throw new Error('No session')
 
@@ -99,11 +99,19 @@ export async function finishOnboarding(formData: {
         continue
       }
       try {
-        await mutate(
-          `INSERT INTO paddocks (org_id, name, area_ha, current_status, geom)
-           VALUES ($1, $2, $3, 'RESTING', ST_SetSRID(ST_GeomFromGeoJSON($4), 4326))`,
-          [orgId, p.name, p.area_ha, JSON.stringify(geomJson)]
-        )
+        if (p.dry_matter_kg_ha && p.dry_matter_kg_ha > 0) {
+          await mutate(
+            `INSERT INTO paddocks (org_id, name, area_ha, current_status, dry_matter_kg_ha, geom)
+             VALUES ($1, $2, $3, 'RESTING', $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326))`,
+            [orgId, p.name, p.area_ha, p.dry_matter_kg_ha, JSON.stringify(geomJson)]
+          )
+        } else {
+          await mutate(
+            `INSERT INTO paddocks (org_id, name, area_ha, current_status, geom)
+             VALUES ($1, $2, $3, 'RESTING', ST_SetSRID(ST_GeomFromGeoJSON($4), 4326))`,
+            [orgId, p.name, p.area_ha, JSON.stringify(geomJson)]
+          )
+        }
       } catch (err: any) {
         console.error('Insert paddock error:', err.message, p.name)
       }
@@ -115,9 +123,9 @@ export async function finishOnboarding(formData: {
     for (const h of formData.herds) {
       try {
         await mutate(
-          `INSERT INTO herds (org_id, name, species, breed, head_count, avg_weight_kg, total_ev)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [orgId, h.name, h.species, h.breed || null, h.headCount, h.avgWeight || null, h.totalEV || 0]
+          `INSERT INTO herds (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [orgId, h.name, h.species, h.breed || null, h.headCount, h.avgWeight || null, h.totalEV || 0, h.categoria || null]
         )
       } catch (err: any) {
         console.error('Insert herd error:', err.message, h.name)

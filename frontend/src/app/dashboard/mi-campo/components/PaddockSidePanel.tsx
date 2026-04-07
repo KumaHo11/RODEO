@@ -1,9 +1,11 @@
 'use client'
 
 import React, { useState, useCallback, useRef } from 'react'
-import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, ChevronRight, X, Check, Satellite, TrendingUp, Loader2, Plus, NotebookPen, BarChart3, AlertTriangle, BookOpen, Camera, Images, RefreshCw, Scale, Map, Settings } from 'lucide-react'
+import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, X, Check, Satellite, TrendingUp, Loader2, Plus, NotebookPen, BarChart3, AlertTriangle, BookOpen, Camera, Images, RefreshCw, Scale, Map, Settings } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
+import { useAuth } from '@/components/AuthProvider'
+import BitacoraModal from '../../bitacora/components/BitacoraModal'
 
 interface Paddock {
   id: string
@@ -90,6 +92,12 @@ const NOTE_CAT_COLORS: Record<string, string> = {
   GENERAL: 'bg-gray-100 text-gray-700',
 }
 
+// Pastel palette matching the map colors
+const PASTEL_ACCENTS = [
+  '#a7f3d0', '#bfdbfe', '#fde68a', '#ddd6fe', '#fca5a5',
+  '#a5f3fc', '#fbcfe8', '#d9f99d', '#fed7aa', '#c4b5fd',
+]
+
 export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0, onDrawFieldBoundary
@@ -98,6 +106,8 @@ export default function PaddockSidePanel({
   const [sideTab, setSideTab] = useState<'campo' | 'potreros'>('campo')
   const [modalOpen, setModalOpen] = useState(false)
   const [modalTab, setModalTab] = useState<'tecnico' | 'bitacora'>('tecnico')
+  const [bitacoraModalOpen, setBitacoraModalOpen] = useState(false)
+  const { user } = useAuth()
   const [editingPaddock, setEditingPaddock] = useState<Paddock | null>(null)
   const [techData, setTechData] = useState<Record<string, any>>({})
   const [dryMatter, setDryMatter] = useState<number | ''>('')
@@ -321,7 +331,7 @@ export default function PaddockSidePanel({
               <p className="text-[10px] text-gray-300 mt-1">Dibuja un potrero en el mapa</p>
             </div>
           ) : (
-            filtered.map(paddock => {
+            filtered.map((paddock, paddockIdx) => {
               const status = STATUS_LABEL[paddock.current_status] || STATUS_LABEL.default
               const isSelected = paddock.id === selectedPaddockId
               const sat = ndviData[paddock.id]
@@ -329,14 +339,16 @@ export default function PaddockSidePanel({
               const ndviInfo = ndviVal != null ? getNdviLabel(ndviVal) : null
               const isReal = sat?.source === 'sentinel-2-l2a'
               const td = paddock.technical_data || {}
+              const accentColor = PASTEL_ACCENTS[paddockIdx % PASTEL_ACCENTS.length]
 
               return (
                 <div
                   key={paddock.id}
-                  className={`w-full rounded-xl border transition-all cursor-pointer ${isSelected
+                  className={`w-full rounded-xl border transition-all cursor-pointer overflow-hidden ${isSelected
                     ? 'bg-green-50 border-green-200 shadow-sm'
                     : 'bg-white border-gray-100 hover:border-green-100 hover:bg-gray-50/50'
                     }`}
+                  style={{ borderLeftColor: accentColor, borderLeftWidth: 4 }}
                   onClick={() => onSelectPaddock(paddock.id)}
                 >
                   <div className="p-3.5 flex items-start justify-between gap-2">
@@ -384,9 +396,9 @@ export default function PaddockSidePanel({
                     </div>
                     <button
                       onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                      className="shrink-0 w-7 h-7 flex items-center justify-center text-gray-300 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                      className="shrink-0 flex items-center gap-1 px-2 py-1 text-[10px] font-black text-green-600 bg-green-50 hover:bg-green-100 rounded-lg border border-green-100 transition-all"
                     >
-                      <ChevronRight className="w-4 h-4" />
+                      Ver/Editar
                     </button>
                   </div>
                 </div>
@@ -457,7 +469,13 @@ export default function PaddockSidePanel({
 
             {/* ── TAB: BITÁCORA ── */}
             {modalTab === 'bitacora' && (
-              <div className="max-h-[60vh] overflow-y-auto">
+              <div className="max-h-[60vh] overflow-y-auto relative">
+                <div className="sticky top-0 bg-white/95 backdrop-blur-sm p-3 border-b border-gray-100 flex justify-between items-center z-10">
+                  <p className="text-[10px] font-black text-gray-500 tracking-widest uppercase">Historial de notas</p>
+                  <button onClick={() => setBitacoraModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all">
+                    <Plus className="w-3 h-3" /> Nueva Nota
+                  </button>
+                </div>
                 {notesLoading ? (
                   <div className="flex items-center justify-center py-10">
                     <Loader2 className="w-5 h-5 text-green-600 animate-spin" />
@@ -852,15 +870,28 @@ export default function PaddockSidePanel({
               </div>
             )}
             {(modalTab as string) === 'bitacora' && (
-              <div className="px-6 py-4 border-t border-gray-100">
-                <p className="text-[10px] text-gray-400 text-center">
-                  Para agregar notas, usá <strong>Bitácora de potreros</strong> y seleccioná este potrero.
-                </p>
+              <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+                <button onClick={() => setModalOpen(false)} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+                  Cerrar
+                </button>
               </div>
             )}
           </div>
         </div>
       )}
+
+      {/* ── Bitácora Modal (Independiente) ── */}
+      <BitacoraModal 
+        isOpen={bitacoraModalOpen} 
+        onClose={() => setBitacoraModalOpen(false)} 
+        onSaved={() => {
+          if (editingPaddock) loadPaddockNotes(editingPaddock.id)
+        }}
+        user={user}
+        initialPaddockId={editingPaddock?.id}
+        initialPaddockName={editingPaddock?.name}
+        paddocks={paddocks}
+      />
     </>
   )
 }

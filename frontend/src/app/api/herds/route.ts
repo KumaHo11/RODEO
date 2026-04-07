@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const herds = await query(
-      `SELECT id, org_id, name, species, breed, category, head_count,
+      `SELECT id, org_id, name, species, breed, categoria, head_count,
               avg_weight_kg, total_ev, age_years, bcs_score, bcs_label,
               bcs_data, photo_url, created_at, updated_at
        FROM herds
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       name, species, breed, head_count, avg_weight_kg,
-      age_years, total_ev, bcs_score, bcs_label, bcs_data, photo_url
+      age_years, total_ev, bcs_score, bcs_label, bcs_data, photo_url, categoria
     } = body
 
     if (!name || !head_count) {
@@ -59,14 +59,15 @@ export async function POST(req: NextRequest) {
     const result = await mutate(
       `INSERT INTO herds
          (org_id, name, species, breed, head_count, avg_weight_kg, age_years, total_ev,
-          bcs_score, bcs_label, bcs_data, photo_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+          bcs_score, bcs_label, bcs_data, photo_url, categoria)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING id`,
       [
         auth.orgId, name, species || 'vacas', breed || null,
         head_count, avg_weight_kg || null, age_years || null,
         total_ev || null, bcs_score || null, bcs_label || null,
-        bcs_data ? JSON.stringify(bcs_data) : null, photo_url || null
+        bcs_data ? JSON.stringify(bcs_data) : null, photo_url || null,
+        categoria || null
       ]
     )
 

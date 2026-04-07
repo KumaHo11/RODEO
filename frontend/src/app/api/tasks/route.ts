@@ -32,9 +32,12 @@ export async function GET(req: NextRequest) {
     const limit = url.searchParams.get('limit')
 
     let sql = `
-      SELECT t.*,
-        json_build_object('name', p.name) AS paddock,
-        json_build_object('first_name', pr.first_name, 'last_name', pr.last_name) AS assignee
+      SELECT t.id, t.org_id, t.created_by, t.title, t.description,
+             t.task_type, t.paddock_id, t.assigned_to, t.priority, t.status,
+             TO_CHAR(t.due_date, 'YYYY-MM-DD') AS due_date,
+             t.created_at, t.updated_at,
+             json_build_object('name', p.name) AS paddock,
+             json_build_object('first_name', pr.first_name, 'last_name', pr.last_name) AS assignee
       FROM tasks t
       LEFT JOIN paddocks p ON p.id = t.paddock_id
       LEFT JOIN profiles pr ON pr.id = t.assigned_to
@@ -43,12 +46,10 @@ export async function GET(req: NextRequest) {
     let i = 2
 
     if (status) { sql += ` AND t.status = $${i++}`; vals.push(status) }
-    if (status === null && !pending) {
-      // no filter
-    }
-    if (today) { sql += ` AND t.due_date >= $${i++}`; vals.push(today) }
+    // When from_date is provided, include tasks due on or after that date OR tasks without a due_date
+    if (today) { sql += ` AND (t.due_date >= $${i++} OR t.due_date IS NULL)`; vals.push(today) }
 
-    sql += ' ORDER BY t.created_at DESC'
+    sql += ' ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC'
     if (limit) { sql += ` LIMIT $${i++}`; vals.push(parseInt(limit)) }
 
     const tasks = await query(sql, vals)

@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import { Plus, Search, Edit2, Trash2, X, Check, Camera, Sparkles, Loader2, HeartPulse, PawPrint, Paperclip } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, X, Check, Camera, Sparkles, Loader2, HeartPulse, Paperclip } from 'lucide-react'
+import { CATEGORIAS_COMERCIALES } from '@/lib/categorias'
 
 
 const ANIMAL_TYPES = [
@@ -26,9 +27,12 @@ const BREED_OPTIONS: Record<string, string[]> = {
   toros:       ['Angus', 'Hereford', 'Braford', 'Brangus', 'Otra'],
 }
 
+const CATEGORIAS_DEL_HERDS = CATEGORIAS_COMERCIALES
+
 const EMPTY_FORM = {
   id: '', name: '', species: 'vacas', breed: '', head_count: 0, avg_weight_kg: 0, age_years: 0,
   photo_url: null as string | null,
+  categoria: '' as string,
 }
 
 async function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
@@ -98,6 +102,7 @@ export default function HerdsPage() {
       id: herd.id, name: herd.name, species: herd.species, breed: herd.breed || '',
       head_count: herd.head_count, avg_weight_kg: herd.avg_weight_kg || 0, age_years: herd.age_years || 0,
       photo_url: herd.photo_url || null,
+      categoria: herd.categoria || '',
     })
     setModalBcsFile(null)
     setModalBcsPreview(herd.photo_url || null)
@@ -153,6 +158,7 @@ export default function HerdsPage() {
       age_years: form.age_years,
       total_ev: calculateEV(form.avg_weight_kg, form.head_count, form.species),
       photo_url,
+      categoria: form.categoria || null,
       ...(modalBcsResult ? { bcs_data: modalBcsResult, bcs_score: modalBcsResult.bcs_score, bcs_label: modalBcsResult.condition_label } : {}),
     }
 
@@ -252,7 +258,9 @@ export default function HerdsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
-          <PawPrint className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+          <div className="w-12 h-12 rounded-2xl bg-gray-100 mx-auto mb-3 flex items-center justify-center">
+            <span className="text-2xl">🐄</span>
+          </div>
           <p className="text-sm font-bold text-gray-400">No hay rebaños que mostrar</p>
           <p className="text-[10px] text-gray-300 mt-1">Crea tu primer rebaño o cambia los filtros</p>
         </div>
@@ -267,14 +275,21 @@ export default function HerdsPage() {
                 {/* Card Header */}
                 <div className="px-5 pt-5 pb-3 flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${at.color}`}>
-                      <PawPrint className="w-5 h-5" />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black ${at.color}`}>
+                      {at.label.slice(0, 2)}
                     </div>
                     <div>
                       <h3 className="text-sm font-black text-gray-950 tracking-tight leading-tight">{herd.name}</h3>
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${at.color} mt-0.5 inline-block`}>
-                        {at.label}
-                      </span>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${at.color} inline-block`}>
+                          {at.label}
+                        </span>
+                        {herd.categoria && (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 inline-block">
+                            {herd.categoria}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
@@ -391,6 +406,35 @@ export default function HerdsPage() {
                     >
                       <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${t.dot}`} />
                       {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Categoría Comercial */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Categoría Comercial</label>
+                <p className="text-[9px] text-gray-400 font-normal">Se usa para calcular el valor del rodeo en Valuación Ganadera</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, categoria: '' })}
+                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${!form.categoria ? 'bg-gray-900 text-white border-transparent' : 'border-gray-200 text-gray-500 hover:border-gray-300 bg-gray-50'}`}
+                  >
+                    Sin categoría
+                  </button>
+                  {CATEGORIAS_COMERCIALES.map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setForm({ ...form, categoria: cat })}
+                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${
+                        form.categoria === cat
+                          ? 'bg-green-600 text-white border-transparent'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-gray-50'
+                      }`}
+                    >
+                      {cat}
                     </button>
                   ))}
                 </div>

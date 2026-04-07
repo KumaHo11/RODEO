@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutDashboard, Calendar, CalendarDays, Lightbulb, NotebookPen, Users, CheckSquare } from 'lucide-react'
+import { LayoutDashboard, Calendar, CalendarDays, Lightbulb, NotebookPen, Users, CheckSquare, TrendingUp } from 'lucide-react'
 
 const FieldIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -39,15 +39,15 @@ export type NavItem = {
  * permissionKey === null means always visible (e.g. Panel, Equipo — equipo shows read-only for guests)
  */
 export const ALL_NAV_ITEMS: NavItem[] = [
-  { name: 'Panel',        href: '/dashboard',           icon: LayoutDashboard, permissionKey: null        },
-  { name: 'Mi campo',     href: '/dashboard/mi-campo',  icon: FieldIcon,       permissionKey: 'mi_campo'  },
-  { name: 'Rebaños',      href: '/dashboard/herds',     icon: HerdIcon,        permissionKey: 'rebanhos'  },
-  { name: 'Agenda',       href: '/dashboard/agenda',    icon: CalendarDays,    permissionKey: 'agenda'    },
-  { name: 'Planificador', href: '/dashboard/grazing',   icon: Calendar,        permissionKey: 'planificador' },
-  { name: 'Bitácora',     href: '/dashboard/bitacora',  icon: NotebookPen,     permissionKey: 'bitacora'  },
-  { name: 'Insights',     href: '/dashboard/insights',  icon: Lightbulb,       permissionKey: 'insights'  },
-  { name: 'Equipo',       href: '/dashboard/equipo',    icon: Users,           permissionKey: null        }, // always visible, read-only for guests
-  { name: 'Tareas',       href: '/dashboard/tareas',    icon: CheckSquare,     permissionKey: 'tareas'    },
+  { name: 'Panel',               href: '/dashboard',                 icon: LayoutDashboard, permissionKey: 'dashboard'   },
+  { name: 'Potreros',            href: '/dashboard/mi-campo',        icon: FieldIcon,       permissionKey: 'mi_campo'    },
+  { name: 'Rebaños',             href: '/dashboard/herds',           icon: HerdIcon,        permissionKey: 'rebanhos'    },
+  { name: 'Agenda',              href: '/dashboard/agenda',          icon: CalendarDays,    permissionKey: 'agenda'      },
+  { name: 'Planificador',        href: '/dashboard/grazing',         icon: Calendar,        permissionKey: 'planificador'},
+  { name: 'Bitácora',            href: '/dashboard/bitacora',        icon: NotebookPen,     permissionKey: 'bitacora'    },
+  { name: 'Insights',            href: '/dashboard/insights',        icon: Lightbulb,       permissionKey: 'insights'    },
+  { name: 'Equipo',              href: '/dashboard/equipo',          icon: Users,           permissionKey: 'equipo'      },
+  { name: 'Tareas',              href: '/dashboard/tareas',          icon: CheckSquare,     permissionKey: 'tareas'      },
 ]
 
 /** Mobile bottom nav always shows these 5 (filtered by permissions) */

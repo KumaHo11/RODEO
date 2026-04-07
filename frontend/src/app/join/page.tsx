@@ -84,7 +84,22 @@ function JoinContent() {
       }
       await refreshProfile()
       setStep('done')
-      setTimeout(() => router.push('/dashboard'), 1800)
+
+      // Redirect to the first permitted route (never hardcode /dashboard)
+      const ORDERED_ROUTES: { key: string; path: string }[] = [
+        { key: 'dashboard',     path: '/dashboard' },
+        { key: 'mi_campo',      path: '/dashboard/mi-campo' },
+        { key: 'rebanhos',      path: '/dashboard/herds' },
+        { key: 'agenda',        path: '/dashboard/agenda' },
+        { key: 'planificador',  path: '/dashboard/grazing' },
+        { key: 'bitacora',      path: '/dashboard/bitacora' },
+        { key: 'insights',      path: '/dashboard/insights' },
+        { key: 'tareas',        path: '/dashboard/tareas' },
+        { key: 'equipo',        path: '/dashboard/equipo' },
+      ]
+      const perms = inv?.permissions ?? {}
+      const firstRoute = ORDERED_ROUTES.find(r => perms[r.key] === true)?.path ?? '/dashboard'
+      setTimeout(() => router.push(firstRoute), 1800)
     } catch (err: any) {
       setErrorMsg(err.message || 'Error inesperado.')
       setStep('error')

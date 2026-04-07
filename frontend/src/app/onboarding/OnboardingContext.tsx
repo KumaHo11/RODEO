@@ -4,6 +4,7 @@ interface OnboardingPaddock {
   name: string
   geojson: any   // GeoJSON Feature (Polygon)
   area_ha: number
+  dry_matter_kg_ha?: number  // Forraje declarado por el usuario (kg MS/ha)
 }
 
 interface OnboardingData {
@@ -19,10 +20,14 @@ interface OnboardingData {
   paddocks: OnboardingPaddock[]
   skippedMap: boolean           // user skipped step 2
 
+  // Internal: shape drawn by singleton map, pending confirmation in Step2Panel
+  _draftShape: { geojson: any; area_ha: number; layer: any } | null
+
   // Step 3: Herds
   herds: Array<{
     name: string
     species: string
+    categoria?: string | null
     breed: string
     headCount: number
     avgWeight: number
@@ -54,6 +59,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     geometry: null,
     paddocks: [],
     skippedMap: false,
+    _draftShape: null,
     herds: [],
     skippedHerds: false,
   })
@@ -62,9 +68,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setData(prev => ({ ...prev, ...updates }))
   }, [])
 
-  const nextStep = useCallback(() => setStep(s => Math.min(s + 1, 4)), [])
+  // 3 steps (Step 4 / Confirm is now the SuccessModal, not a page step)
+  const nextStep = useCallback(() => setStep(s => Math.min(s + 1, 3)), [])
   const prevStep = useCallback(() => setStep(s => Math.max(s - 1, 1)), [])
-  const goToStep = useCallback((n: number) => setStep(Math.max(1, Math.min(n, 4))), [])
+  const goToStep = useCallback((n: number) => setStep(Math.max(1, Math.min(n, 3))), [])
 
   return (
     <OnboardingContext.Provider value={{ data, updateData, step, nextStep, prevStep, goToStep }}>

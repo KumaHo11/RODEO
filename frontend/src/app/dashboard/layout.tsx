@@ -35,17 +35,17 @@ const NOTIF_COLORS: Record<string, string> = {
 }
 
 const PAGE_NAMES: Record<string, string> = {
-  '/dashboard':            'Panel principal',
-  '/dashboard/mi-campo':   'Mi campo',
-  '/dashboard/herds':      'Rebaños',
-  '/dashboard/agenda':     'Agenda',
-  '/dashboard/grazing':    'Planificador',
-  '/dashboard/bitacora':   'Bitácora de potreros',
-  '/dashboard/insights':   'Insights',
-  '/dashboard/profile':    'Mi perfil',
-  '/dashboard/equipo':     'Equipo',
-  '/dashboard/tareas':     'Tareas',
-  '/dashboard/guest-setup':'Configuración de cuenta',
+  '/dashboard':              'Panel principal',
+  '/dashboard/mi-campo':     'Mi campo',
+  '/dashboard/herds':        'Rebaños',
+  '/dashboard/agenda':       'Agenda',
+  '/dashboard/grazing':      'Planificador',
+  '/dashboard/bitacora':     'Bitácora de potreros',
+  '/dashboard/insights':     'Insights',
+  '/dashboard/profile':      'Mi perfil',
+  '/dashboard/equipo':       'Equipo',
+  '/dashboard/tareas':       'Tareas',
+  '/dashboard/guest-setup':  'Configuración de cuenta',
 }
 
 // ── Layout ─────────────────────────────────────────────────────────────────────
@@ -64,15 +64,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showWelcome, setShowWelcome]       = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
 
-  // ── Guard: redirect to onboarding (in useEffect — never during render) ───────────
+  // ── Guard: redirect to onboarding (in useEffect — never during render) ───────
   useEffect(() => {
-    // Wait until Firebase auth AND profile fetch are both complete
-    if (isLoading) return          // still loading Firebase auth
-    if (!user) return              // not logged in (other guards handle this)
-    if (authProfile === null) return // profile still fetching — do NOT redirect yet
+    if (isLoading) return
+    if (!user) return
+    if (authProfile === null) return
 
     const isGuest = !!(authProfile.team_role)
     const onboardingDone = (authProfile.onboarding_step ?? 0) >= 4
+
+    // Guests skip owner onboarding entirely
     if (!isGuest && !onboardingDone) {
       router.push('/onboarding')
     }
@@ -89,7 +90,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Mobile bottom nav: up to 5 most-used items from filtered nav
   const mobileNav = useMemo<NavItem[]>(() => {
-    const priority = ['Panel', 'Mi campo', 'Bitácora', 'Planificador', 'Tareas', 'Insights']
+    const priority = ['Panel', 'Potreros', 'Bitácora', 'Planificador', 'Tareas', 'Insights']
     const sorted = filteredNav
       .filter(i => priority.includes(i.name))
       .sort((a, b) => priority.indexOf(a.name) - priority.indexOf(b.name))

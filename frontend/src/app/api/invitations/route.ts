@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { email, role = 'OPERATOR', team_role = 'CAPATAZ', permissions = {} } = body
+    const { email, role = 'OPERATOR', team_role = 'CAPATAZ', permissions = {}, first_name, last_name } = body
 
     if (!email) return NextResponse.json({ error: 'Email requerido' }, { status: 400 })
 
@@ -59,18 +59,20 @@ export async function POST(req: NextRequest) {
 
     const result = await mutate(
       `INSERT INTO team_invitations
-         (org_id, email, role, team_role, permissions, token, status, expires_at, invited_by)
-       VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8)
+         (org_id, email, role, team_role, permissions, token, status, expires_at, invited_by, first_name, last_name)
+       VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10)
        ON CONFLICT (org_id, email) DO UPDATE SET
          token = EXCLUDED.token,
          role = EXCLUDED.role,
          team_role = EXCLUDED.team_role,
          permissions = EXCLUDED.permissions,
+         first_name = EXCLUDED.first_name,
+         last_name = EXCLUDED.last_name,
          status = 'PENDING',
          expires_at = EXCLUDED.expires_at,
          updated_at = NOW()
        RETURNING id, token`,
-      [profile.organization_id, email.toLowerCase(), role, team_role, JSON.stringify(permissions), token, expiresAt, profile.id]
+      [profile.organization_id, email.toLowerCase(), role, team_role, JSON.stringify(permissions), token, expiresAt, profile.id, first_name || null, last_name || null]
     )
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'

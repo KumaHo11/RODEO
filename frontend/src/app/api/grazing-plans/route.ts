@@ -26,7 +26,12 @@ export async function GET(req: NextRequest) {
 
     const plans = await query(
       `SELECT
-         gp.*,
+         gp.id, gp.org_id, gp.paddock_id, gp.herd_id, gp.herd_ids,
+         TO_CHAR(gp.entry_date, 'YYYY-MM-DD') AS entry_date,
+         TO_CHAR(gp.exit_date,  'YYYY-MM-DD') AS exit_date,
+         gp.planned_recovery_days, gp.status, gp.temporary_animals,
+         gp.notes, gp.exit_notes, gp.exit_dry_matter_kg_ha,
+         gp.ai_analysis, gp.created_at, gp.updated_at,
          json_build_object('id', p.id, 'name', p.name, 'area_ha', p.area_ha) AS paddocks,
          json_build_object('id', h.id, 'name', h.name, 'head_count', h.head_count, 'total_ev', h.total_ev) AS herds
        FROM grazing_plans gp

@@ -8,7 +8,7 @@ import {
   CheckCircle, Info, Sparkles, BarChart3, Target, Camera,
   Loader2, RefreshCw, Sun, Snowflake, Scale, CalendarDays,
   Zap
-} from 'lucide-react'
+, DollarSign, Beef, ArrowUpRight, ArrowDownRight, Globe, MapPin} from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface InsightCard {
@@ -27,9 +27,48 @@ interface InsightCard {
 
 type Score = { value: number; label: string; color: string }
 
+const CATEGORIAS_CONFIG: Record<string, { emoji: string; color: string; bg: string; defaultWeight: number }> = {
+  NOVILLOS:    { emoji: '🐂', color: 'text-green-700',  bg: 'bg-green-50 border-green-100',    defaultWeight: 380 },
+  NOVILLITOS:  { emoji: '🐂', color: 'text-emerald-700',bg: 'bg-emerald-50 border-emerald-100', defaultWeight: 280 },
+  VAQUILLONAS: { emoji: '🐄', color: 'text-teal-700',   bg: 'bg-teal-50 border-teal-100',      defaultWeight: 300 },
+  TERNEROS:    { emoji: '🐄', color: 'text-lime-700',   bg: 'bg-lime-50 border-lime-100',       defaultWeight: 150 },
+  TERNERAS:    { emoji: '🐄', color: 'text-yellow-700', bg: 'bg-yellow-50 border-yellow-100',   defaultWeight: 130 },
+  VACAS:       { emoji: '🐄', color: 'text-amber-700',  bg: 'bg-amber-50 border-amber-100',     defaultWeight: 420 },
+  TOROS:       { emoji: '🐂', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-100',   defaultWeight: 600 },
+  MEJ:         { emoji: '🐂', color: 'text-red-700',    bg: 'bg-red-50 border-red-100',         defaultWeight: 350 },
+  BUBALINOS:   { emoji: '🦬', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-100',   defaultWeight: 500 },
+}
+
+// CME Live Cattle LE=F is in USD per cwt (100 lbs = 45.36 kg)
+// Convert to USD/kg: price_cwt / 100 / 2.20462
+const cwtToKg = (usdCwt: number) => usdCwt / 100 / 2.20462
+
+function fmt(n: number, digits = 0) {
+  return n.toLocaleString('es-AR', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+}
+function fmtUsd(n: number) {
+  return n.toLocaleString('es-AR', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+// ── Component ──────────────────────────────────────────────────────────────────
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function daysBetween(a: string, b: string) {
-  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000)
+// Safe ISO date normalizer
+function safeIso(val: any): string {
+  if (!val) return ''
+  if (val instanceof Date) return val.toISOString().split('T')[0]
+  const s = String(val)
+  return s.includes('T') ? s.split('T')[0] : s
+}
+
+function daysBetween(a: any, b: any): number {
+  const sa = safeIso(a)
+  const sb = safeIso(b)
+  if (!sa || !sb) return 0
+  const da = new Date(sa + 'T00:00:00')
+  const db = new Date(sb + 'T00:00:00')
+  if (isNaN(da.getTime()) || isNaN(db.getTime())) return 0
+  return Math.round((db.getTime() - da.getTime()) / 86400000)
 }
 
 // Detect southern hemisphere season based on month
@@ -54,8 +93,9 @@ function holismoScore(paddocks: any[], plans: any[], herds: any[], weather: any)
   const restPenalty = Math.min(30, (paddocksWithRecentGrazing / Math.max(1, paddocks.length)) * 40)
   score -= restPenalty
 
-  // 2. Weather stress
-  if (weather?.forecast_mm_15d !== undefined && weather.forecast_mm_15d < 20) score -= 15
+  // 2. Weather stress (null-safe)
+  const forecastMm = weather?.forecast_mm_15d ?? weather?.precipitation_sum?.[0] ?? null
+  if (forecastMm !== null && forecastMm < 20) score -= 15
 
   // 3. Active plan coverage
   const paddocksWithPlan = new Set(plans.map(p => p.paddock_id)).size
@@ -87,6 +127,10 @@ export default function InsightsPage() {
   const [aiRecommendation, setAiRecommendation] = useState<string | null>(null)
   const [loadingAi, setLoadingAi] = useState(false)
 
+  const [mercado, setMercado] = useState<any>(null)
+  const [lastMarketUpdate, setLastMarketUpdate] = useState<string | null>(null)
+
+
   const today = new Date().toISOString().split('T')[0]
   const month = new Date().toLocaleString('es', { month: 'long', year: 'numeric' })
   const season = getCurrentSeason()
@@ -94,32 +138,44 @@ export default function InsightsPage() {
   async function loadData() {
     if (!user) return
     setRefreshing(true)
+    try {
+      const [paddocksRes, plansRes, herdsRes, eventsRes, notesRes, mercadoRes] = await Promise.all([
+        apiFetch('/api/paddocks').catch(() => null),
+        apiFetch('/api/grazing-plans').catch(() => null),
+        apiFetch('/api/herds').catch(() => null),
+        apiFetch('/api/farm-events').catch(() => null),
+        apiFetch('/api/field-notes').catch(() => null),
+        fetch('/api/mercado').catch(() => null),
+      ])
 
-    const [paddocksRes, plansRes, herdsRes, eventsRes, notesRes] = await Promise.all([
-      apiFetch('/api/paddocks'),
-      apiFetch('/api/grazing-plans'),
-      apiFetch('/api/herds'),
-      apiFetch('/api/farm-events'),
-      apiFetch('/api/field-notes'),
-    ])
+      setPaddocks(paddocksRes?.ok ? (await paddocksRes.json()).paddocks ?? [] : [])
+      setPlans(plansRes?.ok ? (await plansRes.json()).plans ?? [] : [])
+      setHerds(herdsRes?.ok ? (await herdsRes.json()).herds ?? [] : [])
+      setFarmEvents(eventsRes?.ok ? (await eventsRes.json()).events ?? [] : [])
+      setFieldNotes(notesRes?.ok ? (await notesRes.json()).notes ?? [] : [])
+      if (mercadoRes?.ok) {
+        const m = await mercadoRes.json()
+        setMercado(m)
+        if (m.cachedAt) setLastMarketUpdate(new Date(m.cachedAt).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }))
+      }
 
-    setPaddocks(paddocksRes.ok ? (await paddocksRes.json()).paddocks ?? [] : [])
-    setPlans(plansRes.ok ? (await plansRes.json()).plans ?? [] : [])
-    setHerds(herdsRes.ok ? (await herdsRes.json()).herds ?? [] : [])
-    setFarmEvents(eventsRes.ok ? (await eventsRes.json()).events ?? [] : [])
-    setFieldNotes(notesRes.ok ? (await notesRes.json()).notes ?? [] : [])
-    setLoading(false)
-    setRefreshing(false)
+    } catch (err) {
+      console.error('Insights loadData error:', err)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
   useEffect(() => { loadData() }, [user])
 
   // ── Derived metrics ────────────────────────────────────────────────────────
-  const totalHectares = useMemo(() => paddocks.reduce((s, p) => s + (p.area_ha || 0), 0), [paddocks])
-  const totalAnimals = useMemo(() => herds.reduce((s, h) => s + (h.animal_count || 0), 0), [herds])
+  const totalHectares = useMemo(() => paddocks.reduce((s, p) => s + (Number(p.area_ha) || 0), 0), [paddocks])
+  const totalAnimals = useMemo(() => herds.reduce((s, h) => s + (Number(h.animal_count) || 0), 0), [herds])
+
   const totalEV = useMemo(() => herds.reduce((s, h) => {
-    const avgWeight = h.avg_weight_kg || 450
-    return s + (h.animal_count || 0) * (avgWeight / 450)
+    const avgWeight = Number(h.avg_weight_kg) || 450
+    return s + (Number(h.animal_count) || 0) * (avgWeight / 450)
   }, 0), [herds])
 
   const stockingRate = totalHectares > 0 ? totalEV / totalHectares : 0
@@ -163,7 +219,11 @@ export default function InsightsPage() {
   const daysSinceLastMove = lastPlanExit ? daysBetween(lastPlanExit, today) : null
 
   // Upcoming events (next 30d)
-  const upcoming30 = farmEvents.filter(e => e.event_date >= today && daysBetween(today, e.event_date) <= 30)
+  const upcoming30 = farmEvents.filter(e => {
+    const ed = safeIso(e.event_date)
+    if (!ed) return false
+    return ed >= today && daysBetween(today, ed) <= 30
+  })
 
   // ── AI animal body condition from photo notes ─────────────────────────────
   const animalConditionNotes = useMemo(() =>
@@ -207,6 +267,38 @@ export default function InsightsPage() {
     } catch { /* silently fail */ }
     setLoadingAi(false)
   }
+
+  
+  // ── Valuación calculations ─────────────────────────────────────────────────
+  const valuacion = useMemo(() => {
+    if (!mercado?.argentina?.categorias || herds.length === 0) return null
+    const usdArs = mercado.global?.usd_ars ?? null
+    let totalArs = 0
+    const byHerd = herds.map((h: any) => {
+      const cat = (h.categoria || '').toUpperCase()
+      const pricePerKg = mercado.argentina.categorias[cat] ?? mercado.argentina.insc_kg_vivo ?? null
+      const head = Number(h.head_count) || 0
+      const weight = Number(h.avg_weight_kg) || CATEGORIAS_CONFIG[cat]?.defaultWeight || 350
+      const totalKg = head * weight
+      const valueArs = pricePerKg ? pricePerKg * totalKg : null
+      if (valueArs) totalArs += valueArs
+      return { ...h, cat, pricePerKg, head, weight, totalKg, valueArs }
+    })
+    const totalUsd = usdArs && totalArs > 0 ? totalArs / usdArs : null
+    return { byHerd, totalArs, totalUsd }
+  }, [herds, mercado])
+
+  const cmeInArs = useMemo(() => {
+    if (!mercado?.global?.LE_usd_cwt || !mercado?.global?.usd_ars) return null
+    const leKgUsd = cwtToKg(mercado.global.LE_usd_cwt)
+    const leKgArs = leKgUsd * mercado.global.usd_ars
+    return { leKgUsd, leKgArs }
+  }, [mercado])
+
+  const arg = mercado?.argentina
+  const glob = mercado?.global
+  const hasArgData = arg?.insc_kg_vivo && arg.insc_kg_vivo > 0
+  const hasGlobData = glob?.LE_usd_cwt && glob.LE_usd_cwt > 0
 
   // ── Insight cards ──────────────────────────────────────────────────────────
   const cards: InsightCard[] = [
@@ -341,7 +433,12 @@ export default function InsightsPage() {
       title: 'Próximos eventos',
       value: upcoming30.length > 0 ? `${upcoming30.length} evento${upcoming30.length > 1 ? 's' : ''}` : 'Sin eventos',
       subtitle: upcoming30.length > 0
-        ? `Próximo: ${upcoming30[0] ? new Date(upcoming30[0].event_date).toLocaleDateString('es') + ' · ' + upcoming30[0].title : '—'}`
+        ? (() => {
+            const ev0 = upcoming30[0]
+            const ed = ev0 ? safeIso(ev0.event_date) : ''
+            const edLabel = ed ? new Date(ed + 'T00:00:00').toLocaleDateString('es') : '—'
+            return `Próximo: ${ev0 ? edLabel + ' · ' + ev0.title : '—'}`
+          })()
         : 'Agendá servicio, vacunación y otras fechas críticas',
       trend: upcoming30.length > 0 ? 'neutral' : 'neutral',
       icon: <CalendarDays className="w-5 h-5" />,
@@ -455,6 +552,91 @@ export default function InsightsPage() {
           </div>
         )}
       </div>
+
+      
+      {/* ── BLOQUE PATRIMONIAL Y MERCADO ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-gray-500" />
+            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Patrimonio y Mercado</h3>
+            {lastMarketUpdate && (
+              <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full ml-2">
+                Actualizado: {lastMarketUpdate}
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {valuacion ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-5 text-white shadow-lg shadow-green-600/20">
+              <p className="text-[9px] font-black text-white/70 tracking-widest uppercase mb-1">Valor total de la hacienda</p>
+              <p className="text-4xl font-black leading-none text-white">
+                ${valuacion.totalArs >= 1_000_000 ? `${(valuacion.totalArs / 1_000_000).toFixed(1)}M` : fmt(valuacion.totalArs)}
+              </p>
+              <p className="text-[11px] font-bold text-white/70 mt-1">pesos argentinos</p>
+              <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-2">
+                <Beef className="w-3.5 h-3.5 text-white/70" />
+                <p className="text-[10px] text-white/80 font-bold">
+                  {totalAnimals.toLocaleString()} cabezas · {herds.length} lotes
+                </p>
+              </div>
+            </div>
+            <div className={`rounded-2xl p-5 border shadow-sm flex flex-col justify-between ${valuacion.totalUsd ? 'bg-slate-800 border-slate-700' : 'bg-gray-50 border-gray-100'}`}>
+              <p className={`text-[9px] font-black tracking-widest uppercase mb-1 ${valuacion.totalUsd ? 'text-white/60' : 'text-gray-400'}`}>Valor en USD (BNA)</p>
+              {valuacion.totalUsd ? (
+                <>
+                  <p className="text-4xl font-black leading-none text-white">{fmtUsd(valuacion.totalUsd)}</p>
+                  <p className="text-[11px] font-bold text-white/50 mt-1">dólares estadounidenses</p>
+                </>
+              ) : (
+                <p className="text-gray-500 text-xs font-bold mt-2">Dólar oficial no disponible</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center mb-6">
+            <p className="text-xs text-gray-500">Registrá tus rebaños para calcular la valuación económica estimativa basada en SIO Carnes.</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="border border-gray-100 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <MapPin className="w-3.5 h-3.5 text-green-600" />
+              <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">SIO Carnes · Argentina</p>
+            </div>
+            {hasArgData ? (
+              <div>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Índice Novillo (INSC)</p>
+                <p className="text-2xl font-black text-green-700">${fmt(arg.insc_kg_vivo)} <span className="text-[10px] text-gray-400 font-normal">$/kg vivo</span></p>
+              </div>
+            ) : <p className="text-[10px] text-gray-400">Datos no disponibles</p>}
+          </div>
+
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 text-white">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="w-3.5 h-3.5 text-blue-400" />
+              <p className="text-[10px] font-black text-white/50 tracking-widest uppercase">CME Group · Mundial</p>
+            </div>
+            {hasGlobData ? (
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-2xl font-black text-white">{fmt(glob.LE_usd_cwt, 2)}</p>
+                  <p className="text-[10px] text-white/50">USD/cwt (Live Cattle)</p>
+                </div>
+                {cmeInArs && (
+                  <p className="text-[10px] text-white/40 mt-1">
+                    Equivalente ARS: <span className="font-bold text-white/70">${fmt(cmeInArs.leKgArs)}/kg vivo</span>
+                  </p>
+                )}
+              </div>
+            ) : <p className="text-[10px] text-white/40">Datos no disponibles</p>}
+          </div>
+        </div>
+      </div>
+
 
       {/* Insight cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

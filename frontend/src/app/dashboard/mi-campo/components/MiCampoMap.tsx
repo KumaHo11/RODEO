@@ -15,11 +15,21 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-const STATUS_COLORS: Record<string, string> = {
-  GRAZING: '#f97316',
-  RESTING: '#22c55e',
-  default: '#6366f1',
-}
+// Pastel colors per-paddock (by index, cycling)
+const PASTEL_COLORS = [
+  '#a7f3d0', // emerald pastel
+  '#bfdbfe', // blue pastel
+  '#fde68a', // amber pastel
+  '#ddd6fe', // violet pastel
+  '#fca5a5', // red pastel
+  '#a5f3fc', // cyan pastel
+  '#fbcfe8', // pink pastel
+  '#d9f99d', // lime pastel
+  '#fed7aa', // orange pastel
+  '#c4b5fd', // purple pastel
+]
+const ACTIVE_STROKE = '#f97316'  // orange
+const RESTING_STROKE = '#15803d' // dark green
 
 const getNdviColor = (ndvi: number): string => {
   if (ndvi >= 0.6) return '#15803d'
@@ -37,11 +47,14 @@ interface Props {
   onPaddockGeomUpdated: (paddockId: string, geojson: any, areaHa: number) => void
   onNewPaddockDrawn: (geojson: any, areaHa: number, tempLayer: L.Layer) => void
   activeGrazingPlans?: { paddock_id: string; herd_name: string; head_count: number }[]
+  drawModeActive?: boolean
+  onDrawModeChange?: (active: boolean) => void
 }
 
 function MapController({
   paddocks, fieldBoundary, selectedPaddockId,
-  onSelectPaddock, onPaddockGeomUpdated, onNewPaddockDrawn, activeGrazingPlans = []
+  onSelectPaddock, onPaddockGeomUpdated, onNewPaddockDrawn, activeGrazingPlans = [],
+  drawModeActive = false, onDrawModeChange
 }: Props) {
   const map = useMap()
   const layerGroupRef = useRef<L.LayerGroup | null>(null)
@@ -86,11 +99,33 @@ function MapController({
     }
 
     map.on('pm:create', onCreate)
+
+    // Handle drawstart/drawend to sync state with parent
+    const onDrawStart = () => onDrawModeChange?.(true)
+    const onDrawEnd   = () => onDrawModeChange?.(false)
+    map.on('pm:drawstart', onDrawStart)
+    map.on('pm:drawend',   onDrawEnd)
+
     return () => {
       map.off('pm:create', onCreate)
+      map.off('pm:drawstart', onDrawStart)
+      map.off('pm:drawend', onDrawEnd)
       map.pm.removeControls()
     }
-  }, [map, onNewPaddockDrawn])
+  }, [map, onNewPaddockDrawn, onDrawModeChange])
+
+  // ── Programmatic draw mode toggle from parent FAB ──────────────────────
+  useEffect(() => {
+    if (drawModeActive) {
+      map.pm.enableDraw('Polygon', {
+        snappable: true,
+        snapDistance: 15,
+        allowSelfIntersection: false,
+      })
+    } else {
+      map.pm.disableDraw()
+    }
+  }, [drawModeActive, map])
 
   // ── Field boundary ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -142,17 +177,19 @@ function MapController({
         try { geojson = JSON.parse(geojson) } catch { return }
       }
 
-      const color = STATUS_COLORS[paddock.current_status] || STATUS_COLORS.default
+      const pastelidx = paddocks.indexOf(paddock)
+      const fillColor = PASTEL_COLORS[pastelidx % PASTEL_COLORS.length]
+      const strokeColor = paddock.current_status === 'GRAZING' ? ACTIVE_STROKE : RESTING_STROKE
       const isSelected = paddock.id === selectedPaddockId
       const ndvi = paddock.current_ndvi
 
       const layer = L.geoJSON(geojson, {
         style: {
-          color: ndvi != null ? getNdviColor(ndvi) : color,
+          color: isSelected ? '#1d4ed8' : strokeColor,
           weight: isSelected ? 3.5 : 2,
           opacity: 1,
-          fillColor: color,
-          fillOpacity: isSelected ? 0.45 : 0.2,
+          fillColor: fillColor,
+          fillOpacity: isSelected ? 0.65 : 0.4,
         },
       })
 

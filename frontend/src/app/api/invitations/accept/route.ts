@@ -45,9 +45,12 @@ export async function POST(req: NextRequest) {
          permissions     = $3::jsonb,
          onboarding_step = -1,
          is_first_login  = true,
+         first_name      = COALESCE(NULLIF(first_name, ''), $5),
+         last_name       = COALESCE(NULLIF(last_name, ''), $6),
          updated_at      = NOW()
        WHERE firebase_uid = $4`,
-      [invitation.org_id, invitation.team_role, JSON.stringify(permsObj), firebaseUid]
+      [invitation.org_id, invitation.team_role, JSON.stringify(permsObj), firebaseUid,
+       invitation.first_name || null, invitation.last_name || null]
     )
 
     // Marcar invitación como aceptada

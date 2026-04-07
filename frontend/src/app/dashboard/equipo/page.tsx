@@ -140,6 +140,8 @@ export default function EquipoPage() {
   // ── Invite modal state ─────────────────────────────────────────────────────
   const [modalOpen, setModalOpen]   = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteFirstName, setInviteFirstName] = useState('')
+  const [inviteLastName, setInviteLastName]   = useState('')
   const [inviteRole, setInviteRole]   = useState('CAPATAZ')
   const [invitePerms, setInvitePerms] = useState<Record<string, boolean>>(
     ROLE_MAP['CAPATAZ'].defaultPermissions
@@ -217,7 +219,13 @@ export default function EquipoPage() {
 
     const res = await apiFetch('/api/invitations', {
       method: 'POST',
-      body: JSON.stringify({ email: inviteEmail, team_role: inviteRole, permissions: invitePerms }),
+      body: JSON.stringify({
+        email: inviteEmail,
+        first_name: inviteFirstName.trim() || undefined,
+        last_name: inviteLastName.trim() || undefined,
+        team_role: inviteRole,
+        permissions: invitePerms,
+      }),
     })
 
     if (!res.ok) {
@@ -246,6 +254,8 @@ export default function EquipoPage() {
       setInviteSent(false)
       setModalOpen(false)
       setInviteEmail('')
+      setInviteFirstName('')
+      setInviteLastName('')
       setInviteRole('CAPATAZ')
       setInvitePerms(ROLE_MAP['CAPATAZ'].defaultPermissions)
       load()
@@ -740,6 +750,30 @@ export default function EquipoPage() {
               </div>
             ) : (
               <form onSubmit={handleInvite} className="p-6 space-y-5">
+                {/* Nombre y apellido */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Nombre</label>
+                    <input
+                      type="text"
+                      value={inviteFirstName}
+                      onChange={e => setInviteFirstName(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Juan"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Apellido</label>
+                    <input
+                      type="text"
+                      value={inviteLastName}
+                      onChange={e => setInviteLastName(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Rodríguez"
+                    />
+                  </div>
+                </div>
+
                 {/* Email */}
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Email del invitado *</label>
