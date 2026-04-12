@@ -9,7 +9,7 @@ import {
   Wrench, Leaf, AlertTriangle, BookOpen, Loader2, Sparkles,
   BarChart3, Droplets, CheckCircle2, AlertCircle,
   SortDesc, SortAsc, Filter, Search, Pencil, Calendar, CheckSquare2,
-  Image as ImageIcon, Beef, HeartPulse, Check
+  Image as ImageIcon, Footprints, HeartPulse, Check
 } from 'lucide-react'
 
 // ── Category config ────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ const CATEGORIES = [
   {
     id: 'GANADO',
     label: 'Condición Corporal',
-    icon: Beef,
+    icon: Footprints,
     color: '#b45309',
     bg: 'bg-amber-50',
     border: 'border-amber-200',
@@ -557,64 +557,20 @@ export default function BitacoraPage() {
   return (
     <div className="space-y-5">
 
-      {/* ── AI Feature Banner ── */}
-      <div className="bg-gradient-to-br from-green-700 to-emerald-600 rounded-2xl p-5 text-white">
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles className="w-4 h-4 text-green-200" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-green-200">IA de Campo — Herramientas para tus potreros</p>
-        </div>
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="flex items-start gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-              <Mic className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-sm font-black leading-tight">Dictado de voz</p>
-              <p className="text-[11px] text-green-100 leading-relaxed mt-0.5">Dictá a caballo. La IA detecta la categoría del potrero automáticamente.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-              <Camera className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-sm font-black leading-tight">Análisis de remanente</p>
-              <p className="text-[11px] text-green-100 leading-relaxed mt-0.5">Foto del pasto post-pastura → kg MS/ha, altura y autonomía en segundos.</p>
-            </div>
-          </div>
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Bitácora</h1>
+          <p className="text-sm text-gray-500 font-medium mt-1">
+            {notes.length} nota{notes.length !== 1 ? 's' : ''} registrada{notes.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <button
           onClick={() => { resetForm(); setIsOpen(true) }}
-          className="w-full py-3 bg-white text-green-700 rounded-xl text-sm font-black hover:bg-green-50 transition-all flex items-center justify-center gap-2"
+          className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 shadow-sm shadow-green-200 transition-all"
         >
-          <Plus className="w-4 h-4" /> Nueva nota de campo
+          <Plus className="w-4 h-4" /> Nueva nota
         </button>
-      </div>
-
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
-          {filtered.length} nota{filtered.length !== 1 ? 's' : ''} registrada{filtered.length !== 1 ? 's' : ''}
-        </p>
-      </div>
-
-      {/* Stats by category */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-        {CATEGORIES.map(cat => {
-          const count = notes.filter(n => getNoteTags(n).includes(cat.id)).length
-          const isActive = filterTags.includes(cat.id)
-          return (
-            <button
-              key={cat.id}
-              onClick={() => toggleFilterTag(cat.id)}
-              className={`${cat.bg} ${cat.border} border rounded-2xl px-3 py-2.5 transition-all hover:shadow-sm text-left ${isActive ? 'ring-2 ring-offset-1 ring-green-500' : ''}`}
-            >
-              <cat.icon className="w-4 h-4 mb-1" style={{ color: cat.color }} />
-              <p className={`text-lg font-black ${cat.text}`}>{count}</p>
-              <p className={`text-[9px] font-bold ${cat.text} opacity-70 leading-tight`}>{cat.label}</p>
-            </button>
-          )
-        })}
       </div>
 
       {/* Filters bar */}
@@ -631,6 +587,27 @@ export default function BitacoraPage() {
           />
         </div>
 
+        {/* Category filter chips */}
+        <div className="flex gap-1 flex-wrap">
+          {CATEGORIES.map(cat => {
+            const isActive = filterTags.includes(cat.id)
+            return (
+              <button
+                key={cat.id}
+                onClick={() => toggleFilterTag(cat.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold rounded-xl border transition-all ${
+                  isActive
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <cat.icon className="w-3 h-3" />
+                {cat.label}
+              </button>
+            )
+          })}
+        </div>
+
         {/* Potrero filter */}
         <select value={filterPaddock} onChange={e => setFilterPaddock(e.target.value)}
           className="px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl text-gray-700 focus:ring-1 focus:ring-green-600 outline-none">
@@ -643,7 +620,7 @@ export default function BitacoraPage() {
           {filterMonth !== null && (
             <button
               onClick={() => setFilterMonth(null)}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold bg-gray-900 text-white rounded-xl hover:bg-gray-700"
             >
               <X className="w-3 h-3" /> {MONTHS_ES[filterMonth]}
             </button>
@@ -652,7 +629,7 @@ export default function BitacoraPage() {
             <button
               key={m}
               onClick={() => setFilterMonth(m)}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold bg-white border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50"
             >
               <Calendar className="w-2.5 h-2.5" /> {MONTHS_ES[m]}
             </button>
@@ -779,17 +756,17 @@ export default function BitacoraPage() {
 
       {/* ── Modal: Nueva / Editar nota ── */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-2xl max-h-[96vh] sm:max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
 
             {/* ── Sticky header ── */}
-            <div className="sticky top-0 bg-white/98 backdrop-blur-sm border-b border-gray-100 px-5 py-4 flex items-center justify-between rounded-t-3xl z-10">
+            <div className="sticky top-0 bg-white/98 backdrop-blur-sm border-b border-gray-100 px-6 py-5 flex items-center justify-between rounded-t-3xl z-10 shrink-0">
               <div>
-                <h2 className="font-black text-gray-900 text-base leading-tight">
-                  {editingNote ? 'Editar nota' : '📋 Nueva nota de campo'}
+                <h2 className="text-lg font-black text-gray-950 tracking-tight">
+                  {editingNote ? 'Editar nota' : 'Nueva nota de campo'}
                 </h2>
                 {form.paddock_id && paddocks.find(p => p.id === form.paddock_id) && (
-                  <p className="text-xs text-green-600 font-bold mt-0.5 flex items-center gap-1">
+                  <p className="text-xs text-gray-400 font-medium mt-0.5 flex items-center gap-1">
                     <MapPin className="w-3 h-3" />
                     {paddocks.find(p => p.id === form.paddock_id)?.name}
                   </p>
@@ -797,7 +774,7 @@ export default function BitacoraPage() {
               </div>
               <button
                 onClick={() => { setIsOpen(false); resetForm() }}
-                className="w-10 h-10 flex items-center justify-center rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all active:scale-95"
+                className="w-10 h-10 flex items-center justify-center rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -957,7 +934,7 @@ export default function BitacoraPage() {
                             onClick={() => { setPhotoMode('bcs'); setAiResult(null); setBcsResult(null) }}
                             className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-black transition-all ${photoMode === 'bcs' ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-400'}`}
                           >
-                            <Beef className="w-3.5 h-3.5" /> Condición corporal
+                            <Footprints className="w-3.5 h-3.5" /> Condición corporal
                           </button>
                         </div>
 
@@ -1207,14 +1184,14 @@ export default function BitacoraPage() {
               )}
 
               {/* Actions */}
-              <div className="flex gap-3 px-5 pb-6 pt-4">
+              <div className="flex gap-3 px-6 pb-8 pt-4">
                 <button type="button" onClick={() => { setIsOpen(false); resetForm() }}
-                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-colors">
+                  className="flex-1 py-3 text-sm font-black text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
                   Cancelar
                 </button>
                 <button type="submit" disabled={saving || !form.title}
-                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
-                  {saving ? <><Loader2 className="w-4 h-4 animate-spin" />Guardando...</> : editingNote ? 'Guardar cambios' : 'Guardar nota'}
+                  className="flex-1 py-3 bg-green-600 text-white rounded-xl font-black text-sm shadow-md shadow-green-100 hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                  {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</> : editingNote ? 'Guardar cambios' : 'Guardar nota'}
                 </button>
               </div>
             </form>

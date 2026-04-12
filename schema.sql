@@ -73,13 +73,24 @@ CREATE TABLE herds (
 -- 6. Grazing Plans (Carta de Pastoreo)
 CREATE TABLE grazing_plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
     paddock_id UUID REFERENCES paddocks(id) ON DELETE CASCADE,
     herd_id UUID REFERENCES herds(id) ON DELETE CASCADE,
+    herd_ids JSONB,
     entry_date DATE NOT NULL,
     exit_date DATE,
+    actual_entry_date DATE,
+    actual_exit_date DATE,
     planned_recovery_days INT,
-    status VARCHAR(50) CHECK (status IN ('PLANNED', 'ACTIVE', 'COMPLETED')) DEFAULT 'PLANNED',
+    status VARCHAR(50) CHECK (status IN ('PLANNED', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'HISTORY')) DEFAULT 'PLANNED',
     actual_adh_consumed DECIMAL(10, 2) DEFAULT 0,
+    temporary_animals JSONB,
+    notes TEXT,
+    exit_notes TEXT,
+    exit_dry_matter_kg_ha DECIMAL(10, 2),
+    target_remnant DECIMAL(10, 2),
+    grace_days INT,
+    ai_analysis JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

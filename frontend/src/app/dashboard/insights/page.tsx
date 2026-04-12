@@ -8,7 +8,7 @@ import {
   CheckCircle, Info, Sparkles, BarChart3, Target, Camera,
   Loader2, RefreshCw, Sun, Snowflake, Scale, CalendarDays,
   Zap
-, DollarSign, Beef, ArrowUpRight, ArrowDownRight, Globe, MapPin} from 'lucide-react'
+} from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface InsightCard {
@@ -27,27 +27,8 @@ interface InsightCard {
 
 type Score = { value: number; label: string; color: string }
 
-const CATEGORIAS_CONFIG: Record<string, { emoji: string; color: string; bg: string; defaultWeight: number }> = {
-  NOVILLOS:    { emoji: '🐂', color: 'text-green-700',  bg: 'bg-green-50 border-green-100',    defaultWeight: 380 },
-  NOVILLITOS:  { emoji: '🐂', color: 'text-emerald-700',bg: 'bg-emerald-50 border-emerald-100', defaultWeight: 280 },
-  VAQUILLONAS: { emoji: '🐄', color: 'text-teal-700',   bg: 'bg-teal-50 border-teal-100',      defaultWeight: 300 },
-  TERNEROS:    { emoji: '🐄', color: 'text-lime-700',   bg: 'bg-lime-50 border-lime-100',       defaultWeight: 150 },
-  TERNERAS:    { emoji: '🐄', color: 'text-yellow-700', bg: 'bg-yellow-50 border-yellow-100',   defaultWeight: 130 },
-  VACAS:       { emoji: '🐄', color: 'text-amber-700',  bg: 'bg-amber-50 border-amber-100',     defaultWeight: 420 },
-  TOROS:       { emoji: '🐂', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-100',   defaultWeight: 600 },
-  MEJ:         { emoji: '🐂', color: 'text-red-700',    bg: 'bg-red-50 border-red-100',         defaultWeight: 350 },
-  BUBALINOS:   { emoji: '🦬', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-100',   defaultWeight: 500 },
-}
-
-// CME Live Cattle LE=F is in USD per cwt (100 lbs = 45.36 kg)
-// Convert to USD/kg: price_cwt / 100 / 2.20462
-const cwtToKg = (usdCwt: number) => usdCwt / 100 / 2.20462
-
 function fmt(n: number, digits = 0) {
   return n.toLocaleString('es-AR', { minimumFractionDigits: digits, maximumFractionDigits: digits })
-}
-function fmtUsd(n: number) {
-  return n.toLocaleString('es-AR', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -127,9 +108,6 @@ export default function InsightsPage() {
   const [aiRecommendation, setAiRecommendation] = useState<string | null>(null)
   const [loadingAi, setLoadingAi] = useState(false)
 
-  const [mercado, setMercado] = useState<any>(null)
-  const [lastMarketUpdate, setLastMarketUpdate] = useState<string | null>(null)
-
 
   const today = new Date().toISOString().split('T')[0]
   const month = new Date().toLocaleString('es', { month: 'long', year: 'numeric' })
@@ -139,13 +117,12 @@ export default function InsightsPage() {
     if (!user) return
     setRefreshing(true)
     try {
-      const [paddocksRes, plansRes, herdsRes, eventsRes, notesRes, mercadoRes] = await Promise.all([
+      const [paddocksRes, plansRes, herdsRes, eventsRes, notesRes] = await Promise.all([
         apiFetch('/api/paddocks').catch(() => null),
         apiFetch('/api/grazing-plans').catch(() => null),
         apiFetch('/api/herds').catch(() => null),
         apiFetch('/api/farm-events').catch(() => null),
         apiFetch('/api/field-notes').catch(() => null),
-        fetch('/api/mercado').catch(() => null),
       ])
 
       setPaddocks(paddocksRes?.ok ? (await paddocksRes.json()).paddocks ?? [] : [])
@@ -153,11 +130,6 @@ export default function InsightsPage() {
       setHerds(herdsRes?.ok ? (await herdsRes.json()).herds ?? [] : [])
       setFarmEvents(eventsRes?.ok ? (await eventsRes.json()).events ?? [] : [])
       setFieldNotes(notesRes?.ok ? (await notesRes.json()).notes ?? [] : [])
-      if (mercadoRes?.ok) {
-        const m = await mercadoRes.json()
-        setMercado(m)
-        if (m.cachedAt) setLastMarketUpdate(new Date(m.cachedAt).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }))
-      }
 
     } catch (err) {
       console.error('Insights loadData error:', err)
@@ -268,38 +240,6 @@ export default function InsightsPage() {
     setLoadingAi(false)
   }
 
-  
-  // ── Valuación calculations ─────────────────────────────────────────────────
-  const valuacion = useMemo(() => {
-    if (!mercado?.argentina?.categorias || herds.length === 0) return null
-    const usdArs = mercado.global?.usd_ars ?? null
-    let totalArs = 0
-    const byHerd = herds.map((h: any) => {
-      const cat = (h.categoria || '').toUpperCase()
-      const pricePerKg = mercado.argentina.categorias[cat] ?? mercado.argentina.insc_kg_vivo ?? null
-      const head = Number(h.head_count) || 0
-      const weight = Number(h.avg_weight_kg) || CATEGORIAS_CONFIG[cat]?.defaultWeight || 350
-      const totalKg = head * weight
-      const valueArs = pricePerKg ? pricePerKg * totalKg : null
-      if (valueArs) totalArs += valueArs
-      return { ...h, cat, pricePerKg, head, weight, totalKg, valueArs }
-    })
-    const totalUsd = usdArs && totalArs > 0 ? totalArs / usdArs : null
-    return { byHerd, totalArs, totalUsd }
-  }, [herds, mercado])
-
-  const cmeInArs = useMemo(() => {
-    if (!mercado?.global?.LE_usd_cwt || !mercado?.global?.usd_ars) return null
-    const leKgUsd = cwtToKg(mercado.global.LE_usd_cwt)
-    const leKgArs = leKgUsd * mercado.global.usd_ars
-    return { leKgUsd, leKgArs }
-  }, [mercado])
-
-  const arg = mercado?.argentina
-  const glob = mercado?.global
-  const hasArgData = arg?.insc_kg_vivo && arg.insc_kg_vivo > 0
-  const hasGlobData = glob?.LE_usd_cwt && glob.LE_usd_cwt > 0
-
   // ── Insight cards ──────────────────────────────────────────────────────────
   const cards: InsightCard[] = [
     {
@@ -309,13 +249,13 @@ export default function InsightsPage() {
       subtitle: `${totalAnimals} animales · ${totalEV.toFixed(1)} EV totales en ${totalHectares.toFixed(0)} ha`,
       trend: stockingRate > 1.8 ? 'warning' : stockingRate > 0.3 ? 'ok' : 'neutral',
       icon: <Scale className="w-5 h-5" />,
-      color: 'bg-blue-50',
+      color: 'bg-gray-50',
       badge: stockingOptimal ? 'Óptimo' : stockingRate > 1.5 ? 'Alta' : stockingRate > 0 ? 'Baja' : undefined,
       badgeColor: stockingOptimal ? 'bg-green-100 text-green-700' : stockingRate > 1.5 ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700',
-      detail: 'La carga animal óptima en pastoreo rotativo intensivo es 0.8–1.5 EV/ha. Cargas superiores sin rotación adecuada generan erosión y pérdida de biodiversidad forrajera.',
+      detail: 'La carga animal óptima en pastoreo rotativo intensivo es 0.8–1.5 EV/ha.',
       recommendation: stockingRate > 1.8
-        ? '🔴 Carga excesiva. Considerá reducir el rodeo o aumentar la superficie grazable.'
-        : stockingOptimal ? '✓ Carga dentro del rango óptimo holístico. Mantené el seguimiento.'
+        ? 'Carga excesiva. Considerá reducir el rodeo o aumentar la superficie grazable.'
+        : stockingOptimal ? 'Carga dentro del rango óptimo holístico.'
         : 'Registrá el peso promedio de tus animales para un cálculo más preciso de EV.',
     },
     {
@@ -325,17 +265,17 @@ export default function InsightsPage() {
       subtitle: lastBiomassNote
         ? `IA Gemini · ${new Date(lastBiomassNote.created_at).toLocaleDateString('es')}`
         : avgPaddockMs ? `Promedio ${paddocks.filter(p => p.dry_matter_kg_ha > 0).length} potreros`
-        : 'Usá análisis de fotos IA en "Mi Campo" para registrar',
+        : 'Analizá fotos IA en Bitácora para registrar',
       trend: bestMs ? (bestMs > 1500 ? 'up' : bestMs > 800 ? 'neutral' : 'down') : 'neutral',
       icon: <Leaf className="w-5 h-5" />,
-      color: 'bg-green-50',
-      badge: lastBiomassNote ? '📷 IA' : avgPaddockMs ? 'NDVI' : undefined,
+      color: 'bg-gray-50',
+      badge: lastBiomassNote ? 'IA' : avgPaddockMs ? 'NDVI' : undefined,
       badgeColor: 'bg-violet-100 text-violet-700',
-      detail: 'El umbral mínimo de remanente post-pastoreo para no erosionar el suelo es 800–1000 kg MS/ha. Entrar antes puede comprometer la recuperación del pasto y la cobertura del suelo.',
+      detail: 'El umbral mínimo de remanente post-pastoreo para no erosionar el suelo es 800–1000 kg MS/ha.',
       recommendation: bestMs && bestMs < 1000
-        ? '⚠️ Biomasa baja. Extendé el descanso de este potrero y evaluá suplementación.'
-        : bestMs ? '✓ Nivel de biomasa adecuado para planificar el próximo ingreso.'
-        : '📷 Fotografiá tus pasturas con la Bitácora o desde "Mi Campo" para análisis IA automático.',
+        ? 'Biomasa baja. Extendé el descanso de este potrero y evaluá suplementación.'
+        : bestMs ? 'Nivel de biomasa adecuado.'
+        : 'Fotografiá tus pasturas desde Bitácora para análisis IA automático.',
     },
     {
       id: 'rest_season',
@@ -344,13 +284,13 @@ export default function InsightsPage() {
       subtitle: `Período óptimo de descanso en ${season.name.toLowerCase()} para zona templada`,
       trend: restingPaddocks.length >= 2 ? 'ok' : 'warning',
       icon: season.name === 'Invierno' ? <Snowflake className="w-5 h-5" /> : <Sun className="w-5 h-5" />,
-      color: season.name === 'Invierno' ? 'bg-sky-50' : season.name === 'Verano' ? 'bg-amber-50' : 'bg-green-50',
-      badge: `${season.icon} ${season.name}`,
-      badgeColor: 'bg-emerald-100 text-emerald-700',
-      detail: `En ${season.name.toLowerCase()}, el pasto ${season.name === 'Invierno' ? 'crece muy lento' : season.name === 'Verano' ? 'crece rápido pero puede estresarse por calor' : 'crece activamente'}. El factor de crecimiento estimado es ×${season.growthFactor}. Respetar los días de descanso mínimos es crítico para no erosionar el potrero.`,
+      color: 'bg-gray-50',
+      badge: season.name,
+      badgeColor: 'bg-gray-100 text-gray-600',
+      detail: `En ${season.name.toLowerCase()}, el factor de crecimiento estimado es ×${season.growthFactor}.`,
       recommendation: restingPaddocks.length < 2
-        ? `⚠️ Con pocos potreros en descanso, es difícil cumplir los ${season.restDaysMin} días mínimos de ${season.name.toLowerCase()}. Considerá aumentar subdivisiones.`
-        : `✓ ${restingPaddocks.length} potreros en descanso. Verificá que ninguno tenga menos de ${season.restDaysMin} días desde el último pastoreo.`,
+        ? `Con pocos potreros en descanso es difícil cumplir los ${season.restDaysMin} días mínimos.`
+        : `${restingPaddocks.length} potreros en descanso. Verificá que ninguno tenga menos de ${season.restDaysMin} días.`,
     },
     {
       id: 'rotation',
@@ -359,13 +299,13 @@ export default function InsightsPage() {
       subtitle: `${restingPaddocks.length} de ${paddocks.length} potreros · ${daysSinceLastMove ?? '—'} días desde último movimiento`,
       trend: rotationRatio > 0.65 ? 'ok' : rotationRatio > 0.4 ? 'neutral' : 'warning',
       icon: <RefreshCw className="w-5 h-5" />,
-      color: 'bg-purple-50',
-      detail: 'En pastoreo holístico bien manejado, entre el 65–80% de los potreros deberían estar en descanso simultáneamente. Esto garantiza que el pasto complete su ciclo reproductivo antes del siguiente pastoreo.',
+      color: 'bg-gray-50',
+      detail: 'En pastoreo holístico bien manejado, entre el 65–80% deberían estar en descanso.',
       recommendation: rotationRatio > 0.65
-        ? '✓ Excelente distribución de descanso. El ciclo de rotación está bien equilibrado.'
+        ? 'Excelente distribución de descanso.'
         : rotationRatio > 0.4
-        ? 'Hay oportunidad de mejorar. Intentá mover el rebaño más frecuentemente para aumentar el porcentaje en descanso.'
-        : '🔴 Baja proporción en descanso. El sistema puede estar subpastoreando o sobreconcentrando la presión de pastoreo.',
+        ? 'Hay oportunidad de mejorar. Mové el rebaño más frecuentemente.'
+        : 'Baja proporción en descanso. El sistema puede estar sobreconcentrando la presión.',
     },
     {
       id: 'daily_capacity',
@@ -378,38 +318,36 @@ export default function InsightsPage() {
         ? (forecastedDaysAvailable > 30 ? 'ok' : forecastedDaysAvailable > 14 ? 'neutral' : 'warning')
         : 'neutral',
       icon: <Target className="w-5 h-5" />,
-      color: 'bg-orange-50',
-      badge: forecastedDaysAvailable && forecastedDaysAvailable < 15 ? '⚠️ Crítico' : undefined,
+      color: 'bg-gray-50',
+      badge: forecastedDaysAvailable && forecastedDaysAvailable < 15 ? 'Crítico' : undefined,
       badgeColor: 'bg-red-100 text-red-700',
-      detail: `Con ${totalEV.toFixed(1)} EV y una exigencia de ~11 kg MS/EV/día, tu rodeo consume ${Math.round(dailyDemandKg).toLocaleString()} kg MS por día. El balance usa el 60% de la MS disponible como factor de cosecha eficiente (recomendado en pastoreo holístico).`,
+      detail: `Con ${totalEV.toFixed(1)} EV y ~11 kg MS/EV/día, tu rodeo consume ${Math.round(dailyDemandKg).toLocaleString()} kg MS por día.`,
       recommendation: forecastedDaysAvailable && forecastedDaysAvailable < 15
-        ? '🔴 Autonomía crítica. Evaluá suplementación inmediata o movimiento urgente del rebaño.'
+        ? 'Autonomía crítica. Evaluá suplementación inmediata.'
         : forecastedDaysAvailable
-        ? '✓ Autonomía razonable. Monitoreá semanalmente y ajustá el ritmo de rotación.'
-        : 'Registrá MS en tus potreros con análisis de fotos IA para calcular la autonomía forrajera.',
+        ? 'Autonomía razonable. Monitorea semanalmente.'
+        : 'Registrá MS en potreros para calcular la autonomía forrajera.',
     },
     {
       id: 'animal_condition',
       title: 'Condición corporal',
-      value: avgConditionScore
-        ? `${avgConditionScore}/5 CC`
-        : 'Sin análisis IA',
+      value: avgConditionScore ? `${avgConditionScore}/5 CC` : 'Sin análisis IA',
       subtitle: lastConditionNote
         ? `Análisis Gemini · ${new Date(lastConditionNote.created_at).toLocaleDateString('es')} · ${totalAnimals} animales`
-        : 'Fotografiá animales en la Bitácora para análisis IA de condición corporal',
+        : 'Fotografiá animales en Bitácora para análisis IA',
       trend: avgConditionScore
         ? (avgConditionScore >= 3.5 ? 'ok' : avgConditionScore >= 2.5 ? 'neutral' : 'down')
         : 'neutral',
       icon: <Camera className="w-5 h-5" />,
-      color: 'bg-violet-50',
-      badge: avgConditionScore ? '📷 IA Gemini' : undefined,
+      color: 'bg-gray-50',
+      badge: avgConditionScore ? 'IA Gemini' : undefined,
       badgeColor: 'bg-violet-100 text-violet-700',
-      detail: 'La condición corporal (CC) en escala 1–5 es el indicador más importante de la nutrición animal. CC < 2.5 indica subnutrición severa. CC 3–3.5 es el rango objetivo al servicio. El análisis de imagen IA puede estimarla a partir de fotografías del costillar.',
+      detail: 'La condición corporal (CC) en escala 1–5: CC < 2.5 indica subnutrición severa. CC 3–3.5 es el objetivo al servicio.',
       recommendation: avgConditionScore && avgConditionScore < 2.5
-        ? '🔴 Condición corporal baja. Evaluá suplementación proteica o energética urgente.'
+        ? 'Condición corporal baja. Evaluá suplementación protéica urgente.'
         : avgConditionScore && avgConditionScore >= 3
-        ? '✓ Condición corporal buena. Seguí monitoreando especialmente en períodos de servicio y preparto.'
-        : '📷 Fotografiá tus animales desde la Bitácora para obtener estimación de CC por IA Gemini.',
+        ? 'Condición corporal buena.'
+        : 'Fotografiá tus animales desde Bitácora para estimación de CC.',
     },
     {
       id: 'paddock_capacity',
@@ -417,16 +355,14 @@ export default function InsightsPage() {
       value: paddockCapacities[0] ? `${paddockCapacities[0].evDays} días` : '—',
       subtitle: paddockCapacities[0]
         ? `${paddockCapacities[0].name} · ${paddockCapacities[0].dry_matter_kg_ha?.toLocaleString()} kg MS/ha · ${paddockCapacities[0].area_ha?.toFixed(1)} ha`
-        : 'Con datos de MS en tus potreros verás cuál listo para pastoreo',
-      trend: paddockCapacities[0]?.evDays > 7 ? 'ok' : paddockCapacities[0] ? 'neutral' : 'neutral',
+        : 'Con datos de MS verás cuál está listo',
+      trend: paddockCapacities[0]?.evDays > 7 ? 'ok' : 'neutral',
       icon: <Zap className="w-5 h-5" />,
-      color: 'bg-lime-50',
-      badge: paddockCapacities[0] ? '🔝 Más días' : undefined,
-      badgeColor: 'bg-lime-100 text-lime-700',
-      detail: `Los días de autonomía por potrero se calculan como (MS disponible × área × 60%) / demanda diaria. Esto indica cuántos días el rebaño puede pastorear ese potrero a ${Math.round(dailyDemandKg)} kg MS/día de consumo.`,
+      color: 'bg-gray-50',
+      detail: 'Días de autonomía = (MS × ha × 60%) / demanda diaria.',
       recommendation: paddockCapacities[0]
-        ? `El potrero "${paddockCapacities[0].name}" tiene la mayor oferta disponible (${Math.round(paddockCapacities[0].totalMs).toLocaleString()} kg MS totales aprovechables).`
-        : 'Registrá análisis de materia seca en tus potreros para ver cuáles tienen mayor capacidad.',
+        ? `"${paddockCapacities[0].name}" tiene la mayor oferta disponible.`
+        : 'Registrá análisis de materia seca.',
     },
     {
       id: 'events',
@@ -440,13 +376,13 @@ export default function InsightsPage() {
             return `Próximo: ${ev0 ? edLabel + ' · ' + ev0.title : '—'}`
           })()
         : 'Agendá servicio, vacunación y otras fechas críticas',
-      trend: upcoming30.length > 0 ? 'neutral' : 'neutral',
+      trend: 'neutral',
       icon: <CalendarDays className="w-5 h-5" />,
-      color: 'bg-yellow-50',
-      detail: 'Los eventos de servicio (toros al rodeo), parición, vacunación y destete impactan directamente en la demanda forrajera y la planificación del pastoreo. Anticiparlos permite ajustar la carga animal.',
+      color: 'bg-gray-50',
+      detail: 'Los eventos de servicio, parición y vacunación impactan la demanda forrajera.',
       recommendation: upcoming30.length > 0
-        ? 'Verificá que el balance forrajero contemple los cambios de carga animal asociados a estos eventos.'
-        : 'Sin eventos próximos. Usá la Agenda para planificar servicio, vacunaciones y parición.',
+        ? 'Verificá que el balance forrajero contemple los cambios de carga.'
+        : 'Sin eventos próximos. Usá la Agenda para planificar.',
     },
   ]
 
@@ -463,15 +399,10 @@ export default function InsightsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Análisis · {month}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-sm font-black text-gray-700">
-              {season.icon} {season.name}
-            </span>
-            <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-              Descanso recomendado: {season.restDaysMin}–{season.restDaysMax} días
-            </span>
-          </div>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Insights</h1>
+          <p className="text-sm text-gray-500 font-medium mt-1">
+            Análisis holístico de tu campo · {season.name} · Descanso óptimo: {season.restDaysMin}–{season.restDaysMax} días
+          </p>
         </div>
         <button
           onClick={loadData}
@@ -521,122 +452,33 @@ export default function InsightsPage() {
         </div>
       </div>
 
-      {/* AI Recommendation */}
-      <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-6 text-white">
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-green-200" />
-            <h3 className="text-sm font-black uppercase tracking-widest text-green-100">Recomendación del día</h3>
+      {/* AI Recommendation — minimal white card */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <h3 className="text-sm font-black text-gray-900 mb-1">Recomendación del día</h3>
+            {aiRecommendation ? (
+              <p className="text-sm text-gray-600 leading-relaxed">{aiRecommendation}</p>
+            ) : (
+              <p className="text-sm text-gray-500 leading-relaxed">
+                {score.value >= 75
+                  ? `Tu campo está en buenas condiciones para ${season.name.toLowerCase()}. Con ${restingPaddocks.length} potreros en descanso, respetá el período de ${season.restDaysMin}–${season.restDaysMax} días.`
+                  : score.value >= 50
+                  ? `Hay oportunidades de mejora. Priorizá aumentar los períodos de descanso (mínimo ${season.restDaysMin} días en ${season.name.toLowerCase()}).`
+                  : `Tu sistema necesita atención urgente. Reducir la carga o aumentar subdivisiones puede mejorar rápidamente.`}
+              </p>
+            )}
           </div>
           <button
             onClick={generateAiInsight}
             disabled={loadingAi}
-            className="shrink-0 flex items-center gap-1.5 text-[10px] font-bold bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors"
+            className="shrink-0 flex items-center gap-1.5 text-[10px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-xl transition-colors"
           >
             {loadingAi ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
             {loadingAi ? 'Analizando...' : 'Generar con IA'}
           </button>
         </div>
-        {aiRecommendation ? (
-          <p className="text-sm leading-relaxed text-green-50">{aiRecommendation}</p>
-        ) : (
-          <div>
-            <p className="text-sm leading-relaxed text-green-100 mb-2">
-              {score.value >= 75
-                ? `${season.icon} Tu campo está en buenas condiciones para ${season.name.toLowerCase()}. Con ${restingPaddocks.length} potreros en descanso y ${totalAnimals} animales, el período de descanso de ${season.restDaysMin}–${season.restDaysMax} días es clave en esta época.`
-                : score.value >= 50
-                ? `Hay oportunidades de mejora. Priorizá aumentar los períodos de descanso (mínimo ${season.restDaysMin} días en ${season.name.toLowerCase()}) y registrá análisis de biomasa con IA.`
-                : `Tu sistema necesita atención urgente. Reducir la carga animal o aumentar subdivisiones puede mejorar rápidamente la condición del forraje.`}
-            </p>
-            <p className="text-[10px] text-green-300 italic">Presioná "Generar con IA" para análisis personalizado basado en Gemini.</p>
-          </div>
-        )}
       </div>
-
-      
-      {/* ── BLOQUE PATRIMONIAL Y MERCADO ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-gray-500" />
-            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Patrimonio y Mercado</h3>
-            {lastMarketUpdate && (
-              <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full ml-2">
-                Actualizado: {lastMarketUpdate}
-              </span>
-            )}
-          </div>
-        </div>
-        
-        {valuacion ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-5 text-white shadow-lg shadow-green-600/20">
-              <p className="text-[9px] font-black text-white/70 tracking-widest uppercase mb-1">Valor total de la hacienda</p>
-              <p className="text-4xl font-black leading-none text-white">
-                ${valuacion.totalArs >= 1_000_000 ? `${(valuacion.totalArs / 1_000_000).toFixed(1)}M` : fmt(valuacion.totalArs)}
-              </p>
-              <p className="text-[11px] font-bold text-white/70 mt-1">pesos argentinos</p>
-              <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-2">
-                <Beef className="w-3.5 h-3.5 text-white/70" />
-                <p className="text-[10px] text-white/80 font-bold">
-                  {totalAnimals.toLocaleString()} cabezas · {herds.length} lotes
-                </p>
-              </div>
-            </div>
-            <div className={`rounded-2xl p-5 border shadow-sm flex flex-col justify-between ${valuacion.totalUsd ? 'bg-slate-800 border-slate-700' : 'bg-gray-50 border-gray-100'}`}>
-              <p className={`text-[9px] font-black tracking-widest uppercase mb-1 ${valuacion.totalUsd ? 'text-white/60' : 'text-gray-400'}`}>Valor en USD (BNA)</p>
-              {valuacion.totalUsd ? (
-                <>
-                  <p className="text-4xl font-black leading-none text-white">{fmtUsd(valuacion.totalUsd)}</p>
-                  <p className="text-[11px] font-bold text-white/50 mt-1">dólares estadounidenses</p>
-                </>
-              ) : (
-                <p className="text-gray-500 text-xs font-bold mt-2">Dólar oficial no disponible</p>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center mb-6">
-            <p className="text-xs text-gray-500">Registrá tus rebaños para calcular la valuación económica estimativa basada en SIO Carnes.</p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="border border-gray-100 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <MapPin className="w-3.5 h-3.5 text-green-600" />
-              <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">SIO Carnes · Argentina</p>
-            </div>
-            {hasArgData ? (
-              <div>
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Índice Novillo (INSC)</p>
-                <p className="text-2xl font-black text-green-700">${fmt(arg.insc_kg_vivo)} <span className="text-[10px] text-gray-400 font-normal">$/kg vivo</span></p>
-              </div>
-            ) : <p className="text-[10px] text-gray-400">Datos no disponibles</p>}
-          </div>
-
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 text-white">
-            <div className="flex items-center gap-2 mb-3">
-              <Globe className="w-3.5 h-3.5 text-blue-400" />
-              <p className="text-[10px] font-black text-white/50 tracking-widest uppercase">CME Group · Mundial</p>
-            </div>
-            {hasGlobData ? (
-              <div>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-black text-white">{fmt(glob.LE_usd_cwt, 2)}</p>
-                  <p className="text-[10px] text-white/50">USD/cwt (Live Cattle)</p>
-                </div>
-                {cmeInArs && (
-                  <p className="text-[10px] text-white/40 mt-1">
-                    Equivalente ARS: <span className="font-bold text-white/70">${fmt(cmeInArs.leKgArs)}/kg vivo</span>
-                  </p>
-                )}
-              </div>
-            ) : <p className="text-[10px] text-white/40">Datos no disponibles</p>}
-          </div>
-        </div>
-      </div>
-
 
       {/* Insight cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -729,17 +571,17 @@ function InsightCardComponent({ card }: { card: InsightCard }) {
   const [expanded, setExpanded] = useState(false)
 
   const trendIcon = {
-    up: <TrendingUp className="w-4 h-4 text-green-500" />,
-    down: <TrendingDown className="w-4 h-4 text-red-500" />,
+    up:      <TrendingUp className="w-4 h-4 text-green-500" />,
+    down:    <TrendingDown className="w-4 h-4 text-red-500" />,
     neutral: <Minus className="w-4 h-4 text-gray-400" />,
     warning: <AlertTriangle className="w-4 h-4 text-yellow-500" />,
-    ok: <CheckCircle className="w-4 h-4 text-green-500" />,
+    ok:      <CheckCircle className="w-4 h-4 text-green-500" />,
   }
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow cursor-pointer" onClick={() => setExpanded(!expanded)}>
       <div className="flex items-start justify-between mb-3">
-        <div className={`w-10 h-10 rounded-xl ${card.color} flex items-center justify-center text-gray-700`}>
+        <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-500">
           {card.icon}
         </div>
         <div className="flex items-center gap-1.5">

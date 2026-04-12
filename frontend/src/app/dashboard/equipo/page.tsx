@@ -10,6 +10,7 @@ import {
   Loader2, Check, X, Eye, Copy, CheckCheck,
   ChevronRight, Pencil, Save, Star, AlertCircle, BadgePlus
 } from 'lucide-react'
+import { AppHeader } from '@/components/AppHeader'
 
 // ── Role config ────────────────────────────────────────────────────────────────
 const PRESET_ROLES = [
@@ -364,6 +365,7 @@ export default function EquipoPage() {
 
   return (
     <div className="space-y-5">
+      <AppHeader title="Equipo" subtitle="Gestión de miembros y permisos" />
 
       {/* Read-only banner for guests */}
       {!isOwner && (
@@ -639,16 +641,16 @@ export default function EquipoPage() {
 
       {/* ── Edit permissions drawer ───────────────────────────────────────────── */}
       {editMember && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-3xl z-10">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="sticky top-0 bg-white/98 backdrop-blur px-6 py-5 border-b border-gray-100 flex items-center justify-between rounded-t-3xl z-10 shrink-0">
               <div>
-                <h2 className="font-black text-gray-900 text-base">Editar accesos</h2>
-                <p className="text-xs text-gray-500">
+                <h2 className="text-lg font-black text-gray-950 tracking-tight">Editar accesos</h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">
                   {[editMember.first_name, editMember.last_name].filter(Boolean).join(' ') || editMember.email}
                 </p>
               </div>
-              <button onClick={() => setEditMember(null)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500">
+              <button onClick={() => setEditMember(null)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -707,14 +709,14 @@ export default function EquipoPage() {
                 <button
                   type="button"
                   onClick={() => setEditMember(null)}
-                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-colors"
+                  className="flex-1 py-3 text-sm font-black text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={savePermissions}
                   disabled={savingPerms}
-                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-green-600 text-white rounded-xl font-black text-sm shadow-md shadow-green-100 hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {savingPerms
                     ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -731,11 +733,11 @@ export default function EquipoPage() {
 
       {/* ── Invite Modal ──────────────────────────────────────────────────────── */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-3xl z-10">
-              <h2 className="font-black text-gray-900 text-base">Invitar al equipo</h2>
-              <button onClick={() => setModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="sticky top-0 bg-white/98 backdrop-blur px-6 py-5 border-b border-gray-100 flex items-center justify-between rounded-t-3xl z-10 shrink-0">
+              <h2 className="text-lg font-black text-gray-950 tracking-tight">Invitar al equipo</h2>
+              <button onClick={() => setModalOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -846,14 +848,14 @@ export default function EquipoPage() {
 
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setModalOpen(false)}
-                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-colors">
+                    className="flex-1 py-3 text-sm font-black text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
                     Cancelar
                   </button>
                   <button type="submit" disabled={inviting || !inviteEmail}
-                    className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                    className="flex-1 py-3 bg-green-600 text-white rounded-xl font-black text-sm shadow-md shadow-green-100 hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
                     {inviting
-                      ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando...</>
-                      : <><Mail className="w-4 h-4" />Enviar invitación</>
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
+                      : <><Mail className="w-4 h-4" /> Enviar invitación</>
                     }
                   </button>
                 </div>
@@ -865,14 +867,14 @@ export default function EquipoPage() {
 
       {/* ── New Custom Role Modal ─────────────────────────────────────────────── */}
       {newRoleModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-3xl z-10">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-20 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
-                <h2 className="font-black text-gray-900 text-base">Crear rol personalizado</h2>
-                <p className="text-xs text-gray-500">Define un rol específico para tu campo</p>
+                <h2 className="text-lg font-black text-gray-950 tracking-tight">Rol personalizado</h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">Definir un nuevo rol operativo</p>
               </div>
-              <button onClick={() => setNewRoleModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500">
+              <button onClick={() => setNewRoleModalOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -921,11 +923,11 @@ export default function EquipoPage() {
 
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setNewRoleModalOpen(false)}
-                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm">
+                  className="flex-1 py-3 text-sm font-black text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
                   Cancelar
                 </button>
                 <button type="submit" disabled={savingRole || !newRoleLabel.trim()}
-                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm disabled:opacity-60 flex items-center justify-center gap-2">
+                  className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
                   {savingRole ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4" />}
                   Crear rol
                 </button>

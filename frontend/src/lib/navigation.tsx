@@ -1,29 +1,20 @@
 'use client'
 
-import { LayoutDashboard, Calendar, CalendarDays, Lightbulb, NotebookPen, Users, CheckSquare, TrendingUp } from 'lucide-react'
+import { LayoutDashboard, Calendar, CalendarDays, Lightbulb, NotebookPen, Users, CheckSquare } from 'lucide-react'
+import CowIcon from '@/components/CowIcon'
+
+
 
 const FieldIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <polygon points="3,12 8,4 16,4 21,12 16,20 8,20" />
-    <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-  </svg>
-)
-
-const HerdIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <line x1="1" y1="19" x2="23" y2="19" strokeWidth="1.5" />
-    <ellipse cx="7" cy="14" rx="3.5" ry="2" />
-    <line x1="4.5" y1="15.5" x2="4" y2="19" />
-    <line x1="6" y1="16" x2="6" y2="19" />
-    <line x1="8.5" y1="15.5" x2="9" y2="19" />
-    <line x1="8" y1="14.5" x2="10" y2="13.5" />
-    <circle cx="10.5" cy="13" r="1.2" />
-    <ellipse cx="16" cy="14.5" rx="3.5" ry="2" />
-    <line x1="13.5" y1="16" x2="13" y2="19" />
-    <line x1="15" y1="16.5" x2="15" y2="19" />
-    <line x1="18" y1="16" x2="18.5" y2="19" />
-    <line x1="18.5" y1="14.5" x2="20.5" y2="13.5" />
-    <circle cx="21" cy="13" r="1.2" />
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    {/* Outer field boundary */}
+    <rect x="2" y="4" width="20" height="16" rx="1.5" />
+    {/* Internal fence divider — horizontal */}
+    <line x1="2" y1="12" x2="22" y2="12" />
+    {/* Internal fence divider — vertical right */}
+    <line x1="14" y1="12" x2="14" y2="20" />
+    {/* Gate post hint on top-left sub-field */}
+    <line x1="8" y1="4" x2="8" y2="12" strokeWidth="1.25" strokeDasharray="2 2" />
   </svg>
 )
 
@@ -41,7 +32,7 @@ export type NavItem = {
 export const ALL_NAV_ITEMS: NavItem[] = [
   { name: 'Panel',               href: '/dashboard',                 icon: LayoutDashboard, permissionKey: 'dashboard'   },
   { name: 'Potreros',            href: '/dashboard/mi-campo',        icon: FieldIcon,       permissionKey: 'mi_campo'    },
-  { name: 'Rebaños',             href: '/dashboard/herds',           icon: HerdIcon,        permissionKey: 'rebanhos'    },
+  { name: 'Rebaños',             href: '/dashboard/herds',           icon: CowIcon,         permissionKey: 'rebanhos'    },
   { name: 'Agenda',              href: '/dashboard/agenda',          icon: CalendarDays,    permissionKey: 'agenda'      },
   { name: 'Planificador',        href: '/dashboard/grazing',         icon: Calendar,        permissionKey: 'planificador'},
   { name: 'Bitácora',            href: '/dashboard/bitacora',        icon: NotebookPen,     permissionKey: 'bitacora'    },
@@ -67,4 +58,4 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/tareas':    'tareas',
 }
 
-export { FieldIcon, HerdIcon }
+export { FieldIcon }

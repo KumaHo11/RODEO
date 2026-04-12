@@ -26,15 +26,16 @@ export async function GET(req: NextRequest) {
 
     const paddocks = await query(
       `SELECT
-         id, org_id, name, area_ha, current_status, is_grazable,
-         estimated_adh, dry_matter_kg_ha, current_ndvi,
-         previous_dry_matter_kg_ha, previous_ndvi_date, technical_data,
-         created_at, updated_at,
-         ST_AsGeoJSON(geom)::json AS boundary,
-         ST_AsGeoJSON(geom)::json AS geometry
-       FROM paddocks
-       WHERE org_id = $1
-       ORDER BY name ASC`,
+         p.id, p.org_id, p.name, p.area_ha, p.current_status, p.is_grazable,
+         p.estimated_adh, p.dry_matter_kg_ha, p.current_ndvi,
+         p.previous_dry_matter_kg_ha, p.previous_ndvi_date, p.technical_data,
+         p.created_at, p.updated_at,
+         ST_AsGeoJSON(p.geom)::json AS boundary,
+         ST_AsGeoJSON(p.geom)::json AS geometry,
+         (SELECT MAX(recorded_at) FROM biological_monitoring bm WHERE bm.paddock_id = p.id) as last_monitoring_date
+       FROM paddocks p
+       WHERE p.org_id = $1
+       ORDER BY p.name ASC`,
       [auth.orgId]
     )
 

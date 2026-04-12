@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       `SELECT id, org_id, title, event_type,
               TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
               TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
-              herd_id, paddock_id, description, status, created_at
+              herd_id, herd_ids, paddock_id, description, status, created_at
        FROM farm_events
        WHERE org_id = $1
        ORDER BY event_date ASC`,
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const body = await req.json()
-    const { title, event_type, event_date, end_date, herd_id, paddock_id, description, status } = body
+    const { title, event_type, event_date, end_date, herd_id, herd_ids, paddock_id, description, status } = body
 
     if (!title || !event_type || !event_date) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
@@ -70,15 +70,16 @@ export async function POST(req: NextRequest) {
       SCHEDULED: 'SCHEDULED', COMPLETED: 'COMPLETED', CANCELLED: 'CANCELLED',
     }
     const dbStatus = STATUS_UI_TO_DB[status] ?? 'SCHEDULED'
+    const finalHerdIds = Array.isArray(herd_ids) ? JSON.stringify(herd_ids) : null
 
     const result = await mutate(
       `INSERT INTO farm_events
-         (org_id, title, event_type, event_date, end_date, herd_id, paddock_id, description, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         (org_id, title, event_type, event_date, end_date, herd_id, herd_ids, paddock_id, description, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING id`,
       [
         auth.orgId, title, event_type, event_date,
-        end_date || null, herd_id || null, paddock_id || null,
+        end_date || null, herd_id || null, finalHerdIds, paddock_id || null,
         description || null, dbStatus,
       ]
     )

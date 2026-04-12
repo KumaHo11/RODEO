@@ -251,17 +251,19 @@ export default function TareasPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Stats pills */}
-          {[
-            { label: 'Pendientes', count: pendingCount, color: 'bg-amber-100 text-amber-700' },
-            { label: 'En proceso', count: inProgressCount, color: 'bg-blue-100 text-blue-700' },
-            { label: 'Completadas', count: doneCount, color: 'bg-green-100 text-green-700' },
-          ].map(s => (
-            <span key={s.label} className={`text-[10px] font-black px-3 py-1.5 rounded-xl ${s.color}`}>
-              {s.count} {s.label}
-            </span>
-          ))}
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Tareas</h1>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            {[
+              { label: 'Pendientes', count: pendingCount, color: 'bg-amber-100 text-amber-700' },
+              { label: 'En proceso', count: inProgressCount, color: 'bg-blue-100 text-blue-700' },
+              { label: 'Completadas', count: doneCount, color: 'bg-green-100 text-green-700' },
+            ].map(s => (
+              <span key={s.label} className={`text-[10px] font-black px-2.5 py-1 rounded-lg ${s.color}`}>
+                {s.count} {s.label}
+              </span>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {/* View toggle */}

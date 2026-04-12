@@ -37,6 +37,7 @@ export async function PATCH(
 
     const validFields = [
       'paddock_id', 'herd_id', 'herd_ids', 'entry_date', 'exit_date',
+      'actual_entry_date', 'actual_exit_date',
       'planned_recovery_days', 'status', 'temporary_animals', 'notes',
       'exit_notes', 'exit_dry_matter_kg_ha'
     ]

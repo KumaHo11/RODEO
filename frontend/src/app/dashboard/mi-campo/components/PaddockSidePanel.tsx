@@ -422,21 +422,21 @@ export default function PaddockSidePanel({
         </div>
       </div>
 
-        {/* Modal */}
+      {/* Modal */}
       {modalOpen && editingPaddock && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Modal header unificado */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
               <div>
-                <h3 className="text-base font-black text-gray-950 tracking-tight">{editingPaddock.name}</h3>
-                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
-                  {Number(editingPaddock.area_ha || 0).toFixed(1)} ha
+                <h3 className="text-lg font-black text-gray-950 tracking-tight">{editingPaddock.name}</h3>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">
+                  Potrero · {Number(editingPaddock.area_ha || 0).toFixed(1)} ha
                 </p>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all"
+                className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -538,139 +538,19 @@ export default function PaddockSidePanel({
 
             {/* ── TAB: DETALLE TÉCNICO ── */}
             {modalTab === 'tecnico' && (
-            <div className="px-6 py-5 flex-1 overflow-y-auto max-h-[70vh]">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {/* LEFT COLUMN */}
-              <div className="space-y-4">
-              {/* ─── NDVI + Tasa de Crecimiento ─── */}
-              {(ndviData[editingPaddock.id] || editingPaddock.current_ndvi != null) && (
-                <div className="space-y-2">
-                  <div className="p-3 bg-green-50 rounded-xl border border-green-100 flex items-center gap-3">
-                    <Satellite className="w-4 h-4 text-green-600 shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-[9px] font-black text-green-600 tracking-widest uppercase">NDVI Actual</p>
-                      <p className="text-lg font-black text-gray-900">
-                        {(ndviData[editingPaddock.id]?.averageNdvi ?? editingPaddock.current_ndvi)?.toFixed(3)}
-                      </p>
-                      <p className="text-[9px] text-gray-400">
-                        {ndviData[editingPaddock.id]?.source === 'sentinel-2-l2a'
-                          ? `Sentinel-2 · ${ndviData[editingPaddock.id]?.captureDate}`
-                          : 'Estimado'}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => refreshNdvi(editingPaddock as any)}
-                      disabled={ndviRefreshing}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-xl bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-all"
-                    >
-                      {ndviRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                      Actualizar
-                    </button>
-                  </div>
-                  {growthRate !== null && (
-                    <div className={`px-3 py-2 rounded-xl border flex items-center gap-2 ${
-                      growthRate >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'
-                    }`}>
-                      <TrendingUp className={`w-3.5 h-3.5 ${growthRate >= 0 ? 'text-emerald-600' : 'text-red-500'}`} />
-                      <div>
-                        <p className="text-[8px] font-black tracking-widest uppercase text-gray-400">Índice de Crecimiento</p>
-                        <p className={`text-sm font-black ${growthRate >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                          {growthRate >= 0 ? '+' : ''}{growthRate.toFixed(1)} kg MS/ha/día
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="px-6 py-5 flex-1 overflow-y-auto max-h-[70vh] space-y-5">
 
-              {/* ─── MATERIA SECA — Dato principal ─── */}
+              {/* ── HERO: Materia Seca — campo más importante ── */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase flex items-center gap-1.5">
-                    <BarChart3 className="w-3 h-3" /> Materia Seca Disponible
-                  </label>
+                  <p className="text-xs font-black text-gray-900 uppercase tracking-wider">Materia seca disponible</p>
                   {dryMatter !== '' && (
-                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700">
                       {Number(dryMatter).toLocaleString()} kg MS/ha
                     </span>
                   )}
                 </div>
-
-                {/* ── IA ANÁLISIS DE FOTOS — hero banner ── */}
-                <div className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 to-white overflow-hidden">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-violet-100/60 border-b border-violet-200">
-                    <Camera className="w-3.5 h-3.5 text-violet-600" />
-                    <p className="text-[10px] font-black text-violet-700 tracking-wide">ANÁLISIS IA DE PASTURAS</p>
-                    <span className="ml-auto text-[8px] font-black px-1.5 py-0.5 bg-violet-600 text-white rounded-full">Gemini Vision</span>
-                  </div>
-                  <div className="p-3 space-y-2">
-                    <p className="text-[9px] text-violet-600 font-bold">Subí hasta 5 fotos del potrero → la IA estima kg MS/ha automáticamente</p>
-                    <div className="flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={() => photosInputRef.current?.click()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-all"
-                      >
-                        <Camera className="w-3 h-3" />
-                        {bioPhotos.length === 0 ? 'Seleccionar fotos' : `${bioPhotos.length} foto${bioPhotos.length > 1 ? 's' : ''} seleccionada${bioPhotos.length > 1 ? 's' : ''}`}
-                      </button>
-                      {bioPhotos.length > 0 && (
-                        <button
-                          onClick={analyzeBioPhotos}
-                          disabled={bioAnalyzing}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold bg-white border border-violet-300 text-violet-700 rounded-lg hover:bg-violet-50 disabled:opacity-50 transition-all"
-                        >
-                          {bioAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Images className="w-3 h-3" />}
-                          {bioAnalyzing ? 'Analizando...' : 'Analizar'}
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      ref={photosInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []).slice(0, 5)
-                        setBioPhotos(files)
-                        setBioResults([])
-                        setBioError(null)
-                      }}
-                    />
-                    {bioPhotos.length > 0 && (
-                      <div className="flex gap-1 flex-wrap">
-                        {bioPhotos.map((f, i) => (
-                          <div key={i} className="relative">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={URL.createObjectURL(f)} alt="" className="w-10 h-10 rounded-lg object-cover border border-violet-200" />
-                            <button
-                              onClick={() => setBioPhotos(prev => prev.filter((_, j) => j !== i))}
-                              className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px]"
-                            >×</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {bioError && <p className="text-[9px] text-red-600 font-bold">{bioError}</p>}
-                    {bioResults.length > 0 && (
-                      <div className="bg-white rounded-lg px-3 py-2 border border-violet-200">
-                        <p className="text-[8px] font-black text-violet-500 uppercase tracking-widest">Resultado IA · {bioResults.length} foto{bioResults.length > 1 ? 's' : ''}</p>
-                        <p className="text-xl font-black text-violet-800">
-                          {Math.round(bioResults.reduce((s: number, r: any) => s + r.dry_matter_kg_ha, 0) / bioResults.length).toLocaleString()}
-                          <span className="text-xs font-bold text-violet-500 ml-1">kg MS/ha</span>
-                        </p>
-                        {dryMatter !== '' && Number(editingPaddock.area_ha) > 0 && (
-                          <p className="text-[9px] text-violet-600">Total potrero: {(Number(dryMatter) * Number(editingPaddock.area_ha)).toFixed(0)} kg MS</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Ingreso manual */}
-                <div className="space-y-1">
-                  <p className="text-[9px] font-bold text-gray-400">O ingresá el valor manualmente:</p>
+                <div className="flex items-center gap-2">
                   <input
                     type="number"
                     min="0"
@@ -678,200 +558,204 @@ export default function PaddockSidePanel({
                     step="50"
                     value={dryMatter}
                     onChange={e => setDryMatter(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder={`Estimado NDVI: ${ndviData[editingPaddock.id]?.estimatedAvailableDryMatterHa ?? '—'} kg MS/ha`}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all"
+                    placeholder={`Ej: ${ndviData[editingPaddock.id]?.estimatedAvailableDryMatterHa ?? 1800} kg MS/ha`}
+                    className="flex-1 bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3 text-base font-black text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-400 outline-none transition-all"
                   />
-                  {dryMatter !== '' && Number(editingPaddock.area_ha) > 0 && (
-                    <div className="p-2.5 bg-green-50 rounded-lg border border-green-100">
-                      <p className="text-[10px] text-green-700 font-bold">
-                        Total disponible: <strong>{(Number(dryMatter) * Number(editingPaddock.area_ha)).toFixed(0)} kg MS</strong>
-                        <span className="text-gray-400 font-normal ml-1">en {Number(editingPaddock.area_ha).toFixed(1)} ha</span>
+                  <span className="text-xs text-gray-400 font-bold whitespace-nowrap">kg/ha</span>
+                </div>
+                {dryMatter !== '' && Number(editingPaddock.area_ha) > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-xl border border-green-100">
+                    <BarChart3 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                    <p className="text-xs text-green-700 font-bold">
+                      Total: <strong>{(Number(dryMatter) * Number(editingPaddock.area_ha)).toFixed(0)} kg MS</strong>
+                      <span className="text-gray-400 font-normal ml-1">en {Number(editingPaddock.area_ha).toFixed(1)} ha</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Análisis IA fotos — colapsado y discreto */}
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border-b border-gray-200">
+                  <Camera className="w-3.5 h-3.5 text-gray-500" />
+                  <p className="text-[10px] font-black text-gray-600 tracking-wide">Analizar con IA (fotos de pastura)</p>
+                  <span className="ml-auto text-[8px] font-black px-1.5 py-0.5 bg-indigo-600 text-white rounded-full">Gemini</span>
+                </div>
+                <div className="p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => photosInputRef.current?.click()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all"
+                    >
+                      <Camera className="w-3 h-3" />
+                      {bioPhotos.length === 0 ? 'Subir fotos' : `${bioPhotos.length} foto${bioPhotos.length > 1 ? 's' : ''}`}
+                    </button>
+                    {bioPhotos.length > 0 && (
+                      <button
+                        onClick={analyzeBioPhotos}
+                        disabled={bioAnalyzing}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-all"
+                      >
+                        {bioAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Images className="w-3 h-3" />}
+                        {bioAnalyzing ? 'Analizando...' : 'Analizar'}
+                      </button>
+                    )}
+                  </div>
+                  <input ref={photosInputRef} type="file" accept="image/*" multiple className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []).slice(0, 5)
+                      setBioPhotos(files); setBioResults([]); setBioError(null)
+                    }}
+                  />
+                  {bioError && <p className="text-[9px] text-red-600 font-bold">{bioError}</p>}
+                  {bioResults.length > 0 && (
+                    <div className="bg-indigo-50 rounded-lg px-3 py-2 border border-indigo-100">
+                      <p className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">Resultado IA</p>
+                      <p className="text-lg font-black text-indigo-800">
+                        {Math.round(bioResults.reduce((s: number, r: any) => s + r.dry_matter_kg_ha, 0) / bioResults.length).toLocaleString()}
+                        <span className="text-xs font-bold text-indigo-500 ml-1">kg MS/ha</span>
                       </p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* ─── Balance Oferta / Demanda ─── */}
-              {dryMatter !== '' && (() => {
-                const oferta    = Number(dryMatter) * Number(editingPaddock.area_ha) * 0.5 // 50% factor holístico
-                const demandaDia = totalEV * 12
-                const diasAut   = demandaDia > 0 ? Math.round(oferta / demandaDia) : null
-                const deficit   = demandaDia > 0 && oferta < demandaDia
-                return (
-                  <div className={`rounded-xl border p-3 space-y-2 ${
-                    deficit ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-100'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <Scale className={`w-3.5 h-3.5 ${deficit ? 'text-red-500' : 'text-emerald-600'}`} />
-                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Balance MS — Oferta vs Demanda</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-white/70 rounded-lg p-2">
-                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Oferta (50%)</p>
-                        <p className="text-base font-black text-gray-800">{Math.round(oferta).toLocaleString()} <span className="text-[9px] font-bold text-gray-400">kg MS</span></p>
-                      </div>
-                      <div className="bg-white/70 rounded-lg p-2">
-                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Demanda/día</p>
-                        <p className="text-base font-black text-gray-800">{demandaDia.toFixed(0)} <span className="text-[9px] font-bold text-gray-400">kg MS</span></p>
-                      </div>
-                    </div>
-                    {diasAut !== null && (
-                      <div className="flex items-center justify-between bg-white/70 rounded-lg px-3 py-2">
-                        <p className="text-[9px] font-bold text-gray-500">Días de autonomía</p>
-                        <p className={`text-lg font-black ${deficit ? 'text-red-600' : 'text-emerald-700'}`}>{diasAut} días</p>
-                      </div>
-                    )}
-                    {deficit && (
-                      <div className="flex items-center gap-2 bg-red-100 rounded-lg px-3 py-2">
-                        <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                        <p className="text-[9px] font-bold text-red-700">Capacidad insuficiente para el rodeo actual. Considerá rotar o suplementar.</p>
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
-
-              </div>{/* end LEFT COLUMN */}
-
-              {/* RIGHT COLUMN: Tech toggles as compact pills */}
-              <div className="space-y-4">
-
-                {/* ── CONDICIONES con Toggle switches ── */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Condiciones del potrero</p>
-
-                  {/* Agua */}
-                  <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${ techData.hasWater ? 'bg-blue-100' : 'bg-gray-50'}`}>
-                        <Droplets className={`w-3.5 h-3.5 ${ techData.hasWater ? 'text-blue-500' : 'text-gray-300'}`} />
+              {/* NDVI */}
+              {(ndviData[editingPaddock.id] || editingPaddock.current_ndvi != null) && (
+                <div className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200">
+                  <Satellite className="w-4 h-4 text-green-600 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">NDVI satelital</p>
+                    <p className="text-sm font-black text-gray-900">
+                      {(ndviData[editingPaddock.id]?.averageNdvi ?? editingPaddock.current_ndvi)?.toFixed(3)}
+                      <span className="text-[9px] font-bold text-gray-400 ml-2">
+                        {ndviData[editingPaddock.id]?.source === 'sentinel-2-l2a' ? 'Sentinel-2' : 'Estimado'}
                       </span>
-                      <div>
-                        <p className="text-xs font-bold text-gray-700">Agua disponible</p>
-                        <p className="text-[9px] text-gray-400">{techData.hasWater ? 'Fuente de agua presente' : 'Sin agua en el potrero'}</p>
-                      </div>
-                    </div>
-                    <Toggle
-                      checked={!!techData.hasWater}
-                      onChange={() => setTechData({ ...techData, hasWater: !techData.hasWater })}
-                      colorClass="bg-blue-500"
-                    />
+                    </p>
                   </div>
+                  <button
+                    onClick={() => refreshNdvi(editingPaddock as any)}
+                    disabled={ndviRefreshing}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-all"
+                  >
+                    {ndviRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    Actualizar
+                  </button>
+                </div>
+              )}
 
-                  {/* Infraestructura */}
-                  <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${ techData.hasInfraIssues ? 'bg-orange-100' : 'bg-gray-50'}`}>
-                        <Wrench className={`w-3.5 h-3.5 ${ techData.hasInfraIssues ? 'text-orange-500' : 'text-gray-300'}`} />
-                      </span>
-                      <div>
-                        <p className="text-xs font-bold text-gray-700">Problemas de infraestructura</p>
-                        <p className="text-[9px] text-gray-400">{techData.hasInfraIssues ? 'Requiere atención' : 'Sin issues reportados'}</p>
-                      </div>
-                    </div>
-                    <Toggle
-                      checked={!!techData.hasInfraIssues}
-                      onChange={() => setTechData({ ...techData, hasInfraIssues: !techData.hasInfraIssues })}
-                      colorClass="bg-orange-500"
-                    />
-                  </div>
 
-                  {/* Malezas */}
-                  <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${ techData.hasPests ? 'bg-lime-100' : 'bg-gray-50'}`}>
-                        <Leaf className={`w-3.5 h-3.5 ${ techData.hasPests ? 'text-lime-600' : 'text-gray-300'}`} />
-                      </span>
-                      <div>
-                        <p className="text-xs font-bold text-gray-700">Presencia de malezas</p>
-                        <p className="text-[9px] text-gray-400">{techData.hasPests ? 'Malezas detectadas' : 'Pastura limpia'}</p>
-                      </div>
-                    </div>
-                    <Toggle
-                      checked={!!techData.hasPests}
-                      onChange={() => setTechData({ ...techData, hasPests: !techData.hasPests, weeds: !techData.hasPests ? (techData.weeds || []) : [] })}
-                      colorClass="bg-lime-500"
-                    />
-                  </div>
+              {/* Condiciones del potrero */}
+              <div className="space-y-1">
+                <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Condiciones del potrero</p>
 
-                  {/* Depredadores */}
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${ techData.hasPredators ? 'bg-red-100' : 'bg-gray-50'}`}>
-                        <ShieldAlert className={`w-3.5 h-3.5 ${ techData.hasPredators ? 'text-red-500' : 'text-gray-300'}`} />
-                      </span>
-                      <div>
-                        <p className="text-xs font-bold text-gray-700">Riesgo de depredadores</p>
-                        <p className="text-[9px] text-gray-400">{techData.hasPredators ? 'Alerta activa' : 'Sin reportes'}</p>
-                      </div>
+                {/* Agua */}
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${techData.hasWater ? 'bg-blue-100' : 'bg-gray-50'}`}>
+                      <Droplets className={`w-3.5 h-3.5 ${techData.hasWater ? 'text-blue-500' : 'text-gray-300'}`} />
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-gray-700">Agua disponible</p>
+                      <p className="text-[9px] text-gray-400">{techData.hasWater ? 'Fuente de agua presente' : 'Sin agua en el potrero'}</p>
                     </div>
-                    <Toggle
-                      checked={!!techData.hasPredators}
-                      onChange={() => setTechData({ ...techData, hasPredators: !techData.hasPredators })}
-                      colorClass="bg-red-500"
-                    />
                   </div>
+                  <Toggle checked={!!techData.hasWater} onChange={() => setTechData({ ...techData, hasWater: !techData.hasWater })} colorClass="bg-blue-500" />
                 </div>
 
-                {/* Water source — only if hasWater */}
+                {/* Infraestructura */}
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${techData.hasInfraIssues ? 'bg-orange-100' : 'bg-gray-50'}`}>
+                      <Wrench className={`w-3.5 h-3.5 ${techData.hasInfraIssues ? 'text-orange-500' : 'text-gray-300'}`} />
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-gray-700">Infraestructura</p>
+                      <p className="text-[9px] text-gray-400">{techData.hasInfraIssues ? 'Requiere atención' : 'Sin issues reportados'}</p>
+                    </div>
+                  </div>
+                  <Toggle checked={!!techData.hasInfraIssues} onChange={() => setTechData({ ...techData, hasInfraIssues: !techData.hasInfraIssues })} colorClass="bg-orange-500" />
+                </div>
+
+                {/* Malezas */}
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${techData.hasPests ? 'bg-lime-100' : 'bg-gray-50'}`}>
+                      <Leaf className={`w-3.5 h-3.5 ${techData.hasPests ? 'text-lime-600' : 'text-gray-300'}`} />
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-gray-700">Malezas</p>
+                      <p className="text-[9px] text-gray-400">{techData.hasPests ? 'Malezas detectadas' : 'Pastura limpia'}</p>
+                    </div>
+                  </div>
+                  <Toggle checked={!!techData.hasPests} onChange={() => setTechData({ ...techData, hasPests: !techData.hasPests, weeds: !techData.hasPests ? (techData.weeds || []) : [] })} colorClass="bg-lime-500" />
+                </div>
+
+                {/* Depredadores */}
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${techData.hasPredators ? 'bg-red-100' : 'bg-gray-50'}`}>
+                      <ShieldAlert className={`w-3.5 h-3.5 ${techData.hasPredators ? 'text-red-500' : 'text-gray-300'}`} />
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-gray-700">Depredadores</p>
+                      <p className="text-[9px] text-gray-400">{techData.hasPredators ? 'Alerta activa' : 'Sin reportes'}</p>
+                    </div>
+                  </div>
+                  <Toggle checked={!!techData.hasPredators} onChange={() => setTechData({ ...techData, hasPredators: !techData.hasPredators })} colorClass="bg-red-500" />
+                </div>
+
+                {/* Tipo de agua */}
                 {techData.hasWater && (
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-1.5">Tipo de fuente</p>
+                  <div className="pt-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Tipo de fuente</p>
                     <div className="flex flex-wrap gap-1.5">
                       {WATER_TYPES.map(type => (
-                        <button
-                          key={type}
-                          onClick={() => setTechData({ ...techData, waterType: type })}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                            techData.waterType === type ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-600 hover:bg-blue-50'
-                          }`}
+                        <button key={type} onClick={() => setTechData({ ...techData, waterType: type })}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${techData.waterType === type ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-600 hover:bg-blue-50'}`}
                         >{type}</button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Weeds — only if hasPests */}
+                {/* Tipo de maleza */}
                 {techData.hasPests && (
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-1.5">Tipo de maleza</p>
+                  <div className="pt-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Tipo de maleza</p>
                     <div className="flex flex-wrap gap-1.5">
                       {WEED_TYPES.map(weed => {
                         const sel = (techData.weeds || []).includes(weed)
                         return (
-                          <button
-                            key={weed}
-                            onClick={() => toggleWeed(weed)}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                              sel ? 'bg-lime-200 text-lime-800' : 'bg-gray-100 text-gray-600 hover:bg-lime-50'
-                            }`}
+                          <button key={weed} onClick={() => toggleWeed(weed)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${sel ? 'bg-lime-200 text-lime-800' : 'bg-gray-100 text-gray-600 hover:bg-lime-50'}`}
                           >{weed}</button>
                         )
                       })}
                     </div>
                   </div>
                 )}
-              </div>{/* end RIGHT COLUMN */}
-              </div>{/* end grid */}
+              </div>{/* end condiciones */}
             </div>
             )}
 
+
             {/* Footer tecnico */}
             {(modalTab as string) === 'tecnico' && (
-              <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-                <button onClick={() => setModalOpen(false)} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
+                <button onClick={() => setModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
                   Cancelar
                 </button>
-                <button onClick={handleSave} disabled={saving} className="px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center gap-2">
-                  {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
-                  Guardar
+                <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 text-sm font-black text-white bg-green-600 rounded-xl shadow-md shadow-green-100 hover:bg-green-700 disabled:opacity-50 transition-all flex items-center gap-2">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Guardar cambios
                 </button>
               </div>
             )}
             {(modalTab as string) === 'bitacora' && (
-              <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
-                <button onClick={() => setModalOpen(false)} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end">
+                <button onClick={() => setModalOpen(false)} className="px-6 py-2.5 text-sm font-black text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
                   Cerrar
                 </button>
               </div>

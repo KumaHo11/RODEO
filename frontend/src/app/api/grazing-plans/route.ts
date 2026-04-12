@@ -29,14 +29,19 @@ export async function GET(req: NextRequest) {
          gp.id, gp.org_id, gp.paddock_id, gp.herd_id, gp.herd_ids,
          TO_CHAR(gp.entry_date, 'YYYY-MM-DD') AS entry_date,
          TO_CHAR(gp.exit_date,  'YYYY-MM-DD') AS exit_date,
+         TO_CHAR(gp.actual_entry_date, 'YYYY-MM-DD') AS actual_entry_date,
+         TO_CHAR(gp.actual_exit_date,  'YYYY-MM-DD') AS actual_exit_date,
          gp.planned_recovery_days, gp.status, gp.temporary_animals,
          gp.notes, gp.exit_notes, gp.exit_dry_matter_kg_ha,
          gp.ai_analysis, gp.created_at, gp.updated_at,
          json_build_object('id', p.id, 'name', p.name, 'area_ha', p.area_ha) AS paddocks,
-         json_build_object('id', h.id, 'name', h.name, 'head_count', h.head_count, 'total_ev', h.total_ev) AS herds
+         CASE WHEN h.id IS NOT NULL
+           THEN json_build_object('id', h.id, 'name', h.name, 'head_count', h.head_count, 'total_ev', h.total_ev)
+           ELSE NULL
+         END AS herds
        FROM grazing_plans gp
        JOIN paddocks p ON p.id = gp.paddock_id
-       JOIN herds h ON h.id = gp.herd_id
+       LEFT JOIN herds h ON h.id = gp.herd_id
        WHERE p.org_id = $1
        ORDER BY gp.entry_date ASC`,
       [auth.orgId]
@@ -57,6 +62,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       paddock_id, herd_id, herd_ids, entry_date, exit_date,
+      actual_entry_date, actual_exit_date,
       planned_recovery_days, status, temporary_animals, notes,
       exit_notes, exit_dry_matter_kg_ha, org_id
     } = body
@@ -68,15 +74,17 @@ export async function POST(req: NextRequest) {
     const result = await mutate(
       `INSERT INTO grazing_plans
          (paddock_id, herd_id, herd_ids, org_id, entry_date, exit_date,
+          actual_entry_date, actual_exit_date,
           planned_recovery_days, status, temporary_animals, notes,
           exit_notes, exit_dry_matter_kg_ha)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING id`,
       [
         paddock_id, herd_id,
         herd_ids ? JSON.stringify(herd_ids) : null,
         auth.orgId,
         entry_date, exit_date || null,
+        actual_entry_date || null, actual_exit_date || null,
         planned_recovery_days || 60,
         status || 'PLANNED',
         temporary_animals ? JSON.stringify(temporary_animals) : null,

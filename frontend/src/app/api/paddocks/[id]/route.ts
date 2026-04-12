@@ -86,6 +86,13 @@ export async function PATCH(
       vals
     )
 
+    if (dry_matter_kg_ha !== undefined) {
+      await mutate(
+        `INSERT INTO biological_monitoring (paddock_id, dry_matter_estimate_kg, recorded_at) VALUES ($1, $2, NOW())`,
+        [(await params).id, dry_matter_kg_ha]
+      )
+    }
+
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('PATCH /api/paddocks/[id] error:', err)

@@ -168,24 +168,9 @@ export default function MiCampoPage() {
     : null
 
   return (
-    <div className="flex h-full overflow-hidden bg-gray-100 p-4 gap-4">
-      {/* Left Panel — 30% */}
-      <div className="w-[340px] shrink-0 flex flex-col">
-        <PaddockSidePanel
-          paddocks={paddocks}
-          org={org}
-          loading={loading}
-          selectedPaddockId={selectedPaddockId}
-          onSelectPaddock={setSelectedPaddockId}
-          onSaveTechnicalData={handlePaddockSaved}
-          ndviData={ndviData}
-          ndviLoading={ndviLoading}
-          avgNdvi={avgNdvi}
-        />
-      </div>
-
-      {/* Right Panel — Map 70% */}
-      <div className="flex-1 rounded-2xl overflow-hidden shadow-md border border-gray-200 relative">
+    <div className="flex flex-col md:flex-row h-full overflow-hidden bg-gray-100 p-3 md:p-4 gap-3 md:gap-4">
+      {/* Map — on mobile goes FIRST (top), on desktop goes RIGHT (70%) */}
+      <div className="order-1 md:order-2 flex-1 md:flex-1 h-[45vh] md:h-auto rounded-2xl overflow-hidden shadow-md border border-gray-200 relative min-h-[200px]">
         <MiCampoMap
           paddocks={paddocks}
           org={org}
@@ -222,6 +207,22 @@ export default function MiCampoPage() {
           </button>
         </div>
       </div>
+
+      {/* Side Panel — on mobile goes SECOND (bottom), on desktop LEFT (30%) */}
+      <div className="order-2 md:order-1 w-full md:w-[340px] md:shrink-0 flex flex-col overflow-hidden">
+        <PaddockSidePanel
+          paddocks={paddocks}
+          org={org}
+          loading={loading}
+          selectedPaddockId={selectedPaddockId}
+          onSelectPaddock={setSelectedPaddockId}
+          onSaveTechnicalData={handlePaddockSaved}
+          ndviData={ndviData}
+          ndviLoading={ndviLoading}
+          avgNdvi={avgNdvi}
+        />
+      </div>
+
 
       {/* ── New Paddock Creation Modal ──────────────────────────────────────── */}
       {newPaddockModal && (

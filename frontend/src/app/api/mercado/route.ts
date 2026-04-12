@@ -8,12 +8,14 @@ interface MercadoResponse {
     fecha: string | null
     fuente: string
     error?: string
+    history: Array<{ date: string; price: number }>  // real daily prices accumulated
   }
   global: {
     LE_usd_cwt: number | null   // CME Live Cattle (gordo)
     GF_usd_cwt: number | null   // CME Feeder Cattle (de reposición)
     usd_ars: number | null       // Tipo de cambio oficial
     fecha: string
+    leHistory: number[]          // últimos cierres reales de LE=F (USD/cwt)
     error?: string
   }
   cachedAt: string
@@ -22,6 +24,10 @@ interface MercadoResponse {
 // ── In-memory cache (6 hours) ─────────────────────────────────────────────────
 let cache: { data: MercadoResponse; ts: number } | null = null
 const CACHE_TTL = 6 * 60 * 60 * 1000
+
+// ── Argentine price history — persists while server is running ─────────────────
+// One entry per day max (keyed by ISO date), up to 7 entries
+const argentineHistory: Array<{ date: string; price: number }> = []
 
 // ── Categoria price map (relative to INSC) ─────────────────────────────────────
 const CATEGORIA_RATIOS: Record<string, number> = {
@@ -37,82 +43,52 @@ const CATEGORIA_RATIOS: Record<string, number> = {
 }
 
 // ── Fallback prices (last known good — updated manually) ──────────────────────
-// INSC al ~2026-04 según cotizaciones de referencia Liniers/ROSGAN
-const FALLBACK_INSC = 2800   // ARS/kg vivo — referencia aproximada
-const FALLBACK_DATE = '2026-04-07'
+// INSC/INMAG al ~2026-04 según cotizaciones de referencia Liniers/Cañuelas
+const FALLBACK_INSC = 4330   // ARS/kg vivo — referencia aproximada conservadora
+const FALLBACK_DATE = '2026-04-08'
 
-// ── Parse CSV text for INSC ────────────────────────────────────────────────────
-function parseInscCsv(text: string): { insc: number; fecha: string } | null {
-  try {
-    const lines = text.split('\n').map(l => l.replace(/\r/g, '').trim()).filter(Boolean)
-    if (lines.length < 2) return null
-
-    // Header line → find column indices
-    const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-    const fechaIdx = header.findIndex(h => h.toLowerCase().includes('fecha'))
-    const inscIdx  = header.findIndex(h => h.toLowerCase().includes('insc'))
-    if (fechaIdx < 0 || inscIdx < 0) return null
-
-    // Sort remaining lines by date descending to get latest
-    const rows = lines.slice(1)
-      .map(line => {
-        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
-        return { fecha: cols[fechaIdx] ?? '', insc: parseFloat(cols[inscIdx] ?? '0') }
-      })
-      .filter(r => r.insc > 0 && r.fecha)
-      .sort((a, b) => b.fecha.localeCompare(a.fecha))
-
-    if (rows.length === 0) return null
-    return { insc: rows[0].insc, fecha: rows[0].fecha.split('T')[0] }
-  } catch {
-    return null
-  }
+// ── Utilitario para parsear números con formato argentino (ej. "4.329,89") ────
+function parseArgNumber(str: string): number {
+  if (!str) return 0;
+  const cleanStr = str.replace(/\./g, '').replace(',', '.');
+  return parseFloat(cleanStr);
 }
 
-// ── Fetch INSC from SIO Carnes CSV ────────────────────────────────────────────
-async function fetchArgentinaPrices(): Promise<MercadoResponse['argentina']> {
-  const CSV_URL = 'https://datos.magyp.gob.ar/dataset/175f48c6-312c-486a-b533-91f80de4ebbe/resource/f599d23f-2be9-4738-855e-205d2e064b6a/download/indice-novillo-sio-carnes.csv'
+// ── Fetch INSC / INMAG prices ───────────────────────────────────────────────
+async function fetchArgentinaPrices(): Promise<Omit<MercadoResponse['argentina'], 'history'>> {
+  const today = new Date().toISOString().split('T')[0]
 
-  // ── Strategy 1: SIO Carnes INSC CSV from datos.gob.ar ──────────────────────
+  // ── Strategy 1: Mercado Agroganadero (Cañuelas) - INMAG ────────────────────
   try {
-    const res = await fetch(CSV_URL, {
-      headers: { 'User-Agent': 'Rodeo-App/1.0' },
-      signal: AbortSignal.timeout(10000),
+    const MAG_URL = 'https://www.mercadoagroganadero.com.ar/dll/inicio.dll';
+    const res = await fetch(MAG_URL, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      signal: AbortSignal.timeout(8000),
       cache: 'no-store',
     })
 
-    if (!res.ok) throw new Error(`CSV responded ${res.status}`)
-
-    const text = await res.text()
-    const parsed = parseInscCsv(text)
-
-    if (parsed && parsed.insc > 0) {
-      // If data is old (pre-2024), it means the CSV only has historical data
-      // The INSC in 2018 was ~$32/kg, in 2025+ it's in the thousands
-      // Detect if this is stale data and normalize accordingly
-      const year = parseInt(parsed.fecha.slice(0, 4))
-      let insc = parsed.insc
-
-      if (year < 2022 && insc < 500) {
-        // Old data — use fallback instead (data is clearly stale)
-        throw new Error(`CSV data is stale (${parsed.fecha}, $${insc}/kg) — using fallback`)
+    if (res.ok) {
+      const text = await res.text()
+      // Extract INMAG index (e.g. "INMAG 4.329,89")
+      const inmagMatch = text.match(/INMAG\s*(?:<[^>]+>)*\s*([\d\.,]+)/i);
+      
+      if (inmagMatch && inmagMatch[1]) {
+        const insc = parseArgNumber(inmagMatch[1])
+        if (insc > 500) {
+          const categorias: Record<string, number> = {}
+          for (const [cat, ratio] of Object.entries(CATEGORIA_RATIOS)) {
+            categorias[cat] = Math.round(insc * ratio)
+          }
+          return { insc_kg_vivo: insc, categorias, fecha: today, fuente: 'MAG Cañuelas (INMAG)' }
+        }
       }
-
-      const categorias: Record<string, number> = {}
-      for (const [cat, ratio] of Object.entries(CATEGORIA_RATIOS)) {
-        categorias[cat] = Math.round(insc * ratio)
-      }
-      return { insc_kg_vivo: insc, categorias, fecha: parsed.fecha, fuente: 'SIO Carnes INSC / datos.gob.ar' }
     }
-
-    throw new Error('No valid INSC record in CSV')
-  } catch (err1: any) {
-    console.warn('[mercado] CSV primary fetch failed:', err1.message)
+  } catch (err: any) {
+    console.warn('[mercado] MAG Cañuelas fetch failed:', err.message)
   }
 
   // ── Strategy 2: Try the SIO Carnes website scrape (JSON endpoint) ──────────
   try {
-    // Try fetching the public SIO Carnes API endpoint
     const res = await fetch('https://www.siocarnes.magyp.gob.ar/php/webservice.php?accion=carnesBovina', {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Rodeo/1.0)' },
       signal: AbortSignal.timeout(8000),
@@ -120,7 +96,6 @@ async function fetchArgentinaPrices(): Promise<MercadoResponse['argentina']> {
     })
     if (res.ok) {
       const json = await res.json()
-      // The response structure varies — look for novillo/INSC value
       const items: any[] = Array.isArray(json) ? json : (json?.data ?? json?.rows ?? [])
       const novillo = items.find((r: any) =>
         (r.categoria ?? r.Categoria ?? '').toLowerCase().includes('novillo') ||
@@ -132,7 +107,7 @@ async function fetchArgentinaPrices(): Promise<MercadoResponse['argentina']> {
         for (const [cat, ratio] of Object.entries(CATEGORIA_RATIOS)) {
           categorias[cat] = Math.round(insc * ratio)
         }
-        const fecha = novillo?.fecha?.split('T')[0] ?? new Date().toISOString().split('T')[0]
+        const fecha = novillo?.fecha?.split('T')[0] ?? today
         return { insc_kg_vivo: insc, categorias, fecha, fuente: 'SIO Carnes web' }
       }
     }
@@ -141,7 +116,7 @@ async function fetchArgentinaPrices(): Promise<MercadoResponse['argentina']> {
   }
 
   // ── Strategy 3: Use the fallback (known approximate value) ─────────────────
-  console.warn('[mercado] Using hardcoded INSC fallback value')
+  console.warn('[mercado] Using hardcoded INMAG/INSC fallback value')
   const categorias: Record<string, number> = {}
   for (const [cat, ratio] of Object.entries(CATEGORIA_RATIOS)) {
     categorias[cat] = Math.round(FALLBACK_INSC * ratio)
@@ -150,8 +125,8 @@ async function fetchArgentinaPrices(): Promise<MercadoResponse['argentina']> {
     insc_kg_vivo: FALLBACK_INSC,
     categorias,
     fecha: FALLBACK_DATE,
-    fuente: 'Referencia aproximada (Liniers/ROSGAN ~2026-04)',
-    error: 'API SIO Carnes no disponible — usando referencia manual'
+    fuente: 'Referencia aproximada (Liniers/Cañuelas ~2026-04)',
+    error: 'Mercados no disponibles — usando referencia manual'
   }
 }
 
@@ -160,7 +135,8 @@ async function fetchGlobalPrices(): Promise<MercadoResponse['global']> {
   const today = new Date().toISOString().split('T')[0]
   try {
     const [leRes, gfRes, fxRes] = await Promise.all([
-      fetch('https://query1.finance.yahoo.com/v8/finance/chart/LE=F?interval=1d&range=5d', {
+      // 10d range so we reliably get 5-7 trading days of real closes
+      fetch('https://query1.finance.yahoo.com/v8/finance/chart/LE=F?interval=1d&range=10d', {
         headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
         signal: AbortSignal.timeout(8000),
         cache: 'no-store',
@@ -177,20 +153,32 @@ async function fetchGlobalPrices(): Promise<MercadoResponse['global']> {
       }),
     ])
 
-    const extractLastClose = async (r: Response): Promise<number | null> => {
-      if (!r.ok) return null
-      const j = await r.json()
-      const closes: number[] = j?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []
-      const valid = closes.filter((c: number | null) => c != null && c > 0)
-      return valid.length > 0 ? parseFloat(valid[valid.length - 1].toFixed(2)) : null
+    // ── LE=F: extract full close history ─────────────────────────────────────
+    let LE: number | null = null
+    let leHistory: number[] = []
+    if (leRes.ok) {
+      const leJson = await leRes.json()
+      const closes: number[] = leJson?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []
+      const valid = closes
+        .filter((c: number | null) => c != null && c > 0)
+        .map((c: number) => parseFloat(c.toFixed(2)))
+      leHistory = valid.slice(-7) // last 7 real closes
+      LE = valid.length > 0 ? valid[valid.length - 1] : null
     }
 
-    const [LE, GF] = await Promise.all([extractLastClose(leRes), extractLastClose(gfRes)])
+    // ── GF=F: last close only ─────────────────────────────────────────────────
+    let GF: number | null = null
+    if (gfRes.ok) {
+      const gfJson = await gfRes.json()
+      const closes: number[] = gfJson?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []
+      const valid = closes.filter((c: number | null) => c != null && c > 0)
+      GF = valid.length > 0 ? parseFloat((valid[valid.length - 1] as number).toFixed(2)) : null
+    }
 
+    // ── USD/ARS ───────────────────────────────────────────────────────────────
     let usdArs: number | null = null
     if (fxRes.ok) {
       const fxJson = await fxRes.json()
-      // open.er-api format: { rates: { ARS: ... } }
       usdArs = fxJson?.rates?.ARS ?? null
     }
 
@@ -208,10 +196,10 @@ async function fetchGlobalPrices(): Promise<MercadoResponse['global']> {
       } catch {}
     }
 
-    return { LE_usd_cwt: LE, GF_usd_cwt: GF, usd_ars: usdArs, fecha: today }
+    return { LE_usd_cwt: LE, GF_usd_cwt: GF, usd_ars: usdArs, fecha: today, leHistory }
   } catch (err: any) {
     console.error('[mercado] Global fetch error:', err.message)
-    return { LE_usd_cwt: null, GF_usd_cwt: null, usd_ars: null, fecha: today, error: err.message }
+    return { LE_usd_cwt: null, GF_usd_cwt: null, usd_ars: null, fecha: today, leHistory: [], error: err.message }
   }
 }
 
@@ -227,13 +215,27 @@ export async function GET(req: Request) {
     })
   }
 
-  const [argentina, global] = await Promise.all([
+  const [argBase, global] = await Promise.all([
     fetchArgentinaPrices(),
     fetchGlobalPrices(),
   ])
 
+  // ── Accumulate real Argentine price history ─────────────────────────────────
+  // One entry per calendar day (de-duplicated by date). Max 7 days retained.
+  const today = new Date().toISOString().split('T')[0]
+  if (argBase.insc_kg_vivo && argBase.insc_kg_vivo > 500 && !argBase.error) {
+    const existingToday = argentineHistory.find(h => h.date === today)
+    if (!existingToday) {
+      argentineHistory.push({ date: today, price: argBase.insc_kg_vivo })
+      if (argentineHistory.length > 7) argentineHistory.shift()
+    }
+  }
+
   const response: MercadoResponse = {
-    argentina,
+    argentina: {
+      ...argBase,
+      history: [...argentineHistory],
+    },
     global,
     cachedAt: new Date().toISOString(),
   }

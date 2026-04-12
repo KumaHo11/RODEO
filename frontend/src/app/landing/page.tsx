@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
-  Map, Beef, Leaf, CalendarDays, Mic, Target, TrendingUp, Sprout,
+  Map, Footprints, Leaf, CalendarDays, Mic, Target, TrendingUp, Sprout,
   ArrowRight, Check, X, ChevronDown, Building2, CheckCircle2,
   Camera, WifiOff, Brain, BarChart3, Zap, Shield,
 } from 'lucide-react'
@@ -118,7 +118,7 @@ export default function LandingPage() {
       accent: 'from-green-700 to-emerald-800',
     },
     {
-      Icon: Beef,
+      Icon: Footprints,
       tag: 'CORE',
       title: 'Gestión de Hacienda',
       subtitle: 'Tu inventario al día, siempre',

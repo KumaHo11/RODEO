@@ -420,7 +420,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* ── Top header ──────────────────────────────────────────────────── */}
         <header className="h-14 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 z-30">
-          {/* Left: mobile hamburger + page title */}
+          {/* Left: mobile hamburger */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               className="md:hidden p-2 rounded-xl text-gray-500 hover:bg-gray-100 shrink-0"
@@ -428,7 +428,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h1 className="text-sm sm:text-base font-black text-gray-800 tracking-tight truncate">{currentPageName}</h1>
           </div>
 
           {/* Right: offline badge + role badge (desktop) + bell + avatar */}

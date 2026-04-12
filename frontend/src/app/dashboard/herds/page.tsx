@@ -4,47 +4,35 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { Plus, Search, Edit2, Trash2, X, Check, Camera, Sparkles, Loader2, HeartPulse, Paperclip } from 'lucide-react'
-import { CATEGORIAS_COMERCIALES } from '@/lib/categorias'
-
 
 const ANIMAL_TYPES = [
-  { id: 'vacas',       label: 'Vacas',       demandFactor: 1.0,  color: 'bg-green-100 text-green-700',   dot: 'bg-green-500' },
-  { id: 'vaquillonas', label: 'Vaquillonas', demandFactor: 1.0,  color: 'bg-teal-100 text-teal-700',     dot: 'bg-teal-500' },
-  { id: 'terneros',    label: 'Terneros',    demandFactor: 0.6,  color: 'bg-sky-100 text-sky-700',       dot: 'bg-sky-500' },
-  { id: 'ovejas',      label: 'Ovejas',      demandFactor: 0.15, color: 'bg-amber-100 text-amber-700',   dot: 'bg-amber-500' },
-  { id: 'cabras',      label: 'Cabras',      demandFactor: 0.15, color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
-  { id: 'caballos',    label: 'Caballos',    demandFactor: 1.27, color: 'bg-purple-100 text-purple-700', dot: 'bg-purple-500' },
-  { id: 'toros',       label: 'Toros',       demandFactor: 1.25, color: 'bg-red-100 text-red-700',       dot: 'bg-red-500' },
+  { id: 'vacas',       label: 'Vacas',       demandFactor: 1.0 },
+  { id: 'toro',        label: 'Toro',        demandFactor: 1.25 },
+  { id: 'novillo',     label: 'Novillo',     demandFactor: 1.0 },
+  { id: 'vaquillona',  label: 'Vaquillona',  demandFactor: 1.0 },
+  { id: 'ternero',     label: 'Ternero',     demandFactor: 0.6 },
+  { id: 'ternera',     label: 'Ternera',     demandFactor: 0.6 },
+  { id: 'cabras',      label: 'Cabras',      demandFactor: 0.15 },
+  { id: 'caballos',    label: 'Caballos',    demandFactor: 1.25 },
+  { id: 'ovejas',      label: 'Ovejas',      demandFactor: 0.15 },
+  { id: 'otro',        label: 'Otro',        demandFactor: 1.0 },
 ]
 
 const BREED_OPTIONS: Record<string, string[]> = {
   vacas:       ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
-  vaquillonas: ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
-  terneros:    ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
+  vaquillona:  ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
+  ternero:     ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
+  ternera:     ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
+  novillo:     ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
+  toro:        ['Angus', 'Hereford', 'Braford', 'Brangus', 'Otra'],
   ovejas:      ['Merino', 'Corriedale', 'Texel', 'Hampshire Down', 'Dorper', 'Otra'],
   cabras:      ['Boer', 'Anglo-Nubian', 'Saanen', 'Criolla', 'Otra'],
   caballos:    ['Criollo', 'Cuarto de Milla', 'Polo Argentino', 'Árabe', 'Percherón', 'Otra'],
-  toros:       ['Angus', 'Hereford', 'Braford', 'Brangus', 'Otra'],
 }
-
-const CATEGORIAS_DEL_HERDS = CATEGORIAS_COMERCIALES
 
 const EMPTY_FORM = {
   id: '', name: '', species: 'vacas', breed: '', head_count: 0, avg_weight_kg: 0, age_years: 0,
   photo_url: null as string | null,
-  categoria: '' as string,
-}
-
-async function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      resolve({ base64: dataUrl.split(',')[1], mimeType: file.type || 'image/jpeg' })
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
 }
 
 function calculateEV(weight: number, headCount: number, speciesId: string): number {
@@ -63,13 +51,6 @@ export default function HerdsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
-  const [modalBcsFile, setModalBcsFile] = useState<File | null>(null)
-  const [modalBcsPreview, setModalBcsPreview] = useState<string | null>(null)
-  const [modalBcsResult, setModalBcsResult] = useState<any | null>(null)
-  const [modalBcsError, setModalBcsError] = useState<string | null>(null)
-  const [analyzingBcs, setAnalyzingBcs] = useState(false)
-  const modalCameraRef = useRef<HTMLInputElement>(null)
-  const modalGalleryRef = useRef<HTMLInputElement>(null)
 
   const loadHerds = async () => {
     if (!user) return
@@ -96,58 +77,19 @@ export default function HerdsPage() {
   const totalEV      = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
   const totalDailyMS = herds.reduce((s, h) => s + (Number(h.head_count) || 0) * (Number(h.avg_weight_kg) || 0) * 0.03, 0)
 
-  const openCreate = () => { setForm(EMPTY_FORM); setModalBcsFile(null); setModalBcsPreview(null); setModalBcsResult(null); setModalBcsError(null); setModalOpen(true) }
+  const openCreate = () => { setForm(EMPTY_FORM); setModalOpen(true) }
   const openEdit = (herd: any) => {
     setForm({
       id: herd.id, name: herd.name, species: herd.species, breed: herd.breed || '',
       head_count: herd.head_count, avg_weight_kg: herd.avg_weight_kg || 0, age_years: herd.age_years || 0,
-      photo_url: herd.photo_url || null,
-      categoria: herd.categoria || '',
+      photo_url: null,
     })
-    setModalBcsFile(null)
-    setModalBcsPreview(herd.photo_url || null)
-    setModalBcsResult(herd.bcs_data || null)
-    setModalBcsError(null)
     setModalOpen(true)
-  }
-
-  const handleHerdBcs = async () => {
-    if (!modalBcsFile) return
-    setAnalyzingBcs(true)
-    setModalBcsResult(null)
-    setModalBcsError(null)
-    try {
-      const { base64, mimeType } = await fileToBase64(modalBcsFile)
-      const res = await fetch('/api/analyze-body-condition', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, mimeType, species: form.species }),
-      })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
-      setModalBcsResult(json.data)
-    } catch (err: any) {
-      setModalBcsError(err.message || 'Error en análisis')
-    }
-    setAnalyzingBcs(false)
   }
 
   const handleSave = async () => {
     if (!form.name || !form.head_count) return
     setSaving(true)
-
-    // Upload BCS photo to GCS if a new file was selected
-    let photo_url: string | null = form.photo_url || null
-    if (modalBcsFile) {
-      const fd = new FormData()
-      fd.append('file', modalBcsFile)
-      fd.append('folder', 'herds')
-      const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd })
-      if (uploadRes.ok) {
-        const { url } = await uploadRes.json()
-        photo_url = url
-      }
-    }
 
     const payload = {
       name: form.name,
@@ -157,9 +99,7 @@ export default function HerdsPage() {
       avg_weight_kg: form.avg_weight_kg,
       age_years: form.age_years,
       total_ev: calculateEV(form.avg_weight_kg, form.head_count, form.species),
-      photo_url,
-      categoria: form.categoria || null,
-      ...(modalBcsResult ? { bcs_data: modalBcsResult, bcs_score: modalBcsResult.bcs_score, bcs_label: modalBcsResult.condition_label } : {}),
+      photo_url: null,
     }
 
     if (form.id) {
@@ -208,19 +148,19 @@ export default function HerdsPage() {
           <p className="text-[9px] text-gray-400 mt-1">{totalAnimals.toLocaleString()} animales</p>
         </div>
         <div className="bg-amber-50 rounded-2xl border border-amber-100 shadow-sm p-5">
-          <p className="text-[10px] font-black text-amber-500 tracking-widest uppercase mb-2">Consumo Diario</p>
-          <p className="text-4xl font-black text-amber-700">{totalDailyMS >= 1000 ? `${(totalDailyMS/1000).toFixed(1)}k` : Math.round(totalDailyMS).toLocaleString()}</p>
-          <p className="text-[9px] text-amber-500 mt-1">kg MS/día · {totalEV.toFixed(1)} EV</p>
+          <p className="text-[10px] font-bold text-amber-500 tracking-widest uppercase mb-2">Consumo Diario</p>
+          <p className="text-4xl font-bold text-amber-700">{totalDailyMS >= 1000 ? `${(totalDailyMS/1000).toFixed(1)}k` : Math.round(totalDailyMS).toLocaleString()}</p>
+          <p className="text-[9px] text-amber-500 mt-1 font-medium">kg MS/día · {totalEV.toFixed(1)} EV</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Carga (EV)</p>
-          <p className="text-4xl font-black text-orange-600">{totalEV.toFixed(1)}</p>
-          <p className="text-[9px] text-gray-400 mt-1">Equivalente Vaca total</p>
+          <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-2">Carga (EV)</p>
+          <p className="text-4xl font-bold text-orange-600">{totalEV.toFixed(1)}</p>
+          <p className="text-[9px] text-gray-400 mt-1 font-medium">Equivalente Vaca total</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap items-center">
+      <div className="flex gap-3 flex-wrap items-center bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -228,26 +168,21 @@ export default function HerdsPage() {
             placeholder="Buscar rebaño o raza..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none shadow-sm"
+            className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-1 focus:ring-gray-200 outline-none"
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setFilterSpecies('all')}
-            className={`px-3 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all border ${filterSpecies === 'all' ? 'bg-gray-900 text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+        <div className="flex items-center gap-2 px-2 border-l border-gray-100">
+          <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Especie</label>
+          <select
+            value={filterSpecies}
+            onChange={e => setFilterSpecies(e.target.value)}
+            className="bg-transparent text-sm font-bold text-gray-700 outline-none cursor-pointer"
           >
-            Todos
-          </button>
-          {ANIMAL_TYPES.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setFilterSpecies(filterSpecies === t.id ? 'all' : t.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all border ${filterSpecies === t.id ? `${t.color} border-transparent` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
-            >
-              <span className={`w-2 h-2 rounded-full ${t.dot}`} />
-              {t.label}
-            </button>
-          ))}
+            <option value="all">Todas</option>
+            {ANIMAL_TYPES.map(t => (
+              <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -272,24 +207,16 @@ export default function HerdsPage() {
 
             return (
               <div key={herd.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group">
+                <div className="h-1 w-full bg-gray-200" />
                 {/* Card Header */}
-                <div className="px-5 pt-5 pb-3 flex items-start justify-between">
+                <div className="px-5 pt-4 pb-3 flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black ${at.color}`}>
+                    <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-500">
                       {at.label.slice(0, 2)}
                     </div>
                     <div>
-                      <h3 className="text-sm font-black text-gray-950 tracking-tight leading-tight">{herd.name}</h3>
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${at.color} inline-block`}>
-                          {at.label}
-                        </span>
-                        {herd.categoria && (
-                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 inline-block">
-                            {herd.categoria}
-                          </span>
-                        )}
-                      </div>
+                      <h3 className="text-sm font-bold text-gray-950 tracking-tight leading-tight">{herd.name}</h3>
+                      <p className="text-[10px] font-medium text-gray-500 mt-0.5">{at.label}</p>
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
@@ -305,9 +232,9 @@ export default function HerdsPage() {
                 {/* Stats */}
                 <div className="px-5 py-3 border-t border-gray-50">
                   <div className="mb-3">
-                    <p className="text-[9px] font-black text-amber-500 tracking-widest uppercase mb-0.5">Consumo Diario</p>
+                    <p className="text-[9px] font-bold text-amber-500 tracking-widest uppercase mb-0.5">Consumo Diario</p>
                     <div className="flex items-baseline gap-2">
-                      <p className="text-3xl font-black text-gray-950 tracking-tighter">
+                      <p className="text-3xl font-bold text-gray-950 tracking-tighter">
                         {Math.round((Number(herd.head_count) || 0) * (Number(herd.avg_weight_kg) || 0) * 0.03).toLocaleString()}
                       </p>
                       <span className="text-xs font-bold text-gray-400">kg MS/día</span>
@@ -315,12 +242,12 @@ export default function HerdsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Cabezas</p>
-                      <p className="text-lg font-black text-gray-700">{herd.head_count}</p>
+                      <p className="text-[9px] font-bold text-gray-400 tracking-widest uppercase mb-0.5">Cabezas</p>
+                      <p className="text-lg font-bold text-gray-700">{herd.head_count}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-0.5">EV Total</p>
-                      <p className="text-lg font-black text-orange-500">{Number(herd.total_ev).toFixed(1)}</p>
+                      <p className="text-[9px] font-bold text-gray-400 tracking-widest uppercase mb-0.5">EV Total</p>
+                      <p className="text-lg font-bold text-orange-500">{Number(herd.total_ev).toFixed(1)}</p>
                     </div>
                     <div>
                       <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Raza</p>
@@ -334,22 +261,6 @@ export default function HerdsPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Photo + BCS Badge */}
-                {(herd.photo_url || herd.bcs_score) && (
-                  <div className="px-5 pb-3 flex items-center gap-2">
-                    {herd.photo_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={herd.photo_url} alt="Foto rebaño" className="w-12 h-12 rounded-xl object-cover border border-gray-100" />
-                    )}
-                    {herd.bcs_score && (
-                      <div className="flex-1 bg-amber-50 rounded-xl px-3 py-1.5 border border-amber-100">
-                        <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Condición Corporal</p>
-                        <p className="text-sm font-black text-amber-800">CC {herd.bcs_score} &mdash; {herd.bcs_label || ''}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* EV Bar */}
                 <div className="px-5 pb-4">
@@ -394,66 +305,34 @@ export default function HerdsPage() {
                 />
               </div>
 
-              {/* Especie */}
+              {/* Especie / Categoria Comercial */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Especie / Categoría *</label>
-                <div className="grid grid-cols-2 gap-2">
+                <select
+                  required
+                  value={form.species}
+                  onChange={e => setForm({ ...form, species: e.target.value, breed: '' })}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-800 focus:ring-1 focus:ring-gray-400 outline-none transition-all"
+                >
                   {ANIMAL_TYPES.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => setForm({ ...form, species: t.id, breed: '' })}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all border text-left ${form.species === t.id ? `${t.color} border-transparent shadow-sm` : 'border-gray-100 text-gray-600 hover:border-gray-200 bg-gray-50'}`}
-                    >
-                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${t.dot}`} />
-                      {t.label}
-                    </button>
+                    <option key={t.id} value={t.id}>{t.label}</option>
                   ))}
-                </div>
-              </div>
-
-              {/* Categoría Comercial */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Categoría Comercial</label>
-                <p className="text-[9px] text-gray-400 font-normal">Se usa para calcular el valor del rodeo en Valuación Ganadera</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, categoria: '' })}
-                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${!form.categoria ? 'bg-gray-900 text-white border-transparent' : 'border-gray-200 text-gray-500 hover:border-gray-300 bg-gray-50'}`}
-                  >
-                    Sin categoría
-                  </button>
-                  {CATEGORIAS_COMERCIALES.map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setForm({ ...form, categoria: cat })}
-                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${
-                        form.categoria === cat
-                          ? 'bg-green-600 text-white border-transparent'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-gray-50'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
+                </select>
               </div>
 
               {/* Raza */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Raza</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {(BREED_OPTIONS[form.species] || ['Otra']).map(b => (
-                    <button
-                      key={b}
-                      onClick={() => setForm({ ...form, breed: b })}
-                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${form.breed === b ? 'bg-gray-900 text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-gray-50'}`}
-                    >
-                      {b}
-                    </button>
+                <select
+                  value={form.breed}
+                  onChange={e => setForm({ ...form, breed: e.target.value })}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-800 focus:ring-1 focus:ring-gray-400 outline-none transition-all"
+                >
+                  <option value="">No aplica / Otra</option>
+                  {(BREED_OPTIONS[form.species] || BREED_OPTIONS['vacas']).map(b => (
+                    <option key={b} value={b}>{b}</option>
                   ))}
-                </div>
+                </select>
               </div>
 
               {/* Cabezas + Peso + Edad */}
@@ -487,77 +366,7 @@ export default function HerdsPage() {
                 </div>
               </div>
 
-              {/* BCS Photo Section */}
-              <div className="space-y-2">
-                <div className="mb-1">
-                  <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Analísis de Condición Corporal AI</label>
-                  <p className="text-[9px] text-gray-400 mt-0.5">Sacá o subí una foto del rebaño para que la IA evalúe su condición corporal</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => modalCameraRef.current?.click()}
-                    className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-2xl border-2 border-violet-200 bg-violet-50 hover:border-violet-400 transition-all active:scale-95"
-                  >
-                    <Camera className="w-5 h-5 text-violet-600" />
-                    <span className="text-[10px] font-black text-violet-700">Cámara</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => modalGalleryRef.current?.click()}
-                    className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-2xl border-2 border-sky-200 bg-sky-50 hover:border-sky-400 transition-all active:scale-95"
-                  >
-                    <Paperclip className="w-5 h-5 text-sky-600" />
-                    <span className="text-[10px] font-black text-sky-700">Adjuntar foto</span>
-                  </button>
-                </div>
-                <input ref={modalCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if(f){ setModalBcsFile(f); setModalBcsPreview(URL.createObjectURL(f)); setModalBcsResult(null) }}} />
-                <input ref={modalGalleryRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if(f){ setModalBcsFile(f); setModalBcsPreview(URL.createObjectURL(f)); setModalBcsResult(null) }}} />
 
-                {modalBcsPreview && (
-                  <div className="space-y-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={modalBcsPreview} alt="Preview" className="w-full h-40 object-cover rounded-2xl" />
-                    {!analyzingBcs && !modalBcsResult && (
-                      <button
-                        type="button"
-                        onClick={handleHerdBcs}
-                        className="w-full py-2.5 bg-amber-600 text-white rounded-xl text-xs font-black hover:bg-amber-700 transition-all flex items-center justify-center gap-2"
-                      >
-                        <HeartPulse className="w-4 h-4" /> Analizar Condición Corporal
-                      </button>
-                    )}
-                    {analyzingBcs && (
-                      <div className="flex items-center justify-center gap-2 py-3 text-amber-600">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-xs font-bold">Analizando con Gemini...</span>
-                      </div>
-                    )}
-                    {modalBcsResult && (
-                      <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-3 text-white">
-                        <div className="flex items-center gap-2 mb-2">
-                          <HeartPulse className="w-3.5 h-3.5 text-amber-200" />
-                          <p className="text-[9px] font-black uppercase tracking-wider text-amber-100">Condición Corporal</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-center">
-                            <p className="text-2xl font-black">{modalBcsResult.bcs_score}</p>
-                            <p className="text-[9px] text-amber-300">/ {modalBcsResult.bcs_scale}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-black">{modalBcsResult.condition_label}</p>
-                            <p className="text-[10px] text-amber-200">{modalBcsResult.nutritional_status}</p>
-                          </div>
-                        </div>
-                        {modalBcsResult.recommendation && (
-                          <p className="text-[10px] text-amber-100 mt-2 leading-relaxed bg-white/10 rounded-lg px-2 py-1.5">{modalBcsResult.recommendation}</p>
-                        )}
-                      </div>
-                    )}
-                    {modalBcsError && <p className="text-xs text-red-600 font-bold">{modalBcsError}</p>}
-                  </div>
-                )}
-              </div>
 
               {/* EV Calculator */}
               <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100">
