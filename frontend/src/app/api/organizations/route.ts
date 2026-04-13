@@ -58,9 +58,13 @@ export async function PATCH(req: NextRequest) {
     if (total_area_ha !== undefined) { sets.push(`total_area_ha = $${i++}`); vals.push(total_area_ha) }
     if (region_id !== undefined)    { sets.push(`region_id = $${i++}`); vals.push(region_id) }
     if (boundaries !== undefined) {
-      const geomJson = boundaries.geometry ?? boundaries
-      sets.push(`boundaries = ST_SetSRID(ST_GeomFromGeoJSON($${i++}), 4326)`)
-      vals.push(JSON.stringify(geomJson))
+      if (boundaries === null) {
+        sets.push(`boundaries = NULL`)
+      } else {
+        const geomJson = boundaries.geometry ?? boundaries
+        sets.push(`boundaries = ST_SetSRID(ST_GeomFromGeoJSON($${i++}), 4326)`)
+        vals.push(JSON.stringify(geomJson))
+      }
     }
 
     vals.push(auth.orgId)

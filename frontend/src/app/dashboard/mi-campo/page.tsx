@@ -49,6 +49,19 @@ export default function MiCampoPage() {
   const [drawModeActive, setDrawModeActive] = useState(false)
   const triggerDrawRef = useRef<(() => void) | null>(null)
 
+  // ── Field setup state ──────────────────────────────────────────────────────
+  const [setupFieldModal, setSetupFieldModal] = useState(false)
+  const [setupFieldArea, setSetupFieldArea] = useState<number | ''>('')
+  const [savingField, setSavingField] = useState(false)
+
+  // ── Manual paddock state ───────────────────────────────────────────────────
+  const [manualPaddockModal, setManualPaddockModal] = useState(false)
+  const [manualPaddockName, setManualPaddockName] = useState('')
+  const [manualPaddockArea, setManualPaddockArea] = useState<number | ''>('')
+  const [manualPaddockMs, setManualPaddockMs] = useState<number | ''>('')
+  const [savingManualPaddock, setSavingManualPaddock] = useState(false)
+  const [manualPaddockError, setManualPaddockError] = useState<string | null>(null)
+
   const loadData = useCallback(async () => {
     if (!user) return
     setLoading(true)
@@ -163,14 +176,68 @@ export default function MiCampoPage() {
     }
   }
 
+  const handleSetupField = async () => {
+    if (!setupFieldArea || setupFieldArea <= 0) return
+    setSavingField(true)
+    try {
+      const res = await apiFetch('/api/organizations', {
+        method: 'PATCH',
+        body: JSON.stringify({ total_area_ha: Number(setupFieldArea) }),
+      })
+      if (res.ok) {
+        setSetupFieldModal(false)
+        await loadData()
+      }
+    } catch (err) {}
+    setSavingField(false)
+  }
+
+  const handleCreateManualPaddock = async () => {
+    if (!manualPaddockName.trim() || !manualPaddockArea || manualPaddockArea <= 0) return
+    setSavingManualPaddock(true)
+    setManualPaddockError(null)
+    try {
+      const res = await apiFetch('/api/paddocks', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: manualPaddockName.trim(),
+          area_ha: Number(manualPaddockArea),
+          current_status: 'RESTING',
+        }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setManualPaddockError(errData.error || 'Error al guardar')
+        setSavingManualPaddock(false)
+        return
+      }
+      const data = await res.json()
+      if (data.id && manualPaddockMs) {
+        await apiFetch(`/api/paddocks/${data.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ dry_matter_kg_ha: Number(manualPaddockMs) })
+        })
+      }
+      setSavingManualPaddock(false)
+      setManualPaddockModal(false)
+      setManualPaddockName('')
+      setManualPaddockArea('')
+      setManualPaddockMs('')
+      await loadData()
+    } catch (err: any) {
+      setManualPaddockError('Error de red')
+      setSavingManualPaddock(false)
+    }
+  }
+
   const avgNdvi = Object.values(ndviData).length > 0
     ? Object.values(ndviData).reduce((sum, d) => sum + d.averageNdvi, 0) / Object.values(ndviData).length
     : null
 
   return (
     <div className="flex flex-col md:flex-row h-full overflow-hidden bg-gray-100 p-3 md:p-4 gap-3 md:gap-4">
-      {/* Map — on mobile goes FIRST (top), on desktop goes RIGHT (70%) */}
-      <div className="order-1 md:order-2 flex-1 md:flex-1 h-[45vh] md:h-auto rounded-2xl overflow-hidden shadow-md border border-gray-200 relative min-h-[200px]">
+      {/* Map — on mobile goes FIRST (top), on desktop goes RIGHT (60%) */}
+      <div className="order-1 md:order-2 w-full md:w-[60%] flex flex-col h-[45vh] md:h-auto rounded-2xl overflow-hidden shadow-md border border-gray-200 relative min-h-[200px]">
         <MiCampoMap
           paddocks={paddocks}
           org={org}
@@ -179,6 +246,10 @@ export default function MiCampoPage() {
           onSelectPaddock={setSelectedPaddockId}
           onPaddockGeomUpdated={handlePaddockGeomUpdated}
           onNewPaddockDrawn={handleNewPaddockDrawn}
+          onDeletePaddock={async (id) => {
+            await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
+            loadData()
+          }}
           activeGrazingPlans={activeGrazingPlans}
           drawModeActive={drawModeActive}
           onDrawModeChange={setDrawModeActive}
@@ -208,8 +279,8 @@ export default function MiCampoPage() {
         </div>
       </div>
 
-      {/* Side Panel — on mobile goes SECOND (bottom), on desktop LEFT (30%) */}
-      <div className="order-2 md:order-1 w-full md:w-[340px] md:shrink-0 flex flex-col overflow-hidden">
+      {/* Side Panel — on mobile goes SECOND (bottom), on desktop LEFT (40%) */}
+      <div className="order-2 md:order-1 w-full md:w-[40%] md:shrink-0 flex flex-col overflow-hidden">
         <PaddockSidePanel
           paddocks={paddocks}
           org={org}
@@ -220,6 +291,21 @@ export default function MiCampoPage() {
           ndviData={ndviData}
           ndviLoading={ndviLoading}
           avgNdvi={avgNdvi}
+          onSetupField={() => { setSetupFieldArea(org?.total_area_ha || ''); setSetupFieldModal(true); }}
+          onManualPaddockCreate={() => setManualPaddockModal(true)}
+          onDeletePaddock={async (id) => {
+            await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
+            loadData()
+          }}
+          onDeleteField={async () => {
+            if (window.confirm('¿Seguro que deseas eliminar los límites y la superficie del campo?')) {
+              await apiFetch('/api/organizations', {
+                method: 'PATCH',
+                body: JSON.stringify({ boundaries: null, total_area_ha: null })
+              })
+              loadData()
+            }
+          }}
         />
       </div>
 
@@ -307,7 +393,146 @@ export default function MiCampoPage() {
                   ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   : <Check className="w-4 h-4" />
                 }
-                Guardar Potrero
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Field Setup Modal (Logical Container) ─────────────────────────────── */}
+      {setupFieldModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-black text-gray-950">Configurar Campo</h3>
+                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
+                  Contenedor Lógico
+                </p>
+              </div>
+              <button
+                onClick={() => setSetupFieldModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
+                  Hectáreas totales del campo *
+                </label>
+                <input
+                  type="number"
+                  autoFocus
+                  value={setupFieldArea}
+                  onChange={e => setSetupFieldArea(e.target.value === '' ? '' : Number(e.target.value))}
+                  onKeyDown={e => { if (e.key === 'Enter' && setupFieldArea && setupFieldArea > 0) handleSetupField() }}
+                  placeholder="Ej: 500"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+              <button
+                onClick={() => setSetupFieldModal(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSetupField}
+                disabled={savingField || !setupFieldArea || setupFieldArea <= 0}
+                className="flex-1 px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                {savingField ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Manual Paddock Creation Modal ─────────────────────────────────────── */}
+      {manualPaddockModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-black text-gray-950">Crear Potrero Manual</h3>
+                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
+                  Sin ubicación en mapa
+                </p>
+              </div>
+              <button
+                onClick={() => setManualPaddockModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
+                  Nombre del Potrero *
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={manualPaddockName}
+                  onChange={e => setManualPaddockName(e.target.value)}
+                  placeholder="Ej: Lote 3"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
+                  Superficie (ha) *
+                </label>
+                <input
+                  type="number"
+                  value={manualPaddockArea}
+                  onChange={e => setManualPaddockArea(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Ej: 50"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
+                  Materia Seca Actual (kg MS/ha)
+                </label>
+                <input
+                  type="number"
+                  value={manualPaddockMs}
+                  onChange={e => setManualPaddockMs(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Opcional. Ej: 1200"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            {manualPaddockError && (
+              <div className="px-6 pb-0 pt-0">
+                <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{manualPaddockError}</p>
+              </div>
+            )}
+            
+            <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+              <button
+                onClick={() => setManualPaddockModal(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateManualPaddock}
+                disabled={savingManualPaddock || !manualPaddockName.trim() || !manualPaddockArea || manualPaddockArea <= 0}
+                className="flex-1 px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                {savingManualPaddock ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
+                Crear
               </button>
             </div>
           </div>

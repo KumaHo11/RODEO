@@ -88,13 +88,14 @@ function OnboardingWizard() {
   }, [updateData])
 
   // ── Paddock naming modal state ────────────────────────────────────────────
-  const [pendingShape, setPendingShape] = useState<{ geojson: any; area_ha: number; layer: any } | null>(null)
+  const [pendingShape, setPendingShape] = useState<{ id?: number; geojson: any; area_ha: number; layer: any } | null>(null)
   const [paddockModalName, setPaddockModalName]   = useState('')
   const [paddockModalForraje, setPaddockModalForraje] = useState<string>('')
 
   const commitPaddock = useCallback(() => {
     if (!pendingShape || !paddockModalName.trim()) return
     const updated = [...data.paddocks, {
+      layerId: pendingShape.id,
       name: paddockModalName.trim(),
       geojson: pendingShape.geojson,
       area_ha: pendingShape.area_ha,
@@ -115,6 +116,26 @@ function OnboardingWizard() {
   }, [pendingShape])
 
   const [midDrawArea, setMidDrawArea] = useState<number | null>(null)
+
+  const handleShapeEdited = useCallback((layerId: number, geojson: any, area_ha: number) => {
+    if ((data as any).fieldLayerId === layerId) {
+      updateData({ fieldBoundary: geojson, fieldBoundaryHa: area_ha } as any)
+    } else {
+      const updated = data.paddocks.map((p: any) =>
+        p.layerId === layerId ? { ...p, geojson, area_ha } : p
+      )
+      updateData({ paddocks: updated, totalArea: parseFloat(updated.reduce((s: any, p: any) => s + p.area_ha, 0).toFixed(2)) })
+    }
+  }, [data, updateData])
+
+  const handleShapeRemoved = useCallback((layerId: number) => {
+    if ((data as any).fieldLayerId === layerId) {
+      updateData({ fieldBoundary: null, fieldBoundaryHa: 0, fieldLayerId: null, paddocks: [], totalArea: 0 } as any)
+    } else {
+      const updated = data.paddocks.filter((p: any) => p.layerId !== layerId)
+      updateData({ paddocks: updated, totalArea: parseFloat(updated.reduce((s: any, p: any) => s + p.area_ha, 0).toFixed(2)) })
+    }
+  }, [data, updateData])
 
   // Map mode depends on step
   const mapMode = step === 1 ? 'locate' : 'draw'
@@ -215,6 +236,8 @@ function OnboardingWizard() {
                 paddockCount={data.paddocks.length}
                 onShapeDrawn={handleShapeDrawn}
                 onMidDraw={setMidDrawArea}
+                onShapeEdited={handleShapeEdited}
+                onShapeRemoved={handleShapeRemoved}
               />
 
               {/* Mid-draw floating badge */}

@@ -41,6 +41,7 @@ export default function Step2Panel({ midDrawArea }: Props) {
   const confirmField = () => {
     if (!draftShape || !draftName.trim()) return
     updateData({
+      fieldLayerId:    draftShape.id,
       fieldBoundary:   draftShape.geojson,
       fieldBoundaryHa: draftShape.area_ha,
       totalArea:       draftShape.area_ha,

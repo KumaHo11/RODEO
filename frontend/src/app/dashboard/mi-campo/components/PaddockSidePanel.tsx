@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useRef } from 'react'
-import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, X, Check, Satellite, TrendingUp, Loader2, Plus, NotebookPen, BarChart3, AlertTriangle, BookOpen, Camera, Images, RefreshCw, Scale, Map, Settings } from 'lucide-react'
+import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, X, Check, Satellite, TrendingUp, Loader2, Plus, NotebookPen, BarChart3, AlertTriangle, BookOpen, Camera, Images, RefreshCw, Scale, Map, Settings, Trash2, PenLine } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
@@ -37,7 +37,10 @@ interface Props {
   avgNdvi: number | null
   herds?: any[]
   totalEV?: number
-  onDrawFieldBoundary?: () => void   // NEW: trigger field boundary drawing mode on map
+  onSetupField?: () => void
+  onManualPaddockCreate?: () => void
+  onDeletePaddock?: (paddockId: string) => void
+  onDeleteField?: () => void
 }
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -100,7 +103,7 @@ const PASTEL_ACCENTS = [
 
 export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
-  ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0, onDrawFieldBoundary
+  ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0, onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField
 }: Props) {
   const [search, setSearch] = useState('')
   const [sideTab, setSideTab] = useState<'campo' | 'potreros'>('campo')
@@ -261,42 +264,44 @@ export default function PaddockSidePanel({
         {/* ── Header ────────────────────────────────────────────────── */}
         <div className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-black text-gray-950 tracking-tight">{org?.name || 'Mi Campo'}</h2>
+            <h2 className="text-2xl font-black text-gray-950 tracking-tight">{org?.name || 'Mi Campo'}</h2>
             {ndviLoading && <Loader2 className="w-4 h-4 text-green-500 animate-spin" />}
           </div>
 
           {/* Perimeter badge */}
-          {org?.boundaries ? (
-            <div className="flex items-center gap-2 p-2.5 bg-blue-50 rounded-xl border border-blue-100">
-              <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-                <Map className="w-3 h-3 text-white" />
-              </div>
-              <div>
-                <p className="text-[8px] font-black text-blue-500 tracking-widest uppercase">Perímetro</p>
-                <p className="text-xs font-black text-gray-900">{Number(org.total_area_ha).toFixed(1)} ha · {paddocks.length} potreros · {grazingCount} en pastoreo</p>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => onDrawFieldBoundary?.()}
-              className="w-full py-2 bg-blue-50 border border-dashed border-blue-300 text-blue-700 text-[10px] font-black rounded-xl hover:bg-blue-100 transition-all flex items-center justify-center gap-1.5"
-            >
-              <Map className="w-3 h-3" /> Dibujar contorno del campo
-            </button>
-          )}
-
-          {/* NDVI promedio */}
-          {avgNdvi !== null && (
-            <div className="mt-2 p-2.5 bg-green-50 rounded-xl border border-green-100 flex items-center gap-2.5">
-              <Satellite className="w-3.5 h-3.5 text-green-600 shrink-0" />
-              <div className="flex-1">
-                <p className="text-[8px] font-black text-green-600 tracking-widest uppercase">NDVI Promedio del Campo</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-sm font-black text-gray-900">{avgNdvi.toFixed(3)}</p>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${getNdviLabel(avgNdvi).color}`}>
-                    {getNdviLabel(avgNdvi).label}
-                  </span>
+          {org?.boundaries || org?.total_area_ha > 0 ? (
+            <div className="flex items-center justify-between p-2.5 bg-blue-50 rounded-xl border border-blue-100">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                  <Map className="w-3 h-3 text-white" />
                 </div>
+                <div>
+                  <p className="text-[10px] font-black text-blue-500 tracking-widest uppercase">
+                    {org?.boundaries ? 'Perímetro' : 'Campo (Lógico)'}
+                  </p>
+                  <p className="text-sm font-black text-gray-900 mt-0.5">{Number(org.total_area_ha || 0).toFixed(1)} ha · {paddocks.length} potreros · {grazingCount} en pastoreo</p>
+                  {avgNdvi !== null && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Satellite className="w-3 h-3 text-green-600" />
+                      <p className="text-[10px] font-bold text-green-700">NDVI {avgNdvi.toFixed(3)}</p>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ml-1 ${getNdviLabel(avgNdvi).color}`}>
+                        {getNdviLabel(avgNdvi).label}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-1 items-end self-start">
+                {onSetupField && (
+                  <button onClick={onSetupField} className="w-7 h-7 flex items-center justify-center text-blue-600 bg-white/50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200" title="Editar Tamaño">
+                    <PenLine className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {onDeleteField && (
+                  <button onClick={onDeleteField} className="w-7 h-7 flex items-center justify-center text-red-500 bg-white/50 hover:bg-red-100 rounded-lg transition-colors border border-red-200" title="Eliminar Campo">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -306,15 +311,20 @@ export default function PaddockSidePanel({
         <div className="flex-1 overflow-y-auto">
           <div className="px-5 py-2.5 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-50 z-10">
             <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Potreros ({paddocks.length})</p>
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-300" />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="bg-gray-50 border border-gray-100 rounded-lg pl-6 pr-2 py-1 text-[10px] text-gray-700 placeholder:text-gray-300 focus:ring-1 focus:ring-green-500 outline-none w-24"
-              />
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => onManualPaddockCreate?.()} className="flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-green-700 bg-green-50 rounded-lg border border-green-200 hover:bg-green-100 transition-all">
+                <Plus className="w-3 h-3" /> Manual
+              </button>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-300" />
+                <input
+                  type="text"
+                  placeholder="Buscar..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="bg-gray-50 border border-gray-100 rounded-lg pl-6 pr-2 py-1 text-[10px] text-gray-700 placeholder:text-gray-300 focus:ring-1 focus:ring-green-500 outline-none w-24"
+                />
+              </div>
             </div>
           </div>
           <div className="p-3 space-y-1.5">
@@ -348,58 +358,62 @@ export default function PaddockSidePanel({
                     ? 'bg-green-50 border-green-200 shadow-sm'
                     : 'bg-white border-gray-100 hover:border-green-100 hover:bg-gray-50/50'
                     }`}
-                  style={{ borderLeftColor: accentColor, borderLeftWidth: 4 }}
                   onClick={() => onSelectPaddock(paddock.id)}
                 >
-                  <div className="p-3.5 flex items-start justify-between gap-2">
+                  <div className="p-4 flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-start justify-between gap-2 mb-2">
                         <div>
                           {/* MS como dato principal */}
                           {(() => {
                             const ms = Number(paddock.dry_matter_kg_ha) || (ndviData[paddock.id]?.estimatedAvailableDryMatterHa || 0)
                             const msColor = ms >= 1500 ? 'text-green-700' : ms >= 800 ? 'text-amber-700' : ms > 0 ? 'text-red-600' : 'text-gray-400'
                             const ha = Number(paddock.area_ha) || 0
-                            return ms > 0 ? (
+                            return (
                               <div>
-                                <p className="text-xs font-black text-gray-900 truncate leading-tight mb-0.5">{paddock.name}</p>
-                                <p className={`text-base font-black leading-none ${msColor}`}>{ms.toLocaleString()} <span className="text-[9px] font-bold text-gray-400">kg MS/ha</span></p>
-                                <p className="text-[9px] text-gray-500">{(ms * ha).toFixed(0)} kg totales · {ha.toFixed(1)} ha</p>
-                              </div>
-                            ) : (
-                              <div>
-                                <p className="text-sm font-black text-gray-900 truncate leading-tight">{paddock.name}</p>
-                                <p className="text-[10px] text-gray-400">{Number(paddock.area_ha || 0).toFixed(1)} ha · Sin análisis</p>
+                                <h3 className="text-base font-black text-gray-900 truncate leading-tight mb-1">{paddock.name} <span className="text-[11px] text-gray-500 font-bold ml-1.5">{ha.toFixed(1)} ha</span></h3>
+                                {ms > 0 ? (
+                                  <div className="flex items-center gap-1.5 mt-1.5">
+                                    <Leaf className={`w-4 h-4 ${msColor}`} />
+                                    <p className={`text-xl font-black leading-none ${msColor}`}>{ms.toLocaleString()} <span className="text-[10px] font-bold opacity-70">kg MS/ha</span></p>
+                                  </div>
+                                ) : (
+                                  <button onClick={(e) => { e.stopPropagation(); openModal(paddock) }} className="mt-1 flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold text-green-700 border border-green-200 bg-green-50 rounded-md hover:bg-green-100 transition-all">
+                                    <Plus className="w-3 h-3" /> Agregar Materia Seca
+                                  </button>
+                                )}
                               </div>
                             )
                           })()}
                         </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
                           {ndviVal != null && (
-                            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${ndviInfo?.color}`}>NDVI {Number(ndviVal).toFixed(2)}</span>
+                            <p className="text-[10px] text-gray-400 font-bold tracking-tight">NDVI {Number(ndviVal).toFixed(2)}</p>
                           )}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
                         </div>
                       </div>
                       {/* Tech icons row */}
-                      <div className="flex items-center gap-1 mt-1.5">
-                        {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
-                          const td2 = td as Record<string, any>
-                          const active = Boolean(td2[key]) || (key === 'hasPests' && (td2.weeds || []).length > 0)
-                          return (
-                            <span key={key} className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${active ? bgOn : bgOff}`} title={key}>
-                              <Icon className={`w-3 h-3 ${active ? color : 'text-gray-300'}`} />
-                            </span>
-                          )
-                        })}
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-1.5">
+                          {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
+                            const td2 = td as Record<string, any>
+                            const active = Boolean(td2[key]) || (key === 'hasPests' && (td2.weeds || []).length > 0)
+                            return (
+                              <span key={key} className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${active ? bgOn : bgOff}`} title={key}>
+                                <Icon className={`w-3 h-3 ${active ? color : 'text-gray-300'}`} />
+                              </span>
+                            )
+                          })}
+                        </div>
+                        <button
+                          onClick={e => { e.stopPropagation(); openModal(paddock) }}
+                          className="shrink-0 flex items-center gap-1 px-2 py-1 text-[10px] font-black text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-100 transition-all"
+                        >
+                          Detalles
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                      className="shrink-0 flex items-center gap-1 px-2 py-1 text-[10px] font-black text-green-600 bg-green-50 hover:bg-green-100 rounded-lg border border-green-100 transition-all"
-                    >
-                      Ver/Editar
-                    </button>
                   </div>
                 </div>
               )
@@ -743,14 +757,28 @@ export default function PaddockSidePanel({
 
             {/* Footer tecnico */}
             {(modalTab as string) === 'tecnico' && (
-              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
-                <button onClick={() => setModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
-                  Cancelar
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-between items-center shrink-0">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (window.confirm('¿Seguro que deseas eliminar el potrero ' + editingPaddock.name + '?')) {
+                      setModalOpen(false)
+                      if (onDeletePaddock) onDeletePaddock(editingPaddock.id)
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase text-red-600 hover:bg-red-50 rounded-lg transition-all border border-transparent hover:border-red-100"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar
                 </button>
-                <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 text-sm font-black text-white bg-green-600 rounded-xl shadow-md shadow-green-100 hover:bg-green-700 disabled:opacity-50 transition-all flex items-center gap-2">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Guardar cambios
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => setModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
+                    Cancelar
+                  </button>
+                  <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 text-sm font-black text-white bg-green-600 rounded-xl shadow-md shadow-green-100 hover:bg-green-700 disabled:opacity-50 transition-all flex items-center gap-2">
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    Guardar
+                  </button>
+                </div>
               </div>
             )}
             {(modalTab as string) === 'bitacora' && (

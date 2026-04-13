@@ -49,12 +49,13 @@ interface Props {
   activeGrazingPlans?: { paddock_id: string; herd_name: string; head_count: number }[]
   drawModeActive?: boolean
   onDrawModeChange?: (active: boolean) => void
+  onDeletePaddock?: (paddockId: string) => void
 }
 
 function MapController({
   paddocks, fieldBoundary, selectedPaddockId,
   onSelectPaddock, onPaddockGeomUpdated, onNewPaddockDrawn, activeGrazingPlans = [],
-  drawModeActive = false, onDrawModeChange
+  drawModeActive = false, onDrawModeChange, onDeletePaddock
 }: Props) {
   const map = useMap()
   const layerGroupRef = useRef<L.LayerGroup | null>(null)
@@ -74,7 +75,7 @@ function MapController({
       drawMarker: false,
       drawText: false,
       editControls: true,
-      removalMode: false,
+      removalMode: true,
       cutPolygon: false,
     })
 
@@ -212,6 +213,10 @@ function MapController({
           })
         } catch {}
         onPaddockGeomUpdated(paddock.id, updatedGeoJSON.geometry || updatedGeoJSON, areaHa)
+      })
+
+      layer.on('pm:remove', () => {
+        if (onDeletePaddock) onDeletePaddock(paddock.id)
       })
 
       layerGroupRef.current!.addLayer(layer)
