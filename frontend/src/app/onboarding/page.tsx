@@ -29,18 +29,18 @@ const OnboardingMapSingleton = dynamic<OnboardingMapSingletonProps>(
 import Step1Panel from './components/Step1Panel'
 import Step2Panel from './components/Step2Panel'
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 // Stepper config
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 const STEPS = [
   { id: 1, title: 'Ubicación', subtitle: 'Nombre y mapa' },
   { id: 2, title: 'Potreros',  subtitle: 'Campo y lotes' },
   { id: 3, title: 'Hacienda',  subtitle: 'Inventario'    },
 ]
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 // Main wizard
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 function OnboardingWizard() {
   const { data, updateData, step } = useOnboarding()
   const { user, isLoading, profile } = useAuth()
@@ -55,7 +55,7 @@ function OnboardingWizard() {
 
   if (isLoading) return null
 
-  // ── Callbacks for the map singleton ───────────────────────────────────────
+  // -- Callbacks for the map singleton --------------------------------------─
   const handleLocationChange = useCallback(async (lat: number, lng: number) => {
     // Reverse geocode silently
     let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
@@ -67,7 +67,7 @@ function OnboardingWizard() {
     updateData({ location: { lat, lng, address } })
   }, [updateData])
 
-  // ── Keep a ref to fieldBoundary to avoid stale closures in handleShapeDrawn
+  // -- Keep a ref to fieldBoundary to avoid stale closures in handleShapeDrawn
   const fieldBoundaryRef = useRef(data.fieldBoundary)
   useEffect(() => { fieldBoundaryRef.current = data.fieldBoundary }, [data.fieldBoundary])
 
@@ -87,7 +87,7 @@ function OnboardingWizard() {
     }
   }, [updateData])
 
-  // ── Paddock naming modal state ────────────────────────────────────────────
+  // -- Paddock naming modal state --------------------------------------------
   const [pendingShape, setPendingShape] = useState<{ id?: number; geojson: any; area_ha: number; layer: any } | null>(null)
   const [paddockModalName, setPaddockModalName]   = useState('')
   const [paddockModalForraje, setPaddockModalForraje] = useState<string>('')
@@ -146,7 +146,7 @@ function OnboardingWizard() {
   return (
     <div className="flex flex-col h-screen bg-gray-50 font-sans text-gray-900 overflow-hidden">
 
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <header className="bg-white border-b border-gray-100 px-6 py-4 shadow-sm z-30 flex items-center justify-between shrink-0">
         <RodeoLogo variant="light" size="md" showTagline={false} />
         <div className="hidden sm:block">
@@ -154,7 +154,7 @@ function OnboardingWizard() {
         </div>
       </header>
 
-      {/* ── Stepper ── */}
+      {/* -- Stepper -- */}
       <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-3 sm:py-4 flex justify-center z-20 shrink-0">
         <div className="flex items-center gap-0">
           {STEPS.map((s, idx) => {
@@ -189,7 +189,7 @@ function OnboardingWizard() {
         </div>
       </div>
 
-      {/* ── Main content ── */}
+      {/* -- Main content -- */}
       <main className="flex-1 flex overflow-hidden min-h-0">
 
         {/* Steps 1+2: [Left panel | Persistent map] */}
@@ -254,7 +254,7 @@ function OnboardingWizard() {
                 </div>
               )}
 
-              {/* ── Paddock naming modal — slides up from bottom on draw complete ── */}
+              {/* -- Paddock naming modal — slides up from bottom on draw complete -- */}
               <AnimatePresence>
                 {pendingShape && (
                   <motion.div

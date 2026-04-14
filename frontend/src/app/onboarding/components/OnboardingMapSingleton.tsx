@@ -2,7 +2,7 @@
 
 /**
  * OnboardingMapSingleton
- * ──────────────────────
+ * ----------------------
  * Single Leaflet MapContainer that NEVER unmounts during steps 1–2.
  * Changes only its interaction mode:
  *
@@ -38,9 +38,9 @@ const greenIcon = typeof window !== 'undefined' ? new L.Icon({
   iconSize:   [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
 }) : undefined
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 // Types
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 export type MapMode = 'locate' | 'draw'
 
 export interface DrawnShape {
@@ -64,9 +64,9 @@ export interface OnboardingMapSingletonProps {
   onShapeRemoved?: (layerId: number) => void
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 // Inner controller — runs inside MapContainer, never re-mounts
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 function MapController({
   mode,
   location,
@@ -89,7 +89,7 @@ function MapController({
   useEffect(() => { drawPhaseRef.current = drawPhase }, [drawPhase])
   useEffect(() => { paddockRef.current = paddockCount }, [paddockCount])
 
-  // ── On location set: fly map there (only once, or if location changes) ──────
+  // -- On location set: fly map there (only once, or if location changes) ------
   useEffect(() => {
     if (!location) return
     if (!didFlyRef.current) {
@@ -98,7 +98,7 @@ function MapController({
     }
   }, [location, map])
 
-  // ── Click in 'locate' mode → set location ────────────────────────────────
+  // -- Click in 'locate' mode → set location --------------------------------
   useEffect(() => {
     const handler = async (e: L.LeafletMouseEvent) => {
       if (modeRef.current !== 'locate') return
@@ -110,7 +110,7 @@ function MapController({
     return () => { map.off('click', handler) }
   }, [map, onLocationChange])
 
-  // ── Geoman setup (once) ────────────────────────────────────────────────────
+  // -- Geoman setup (once) ----------------------------------------------------
   useEffect(() => {
     if (geomanInited.current) return
     geomanInited.current = true
@@ -169,7 +169,7 @@ function MapController({
     })
   }, [map]) // intentionally no deps — setup runs once
 
-  // ── Mode switching — hide/show Geoman controls ─────────────────────────────
+  // -- Mode switching — hide/show Geoman controls ----------------------------─
   useEffect(() => {
     if (mode === 'locate') {
       // Disable drawing
@@ -195,9 +195,9 @@ function MapController({
   return null
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 // Exported component — the singleton wrapper
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 export default function OnboardingMapSingleton(props: OnboardingMapSingletonProps) {
   const DEFAULT_CENTER: [number, number] = [-34.6037, -60.5]
 
