@@ -22,6 +22,7 @@ export interface Paddock {
   estimated_adh?: number
   technical_data?: Record<string, any>
   geom?: any
+  boundary?: any
 }
 
 interface Props {
