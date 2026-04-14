@@ -118,14 +118,26 @@ export async function finishOnboarding(formData: {
     }
   }
 
-  // 4. Insert Herds — only columns that exist
+  // 4. Insert Herds — admission_date and age_months included
   if (formData.herds && formData.herds.length > 0) {
     for (const h of formData.herds) {
       try {
         await mutate(
-          `INSERT INTO herds (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [orgId, h.name, h.species, h.breed || null, h.headCount, h.avgWeight || null, h.totalEV || 0, h.categoria || null]
+          `INSERT INTO herds
+             (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria, admission_date, age_months)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          [
+            orgId,
+            h.name,
+            h.species,
+            h.breed   || null,
+            h.headCount,
+            h.avgWeight  || null,
+            h.totalEV    || 0,
+            h.categoria  || null,
+            h.admissionDate || null,   // DATE
+            h.ageMonths  ?? null,      // INTEGER (months)
+          ]
         )
       } catch (err: any) {
         console.error('Insert herd error:', err.message, h.name)

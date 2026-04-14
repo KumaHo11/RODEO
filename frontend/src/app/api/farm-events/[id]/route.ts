@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 403 })
 
     const body = await req.json()
-    const { title, event_type, event_date, end_date, description, status, herd_id } = body
+    const { title, event_type, event_date, end_date, description, status, herd_id, assigned_to } = body
 
     const STATUS_UI_TO_DB: Record<string, string> = {
       pendiente: 'SCHEDULED', completado: 'COMPLETED', cancelado: 'CANCELLED',
@@ -54,6 +54,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         orgId,
       ]
     )
+
+    // Optional: update assigned_to if column exists
+    if (assigned_to !== undefined) {
+      try {
+        await query(
+          `UPDATE farm_events SET assigned_to = $1 WHERE id = $2 AND org_id = $3`,
+          [assigned_to || null, (await params).id, orgId]
+        )
+      } catch { /* column not yet migrated */ }
+    }
 
     return NextResponse.json({ ok: true })
   } catch (err: any) {
