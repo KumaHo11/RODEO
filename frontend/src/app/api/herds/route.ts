@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       ]
     )
 
-    const id: string | null = result.rows[0]?.id ?? null
+    const id: string | null = (result.rows[0]?.id as string) ?? null
 
     // Step 2: UPDATE with new optional columns — silently skip if columns don't exist yet
     if (id && (age_months || age_years || admission_date || parent_herd_id)) {
