@@ -65,30 +65,59 @@ export async function POST(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const body = await req.json()
-    const { name, area_ha, geojson, current_status = 'RESTING' } = body
+    const {
+      name, area_ha, geojson, current_status = 'RESTING',
+      technical_data, dry_matter_kg_ha, boundary,
+    } = body
 
     if (!name) return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
 
-    const geomJson = extractGeometry(geojson)
+    // Accept both geojson (drawn polygon) and boundary (KML)
+    const geomJson = extractGeometry(geojson) ?? extractGeometry(boundary)
 
     let result
     if (geomJson) {
       result = await mutate(
-        `INSERT INTO paddocks (org_id, name, area_ha, current_status, geom)
-         VALUES ($1, $2, $3, $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326))
+        `INSERT INTO paddocks (org_id, name, area_ha, current_status, geom, technical_data, dry_matter_kg_ha)
+         VALUES ($1, $2, $3, $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), $6, $7)
          RETURNING id`,
-        [auth.orgId, name, area_ha || 0, current_status, JSON.stringify(geomJson)]
+        [
+          auth.orgId,
+          name,
+          area_ha || 0,
+          current_status,
+          JSON.stringify(geomJson),
+          technical_data ? JSON.stringify(technical_data) : '{}',
+          dry_matter_kg_ha ?? null,
+        ]
       )
     } else {
       result = await mutate(
-        `INSERT INTO paddocks (org_id, name, area_ha, current_status)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO paddocks (org_id, name, area_ha, current_status, technical_data, dry_matter_kg_ha)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id`,
-        [auth.orgId, name, area_ha || 0, current_status]
+        [
+          auth.orgId,
+          name,
+          area_ha || 0,
+          current_status,
+          technical_data ? JSON.stringify(technical_data) : '{}',
+          dry_matter_kg_ha ?? null,
+        ]
       )
     }
 
     const id = result.rows[0]?.id
+
+    // Log initial dry matter in biological_monitoring if provided
+    if (dry_matter_kg_ha !== undefined && dry_matter_kg_ha !== null && id) {
+      await mutate(
+        `INSERT INTO biological_monitoring (paddock_id, dry_matter_estimate_kg, recorded_at)
+         VALUES ($1, $2, NOW())`,
+        [id, dry_matter_kg_ha]
+      )
+    }
+
     return NextResponse.json({ id }, { status: 201 })
   } catch (err: any) {
     console.error('POST /api/paddocks error:', err)
