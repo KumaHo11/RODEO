@@ -221,9 +221,13 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
       const newCount = isAdd
         ? (herd.head_count || 0) + n
         : Math.max((herd.head_count || 0) - n, 0)
+
+      // Recalculate EV with updated head count
+      const newEV = calcEV(catKey, Number(herd.avg_weight_kg || weight || 400), newCount)
+
       const patchRes = await apiFetch(`/api/herds/${herd.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ head_count: newCount }),
+        body: JSON.stringify({ head_count: newCount, total_ev: newEV }),
       })
       if (!patchRes.ok) throw new Error('No se pudo actualizar el stock')
 
@@ -242,6 +246,7 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
       if (actId === 'destete' && n > 0) {
         setActSaving(false)
         setWeanLoading(true)
+        const childEV = calcEV('TERNEROS', 180, n) // peso referencia ternero destetado
         const childRes = await apiFetch('/api/herds', {
           method: 'POST',
           body: JSON.stringify({
@@ -250,6 +255,8 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
             categoria: 'TERNEROS',
             breed: herd.breed || null,
             head_count: n,
+            avg_weight_kg: 180,
+            total_ev: childEV,
             parent_herd_id: herd.id,
           }),
         })
@@ -260,7 +267,7 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
         }
       }
 
-      setActSuccess(`${isAdd ? '+' : '-'}${n} cabezas registradas`)
+      setActSuccess(`${isAdd ? '+' : '-'}${n} cabezas · EV actualizado a ${newEV.toFixed(2)}`)
       setActCount(1); setActNote(''); setActId(null)
       setTimeout(() => setActSuccess(null), 3500)
       onSaved()

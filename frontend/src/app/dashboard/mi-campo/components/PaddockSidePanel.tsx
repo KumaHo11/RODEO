@@ -15,6 +15,7 @@ interface Paddock {
   name: string
   area_ha: number
   current_status: string
+  is_active: boolean
   current_ndvi?: number
   dry_matter_kg_ha?: number
   estimated_adh?: number
@@ -75,6 +76,26 @@ export default function PaddockSidePanel({
   const [editingPaddock, setEditingPaddock] = useState<Paddock | null>(null)
   const [paddockNotes, setPaddockNotes]     = useState<any[]>([])
   const [notesLoading, setNotesLoading]     = useState(false)
+  // Local optimistic is_active map so toggle feels instant
+  const [activeMap, setActiveMap] = useState<Record<string, boolean>>({})
+
+  // Sync activeMap when paddocks data changes
+  useEffect(() => {
+    const map: Record<string, boolean> = {}
+    paddocks.forEach(p => { map[p.id] = p.is_active ?? true })
+    setActiveMap(map)
+  }, [paddocks])
+
+  const toggleDisable = async (e: React.MouseEvent, paddockId: string) => {
+    e.stopPropagation()
+    const next = !(activeMap[paddockId] ?? true)
+    setActiveMap(prev => ({ ...prev, [paddockId]: next }))
+    await apiFetch(`/api/paddocks/${paddockId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: next }),
+    })
+    onDataRefresh?.()
+  }
 
   // KML import
   const kmlInputRef           = useRef<HTMLInputElement>(null)
@@ -332,7 +353,8 @@ export default function PaddockSidePanel({
                 <p className="text-[10px] text-gray-300 mt-1">Dibujá un polígono en el mapa o importá un KML</p>
               </div>
             ) : (
-              filtered.map((paddock) => {
+            filtered.map((paddock) => {
+                const isActive   = activeMap[paddock.id] ?? true
                 const isSelected = paddock.id === selectedPaddockId
                 const sat        = ndviData[paddock.id]
                 const ndviVal    = sat?.averageNdvi ?? paddock.current_ndvi
@@ -351,52 +373,85 @@ export default function PaddockSidePanel({
                 return (
                   <div
                     key={paddock.id}
-                    className={`w-full rounded-xl border transition-all cursor-pointer overflow-hidden ${
-                      isSelected
-                        ? 'bg-green-50 border-green-200 shadow-sm'
-                        : 'bg-white border-gray-100 hover:border-green-200 hover:bg-gray-50/50'
+                    className={`w-full rounded-xl border transition-all overflow-hidden relative ${
+                      !isActive
+                        ? 'bg-gray-100 border-gray-200 opacity-60'
+                        : isSelected
+                          ? 'bg-green-50 border-green-200 shadow-sm cursor-pointer'
+                          : 'bg-white border-gray-100 hover:border-green-200 hover:bg-gray-50/50 cursor-pointer'
                     }`}
-                    onClick={() => onSelectPaddock(paddock.id)}
+                    onClick={() => isActive && onSelectPaddock(paddock.id)}
                   >
                     <div className="p-3.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          {/* Nombre + ha — tipografía mayor */}
-                          <h3 className="text-base font-black text-gray-900 truncate leading-snug">
+                          {/* Nombre + ha */}
+                          <h3 className={`text-base font-black truncate leading-snug ${
+                            isActive ? 'text-gray-900' : 'text-gray-400'
+                          }`}>
                             {paddock.name}
                           </h3>
-                          <p className="text-sm font-bold text-gray-500">
+                          <p className={`text-sm font-bold ${
+                            isActive ? 'text-gray-500' : 'text-gray-400'
+                          }`}>
                             {Number(paddock.area_ha || 0).toFixed(1)} ha
                           </p>
 
-                          {/* MS — solo usuario, secundario */}
-                          {ms > 0 ? (
-                            <p className={`text-xs font-semibold mt-0.5 ${msColor}`}>
-                              {ms.toLocaleString('es')} kg MS/ha
-                              {totalMsCard != null && (
-                                <span className="text-gray-400 font-normal ml-1">
-                                  · {totalMsCard.toLocaleString('es')} kg total
-                                </span>
+                          {/* Content only visible when active */}
+                          {isActive && (
+                            <>
+                              {ms > 0 ? (
+                                <p className={`text-xs font-semibold mt-0.5 ${msColor}`}>
+                                  {ms.toLocaleString('es')} kg MS/ha
+                                  {totalMsCard != null && (
+                                    <span className="text-gray-400 font-normal ml-1">
+                                      · {totalMsCard.toLocaleString('es')} kg total
+                                    </span>
+                                  )}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 mt-0.5">Sin datos de MS</p>
                               )}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-gray-400 mt-0.5">Sin datos de MS</p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                NDVI: <span className="font-medium text-gray-500">{ndviVal != null ? Number(ndviVal).toFixed(3) : '—'}</span>
+                              </p>
+                            </>
                           )}
 
-                          {/* NDVI — solo texto */}
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            NDVI: <span className="font-medium text-gray-500">{ndviVal != null ? Number(ndviVal).toFixed(3) : '—'}</span>
-                          </p>
+                          {/* Disabled badge */}
+                          {!isActive && (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-black text-red-500 bg-red-50 border border-red-200 rounded-md px-2 py-0.5 tracking-widest uppercase">
+                              Inhabilitado
+                            </span>
+                          )}
                         </div>
 
-                        {/* Columna derecha: calidad + pastoreo */}
+                        {/* Right col */}
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          {qualityScore != null && (
+                          {/* Toggle inhabilitado */}
+                          <button
+                            type="button"
+                            onClick={e => toggleDisable(e, paddock.id)}
+                            title={isActive ? 'Inhabilitar potrero' : 'Habilitar potrero'}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none ${
+                              isActive
+                                ? 'bg-green-500 border-green-500'
+                                : 'bg-red-500 border-red-500'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                isActive ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+
+                          {isActive && qualityScore != null && (
                             <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${qColor}`}>
                               {qualityScore}/10
                             </span>
                           )}
-                          {paddock.current_status === 'GRAZING' && (
+                          {isActive && paddock.current_status === 'GRAZING' && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
                               En pastoreo
                             </span>
@@ -404,26 +459,27 @@ export default function PaddockSidePanel({
                         </div>
                       </div>
 
-                      {/* Tech indicators + botón Detalles */}
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-1.5">
-                          {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
-                            const active = Boolean(td[key]) || (key === 'hasPests' && (td.weeds || td.weed_types || []).length > 0)
-                            return (
-                              <span key={key} className={`w-5 h-5 rounded-md flex items-center justify-center ${active ? bgOn : bgOff}`}>
-                                <Icon className={`w-3 h-3 ${active ? color : 'text-gray-300'}`} />
-                              </span>
-                            )
-                          })}
+                      {/* Tech indicators + Detalles — only when active */}
+                      {isActive && (
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center gap-1.5">
+                            {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
+                              const active = Boolean(td[key]) || (key === 'hasPests' && (td.weeds || td.weed_types || []).length > 0)
+                              return (
+                                <span key={key} className={`w-5 h-5 rounded-md flex items-center justify-center ${active ? bgOn : bgOff}`}>
+                                  <Icon className={`w-3 h-3 ${active ? color : 'text-gray-300'}`} />
+                                </span>
+                              )
+                            })}
+                          </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); openModal(paddock) }}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all shadow-sm"
+                          >
+                            Detalles
+                          </button>
                         </div>
-                        {/* Botón Detalles — verde institucional, más prominente */}
-                        <button
-                          onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all shadow-sm"
-                        >
-                          Detalles
-                        </button>
-                      </div>
+                      )}
                     </div>
                   </div>
                 )

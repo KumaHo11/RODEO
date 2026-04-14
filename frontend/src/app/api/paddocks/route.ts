@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
     const paddocks = await query(
       `SELECT
          p.id, p.org_id, p.name, p.area_ha, p.current_status, p.is_grazable,
+         p.is_active,
          p.estimated_adh, p.dry_matter_kg_ha, p.current_ndvi,
          p.previous_dry_matter_kg_ha, p.previous_ndvi_date, p.technical_data,
          p.created_at, p.updated_at,
