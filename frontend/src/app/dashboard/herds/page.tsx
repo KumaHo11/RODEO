@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { Plus, Search, Edit2, Trash2, X, Check, Camera, Sparkles, Loader2, HeartPulse, Paperclip } from 'lucide-react'
+import { Button, FormField } from '@/design-system'
 
 const ANIMAL_TYPES = [
   { id: 'vacas',       label: 'Vacas',       demandFactor: 1.0 },
@@ -127,23 +128,20 @@ export default function HerdsPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-950">Rebaños</h1>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Rodeos</h1>
           <p className="text-sm text-gray-500 font-medium mt-1">
             Gestión de lotes de animales por especie, categoría y carga animal.
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200"
-        >
-          <Plus className="w-4 h-4" /> Nuevo Rebaño
-        </button>
+        <Button onClick={openCreate} leftIcon={<Plus className="w-4 h-4" />}>
+          Nuevo Rodeo
+        </Button>
       </div>
 
       {/* Summary KPIs */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Total Rebaños</p>
+          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Total Rodeos</p>
           <p className="text-4xl font-black text-gray-950">{herds.length}</p>
           <p className="text-[9px] text-gray-400 mt-1">{totalAnimals.toLocaleString()} animales</p>
         </div>
@@ -284,7 +282,7 @@ export default function HerdsPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
               <div>
-                <h3 className="text-base font-black text-gray-950">{form.id ? 'Editar Rebaño' : 'Nuevo Rebaño'}</h3>
+                <h3 className="text-base font-black text-gray-950">{form.id ? 'Editar Rodeo' : 'Nuevo Rodeo'}</h3>
                 <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">Datos del lote de animales</p>
               </div>
               <button onClick={() => setModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
@@ -294,16 +292,13 @@ export default function HerdsPage() {
 
             <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
               {/* Nombre */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Nombre del Lote *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  placeholder="Ej: Vacas preñadas - Lote A"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all"
-                />
-              </div>
+              <FormField
+                label="Nombre del Lote *"
+                type="text"
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="Ej: Vacas preñadas - Lote A"
+              />
 
               {/* Especie / Categoria Comercial */}
               <div className="space-y-1.5">
@@ -386,17 +381,17 @@ export default function HerdsPage() {
             </div>
 
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+              <Button variant="secondary" onClick={() => setModalOpen(false)}>
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleSave}
-                disabled={saving || !form.name || !form.head_count}
-                className="px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center gap-2"
+                isLoading={saving}
+                disabled={!form.name || !form.head_count}
+                leftIcon={<Check className="w-4 h-4" />}
               >
-                {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
-                {form.id ? 'Actualizar' : 'Crear Rebaño'}
-              </button>
+                {form.id ? 'Actualizar' : 'Crear Rodeo'}
+              </Button>
             </div>
           </div>
         </div>

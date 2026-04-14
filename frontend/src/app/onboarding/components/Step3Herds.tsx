@@ -185,7 +185,7 @@ export default function Step3Herds() {
               <div className="flex-1">
                 <p className="text-xs font-black text-amber-800">¿Finalizar sin inventario?</p>
                 <p className="text-[10px] text-amber-600 font-normal mt-0.5 leading-relaxed">
-                  Podés cargar los rebaños después desde la sección <strong>Rebaños</strong> del Dashboard.
+                  Podés cargar los rodeos después desde la sección <strong>Rodeos</strong> del Dashboard.
                 </p>
                 <div className="flex gap-2 mt-3">
                   <button onClick={() => handleFinish(true)} disabled={submitting}

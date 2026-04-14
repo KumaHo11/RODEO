@@ -254,7 +254,7 @@ export default function Step4Confirm() {
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <div>
                     <p className="text-xs font-bold text-amber-700">Sin rebaños registrados</p>
-                    <p className="text-[9px] text-amber-500 mt-0.5">Podés completarlo desde la sección Rebaños del Dashboard.</p>
+                    <p className="text-[9px] text-amber-500 mt-0.5">Podés completarlo desde la sección Rodeos del Dashboard.</p>
                   </div>
                 </div>
               )}

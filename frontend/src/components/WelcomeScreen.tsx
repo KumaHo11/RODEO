@@ -9,7 +9,7 @@ import RodeoLogo from '@/components/RodeoLogo'
 const MODULE_META: Record<string, { label: string; icon: React.ComponentType<any>; color: string }> = {
   dashboard:    { label: 'Panel principal',  icon: BarChart2,    color: 'bg-green-100 text-green-700' },
   mi_campo:     { label: 'Mi campo',         icon: MapPin,       color: 'bg-emerald-100 text-emerald-700' },
-  rebanhos:     { label: 'Rebaños',          icon: Sprout,       color: 'bg-lime-100 text-lime-700' },
+  rebanhos:     { label: 'Rodeos',          icon: Sprout,       color: 'bg-lime-100 text-lime-700' },
   agenda:       { label: 'Agenda',           icon: Calendar,     color: 'bg-blue-100 text-blue-700' },
   planificador: { label: 'Planificador',     icon: ClipboardList,color: 'bg-violet-100 text-violet-700' },
   bitacora:     { label: 'Bitácora',         icon: BookOpen,     color: 'bg-amber-100 text-amber-700' },

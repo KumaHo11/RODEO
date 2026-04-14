@@ -353,7 +353,7 @@ export default function DashboardOverview() {
                           )}
                         </div>
                         <p className="text-xs text-gray-500 font-medium truncate">
-                          {e.herd_id ? (herds.find(h => h.id === e.herd_id)?.name || 'Rebaño') : 'Multi-rebaño'}
+                          {e.herd_id ? (herds.find(h => h.id === e.herd_id)?.name || 'Rodeo') : 'Multi-rodeo'}
                           {e.description && <span className="mx-1.5 opacity-30">·</span>}
                           {e.description && <span className="opacity-70">{e.description}</span>}
                         </p>
@@ -372,7 +372,7 @@ export default function DashboardOverview() {
           </div>
         </div>
 
-        {/* DERECHA: 4 cards — Clima · Precio · Disponibilidad · Rebaños */}
+        {/* DERECHA: 4 cards — Clima · Precio · Disponibilidad · Rodeos */}
         <div className="flex-1 flex flex-col gap-4">
 
           {/* 1. Clima */}
@@ -446,7 +446,7 @@ export default function DashboardOverview() {
             </div>
           </div>
 
-          {/* 4. Rebaños — Carga animal */}
+          {/* 4. Rodeos — Carga animal */}
           <div className="bg-[#fffbeb] rounded-2xl border border-[#fde68a] shadow-sm flex flex-col p-4">
             <h3 className="text-[10px] font-bold text-amber-700/60 tracking-widest uppercase flex items-center gap-1 mb-1">
               <CowIcon className="w-3.5 h-3.5" /> Carga animal

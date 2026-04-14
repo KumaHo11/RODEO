@@ -278,7 +278,7 @@ export default function PaddockModal({
   const [weedTypes, setWeedTypes]   = useState<string[]>(paddock.technical_data?.weed_types ?? [])
 
   const totalMs = areaHa !== '' && msHa !== '' ? Number(areaHa) * Number(msHa) : null
-  const isGeo   = Boolean(paddock.geom || ndviData)
+  const isGeo   = Boolean(paddock.boundary || ndviData)
 
   const qualityBadgeCls = qualityScore >= 7
     ? 'bg-green-100 text-green-800 border-green-200'
@@ -450,9 +450,10 @@ export default function PaddockModal({
         paddock_id: paddock.id,
         category: noteResult ? 'BIOMASA' : 'GENERAL',
         tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-        title: content?.slice(0, 60) || noteImage?.name || 'Nota de campo',
+        title,
         content: content || null,
         photo_url,
+        audio_url,
         analysis_result: noteResult || null,
       }),
     })
@@ -461,7 +462,7 @@ export default function PaddockModal({
     setNoteExpanded(false)
     setTimeout(() => setNoteSaved(false), 3000)
     loadNotes() // recarga el historial
-  }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes])
+  }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes, noteTitle, audioBlob])
 
   // ── Eliminar nota (solo creador) ─────────────────────────────────────────────
   const deleteNote = useCallback(async (noteId: string) => {

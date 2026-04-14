@@ -20,7 +20,7 @@ Basándote en los siguientes datos de un sistema ganadero real, genera UNA recom
 Datos del campo:
 - Potreros totales: ${context.paddocks}
 - Superficie total: ${context.totalHa?.toFixed?.(1)} ha
-- Rebaños: ${context.herds}
+- Rodeos: ${context.herds}
 - Animales totales: ${context.totalAnimals}
 - Equivalentes vaca (EV): ${context.totalEV}
 - Carga animal: ${context.stockingRate} EV/ha

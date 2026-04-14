@@ -460,6 +460,7 @@ export default function PaddockSidePanel({
           onSave={handleModalSave}
           onDelete={onDeletePaddock}
           paddocks={paddocks}
+          user={user}
         />
       )}
 

@@ -492,7 +492,7 @@ function InteractiveGantt({
                     const isMultiHerd = plan.herd_ids && plan.herd_ids.length > 1
                     const color = herdColorMap[plan.herd_ids?.[0]] || '#16a34a'
                     const primaryHerd = herds.find(h => plan.herd_ids?.includes(h.id))
-                    const herdLabel = isMultiHerd ? `${plan.herd_ids.length} Rebaños` : (primaryHerd?.name || 'Rebaño')
+                    const herdLabel = isMultiHerd ? `${plan.herd_ids.length} Rodeos` : (primaryHerd?.name || 'Rodeo')
 
                     const overlaps = sorted.filter((p, i) => i < idx &&
                       !(( p.exit_date || addDays(p.entry_date,14)) <= plan.entry_date || p.entry_date >= exitDate))
@@ -1105,7 +1105,7 @@ export default function GrazingPlanner() {
       return {
         'Potrero': plan.paddocks?.name || '',
         'Hectáreas': Number(plan.paddocks?.area_ha || 0).toFixed(1),
-        'Rebaño': pHerds.map((h: any) => h.name).join(', ') || 'Sin rebaño',
+        'Rodeo': pHerds.map((h: any) => h.name).join(', ') || 'Sin rodeo',
         'Estado': STATUS_MAP[plan.status]?.label || plan.status,
         'Entrada Planif.': plan.entry_date || '',
         'Salida Planif.': plan.exit_date || '',
@@ -1412,7 +1412,7 @@ export default function GrazingPlanner() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Potrero / Rebaño', 'Ha', 'Estado', 'Entrada', 'Salida', 'Días', 'Descanso', 'EV'].map(h => (
+                  {['Potrero / Rodeo', 'Ha', 'Estado', 'Entrada', 'Salida', 'Días', 'Descanso', 'EV'].map(h => (
                     <th key={h} className="px-5 py-3.5 text-left text-[10px] font-black text-gray-400 tracking-widest uppercase whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1421,7 +1421,7 @@ export default function GrazingPlanner() {
                 {filteredPlans.map(plan => {
                   const st = STATUS_MAP[plan.status] || STATUS_MAP.PLANNED
                   const pHerds = herds.filter(h => plan.herd_ids?.includes(h.id))
-                  const herdNames = pHerds.length > 0 ? pHerds.map(h => h.name).join(', ') : 'Rebaño desconocido'
+                  const herdNames = pHerds.length > 0 ? pHerds.map(h => h.name).join(', ') : 'Rodeo desconocido'
                   const totalEv = pHerds.reduce((s, h) => s + Number(h.total_ev || 0), 0)
                   const color = herdColorMap[plan.herd_ids?.[0]] || '#9ca3af'
                   const days = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : null
@@ -1484,7 +1484,7 @@ export default function GrazingPlanner() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Potrero / Rebaño', 'Estado', 'Entrada (Real)', 'Salida (Real)', 'Días Efectivos', 'Remanente', 'Desvío vs Plan'].map(h => (
+                  {['Potrero / Rodeo', 'Estado', 'Entrada (Real)', 'Salida (Real)', 'Días Efectivos', 'Remanente', 'Desvío vs Plan'].map(h => (
                     <th key={h} className="px-5 py-3.5 text-left text-[10px] font-black text-gray-400 tracking-widest uppercase whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1493,7 +1493,7 @@ export default function GrazingPlanner() {
                 {filteredPlans.map(plan => {
                   const st = STATUS_MAP[plan.status] || STATUS_MAP.PLANNED
                   const pHerds = herds.filter(h => plan.herd_ids?.includes(h.id))
-                  const herdNames = pHerds.length > 0 ? pHerds.map(h => h.name).join(', ') : 'Rebaño desconocido'
+                  const herdNames = pHerds.length > 0 ? pHerds.map(h => h.name).join(', ') : 'Rodeo desconocido'
                   const color = herdColorMap[plan.herd_ids?.[0]] || '#9ca3af'
                   
                   const plannedDays = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : 0

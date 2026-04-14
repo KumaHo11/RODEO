@@ -539,11 +539,11 @@ export default function AgendaPage() {
                 </div>
               </div>
 
-              {/* Rebaños Multiple Selection */}
+              {/* Rodeos Multiple Selection */}
       {herds.length > 0 && (
         <div className="space-y-2">
           <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
-            Rebaños (Selección Múltiple)
+            Rodeos (Selección Múltiple)
           </label>
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2">
             {herds.map((h) => {

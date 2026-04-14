@@ -202,7 +202,7 @@ export default function MiCampoPage() {
     <div className="flex flex-col md:flex-row h-full overflow-hidden bg-gray-100 p-3 md:p-4 gap-3 md:gap-4">
 
       {/* ── Map panel — mobile top, desktop right 65% ──────────────────── */}
-      <div className="order-1 md:order-2 w-full md:w-[65%] flex flex-col h-[45vh] md:h-auto rounded-2xl overflow-hidden shadow-md border border-gray-200 relative min-h-[200px]">
+      <div className="order-1 md:order-2 w-full md:w-[65%] flex flex-col h-[50vh] md:h-full rounded-2xl overflow-hidden shadow-md border border-gray-200 relative min-h-[200px]">
 
         {/* View toggle tabs — solo cuando hay imagen cargada */}
         {fieldImg && (
@@ -304,6 +304,7 @@ export default function MiCampoPage() {
         <PaddockSidePanel
           paddocks={paddocks}
           org={org}
+          user={user}
           loading={loading}
           selectedPaddockId={selectedPaddockId}
           onSelectPaddock={setSelectedPaddockId}

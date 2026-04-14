@@ -37,7 +37,7 @@ const NOTIF_COLORS: Record<string, string> = {
 const PAGE_NAMES: Record<string, string> = {
   '/dashboard':              'Panel principal',
   '/dashboard/mi-campo':     'Mi campo',
-  '/dashboard/herds':        'Rebaños',
+  '/dashboard/herds':        'Rodeos',
   '/dashboard/agenda':       'Agenda',
   '/dashboard/grazing':      'Planificador',
   '/dashboard/bitacora':     'Bitácora de potreros',

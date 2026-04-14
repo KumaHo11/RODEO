@@ -11,6 +11,7 @@ import {
   SortDesc, SortAsc, Filter, Search, Pencil, Calendar, CheckSquare2,
   Image as ImageIcon, Footprints, HeartPulse, Check
 } from 'lucide-react'
+import { Button } from '@/design-system'
 
 // ── Category config ────────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -565,12 +566,9 @@ export default function BitacoraPage() {
             {notes.length} nota{notes.length !== 1 ? 's' : ''} registrada{notes.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <button
-          onClick={() => { resetForm(); setIsOpen(true) }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 shadow-sm shadow-green-200 transition-all"
-        >
-          <Plus className="w-4 h-4" /> Nueva nota
-        </button>
+        <Button onClick={() => { resetForm(); setIsOpen(true) }} leftIcon={<Plus className="w-4 h-4" />}>
+          Nueva nota
+        </Button>
       </div>
 
       {/* Filters bar */}
@@ -822,8 +820,7 @@ export default function BitacoraPage() {
                         className="text-[9px] font-bold text-gray-400 bg-transparent border-0 outline-none cursor-pointer hover:text-gray-600"
                         onClick={e => e.stopPropagation()}
                       >
-                        <option value="es-AR">ES 🇬🇧</option>
-                        <option value="es-ES">ES 🇪🇸</option>
+                        <option value="es-AR">ES 🇦🇷</option>
                         <option value="en-US">EN 🇺🇸</option>
                         <option value="pt-BR">PT 🇧🇷</option>
                       </select>

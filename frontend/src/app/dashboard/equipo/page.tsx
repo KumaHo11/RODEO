@@ -11,6 +11,7 @@ import {
   ChevronRight, Pencil, Save, Star, AlertCircle, BadgePlus
 } from 'lucide-react'
 import { AppHeader } from '@/components/AppHeader'
+import { Button, FormField } from '@/design-system'
 
 // ── Role config ────────────────────────────────────────────────────────────────
 const PRESET_ROLES = [
@@ -73,7 +74,7 @@ const ROLE_MAP = Object.fromEntries(PRESET_ROLES.map(r => [r.id, r]))
 const MODULES = [
   { key: 'dashboard',    label: 'Panel principal',  desc: 'Vista general del establecimiento' },
   { key: 'mi_campo',     label: 'Mi campo',          desc: 'Mapa y gestión de potreros' },
-  { key: 'rebanhos',     label: 'Rebaños',           desc: 'Gestión de animales y majadas' },
+  { key: 'rebanhos',     label: 'Rodeos',           desc: 'Gestión de animales y majadas' },
   { key: 'agenda',       label: 'Agenda',            desc: 'Eventos veterinarios y calendarios' },
   { key: 'planificador', label: 'Planificador',      desc: 'Planificación de pastoreos' },
   { key: 'bitacora',     label: 'Bitácora',          desc: 'Notas de campo y registros' },
@@ -385,13 +386,9 @@ export default function EquipoPage() {
           </p>
         </div>
         {isOwner && (
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 shadow-sm shadow-green-200 transition-all"
-          >
-            <Plus className="w-4 h-4" />
+          <Button onClick={() => setModalOpen(true)} leftIcon={<Plus className="w-4 h-4" />}>
             Invitar al equipo
-          </button>
+          </Button>
         )}
       </div>
 
@@ -627,12 +624,9 @@ export default function EquipoPage() {
                 Invitá a tu capataz, veterinario o ayudante para colaborar en la gestión del campo.
               </p>
               {isOwner && (
-                <button
-                  onClick={() => setModalOpen(true)}
-                  className="mt-5 px-5 py-2.5 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 transition-colors"
-                >
+                <Button onClick={() => setModalOpen(true)} className="mt-5">
                   Invitar primer miembro
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -706,25 +700,17 @@ export default function EquipoPage() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditMember(null)}
-                  className="flex-1 py-3 text-sm font-black text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
-                >
+                <Button variant="secondary" className="flex-1 py-3" type="button" onClick={() => setEditMember(null)}>
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
+                  className="flex-1 py-3"
                   onClick={savePermissions}
-                  disabled={savingPerms}
-                  className="flex-1 py-3 bg-green-600 text-white rounded-xl font-black text-sm shadow-md shadow-green-100 hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  isLoading={savingPerms}
+                  leftIcon={savePermsSuccess ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                 >
-                  {savingPerms
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : savePermsSuccess
-                    ? <><Check className="w-4 h-4" /> Guardado</>
-                    : <><Save className="w-4 h-4" /> Guardar cambios</>
-                  }
-                </button>
+                  {savePermsSuccess ? 'Guardado' : 'Guardar cambios'}
+                </Button>
               </div>
             </div>
           </div>
@@ -754,39 +740,31 @@ export default function EquipoPage() {
               <form onSubmit={handleInvite} className="p-6 space-y-5">
                 {/* Nombre y apellido */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Nombre</label>
-                    <input
-                      type="text"
-                      value={inviteFirstName}
-                      onChange={e => setInviteFirstName(e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="Juan"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Apellido</label>
-                    <input
-                      type="text"
-                      value={inviteLastName}
-                      onChange={e => setInviteLastName(e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="Rodríguez"
-                    />
-                  </div>
+                  <FormField
+                    label="Nombre"
+                    type="text"
+                    value={inviteFirstName}
+                    onChange={e => setInviteFirstName(e.target.value)}
+                    placeholder="Juan"
+                  />
+                  <FormField
+                    label="Apellido"
+                    type="text"
+                    value={inviteLastName}
+                    onChange={e => setInviteLastName(e.target.value)}
+                    placeholder="Rodríguez"
+                  />
                 </div>
 
                 {/* Email */}
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Email del invitado *</label>
-                  <input
-                    type="email" required
-                    value={inviteEmail}
-                    onChange={e => setInviteEmail(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="veterinario@ejemplo.com"
-                  />
-                </div>
+                <FormField
+                  label="Email del invitado *"
+                  type="email"
+                  required
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="veterinario@ejemplo.com"
+                />
 
                 {/* Role selector */}
                 <div>
@@ -847,17 +825,12 @@ export default function EquipoPage() {
                 )}
 
                 <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setModalOpen(false)}
-                    className="flex-1 py-3 text-sm font-black text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+                  <Button variant="secondary" className="flex-1 py-3" type="button" onClick={() => setModalOpen(false)}>
                     Cancelar
-                  </button>
-                  <button type="submit" disabled={inviting || !inviteEmail}
-                    className="flex-1 py-3 bg-green-600 text-white rounded-xl font-black text-sm shadow-md shadow-green-100 hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                    {inviting
-                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
-                      : <><Mail className="w-4 h-4" /> Enviar invitación</>
-                    }
-                  </button>
+                  </Button>
+                  <Button type="submit" className="flex-1 py-3" isLoading={inviting} disabled={!inviteEmail} leftIcon={<Mail className="w-4 h-4" />}>
+                    Enviar invitación
+                  </Button>
                 </div>
               </form>
             )}
@@ -879,28 +852,22 @@ export default function EquipoPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateRole} className="p-6 space-y-4">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Nombre del rol *</label>
-                <input
-                  type="text" required
+              <form onSubmit={handleCreateRole} className="p-6 space-y-4">
+                <FormField
+                  label="Nombre del rol *"
+                  type="text"
+                  required
                   value={newRoleLabel}
                   onChange={e => setNewRoleLabel(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   placeholder="ej. Encargado de campo"
                 />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Descripción</label>
-                <input
+                <FormField
+                  label="Descripción"
                   type="text"
                   value={newRoleDesc}
                   onChange={e => setNewRoleDesc(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm"
                   placeholder="ej. Responsable de todas las actividades de campo"
                 />
-              </div>
 
               <div>
                 <label className="block text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">Permisos</label>
@@ -922,15 +889,18 @@ export default function EquipoPage() {
               )}
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setNewRoleModalOpen(false)}
-                  className="flex-1 py-3 text-sm font-black text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+                <Button variant="secondary" className="flex-1 py-3" type="button" onClick={() => setNewRoleModalOpen(false)}>
                   Cancelar
-                </button>
-                <button type="submit" disabled={savingRole || !newRoleLabel.trim()}
-                  className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                  {savingRole ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4" />}
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100"
+                  isLoading={savingRole}
+                  disabled={!newRoleLabel.trim()}
+                  leftIcon={<Star className="w-4 h-4" />}
+                >
                   Crear rol
-                </button>
+                </Button>
               </div>
             </form>
           </div>
