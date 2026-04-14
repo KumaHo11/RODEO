@@ -34,6 +34,7 @@ interface Paddock {
 interface Props {
   paddocks: Paddock[]
   org: any
+  user?: any
   loading: boolean
   selectedPaddockId: string | null
   onSelectPaddock: (id: string) => void
