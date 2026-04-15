@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     if (geomJson) {
       result = await mutate(
         `INSERT INTO paddocks (org_id, name, area_ha, current_status, geom, technical_data, dry_matter_kg_ha)
-         VALUES ($1, $2, $3, $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), $6, $7)
+         VALUES ($1, $2, $3, $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), $6::jsonb, $7)
          RETURNING id`,
         [
           auth.orgId,
@@ -87,21 +87,21 @@ export async function POST(req: NextRequest) {
           area_ha || 0,
           current_status,
           JSON.stringify(geomJson),
-          technical_data ?? {},
+          JSON.stringify(technical_data ?? {}),
           dry_matter_kg_ha ?? null,
         ]
       )
     } else {
       result = await mutate(
         `INSERT INTO paddocks (org_id, name, area_ha, current_status, technical_data, dry_matter_kg_ha)
-         VALUES ($1, $2, $3, $4, $5, $6)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6)
          RETURNING id`,
         [
           auth.orgId,
           name,
           area_ha || 0,
           current_status,
-          technical_data ?? {},
+          JSON.stringify(technical_data ?? {}),
           dry_matter_kg_ha ?? null,
         ]
       )
