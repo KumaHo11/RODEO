@@ -25,9 +25,13 @@ function calcEV(weight: number, count: number, catKey: string | null): number {
   return parseFloat((Math.pow((weight || 400) / 400, 0.75) * f * count).toFixed(2))
 }
 
-function fmtDate(iso: string | null) {
+function fmtDate(iso: string | null | undefined) {
   if (!iso) return '—'
-  try { return new Date(iso + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' }) } catch { return iso }
+  try {
+    // Postgres can return full timestamp — take only the date part
+    const datePart = String(iso).slice(0, 10)
+    return new Date(datePart + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' })
+  } catch { return String(iso).slice(0, 10) }
 }
 
 type SortKey = 'name' | 'head_count' | 'avg_weight_kg' | 'admission_date' | 'total_ev'

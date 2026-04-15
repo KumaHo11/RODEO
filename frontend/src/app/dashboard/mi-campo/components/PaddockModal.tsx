@@ -122,7 +122,11 @@ const getCat = (note: any) => {
   return { tags, primary: CAT_CONFIG[tags[0]] || CAT_CONFIG.GENERAL }
 }
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+const fmtDate = (iso: string | null | undefined) => {
+  if (!iso) return ''
+  try { return new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' }) }
+  catch { return String(iso).slice(0, 10) }
+}
 
 // ─── Shared token strings ──────────────────────────────────────────────────
 const LABEL_CLS  = 'text-[10px] font-black text-gray-700 tracking-widest uppercase'
@@ -736,391 +740,339 @@ export default function PaddockModal({
           {/* ════ TAB 3 — REGISTROS ════ */}
           {activeTab === 'registros' && (
             <div className="flex flex-col" style={{ minHeight: 0 }}>
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
 
-              {/* ── Quick Action Header ── "La Grabadora de Campo" ── */}
-              <div className="px-6 pt-5 pb-4 border-b border-gray-100 bg-gradient-to-b from-gray-50/80 to-white shrink-0">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-[11px] font-black text-gray-800 tracking-tight">Grabadora de campo</p>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">Captura instantánea de lo que pasa en el potrero</p>
+                {/* ══ CARD 1: NOTAS DE CAMPO ══ */}
+                <div className="rounded-2xl border border-gray-200 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
+                        <Mic className="w-3.5 h-3.5 text-gray-500" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas de campo</p>
+                        <p className="text-[9px] text-gray-400 font-medium">Audio · Texto · Foto</p>
+                      </div>
+                    </div>
+                    {sessionNoteCount > 0 && (
+                      <span className="flex items-center gap-1 bg-green-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                        <span className="w-1 h-1 rounded-full bg-green-300 animate-pulse" />
+                        +{sessionNoteCount}
+                      </span>
+                    )}
                   </div>
-                  {sessionNoteCount > 0 && (
-                    <span className="flex items-center gap-1.5 bg-green-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-sm shadow-green-300">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-300 animate-pulse" />
-                      +{sessionNoteCount} nuevos
-                    </span>
-                  )}
-                </div>
-
-                {/* Three big circular capture buttons */}
-                <div className="grid grid-cols-3 gap-3">
-
-                  {/* 🔴 Mic */}
-                  <button type="button"
-                    onClick={() => {
-                      if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) }
-                      else { setNoteExpanded(true); setNoteMode('audio') }
-                    }}
-                    className={`relative flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all select-none ${
-                      noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'
-                    }`}>
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                      noteMode === 'audio' ? 'bg-red-500 shadow-lg shadow-red-200' : 'bg-red-100'
-                    }`}>
-                      {recording
-                        ? <MicOff className={`w-5 h-5 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />
-                        : <Mic className={`w-5 h-5 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
-                    </div>
-                    <span className="text-[10px] font-black text-gray-600 tracking-wide">
-                      {recording ? 'GRABANDO' : 'AUDIO'}
-                    </span>
-                    {recording && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 animate-ping" />}
-                  </button>
-
-                  {/* 🟢 Camera */}
-                  <button type="button"
-                    onClick={() => {
-                      if (noteExpanded && noteMode === 'image') { setNoteExpanded(false); setNoteMode(null) }
-                      else { setNoteExpanded(true); setNoteMode('image') }
-                    }}
-                    className={`flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all select-none ${
-                      noteMode === 'image' ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'
-                    }`}>
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                      noteMode === 'image' ? 'bg-green-500 shadow-lg shadow-green-200' : 'bg-green-100'
-                    }`}>
-                      <Camera className={`w-5 h-5 ${noteMode === 'image' ? 'text-white' : 'text-green-600'}`} />
-                    </div>
-                    <span className="text-[10px] font-black text-gray-600 tracking-wide">FOTO</span>
-                  </button>
-
-                  {/* ⚫ Keyboard / Text */}
-                  <button type="button"
-                    onClick={() => {
-                      if (noteExpanded && noteMode === 'text') { setNoteExpanded(false); setNoteMode(null) }
-                      else { setNoteExpanded(true); setNoteMode('text') }
-                    }}
-                    className={`flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all select-none ${
-                      noteMode === 'text' ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'
-                    }`}>
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                      noteMode === 'text' ? 'bg-gray-700 shadow-lg shadow-gray-200' : 'bg-gray-100'
-                    }`}>
-                      <BookOpen className={`w-5 h-5 ${noteMode === 'text' ? 'text-white' : 'text-gray-500'}`} />
-                    </div>
-                    <span className="text-[10px] font-black text-gray-600 tracking-wide">TEXTO</span>
-                  </button>
-                </div>
-
-                {/* ── Expanded capture form ── */}
-                {noteExpanded && (
-                  <div className="mt-4 space-y-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-                    <input type="text" value={noteTitle} onChange={e => setNoteTitle(e.target.value)}
-                      placeholder="Título del registro (opcional)…" className={INPUT_CLS} />
-
-                    {/* TEXT */}
-                    {noteMode === 'text' && (
-                      <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
-                        placeholder="Escribí tu observación de campo…" rows={3} autoFocus
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none transition-all" />
-                    )}
-
-                    {/* IMAGE */}
-                    {noteMode === 'image' && (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <button type="button" onClick={() => noteImageRef.current?.click()}
-                            className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-gray-600 border border-dashed border-gray-300 rounded-xl hover:border-green-400 hover:text-green-700 transition-colors bg-gray-50">
-                            <Paperclip className="w-4 h-4" /> Galería
-                          </button>
-                          <button type="button" onClick={() => noteCameraRef.current?.click()}
-                            className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 transition-all">
-                            <Camera className="w-4 h-4" /> Cámara
-                          </button>
+                  <div className="p-4">
+                    {/* Three capture buttons */}
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      {/* Mic */}
+                      <button type="button"
+                        onClick={() => { if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') } }}
+                        className={`relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
+                          {recording ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
                         </div>
-                        <input ref={noteImageRef} type="file" accept="image/*" className="hidden"
-                          onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
-                        <input ref={noteCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                          onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
-                        {noteImagePreview && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={noteImagePreview} alt="preview" className="w-full max-h-44 object-cover rounded-xl" />
+                        <span className="text-[9px] font-black text-gray-600 tracking-wide">{recording ? 'GRABANDO' : 'AUDIO'}</span>
+                        {recording && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />}
+                      </button>
+                      {/* Camera */}
+                      <button type="button"
+                        onClick={() => { if (noteExpanded && noteMode === 'image') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('image') } }}
+                        className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'image' ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'image' ? 'bg-green-500 shadow-md shadow-green-200' : 'bg-green-100'}`}>
+                          <Camera className={`w-4 h-4 ${noteMode === 'image' ? 'text-white' : 'text-green-600'}`} />
+                        </div>
+                        <span className="text-[9px] font-black text-gray-600 tracking-wide">FOTO</span>
+                      </button>
+                      {/* Text */}
+                      <button type="button"
+                        onClick={() => { if (noteExpanded && noteMode === 'text') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('text') } }}
+                        className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'text' ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'text' ? 'bg-gray-700 shadow-md' : 'bg-gray-100'}`}>
+                          <BookOpen className={`w-4 h-4 ${noteMode === 'text' ? 'text-white' : 'text-gray-500'}`} />
+                        </div>
+                        <span className="text-[9px] font-black text-gray-600 tracking-wide">TEXTO</span>
+                      </button>
+                    </div>
+
+                    {/* Expanded capture form */}
+                    {noteExpanded && (
+                      <div className="space-y-2.5 pt-2 border-t border-gray-100">
+                        <input type="text" value={noteTitle} onChange={e => setNoteTitle(e.target.value)}
+                          placeholder="Título del registro (opcional)…" className={INPUT_CLS} />
+
+                        {/* TEXT mode */}
+                        {noteMode === 'text' && (
+                          <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
+                            placeholder="Escribí tu observación de campo…" rows={3} autoFocus
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none" />
                         )}
-                        {noteImage && (
-                          <button type="button" onClick={analyzeNoteImage} disabled={noteAnalyzing}
-                            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50 transition-all">
-                            {noteAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>✨</span>}
-                            {noteAnalyzing ? 'Analizando con IA…' : 'Analizar biomasa con IA'}
-                          </button>
-                        )}
-                        {noteResult && (
-                          <div className="bg-violet-50 px-4 py-3 rounded-xl border border-violet-200 flex items-center gap-3">
-                            <span className="text-2xl">🌿</span>
-                            <div>
-                              <p className="text-[10px] font-black text-violet-500 tracking-widest uppercase">Resultado IA · Gemini</p>
-                              <p className="text-lg font-black text-violet-900">{Number(noteResult.dry_matter_kg_ha).toLocaleString('es')} kg MS/ha</p>
-                            </div>
+
+                        {/* AUDIO mode */}
+                        {noteMode === 'audio' && (
+                          <div className="space-y-2">
+                            <button type="button" onClick={recording ? stopRecording : startRecording}
+                              className={`w-full flex items-center justify-center gap-2 py-3 text-sm font-black rounded-xl transition-all ${recording ? 'bg-red-500 text-white shadow-md shadow-red-200' : 'bg-red-600 hover:bg-red-700 text-white'}`}>
+                              {recording ? <><MicOff className="w-4 h-4" /> Detener</> : <><Mic className="w-4 h-4" /> Grabar ahora</>}
+                            </button>
+                            {recording && (
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="flex items-end gap-0.5 h-5">{[3,5,4,7,5,6,3,4].map((h, i) => (<div key={i} className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: `${h * 2.5}px`, animationDelay: `${i * 80}ms` }} />))}</div>
+                                <span className="text-[9px] font-black text-red-600 tracking-widest uppercase">Grabando…</span>
+                              </div>
+                            )}
+                            {audioTranscript && (
+                              <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-200">
+                                <p className={LABEL_CLS}>Transcripción</p>
+                                <p className="text-xs font-medium text-gray-700 mt-1 italic">"{audioTranscript}"</p>
+                              </div>
+                            )}
+                            {audioUrl && !recording && (
+                              // eslint-disable-next-line jsx-a11y/media-has-caption
+                              <audio controls src={audioUrl} className="w-full rounded-xl" />
+                            )}
                           </div>
                         )}
-                        <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Descripción adicional (optativo)…" rows={2}
-                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-700 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none" />
+
+                        {/* IMAGE mode */}
+                        {noteMode === 'image' && (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <button type="button" onClick={() => noteImageRef.current?.click()}
+                                className="flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-gray-600 border border-dashed border-gray-300 rounded-xl hover:border-green-400 hover:text-green-700 bg-gray-50">
+                                <Paperclip className="w-3.5 h-3.5" /> Galería
+                              </button>
+                              <button type="button" onClick={() => noteCameraRef.current?.click()}
+                                className="flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-white bg-green-600 rounded-xl hover:bg-green-700">
+                                <Camera className="w-3.5 h-3.5" /> Cámara
+                              </button>
+                            </div>
+                            <input ref={noteImageRef} type="file" accept="image/*" className="hidden"
+                              onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
+                            <input ref={noteCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                              onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
+                            {noteImagePreview && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={noteImagePreview} alt="preview" className="w-full max-h-36 object-cover rounded-xl" />
+                            )}
+                            {noteImage && (
+                              <button type="button" onClick={analyzeNoteImage} disabled={noteAnalyzing}
+                                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50">
+                                {noteAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>✨</span>}
+                                {noteAnalyzing ? 'Analizando con IA…' : 'Analizar biomasa con IA'}
+                              </button>
+                            )}
+                            {noteResult && (
+                              <div className="bg-violet-50 px-3 py-2 rounded-xl border border-violet-200 flex items-center gap-2">
+                                <span className="text-lg">🌿</span>
+                                <div>
+                                  <p className="text-[9px] font-black text-violet-500 tracking-widest uppercase">Resultado IA · Gemini</p>
+                                  <p className="text-sm font-black text-violet-900">{Number(noteResult.dry_matter_kg_ha).toLocaleString('es')} kg MS/ha</p>
+                                </div>
+                              </div>
+                            )}
+                            <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Descripción adicional…" rows={2}
+                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none" />
+                          </div>
+                        )}
+
+                        {/* Save / Cancel */}
+                        <div className="flex gap-2">
+                          {(noteText || audioTranscript || noteImage || audioBlob) && (
+                            <button type="button"
+                              onClick={async () => { await saveQuickNote(); setSessionNoteCount(c => c + 1) }}
+                              disabled={noteSaving}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">
+                              {noteSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                              {noteSaving ? 'Guardando…' : 'Guardar nota'}
+                            </button>
+                          )}
+                          <button type="button"
+                            onClick={() => { setNoteExpanded(false); setNoteMode(null); setNoteTitle(''); setNoteText(''); setAudioTranscript(''); setNoteImage(null); setNoteImagePreview(null); setAudioBlob(null); setAudioUrl(null) }}
+                            className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700">Cancelar</button>
+                        </div>
                       </div>
                     )}
+                  </div>
+                </div>
 
-                    {/* AUDIO */}
-                    {noteMode === 'audio' && (
-                      <div className="space-y-3">
-                        <button type="button" onClick={recording ? stopRecording : startRecording}
-                          className={`w-full flex items-center justify-center gap-2.5 py-4 text-sm font-black rounded-2xl transition-all ${
-                            recording ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-red-600 hover:bg-red-700 text-white'
-                          }`}>
-                          {recording ? <><MicOff className="w-5 h-5" /> Detener</> : <><Mic className="w-5 h-5" /> Grabar ahora</>}
-                        </button>
-                        {recording && (
-                          <div className="flex items-center justify-center gap-3 py-2">
-                            <div className="flex items-end gap-0.5 h-8">
-                              {[3,6,4,8,5,7,3,6,5,4].map((h, i) => (
-                                <div key={i} className="w-1 bg-red-500 rounded-full animate-bounce"
-                                  style={{ height: `${h * 3}px`, animationDelay: `${i * 80}ms`, animationDuration: '0.65s' }} />
-                              ))}
-                            </div>
-                            <span className="text-[10px] font-black text-red-600 tracking-widest uppercase">Grabando…</span>
-                          </div>
-                        )}
-                        {audioTranscript && (
-                          <div className="bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
-                            <p className={LABEL_CLS}>Transcripción en vivo</p>
-                            <p className="text-sm font-medium text-gray-700 mt-1 italic">&ldquo;{audioTranscript}&rdquo;</p>
-                          </div>
-                        )}
-                        {audioUrl && !recording && (
-                          <div className="space-y-1.5">
-                            <p className={LABEL_CLS}>Audio grabado — listo para guardar</p>
-                            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                            <audio controls src={audioUrl} className="w-full rounded-xl" />
-                          </div>
-                        )}
+                {/* ══ CARD 2: INTELIGENCIA DE CAMPO ══ */}
+                <div className="rounded-2xl border border-gray-200 overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
+                        <span className="text-[11px]">🛰️</span>
                       </div>
-                    )}
-
-                    {/* Save / Cancel */}
-                    <div className="flex items-center gap-2 pt-1">
-                      {(noteText || audioTranscript || noteImage || audioBlob) && (
-                        <button type="button"
-                          onClick={async () => { await saveQuickNote(); setSessionNoteCount(c => c + 1) }}
-                          disabled={noteSaving}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all">
-                          {noteSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                          {noteSaving ? 'Guardando…' : 'Guardar registro'}
+                      <div>
+                        <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Inteligencia de campo</p>
+                        <p className="text-[9px] text-gray-400 font-medium">NDVI Sentinel-2 · Biomasa IA Gemini</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 grid grid-cols-2 gap-3">
+                    {/* Card NDVI */}
+                    <div className={`rounded-xl border p-3 ${
+                      currentNdvi != null
+                        ? currentNdvi >= 0.4 ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
+                        : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[9px] font-black tracking-widest uppercase text-gray-500">NDVI</p>
+                        <span className="text-[8px] font-bold text-gray-400">Sentinel-2</span>
+                      </div>
+                      {currentNdvi != null ? (
+                        <>
+                          <p className={`text-xl font-black leading-none ${currentNdvi >= 0.6 ? 'text-green-700' : currentNdvi >= 0.4 ? 'text-amber-600' : 'text-red-600'}`}>
+                            {Number(currentNdvi).toFixed(3)}
+                          </p>
+                          <p className="text-[9px] font-bold text-gray-500 mt-0.5">{ndviStatus(currentNdvi)}</p>
+                          <div className="w-full h-1 rounded-full bg-gradient-to-r from-red-400 via-yellow-300 to-green-500 mt-2" />
+                        </>
+                      ) : (
+                        <p className="text-xs font-bold text-gray-400 mt-1">Sin datos</p>
+                      )}
+                      {isGeo ? (
+                        <button type="button" onClick={refreshNdvi} disabled={ndviRefreshing}
+                          className="mt-2 text-[9px] font-black text-gray-400 hover:text-green-700 flex items-center gap-0.5 disabled:opacity-50">
+                          {ndviRefreshing ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : '↻'} Actualizar
                         </button>
+                      ) : (
+                        <p className="text-[9px] text-gray-400 mt-1.5 italic">Sin georreferencia</p>
+                      )}
+                    </div>
+
+                    {/* Card IA Biomass */}
+                    <div className="rounded-xl border bg-violet-50 border-violet-200 p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[9px] font-black tracking-widest uppercase text-violet-500">MS/ha (IA)</p>
+                        <span className="text-[8px] font-bold text-violet-400">Gemini</span>
+                      </div>
+                      {bioResult ? (
+                        <>
+                          <p className="text-xl font-black text-violet-800 leading-none">{Number(bioResult.dry_matter_kg_ha).toLocaleString('es')}</p>
+                          <p className="text-[9px] font-bold text-violet-600 mt-0.5">kg MS/ha</p>
+                          {bioResult.coverage_pct && <p className="text-[8px] text-violet-400">Cob: {bioResult.coverage_pct}%</p>}
+                        </>
+                      ) : msHa ? (
+                        <>
+                          <p className="text-xl font-black text-violet-700 leading-none">{Number(msHa).toLocaleString('es')}</p>
+                          <p className="text-[9px] font-bold text-violet-500 mt-0.5">kg MS/ha · Manual</p>
+                        </>
+                      ) : (
+                        <p className="text-xs font-bold text-violet-400 mt-1">Sin análisis</p>
                       )}
                       <button type="button"
-                        onClick={() => {
-                          setNoteExpanded(false); setNoteMode(null)
-                          setNoteTitle(''); setNoteText(''); setAudioTranscript('')
-                          setNoteImage(null); setNoteImagePreview(null)
-                          setAudioBlob(null); setAudioUrl(null)
-                        }}
-                        className="px-4 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 bg-gray-100 rounded-xl transition-all">
-                        Cancelar
+                        onClick={() => { setNoteExpanded(true); setNoteMode('image') }}
+                        className="mt-2 text-[9px] font-black text-violet-600 hover:text-violet-800 flex items-center gap-0.5">
+                        ✨ Analizar foto
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-
-              {/* ── Intelligence Cards — always visible ── */}
-              <div className="px-6 py-4 border-b border-gray-100 shrink-0">
-                <p className={`${LABEL_CLS} mb-3`}>Inteligencia de campo</p>
-                <div className="grid grid-cols-2 gap-3">
-
-                  {/* Card A — NDVI */}
-                  <div className={`rounded-2xl border p-4 ${
-                    currentNdvi != null
-                      ? currentNdvi >= 0.4 ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
-                      : 'bg-gray-50 border-gray-200'
-                  }`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[9px] font-black tracking-widest uppercase text-gray-500">NDVI Actual</p>
-                      <span className="text-[8px] font-bold text-gray-400">Sentinel-2</span>
-                    </div>
-                    {currentNdvi != null ? (
-                      <>
-                        <p className={`text-2xl font-black leading-none ${
-                          currentNdvi >= 0.6 ? 'text-green-700' : currentNdvi >= 0.4 ? 'text-amber-600' : 'text-red-600'
-                        }`}>{Number(currentNdvi).toFixed(3)}</p>
-                        <p className="text-[10px] font-bold text-gray-500 mt-0.5">{ndviStatus(currentNdvi)}</p>
-                        <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-red-400 via-yellow-300 to-green-500 mt-2" />
-                      </>
-                    ) : (
-                      <p className="text-xs font-bold text-gray-400 mt-1">Sin datos</p>
-                    )}
-                    {isGeo && (
-                      <button type="button" onClick={refreshNdvi} disabled={ndviRefreshing}
-                        className="mt-2.5 text-[10px] font-black text-gray-400 hover:text-green-700 flex items-center gap-1 transition-colors disabled:opacity-50">
-                        {ndviRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>↻</span>}
-                        {ndviRefreshing ? 'Actualizando…' : 'Actualizar'}
-                      </button>
-                    )}
-                    {!isGeo && <p className="text-[9px] text-gray-400 mt-2 italic">Sin georreferencia</p>}
-                  </div>
-
-                  {/* Card B — IA Biomass */}
-                  <div className="rounded-2xl border bg-violet-50 border-violet-200 p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[9px] font-black tracking-widest uppercase text-violet-500">Estado MS (IA)</p>
-                      <span className="text-[8px] font-bold text-violet-400">Gemini</span>
-                    </div>
-                    {bioResult ? (
-                      <>
-                        <p className="text-2xl font-black text-violet-800 leading-none">{Number(bioResult.dry_matter_kg_ha).toLocaleString('es')}</p>
-                        <p className="text-[10px] font-bold text-violet-600 mt-0.5">kg MS/ha</p>
-                        {bioResult.coverage_pct && <p className="text-[9px] text-violet-400">Cobertura: {bioResult.coverage_pct}%</p>}
-                      </>
-                    ) : msHa ? (
-                      <>
-                        <p className="text-2xl font-black text-violet-700 leading-none">{Number(msHa).toLocaleString('es')}</p>
-                        <p className="text-[10px] font-bold text-violet-500 mt-0.5">kg MS/ha · Manual</p>
-                      </>
-                    ) : (
-                      <p className="text-xs font-bold text-violet-400 mt-1">Sin análisis aún</p>
-                    )}
-                    <button type="button"
-                      onClick={() => { setNoteExpanded(true); setNoteMode('image') }}
-                      className="mt-2.5 text-[10px] font-black text-violet-600 hover:text-violet-800 flex items-center gap-1 transition-colors">
-                      ✨ Analizar nueva foto
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Timeline — Historial de Evidencias ── */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className={LABEL_CLS}>Historial de evidencias</p>
-                  {notesLoading && <Loader2 className="w-3.5 h-3.5 text-green-500 animate-spin" />}
                 </div>
 
-                {notes.length === 0 && !notesLoading && (
-                  <div className="flex flex-col items-center justify-center py-10 text-center">
-                    <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
-                      <Mic className="w-6 h-6 text-gray-300" />
-                    </div>
-                    <p className="text-sm font-bold text-gray-400">Sin registros aún</p>
-                    <p className="text-[10px] text-gray-300 mt-1">Usá los botones de arriba para capturar</p>
+                {/* ══ HISTORIAL DE EVIDENCIAS ══ */}
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <p className={LABEL_CLS}>Historial de evidencias</p>
+                    {notesLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
                   </div>
-                )}
 
-                {/* Feed con línea de tiempo izquierda */}
-                <div className="relative">
-                  {notes.filter(n => !deletedNotes[n.id]).length > 0 && (
-                    <div className="absolute left-[18px] top-2 bottom-2 w-px bg-gray-100" />
+                  {notes.length === 0 && !notesLoading && (
+                    <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed border-gray-200">
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mb-2.5">
+                        <Mic className="w-5 h-5 text-gray-300" />
+                      </div>
+                      <p className="text-xs font-bold text-gray-400">Sin registros aún</p>
+                      <p className="text-[9px] text-gray-300 mt-1">Usá los botones de arriba para capturar</p>
+                    </div>
                   )}
-                  <div className="space-y-4">
-                    {notes.map(note => {
-                      if (deletedNotes[note.id]) {
-                        return (
-                          <div key={note.id} className="flex items-center gap-3 pl-10 opacity-30">
-                            <p className="text-[10px] text-gray-400 italic">Registro eliminado</p>
-                          </div>
-                        )
-                      }
 
-                      const { tags, primary } = getCat(note)
-                      const { Icon: CatIcon } = primary
-                      const isOwner = !user || note.created_by === user?.id || note.created_by === user?.uid
-                      const hasAudio = !!note.audio_url
-                      const hasPhoto = !!note.photo_url
-                      const hasAI    = !!note.analysis_result?.dry_matter_kg_ha
-
-                      return (
-                        <div key={note.id} className="flex gap-3 group">
-                          {/* Timeline node */}
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 z-10 border ${
-                            hasAudio ? 'bg-red-50 border-red-200' : hasPhoto ? 'bg-green-50 border-green-200' : `${primary.bg} ${primary.border}`
-                          }`}>
-                            {hasAudio
-                              ? <Mic className="w-4 h-4 text-red-500" />
-                              : hasPhoto
-                              ? <Camera className="w-4 h-4 text-green-600" />
-                              : <CatIcon className="w-4 h-4" style={{ color: primary.color }} />}
-                          </div>
-
-                          {/* Card */}
-                          <div className="flex-1 bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-all">
-                            {/* Header */}
-                            <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex flex-wrap gap-1 mb-1">
-                                  {tags.map(t => {
-                                    const c = CAT_CONFIG[t] || CAT_CONFIG.GENERAL
-                                    return <span key={t} className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${c.badge}`}>{c.label}</span>
-                                  })}
-                                  {hasAudio && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 uppercase tracking-widest">Audio</span>}
-                                  {hasAI && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase tracking-widest">IA Analizada</span>}
-                                </div>
-                                <h4 className="text-xs font-black text-gray-900 leading-snug">{note.title}</h4>
+                  {notes.length > 0 && (
+                    <div className="relative">
+                      <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
+                      <div className="space-y-3">
+                        {notes.map(note => {
+                          if (deletedNotes[note.id]) {
+                            return (
+                              <div key={note.id} className="flex items-center gap-3 pl-10 opacity-30">
+                                <p className="text-[9px] text-gray-400 italic">Registro eliminado</p>
                               </div>
-                              {isOwner && (
-                                <button type="button" onClick={() => deleteNote(note.id)}
-                                  className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all shrink-0">
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              )}
-                            </div>
+                            )
+                          }
+                          const { tags, primary } = getCat(note)
+                          const { Icon: CatIcon } = primary
+                          const isOwner = !user || note.created_by === user?.id || note.created_by === user?.uid
+                          const hasAudio = !!note.audio_url
+                          const hasPhoto = !!note.photo_url
+                          const hasAI    = !!note.analysis_result?.dry_matter_kg_ha
 
-                            {/* Audio player */}
-                            {hasAudio && (
-                              <div className="px-4 pb-3">
-                                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                                <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '36px' }} />
+                          return (
+                            <div key={note.id} className="flex gap-2.5 group">
+                              {/* Timeline node */}
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 z-10 border ${hasAudio ? 'bg-red-50 border-red-200' : hasPhoto ? 'bg-green-50 border-green-200' : `${primary.bg} ${primary.border}`}`}>
+                                {hasAudio ? <Mic className="w-3.5 h-3.5 text-red-500" /> : hasPhoto ? <Camera className="w-3.5 h-3.5 text-green-600" /> : <CatIcon className="w-3.5 h-3.5" style={{ color: primary.color }} />}
                               </div>
-                            )}
-
-                            {/* Photo */}
-                            {hasPhoto && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={note.photo_url} alt="Evidencia" className="w-full max-h-40 object-cover" />
-                            )}
-
-                            {/* Text */}
-                            {note.content && (
-                              <div className="px-4 pb-3">
-                                <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-3">{note.content}</p>
-                              </div>
-                            )}
-
-                            {/* AI chips */}
-                            {hasAI && (
-                              <div className="px-4 pb-3 flex gap-2 flex-wrap">
-                                {[
-                                  { l: 'MS/ha', v: `${note.analysis_result.dry_matter_kg_ha} kg` },
-                                  { l: 'Alt.', v: `${note.analysis_result.grass_height_cm ?? '—'} cm` },
-                                  { l: 'Cobertura', v: `${note.analysis_result.coverage_pct ?? '—'}%` },
-                                ].map(item => (
-                                  <div key={item.l} className="bg-violet-50 rounded-lg px-2.5 py-1.5">
-                                    <p className="text-[8px] text-violet-400 font-black uppercase">{item.l}</p>
-                                    <p className="text-[11px] font-black text-violet-800">{item.v}</p>
+                              {/* Card */}
+                              <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
+                                <div className="px-3 pt-2.5 pb-2 flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap gap-1 mb-1">
+                                      {tags.map(t => { const c = CAT_CONFIG[t] || CAT_CONFIG.GENERAL; return <span key={t} className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${c.badge}`}>{c.label}</span> })}
+                                      {hasAudio && <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 uppercase">Audio</span>}
+                                      {hasAI && <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase">IA</span>}
+                                    </div>
+                                    <h4 className="text-[11px] font-black text-gray-900 leading-tight">{note.title}</h4>
                                   </div>
-                                ))}
+                                  {isOwner && (
+                                    <button type="button" onClick={() => deleteNote(note.id)}
+                                      className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-gray-300 hover:text-red-500 rounded-md transition-all shrink-0">
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                                {hasAudio && (
+                                  <div className="px-3 pb-2">
+                                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                                    <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '32px' }} />
+                                  </div>
+                                )}
+                                {hasPhoto && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={note.photo_url} alt="Evidencia" className="w-full max-h-32 object-cover" />
+                                )}
+                                {note.content && (
+                                  <div className="px-3 pb-2">
+                                    <p className="text-[10px] text-gray-500 leading-relaxed line-clamp-3">{note.content}</p>
+                                  </div>
+                                )}
+                                {hasAI && (
+                                  <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
+                                    {[
+                                      { l: 'MS/ha', v: `${note.analysis_result.dry_matter_kg_ha} kg` },
+                                      { l: 'Alt.', v: `${note.analysis_result.grass_height_cm ?? '—'} cm` },
+                                      { l: 'Cob.', v: `${note.analysis_result.coverage_pct ?? '—'}%` },
+                                    ].map(item => (
+                                      <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
+                                        <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
+                                        <p className="text-[10px] font-black text-violet-800">{item.v}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="px-3 pb-2">
+                                  <p className="text-[8px] text-gray-300 font-medium">{fmtDate(note.created_at)}</p>
+                                </div>
                               </div>
-                            )}
-
-                            {/* Timestamp */}
-                            <div className="px-4 pb-3">
-                              <p className="text-[9px] text-gray-300 font-medium">{fmtDate(note.created_at)}</p>
                             </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           )}
         </div>
-
 
         {/* Footer — con contador de sesión */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between shrink-0">

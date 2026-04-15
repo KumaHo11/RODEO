@@ -697,7 +697,7 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
               ) : (
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
 
-                  {/* ── CARD 1: Notas de campo (grabadora) ── */}
+                  {/* ── CARD 1: Notas de rodeo ── */}
                   <div className="rounded-2xl border border-gray-200 overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
                       <div className="flex items-center gap-2">
@@ -705,7 +705,7 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
                           <Mic className="w-3.5 h-3.5 text-gray-500" />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas de campo</p>
+                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas de rodeo</p>
                           <p className="text-[9px] text-gray-400 font-medium">Audio · Texto · Foto</p>
                         </div>
                       </div>
