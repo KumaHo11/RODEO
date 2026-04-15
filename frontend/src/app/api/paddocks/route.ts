@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
           area_ha || 0,
           current_status,
           JSON.stringify(geomJson),
-          technical_data ? JSON.stringify(technical_data) : '{}',
+          technical_data ?? {},
           dry_matter_kg_ha ?? null,
         ]
       )
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
           name,
           area_ha || 0,
           current_status,
-          technical_data ? JSON.stringify(technical_data) : '{}',
+          technical_data ?? {},
           dry_matter_kg_ha ?? null,
         ]
       )

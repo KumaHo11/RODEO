@@ -5,7 +5,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import {
   Plus, Search, Trash2, LayoutGrid, List, Download,
-  ChevronUp, ChevronDown, Filter, X, Calendar, Edit3,
+  ChevronUp, ChevronDown, Filter, X, Calendar, Edit3, Beef,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import HerdModal, { type HerdData } from '@/components/HerdModal'
@@ -340,7 +340,7 @@ export default function HerdsPage() {
 
                     <div className="px-5 py-3 border-t border-gray-50">
                       <div className="mb-3">
-                        <p className="text-[9px] font-bold text-amber-500 tracking-widest uppercase mb-0.5">Consumo diario</p>
+                        <p className="text-[9px] font-bold text-green-600 tracking-widest uppercase mb-0.5">Consumo diario</p>
                         <div className="flex items-baseline gap-2">
                           <p className="text-3xl font-bold text-gray-950 tracking-tighter">{msDay.toLocaleString()}</p>
                           <span className="text-xs font-bold text-gray-400">kg MS/día</span>
