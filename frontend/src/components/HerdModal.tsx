@@ -86,7 +86,7 @@ const EVENT_TYPES_QUICK = [
   { id: 'diagnostico_prenez',    label: 'Diagnóstico de preñez', color: 'bg-teal-500' },
 ]
 
-const LABEL = 'text-[10px] font-black text-gray-500 tracking-widest uppercase'
+const LABEL = 'text-[10px] font-black text-gray-700 tracking-widest uppercase'
 const INPUT  = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all'
 const TEXTAREA = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none resize-none transition-all'
 

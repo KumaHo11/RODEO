@@ -125,7 +125,7 @@ const getCat = (note: any) => {
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 
 // ─── Shared token strings ──────────────────────────────────────────────────
-const LABEL_CLS  = 'text-[10px] font-black text-gray-400 tracking-widest uppercase'
+const LABEL_CLS  = 'text-[10px] font-black text-gray-700 tracking-widest uppercase'
 const INPUT_CLS  = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-400'
 const SELECT_CLS = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-800 focus:ring-1 focus:ring-gray-400 outline-none transition-all'
 
