@@ -259,6 +259,11 @@ export default function MiCampoPage() {
             fieldBoundaryDrawMode={fieldBoundaryDrawMode}
             onFieldBoundaryDrawn={handleFieldBoundaryDrawn}
             onFieldBoundaryDrawModeChange={setFieldBoundaryDrawMode}
+            initialCenter={
+              org?.location?.coordinates
+                ? [org.location.coordinates[1], org.location.coordinates[0]] as [number, number]
+                : undefined
+            }
           />
         )}
 

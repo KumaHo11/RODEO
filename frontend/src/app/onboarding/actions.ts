@@ -71,10 +71,12 @@ export async function finishOnboarding(formData: {
         ]
       )
     } else {
-      // No boundary drawn — just update name and area
+      // No boundary drawn — save name, area AND location point from step 1
       await mutate(
-        `UPDATE organizations SET name = $1, total_area_ha = $2, updated_at = NOW() WHERE id = $3`,
-        [formData.fieldName, areaHa, orgId]
+        `UPDATE organizations SET name = $1, total_area_ha = $2,
+         location = ST_SetSRID(ST_GeomFromGeoJSON($3), 4326),
+         updated_at = NOW() WHERE id = $4`,
+        [formData.fieldName, areaHa, JSON.stringify(locGeom), orgId]
       )
     }
   } catch (err: any) {
@@ -118,10 +120,11 @@ export async function finishOnboarding(formData: {
     }
   }
 
-  // 4. Insert Herds — admission_date and age_months included
+  // 4. Insert Herds — admission_date and age_months now exist in table
   if (formData.herds && formData.herds.length > 0) {
     for (const h of formData.herds) {
       try {
+        // Try full insert with all columns
         await mutate(
           `INSERT INTO herds
              (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria, admission_date, age_months)
@@ -129,18 +132,29 @@ export async function finishOnboarding(formData: {
           [
             orgId,
             h.name,
-            h.species,
-            h.breed   || null,
+            h.species     || 'Bovine',
+            h.breed       || null,
             h.headCount,
-            h.avgWeight  || null,
-            h.totalEV    || 0,
-            h.categoria  || null,
-            h.admissionDate || null,   // DATE
-            h.ageMonths  ?? null,      // INTEGER (months)
+            h.avgWeight   || null,
+            h.totalEV     || 0,
+            h.categoria   || null,
+            h.admissionDate || null,
+            h.ageMonths   ?? null,
           ]
         )
       } catch (err: any) {
-        console.error('Insert herd error:', err.message, h.name)
+        console.error('Insert herd (full) error:', err.message, h.name)
+        // Fallback: insert only guaranteed columns
+        try {
+          await mutate(
+            `INSERT INTO herds (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [orgId, h.name, h.species || 'Bovine', h.breed || null,
+             h.headCount, h.avgWeight || null, h.totalEV || 0, h.categoria || null]
+          )
+        } catch (fallbackErr: any) {
+          console.error('Insert herd (fallback) also failed:', fallbackErr.message, h.name)
+        }
       }
     }
   }

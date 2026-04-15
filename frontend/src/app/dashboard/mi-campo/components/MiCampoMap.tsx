@@ -54,6 +54,8 @@ interface Props {
   fieldBoundaryDrawMode?: boolean
   onFieldBoundaryDrawn?: (geojson: any) => void
   onFieldBoundaryDrawModeChange?: (active: boolean) => void
+  // Initial map center (org location from onboarding step 1)
+  initialCenter?: [number, number]
 }
 
 function MapController({
@@ -61,6 +63,7 @@ function MapController({
   onSelectPaddock, onPaddockGeomUpdated, onNewPaddockDrawn, activeGrazingPlans = [],
   drawModeActive = false, onDrawModeChange, onDeletePaddock,
   fieldBoundaryDrawMode = false, onFieldBoundaryDrawn, onFieldBoundaryDrawModeChange,
+  initialCenter,
 }: Props) {
   const map = useMap()
   const layerGroupRef = useRef<L.LayerGroup | null>(null)
@@ -239,6 +242,10 @@ function MapController({
         map.fitBounds(combined, { padding: [40, 40] })
         hasInitialFitRef.current = true
       }
+    } else if (!hasInitialFitRef.current && validBounds.length === 0 && initialCenter) {
+      // No paddocks drawn yet — fly to the org's saved location from onboarding
+      map.setView(initialCenter, 14, { animate: false })
+      hasInitialFitRef.current = true
     }
   }, [paddocks, selectedPaddockId, map])
 
@@ -318,10 +325,12 @@ function MapController({
 }
 
 export default function MiCampoMap(props: Props) {
+  // Use org location as initial center, fall back to Pampa argentina
+  const center: [number, number] = props.initialCenter ?? [-34.6, -63.0]
   return (
     <MapContainer
-      center={[-34.6, -58.4]}
-      zoom={12}
+      center={center}
+      zoom={props.initialCenter ? 13 : 5}
       style={{ height: '100%', width: '100%' }}
       zoomControl={true}
     >
