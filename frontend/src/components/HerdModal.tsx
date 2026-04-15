@@ -284,8 +284,11 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
   const [bcsSaved,      setBcsSaved]      = useState(false)
   const [showNote,      setShowNote]      = useState(false)
   const [quickNote,     setQuickNote]     = useState('')
+  const [noteMode,      setNoteMode]      = useState<'text' | 'audio' | null>(null)
+  const [noteExpanded,  setNoteExpanded]  = useState(false)
   const [noteSaving,    setNoteSaving]    = useState(false)
   const [noteSaved,     setNoteSaved]     = useState(false)
+  const [sessionNoteCount, setSessionNoteCount] = useState(0)
   const [agendaEvents,  setAgendaEvents]  = useState<any[]>([])
   const [evLoading,     setEvLoading]     = useState(false)
   const [showAllEvents, setShowAllEvents] = useState(false)
@@ -656,21 +659,20 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
 
           {/* ════ TAB 3 — REGISTROS ════ */}
           {tab === 'registros' && (
-            <div className="px-6 py-5 space-y-5">
+            <div className="flex flex-col" style={{ minHeight: 0 }}>
 
-              {/* BCS */}
-              <div className="space-y-3">
-                <div className="flex items-start justify-between gap-2">
+              {/* ── BCS Slider (dato siempre visible arriba) ── */}
+              <div className="px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
+                <div className="flex items-start justify-between gap-2 mb-3">
                   <div>
                     <p className={LABEL}>Condición corporal (BCS)</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5 italic">Estimado general del rodeo — escala 1–9</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 italic">Escala 1–9 · Estimado general del rodeo</p>
                   </div>
                   <span className={`text-xs font-black px-2.5 py-0.5 rounded-lg text-white whitespace-nowrap ${bcsColorClass(bcsScore)}`}>
                     {bcsScore}/9 · {bcsLabel(bcsScore)}
                   </span>
                 </div>
-
-                <div className="relative pt-1">
+                <div className="relative pt-1 mb-2">
                   <div className="w-full h-2.5 rounded-full bg-gradient-to-r from-red-400 via-amber-400 via-lime-400 to-green-600" />
                   <input type="range" min={1} max={9} step={1} value={bcsScore}
                     onChange={e => setBcsScore(Number(e.target.value))}
@@ -678,167 +680,244 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
                   <div className={`absolute top-0 w-4 h-4 rounded-full border-2 border-white shadow-md -translate-y-[3px] -translate-x-1/2 transition-all ${bcsColorClass(bcsScore)}`}
                     style={{ left: `${((bcsScore - 1) / 8) * 100}%` }} />
                 </div>
-                <div className="flex justify-between text-[9px] font-black text-gray-400 tracking-widest">{[1,2,3,4,5,6,7,8,9].map(n => <span key={n}>{n}</span>)}</div>
-
-                {/* BCS save + photo */}
-                <div className="flex gap-2">
-                  <button type="button" onClick={saveBcs} disabled={bcsSaving}
-                    className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-black py-2.5 rounded-xl text-xs transition-all disabled:opacity-40">
-                    {bcsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : bcsSaved ? <Check className="w-3.5 h-3.5" /> : null}
-                    {bcsSaved ? 'Guardado' : 'Guardar BCS'}
-                  </button>
-                  <label className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl text-xs cursor-pointer transition-all">
-                    <Camera className="w-4 h-4" /> Foto
-                    <input type="file" accept="image/*" capture="environment" className="hidden" />
-                  </label>
-                </div>
-              </div>
-
-              {/* Note — hidden by default */}
-              <div className="border-t border-gray-100 pt-4 space-y-3">
-                <button type="button" onClick={() => setShowNote(v => !v)}
-                  className="flex items-center gap-2 text-sm text-gray-600 hover:text-green-700 transition-colors font-medium">
-                  <MessageSquarePlus className="w-4 h-4 text-gray-400" />
-                  ¿Agregar descripción adicional?
-                  {showNote ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
+                <div className="flex justify-between text-[9px] font-black text-gray-400 tracking-widest mb-3">{[1,2,3,4,5,6,7,8,9].map(n => <span key={n}>{n}</span>)}</div>
+                <button type="button" onClick={saveBcs} disabled={bcsSaving}
+                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-black py-2.5 rounded-xl text-xs transition-all disabled:opacity-40">
+                  {bcsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : bcsSaved ? <Check className="w-3.5 h-3.5" /> : null}
+                  {bcsSaved ? 'BCS guardado' : 'Guardar condición corporal'}
                 </button>
-                <AnimatePresence>
-                  {showNote && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }} className="overflow-hidden space-y-3">
-                      <textarea value={quickNote} onChange={e => setQuickNote(e.target.value)} rows={3}
-                        placeholder="Observaciones sobre el rodeo..." className={TEXTAREA} />
-                      <button type="button" onClick={saveNote} disabled={noteSaving || !quickNote.trim()}
-                        className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-black py-2.5 rounded-xl text-xs transition-all disabled:opacity-40">
-                        {noteSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : noteSaved ? <Check className="w-3.5 h-3.5" /> : <BookOpen className="w-3.5 h-3.5" />}
-                        {noteSaved ? 'Nota guardada' : 'Guardar nota'}
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
 
-              {/* New event */}
-              <div className="border-t border-gray-100 pt-4 space-y-3">
-                <p className={`${LABEL} flex items-center gap-1.5`}><CalendarDays className="w-3 h-3 text-gray-400" /> Nueva tarea / evento</p>
+              {/* ── Quick Action Header — "Grabadora de Campo" ── */}
+              {isEditing && (
+                <div className="px-6 pt-4 pb-4 border-b border-gray-100 bg-gradient-to-b from-gray-50/80 to-white shrink-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-[11px] font-black text-gray-800 tracking-tight">Grabadora de campo</p>
+                      <p className="text-[10px] text-gray-400 font-medium mt-0.5">Captura rápida de eventos del rodeo</p>
+                    </div>
+                    {sessionNoteCount > 0 && (
+                      <span className="flex items-center gap-1.5 bg-green-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-300 animate-pulse" />
+                        +{sessionNoteCount} nuevos
+                      </span>
+                    )}
+                  </div>
 
-                {/* Event type — colored dots */}
-                <div className="grid grid-cols-2 gap-1.5">
-                  {EVENT_TYPES_QUICK.map(t => (
-                    <button key={t.id} type="button" onClick={() => setNewEvType(t.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
-                        newEvType === t.id
-                          ? 'border-green-300 bg-green-50 text-green-700'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                  {/* Three capture buttons */}
+                  <div className="grid grid-cols-3 gap-3">
+                    {/* 🔴 Mic (voice to text via SpeechRecognition) */}
+                    <button type="button"
+                      onClick={() => { if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') } }}
+                      className={`relative flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all ${
+                        noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'
                       }`}>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${t.color}`} />
-                      {t.label}
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                        noteMode === 'audio' ? 'bg-red-500 shadow-lg shadow-red-200' : 'bg-red-100'
+                      }`}>
+                        {micOn
+                          ? <MicOff className={`w-5 h-5 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />
+                          : <Mic className={`w-5 h-5 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
+                      </div>
+                      <span className="text-[10px] font-black text-gray-600 tracking-wide">{micOn ? 'ESCUCHANDO' : 'VOZ'}</span>
+                      {micOn && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 animate-ping" />}
                     </button>
-                  ))}
-                </div>
 
-                {/* Title + mic */}
-                <div className="relative">
-                  <input type="text" value={newEvTitle} onChange={e => setNewEvTitle(e.target.value)}
-                    placeholder="Título del evento..." className={`${INPUT} pr-10`} />
-                  <button type="button" onClick={toggleMic}
-                    className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg transition-all ${micOn ? 'bg-red-100 text-red-600 animate-pulse' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
-                    {micOn ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
+                    {/* 🟢 Camera */}
+                    <button type="button"
+                      onClick={() => { if (noteExpanded && noteMode === 'text') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('text') } }}
+                      className={`flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all ${
+                        noteMode === 'text' && noteExpanded ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'
+                      }`}>
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                        noteMode === 'text' && noteExpanded ? 'bg-green-500 shadow-lg shadow-green-200' : 'bg-green-100'
+                      }`}>
+                        <Camera className={`w-5 h-5 ${noteMode === 'text' && noteExpanded ? 'text-white' : 'text-green-600'}`} />
+                      </div>
+                      <span className="text-[10px] font-black text-gray-600 tracking-wide">FOTO</span>
+                    </button>
 
-                {/* Dates */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className={`${LABEL}`}>Fecha inicio</label>
+                    {/* ⚫ Keyboard */}
+                    <button type="button"
+                      onClick={() => {
+                        if (noteExpanded && !noteMode) { setNoteExpanded(false) }
+                        else { setNoteExpanded(true); setNoteMode(null) }
+                      }}
+                      className={`flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all ${
+                        noteExpanded && noteMode === null ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'
+                      }`}>
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                        noteExpanded && noteMode === null ? 'bg-gray-700 shadow-lg shadow-gray-200' : 'bg-gray-100'
+                      }`}>
+                        <MessageSquarePlus className={`w-5 h-5 ${noteExpanded && noteMode === null ? 'text-white' : 'text-gray-500'}`} />
+                      </div>
+                      <span className="text-[10px] font-black text-gray-600 tracking-wide">TEXTO</span>
+                    </button>
+                  </div>
+
+                  {/* Expanded form — text quick note */}
+                  {noteExpanded && (
+                    <div className="mt-4 space-y-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                      {/* Mic voice note */}
+                      {noteMode === 'audio' && (
+                        <div className="space-y-2">
+                          <p className={LABEL}>Dictar observación</p>
+                          <button type="button" onClick={toggleMic}
+                            className={`w-full flex items-center justify-center gap-2.5 py-3 text-sm font-black rounded-2xl transition-all ${
+                              micOn ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-red-600 hover:bg-red-700 text-white'
+                            }`}>
+                            {micOn ? <><MicOff className="w-5 h-5" /> Detener</>  : <><Mic className="w-5 h-5" /> Grabar audio...</> }
+                          </button>
+                          {micOn && (
+                            <div className="flex items-center justify-center gap-2 py-1">
+                              <div className="flex items-end gap-0.5 h-6">
+                                {[3,5,4,7,5,6,3].map((h, i) => (
+                                  <div key={i} className="w-1 bg-red-500 rounded-full animate-bounce"
+                                    style={{ height: `${h * 3}px`, animationDelay: `${i * 80}ms` }} />
+                                ))}
+                              </div>
+                              <span className="text-[10px] font-black text-red-600 tracking-widest uppercase">Escuchando…</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Text / evento form */}
+                      <textarea value={quickNote} onChange={e => setQuickNote(e.target.value)} rows={3}
+                        placeholder={noteMode === 'audio' ? 'El texto dictado aparecerá aquí…' : 'Escribí la observación o tarea…'}
+                        className={TEXTAREA}
+                        autoFocus={noteMode !== 'audio'} />
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={async () => { await saveNote(); setSessionNoteCount(c => c + 1); setNoteExpanded(false); setNoteMode(null) }}
+                          disabled={noteSaving || !quickNote.trim()}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all">
+                          {noteSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                          {noteSaved ? 'Guardado' : 'Guardar nota'}
+                        </button>
+                        <button type="button" onClick={() => { setNoteExpanded(false); setNoteMode(null); setQuickNote('') }}
+                          className="px-4 py-2.5 text-sm font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700 transition-all">
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Event form — below quick actions ── */}
+              {isEditing && (
+                <div className="px-6 py-4 border-b border-gray-100 shrink-0 space-y-3">
+                  <p className={`${LABEL} flex items-center gap-1.5`}><CalendarDays className="w-3 h-3 text-gray-400" /> Nueva tarea / evento
+                    <span className="text-[8px] text-gray-300 normal-case font-normal tracking-normal">para agenda del equipo</span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {EVENT_TYPES_QUICK.map(t => (
+                      <button key={t.id} type="button" onClick={() => setNewEvType(t.id)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+                          newEvType === t.id ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                        }`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${t.color}`} /> {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <input type="text" value={newEvTitle} onChange={e => setNewEvTitle(e.target.value)}
+                      placeholder="Título del evento…" className={`${INPUT} pr-10`} />
+                    <button type="button" onClick={toggleMic}
+                      className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg transition-all ${micOn ? 'bg-red-100 text-red-600 animate-pulse' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                      {micOn ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <input type="date" value={newEvDate} onChange={e => setNewEvDate(e.target.value)} className={INPUT} />
+                    <input type="date" value={newEvEndDate} onChange={e => setNewEvEndDate(e.target.value)} className={INPUT} placeholder="Fin (opc.)" />
                   </div>
-                  <div className="space-y-1">
-                    <label className={`${LABEL}`}>Fecha fin (opc.)</label>
-                    <input type="date" value={newEvEndDate} onChange={e => setNewEvEndDate(e.target.value)} className={INPUT} />
-                  </div>
-                </div>
-
-                {/* Description */}
-                <textarea value={newEvDesc} onChange={e => setNewEvDesc(e.target.value)} rows={2}
-                  placeholder="Descripción del evento (opcional)..." className={TEXTAREA} />
-
-                {/* Assignee */}
-                {teamMembers.length > 0 && (
-                  <div className="space-y-1.5">
-                    <label className={`${LABEL} flex items-center gap-1.5`}><Users className="w-3 h-3 text-gray-400" /> Asignar a</label>
+                  {teamMembers.length > 0 && (
                     <select value={newEvAssignee} onChange={e => setNewEvAssignee(e.target.value)}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-green-500 cursor-pointer">
                       <option value="">Sin asignar</option>
-                      {teamMembers.map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.first_name ?? ''} {m.last_name ?? ''} ({m.email})
-                        </option>
-                      ))}
+                      {teamMembers.map(m => <option key={m.id} value={m.id}>{m.first_name ?? ''} {m.last_name ?? ''} ({m.email})</option>)}
                     </select>
+                  )}
+                  <button type="button" onClick={() => { saveEvent(); setSessionNoteCount(c => c + 1) }} disabled={evSaving || !newEvTitle.trim()}
+                    className="w-full flex items-center justify-center gap-2 border-2 border-green-600 text-green-700 font-black py-2.5 rounded-xl text-sm hover:bg-green-50 transition-all disabled:opacity-40">
+                    {evSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : evSaved ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    {evSaved ? 'Evento creado' : 'Agregar a la Agenda'}
+                  </button>
+                </div>
+              )}
+
+              {/* ── Events Timeline ── */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className={LABEL}>Historial de eventos</p>
+                  {evLoading && <Loader2 className="w-3.5 h-3.5 text-green-500 animate-spin" />}
+                </div>
+
+                {agendaEvents.length === 0 && !evLoading && (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
+                      <CalendarDays className="w-5 h-5 text-gray-300" />
+                    </div>
+                    <p className="text-sm font-bold text-gray-400">Sin eventos registrados</p>
+                    <p className="text-[10px] text-gray-300 mt-1">Usá los botones de arriba para agregar</p>
                   </div>
                 )}
 
-                <button type="button" onClick={saveEvent} disabled={evSaving || !newEvTitle.trim()}
-                  className="w-full flex items-center justify-center gap-2 border-2 border-green-600 text-green-700 font-black py-2.5 rounded-xl text-sm hover:bg-green-50 transition-all disabled:opacity-40">
-                  {evSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : evSaved ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                  {evSaved ? 'Evento creado' : 'Agregar a la Agenda'}
-                </button>
-              </div>
-
-              {/* Events list */}
-              {evLoading ? (
-                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-gray-300 animate-spin" /></div>
-              ) : agendaEvents.length > 0 ? (
-                <div className="border-t border-gray-100 pt-4 space-y-2">
-                  <p className={LABEL}>Eventos vinculados</p>
-                  <div className={`space-y-2 ${showAllEvents && agendaEvents.length > 10 ? 'max-h-72 overflow-y-auto pr-1' : ''}`}>
+                <div className="relative">
+                  {visibleEvents.length > 0 && <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />}
+                  <div className="space-y-3">
                     {visibleEvents.map(ev => {
                       const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
                       return (
-                        <div key={ev.id} className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-gray-900 truncate">{ev.title}</p>
-                            <p className="text-[10px] text-gray-400">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
+                        <div key={ev.id} className="flex gap-3">
+                          {/* Dot */}
+                          <div className="w-8 h-8 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 z-10">
+                            <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
+                          </div>
+                          {/* Card */}
+                          <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3.5 py-2.5 hover:shadow-sm transition-shadow">
+                            <p className="text-xs font-black text-gray-900 leading-snug">{ev.title}</p>
+                            <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
                           </div>
                         </div>
                       )
                     })}
                   </div>
-                  {hiddenCount > 0 && !showAllEvents && (
-                    <button type="button" onClick={() => setShowAllEvents(true)}
-                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-gray-500 hover:text-green-700 py-2 rounded-xl hover:bg-green-50 transition-all border border-dashed border-gray-200">
-                      <ChevronRight className="w-3.5 h-3.5" /> Ver {hiddenCount} evento{hiddenCount !== 1 ? 's' : ''} más
-                    </button>
-                  )}
-                  {showAllEvents && agendaEvents.length > 2 && (
-                    <button type="button" onClick={() => setShowAllEvents(false)}
-                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-600 py-2 rounded-xl hover:bg-gray-50 transition-all">
-                      <ChevronUp className="w-3.5 h-3.5" /> Mostrar menos
-                    </button>
-                  )}
                 </div>
-              ) : isEditing ? (
-                <p className="text-xs text-gray-400 text-center py-2 border-t border-gray-100 pt-4">Sin eventos vinculados a este rodeo</p>
-              ) : null}
 
+                {hiddenCount > 0 && !showAllEvents && (
+                  <button type="button" onClick={() => setShowAllEvents(true)}
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-gray-500 hover:text-green-700 py-2 rounded-xl hover:bg-green-50 transition-all border border-dashed border-gray-200">
+                    <ChevronRight className="w-3.5 h-3.5" /> Ver {hiddenCount} evento{hiddenCount !== 1 ? 's' : ''} más
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Footer — Tab 1 save */}
-        {tab === 'operativo' && (
+        {/* Footer — Tab 1 save / general */}
+        {(tab === 'operativo' || (tab === 'registros' && sessionNoteCount > 0)) && (
           <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex justify-end gap-3">
             <button type="button" onClick={onClose}
               className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
               Cancelar
             </button>
-            <button type="button" onClick={handleSave} disabled={saving || !canSave}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-40 transition-all">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              {isEditing ? 'Actualizar' : 'Crear rodeo'}
-            </button>
+            {tab === 'operativo' && (
+              <button type="button" onClick={handleSave} disabled={saving || !canSave}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-40 transition-all">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {isEditing ? 'Actualizar' : 'Crear rodeo'}
+              </button>
+            )}
+            {tab === 'registros' && sessionNoteCount > 0 && (
+              <button type="button" onClick={onClose}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 transition-all">
+                <Check className="w-4 h-4" />
+                Confirmar (+{sessionNoteCount} registros)
+              </button>
+            )}
           </div>
         )}
 

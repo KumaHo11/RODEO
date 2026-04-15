@@ -324,6 +324,8 @@ export default function PaddockModal({
   const [notes, setNotes]                     = useState<any[]>([])
   const [notesLoading, setNotesLoading]       = useState(false)
   const [deletedNotes, setDeletedNotes]       = useState<Record<string, Date>>({})
+  // Session counter — notes created in this modal session
+  const [sessionNoteCount, setSessionNoteCount] = useState(0)
 
   const loadNotes = useCallback(async () => {
     if (!paddock.id || paddock.id === '__NEW__') return
@@ -733,109 +735,131 @@ export default function PaddockModal({
 
           {/* ════ TAB 3 — REGISTROS ════ */}
           {activeTab === 'registros' && (
-            <div className="px-6 py-5 space-y-4">
+            <div className="flex flex-col" style={{ minHeight: 0 }}>
 
-              {/* Nueva nota — CTA primario */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className={LABEL_CLS}>Registros de campo</p>
-                  {noteSaved && <span className="text-[10px] font-black text-green-700 tracking-widest uppercase">✓ Guardado</span>}
+              {/* ── Quick Action Header ── "La Grabadora de Campo" ── */}
+              <div className="px-6 pt-5 pb-4 border-b border-gray-100 bg-gradient-to-b from-gray-50/80 to-white shrink-0">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-[11px] font-black text-gray-800 tracking-tight">Grabadora de campo</p>
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">Captura instantánea de lo que pasa en el potrero</p>
+                  </div>
+                  {sessionNoteCount > 0 && (
+                    <span className="flex items-center gap-1.5 bg-green-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-sm shadow-green-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-300 animate-pulse" />
+                      +{sessionNoteCount} nuevos
+                    </span>
+                  )}
                 </div>
 
-                {!noteExpanded ? (
-                  <button
-                    type="button"
-                    onClick={() => setNoteExpanded(true)}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 transition-all"
-                  >
-                    <Plus className="w-4 h-4" /> Nueva nota
+                {/* Three big circular capture buttons */}
+                <div className="grid grid-cols-3 gap-3">
+
+                  {/* 🔴 Mic */}
+                  <button type="button"
+                    onClick={() => {
+                      if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) }
+                      else { setNoteExpanded(true); setNoteMode('audio') }
+                    }}
+                    className={`relative flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all select-none ${
+                      noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'
+                    }`}>
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                      noteMode === 'audio' ? 'bg-red-500 shadow-lg shadow-red-200' : 'bg-red-100'
+                    }`}>
+                      {recording
+                        ? <MicOff className={`w-5 h-5 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />
+                        : <Mic className={`w-5 h-5 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
+                    </div>
+                    <span className="text-[10px] font-black text-gray-600 tracking-wide">
+                      {recording ? 'GRABANDO' : 'AUDIO'}
+                    </span>
+                    {recording && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 animate-ping" />}
                   </button>
-                ) : (
-                  <div className="space-y-3 border border-gray-200 rounded-xl p-4">
 
-                    {/* Título */}
-                    <div className="space-y-1.5">
-                      <label className={LABEL_CLS}>Título</label>
-                      <input
-                        type="text" value={noteTitle}
-                        onChange={e => setNoteTitle(e.target.value)}
-                        placeholder="Ej: Ingreso el pasto norte, Corte de agua…"
-                        className={INPUT_CLS}
-                      />
+                  {/* 🟢 Camera */}
+                  <button type="button"
+                    onClick={() => {
+                      if (noteExpanded && noteMode === 'image') { setNoteExpanded(false); setNoteMode(null) }
+                      else { setNoteExpanded(true); setNoteMode('image') }
+                    }}
+                    className={`flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all select-none ${
+                      noteMode === 'image' ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'
+                    }`}>
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                      noteMode === 'image' ? 'bg-green-500 shadow-lg shadow-green-200' : 'bg-green-100'
+                    }`}>
+                      <Camera className={`w-5 h-5 ${noteMode === 'image' ? 'text-white' : 'text-green-600'}`} />
                     </div>
+                    <span className="text-[10px] font-black text-gray-600 tracking-wide">FOTO</span>
+                  </button>
 
-                    {/* Tipo */}
-                    <label className={LABEL_CLS}>Tipo de registro</label>
-                    <div className="flex gap-2">
-                      {(['text', 'image', 'audio'] as const).map(mode => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => setNoteMode(noteMode === mode ? null : mode)}
-                          className={`flex-1 py-2.5 text-sm font-bold rounded-xl border transition-all ${
-                            noteMode === mode
-                              ? 'bg-green-600 text-white border-green-600'
-                              : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          {mode === 'text' ? 'Texto' : mode === 'image' ? 'Imagen' : 'Audio'}
-                        </button>
-                      ))}
+                  {/* ⚫ Keyboard / Text */}
+                  <button type="button"
+                    onClick={() => {
+                      if (noteExpanded && noteMode === 'text') { setNoteExpanded(false); setNoteMode(null) }
+                      else { setNoteExpanded(true); setNoteMode('text') }
+                    }}
+                    className={`flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all select-none ${
+                      noteMode === 'text' ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'
+                    }`}>
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                      noteMode === 'text' ? 'bg-gray-700 shadow-lg shadow-gray-200' : 'bg-gray-100'
+                    }`}>
+                      <BookOpen className={`w-5 h-5 ${noteMode === 'text' ? 'text-white' : 'text-gray-500'}`} />
                     </div>
+                    <span className="text-[10px] font-black text-gray-600 tracking-wide">TEXTO</span>
+                  </button>
+                </div>
 
-                    {/* Texto */}
+                {/* ── Expanded capture form ── */}
+                {noteExpanded && (
+                  <div className="mt-4 space-y-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                    <input type="text" value={noteTitle} onChange={e => setNoteTitle(e.target.value)}
+                      placeholder="Título del registro (opcional)…" className={INPUT_CLS} />
+
+                    {/* TEXT */}
                     {noteMode === 'text' && (
-                      <textarea
-                        value={noteText} onChange={e => setNoteText(e.target.value)}
-                        placeholder="Escribí tu observación de campo…" rows={3}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none transition-all"
-                      />
+                      <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
+                        placeholder="Escribí tu observación de campo…" rows={3} autoFocus
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none transition-all" />
                     )}
 
-                    {/* Imagen */}
+                    {/* IMAGE */}
                     {noteMode === 'image' && (
                       <div className="space-y-2">
-                        {/* Botones: galeria + camara */}
                         <div className="grid grid-cols-2 gap-2">
                           <button type="button" onClick={() => noteImageRef.current?.click()}
                             className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-gray-600 border border-dashed border-gray-300 rounded-xl hover:border-green-400 hover:text-green-700 transition-colors bg-gray-50">
-                            <Paperclip className="w-4 h-4" /> Adjuntar archivo
+                            <Paperclip className="w-4 h-4" /> Galería
                           </button>
                           <button type="button" onClick={() => noteCameraRef.current?.click()}
-                            className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-gray-600 border border-dashed border-gray-300 rounded-xl hover:border-green-400 hover:text-green-700 transition-colors bg-gray-50">
-                            <Camera className="w-4 h-4" /> Tomar foto
+                            className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 transition-all">
+                            <Camera className="w-4 h-4" /> Cámara
                           </button>
                         </div>
-                        {/* Input galeria */}
                         <input ref={noteImageRef} type="file" accept="image/*" className="hidden"
-                          onChange={e => {
-                            const f = e.target.files?.[0]
-                            if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) }
-                          }}
-                        />
-                        {/* Input cámara (mobile capture) */}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
                         <input ref={noteCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                          onChange={e => {
-                            const f = e.target.files?.[0]
-                            if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) }
-                          }}
-                        />
+                          onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
                         {noteImagePreview && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={noteImagePreview} alt="preview" className="w-full max-h-40 object-cover rounded-xl" />
+                          <img src={noteImagePreview} alt="preview" className="w-full max-h-44 object-cover rounded-xl" />
                         )}
                         {noteImage && (
                           <button type="button" onClick={analyzeNoteImage} disabled={noteAnalyzing}
-                            className="text-sm font-bold text-violet-600 hover:text-violet-700 disabled:opacity-50">
-                            {noteAnalyzing ? 'Analizando con IA…' : '✨ Analizar biomasa con IA (optativo)'}
+                            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50 transition-all">
+                            {noteAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>✨</span>}
+                            {noteAnalyzing ? 'Analizando con IA…' : 'Analizar biomasa con IA'}
                           </button>
                         )}
                         {noteResult && (
-                          <div className="bg-violet-50 px-4 py-3 rounded-xl border border-violet-200">
-                            <p className="text-[10px] font-black text-violet-500 tracking-widest uppercase">Resultado IA</p>
-                            <p className="text-sm font-black text-violet-900 mt-1">
-                              {Number(noteResult.dry_matter_kg_ha).toLocaleString('es')} kg MS/ha
-                            </p>
+                          <div className="bg-violet-50 px-4 py-3 rounded-xl border border-violet-200 flex items-center gap-3">
+                            <span className="text-2xl">🌿</span>
+                            <div>
+                              <p className="text-[10px] font-black text-violet-500 tracking-widest uppercase">Resultado IA · Gemini</p>
+                              <p className="text-lg font-black text-violet-900">{Number(noteResult.dry_matter_kg_ha).toLocaleString('es')} kg MS/ha</p>
+                            </div>
                           </div>
                         )}
                         <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Descripción adicional (optativo)…" rows={2}
@@ -843,30 +867,35 @@ export default function PaddockModal({
                       </div>
                     )}
 
-                    {/* Audio */}
+                    {/* AUDIO */}
                     {noteMode === 'audio' && (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <button type="button" onClick={recording ? stopRecording : startRecording}
-                          className={`flex items-center justify-center gap-2 w-full py-2.5 text-sm font-bold rounded-xl transition-all ${
-                            recording ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-600 text-white hover:bg-green-700'
+                          className={`w-full flex items-center justify-center gap-2.5 py-4 text-sm font-black rounded-2xl transition-all ${
+                            recording ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-red-600 hover:bg-red-700 text-white'
                           }`}>
-                          {recording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                          {recording ? 'Detener grabación' : 'Grabar ahora'}
+                          {recording ? <><MicOff className="w-5 h-5" /> Detener</> : <><Mic className="w-5 h-5" /> Grabar ahora</>}
                         </button>
                         {recording && (
-                          <div className="flex items-center gap-2 text-[10px] font-black text-red-600 tracking-widest uppercase">
-                            <div className="w-2 h-2 rounded-full bg-red-500 animate-ping" /> Grabando… (se transcribe automáticamente)
+                          <div className="flex items-center justify-center gap-3 py-2">
+                            <div className="flex items-end gap-0.5 h-8">
+                              {[3,6,4,8,5,7,3,6,5,4].map((h, i) => (
+                                <div key={i} className="w-1 bg-red-500 rounded-full animate-bounce"
+                                  style={{ height: `${h * 3}px`, animationDelay: `${i * 80}ms`, animationDuration: '0.65s' }} />
+                              ))}
+                            </div>
+                            <span className="text-[10px] font-black text-red-600 tracking-widest uppercase">Grabando…</span>
                           </div>
                         )}
                         {audioTranscript && (
                           <div className="bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
                             <p className={LABEL_CLS}>Transcripción en vivo</p>
-                            <p className="text-sm font-medium text-gray-700 mt-1">{audioTranscript}</p>
+                            <p className="text-sm font-medium text-gray-700 mt-1 italic">&ldquo;{audioTranscript}&rdquo;</p>
                           </div>
                         )}
                         {audioUrl && !recording && (
-                          <div className="space-y-1">
-                            <p className={LABEL_CLS}>Audio grabado</p>
+                          <div className="space-y-1.5">
+                            <p className={LABEL_CLS}>Audio grabado — listo para guardar</p>
                             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                             <audio controls src={audioUrl} className="w-full rounded-xl" />
                           </div>
@@ -874,12 +903,15 @@ export default function PaddockModal({
                       </div>
                     )}
 
+                    {/* Save / Cancel */}
                     <div className="flex items-center gap-2 pt-1">
-                      {noteMode && (noteText || audioTranscript || noteImage || audioBlob) && (
-                        <button type="button" onClick={saveQuickNote} disabled={noteSaving}
-                          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all">
+                      {(noteText || audioTranscript || noteImage || audioBlob) && (
+                        <button type="button"
+                          onClick={async () => { await saveQuickNote(); setSessionNoteCount(c => c + 1) }}
+                          disabled={noteSaving}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all">
                           {noteSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                          {noteSaving ? 'Guardando…' : 'Guardar nota'}
+                          {noteSaving ? 'Guardando…' : 'Guardar registro'}
                         </button>
                       )}
                       <button type="button"
@@ -889,7 +921,7 @@ export default function PaddockModal({
                           setNoteImage(null); setNoteImagePreview(null)
                           setAudioBlob(null); setAudioUrl(null)
                         }}
-                        className="text-sm font-bold text-gray-500 hover:text-gray-700 px-3 py-2">
+                        className="px-4 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 bg-gray-100 rounded-xl transition-all">
                         Cancelar
                       </button>
                     </div>
@@ -897,171 +929,200 @@ export default function PaddockModal({
                 )}
               </div>
 
-              {/* Herramientas de apoyo */}
-              <div className="space-y-2 pt-2 border-t border-gray-100">
-                <p className={LABEL_CLS}>Herramientas de apoyo</p>
+              {/* ── Intelligence Cards — always visible ── */}
+              <div className="px-6 py-4 border-b border-gray-100 shrink-0">
+                <p className={`${LABEL_CLS} mb-3`}>Inteligencia de campo</p>
+                <div className="grid grid-cols-2 gap-3">
 
-                <Collapsible title="Análisis de pastura con IA" accent="violet">
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium text-gray-500">Subí una foto de la pastura para estimar materia seca con visión artificial de Gemini.</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button type="button" onClick={() => bioInputRef.current?.click()}
-                        className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-bold bg-gray-50 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-100 transition-all">
-                        <Paperclip className="w-4 h-4" /> Adjuntar imagen
-                      </button>
-                      <button type="button" onClick={() => bioCameraRef.current?.click()}
-                        className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-bold bg-gray-50 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-100 transition-all">
-                        <Camera className="w-4 h-4" /> Tomar foto
-                      </button>
+                  {/* Card A — NDVI */}
+                  <div className={`rounded-2xl border p-4 ${
+                    currentNdvi != null
+                      ? currentNdvi >= 0.4 ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[9px] font-black tracking-widest uppercase text-gray-500">NDVI Actual</p>
+                      <span className="text-[8px] font-bold text-gray-400">Sentinel-2</span>
                     </div>
-                    {bioPhoto && (
-                      <button onClick={analyzeBio} disabled={bioAnalyzing}
-                        className="w-full px-4 py-2.5 text-sm font-bold bg-violet-600 text-white rounded-xl hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all">
-                        {bioAnalyzing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        {bioAnalyzing ? 'Analizando con IA…' : `✨ Analizar: ${bioPhoto.name.slice(0, 20)}…`}
+                    {currentNdvi != null ? (
+                      <>
+                        <p className={`text-2xl font-black leading-none ${
+                          currentNdvi >= 0.6 ? 'text-green-700' : currentNdvi >= 0.4 ? 'text-amber-600' : 'text-red-600'
+                        }`}>{Number(currentNdvi).toFixed(3)}</p>
+                        <p className="text-[10px] font-bold text-gray-500 mt-0.5">{ndviStatus(currentNdvi)}</p>
+                        <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-red-400 via-yellow-300 to-green-500 mt-2" />
+                      </>
+                    ) : (
+                      <p className="text-xs font-bold text-gray-400 mt-1">Sin datos</p>
+                    )}
+                    {isGeo && (
+                      <button type="button" onClick={refreshNdvi} disabled={ndviRefreshing}
+                        className="mt-2.5 text-[10px] font-black text-gray-400 hover:text-green-700 flex items-center gap-1 transition-colors disabled:opacity-50">
+                        {ndviRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>↻</span>}
+                        {ndviRefreshing ? 'Actualizando…' : 'Actualizar'}
                       </button>
                     )}
-                    <input ref={bioInputRef} type="file" accept="image/*" className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) { setBioPhoto(f); setBioResult(null); setBioError(null) } }}
-                    />
-                    <input ref={bioCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) { setBioPhoto(f); setBioResult(null); setBioError(null) } }}
-                    />
-                    {bioError && <p className="text-sm font-bold text-red-600">{bioError}</p>}
-                    {bioResult && (
-                      <div className="bg-violet-50 rounded-xl px-4 py-3 border border-violet-200">
-                        <p className="text-[10px] font-black text-violet-500 tracking-widest uppercase">Gemini IA</p>
-                        <p className="text-2xl font-black text-gray-950 mt-1">{Number(bioResult.dry_matter_kg_ha).toLocaleString('es')}</p>
-                        <p className="text-[10px] font-black text-violet-600 tracking-widest uppercase">kg MS/ha · actualizado en MS disponible</p>
-                      </div>
-                    )}
+                    {!isGeo && <p className="text-[9px] text-gray-400 mt-2 italic">Sin georreferencia</p>}
                   </div>
-                </Collapsible>
 
-                <Collapsible title="Indicador NDVI satelital" accent="green">
-                  <p className="text-xs font-medium text-gray-500 mb-3 leading-relaxed">
-                    <strong className="text-gray-700">NDVI</strong> (Normalized Difference Vegetation Index) mide la vitalidad del pasto
-                    mediante imágenes satelitales de <strong className="text-gray-700">Sentinel-2 (ESA)</strong>, procesadas en Google Earth Engine.
-                    Escala de &minus;1 a 1: valores <span className="text-green-700 font-bold">&ge; 0.4</span> indican vegetación activa sana.
-                  </p>
-                  {!isGeo ? (
-                    <p className="text-sm font-medium text-gray-500">El potrero no está georreferenciado. NDVI no disponible.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {currentNdvi != null ? (
-                        <div>
-                          <p className={LABEL_CLS}>Índice NDVI</p>
-                          <div className="flex items-baseline gap-3 mt-1">
-                            <p className="text-3xl font-black text-gray-950">{Number(currentNdvi).toFixed(3)}</p>
-                            <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
-                              {ndviStatus(currentNdvi)} · {ndviData?.source === 'sentinel-2-l2a' ? 'Sentinel-2' : 'Estimado'}
-                            </p>
-                          </div>
-                          <div className="w-full h-2 rounded-full bg-gradient-to-r from-red-300 via-yellow-300 to-green-500 mt-2" />
-                        </div>
-                      ) : (
-                        <p className="text-sm font-medium text-gray-500">Sin datos NDVI recientes.</p>
-                      )}
-                      <button onClick={refreshNdvi} disabled={ndviRefreshing}
-                        className="px-4 py-2.5 text-sm font-bold bg-gray-50 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-100 disabled:opacity-50 flex items-center gap-1.5 transition-all">
-                        {ndviRefreshing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        {ndviRefreshing ? 'Actualizando…' : 'Actualizar NDVI'}
-                      </button>
+                  {/* Card B — IA Biomass */}
+                  <div className="rounded-2xl border bg-violet-50 border-violet-200 p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[9px] font-black tracking-widest uppercase text-violet-500">Estado MS (IA)</p>
+                      <span className="text-[8px] font-bold text-violet-400">Gemini</span>
                     </div>
-                  )}
-                </Collapsible>
+                    {bioResult ? (
+                      <>
+                        <p className="text-2xl font-black text-violet-800 leading-none">{Number(bioResult.dry_matter_kg_ha).toLocaleString('es')}</p>
+                        <p className="text-[10px] font-bold text-violet-600 mt-0.5">kg MS/ha</p>
+                        {bioResult.coverage_pct && <p className="text-[9px] text-violet-400">Cobertura: {bioResult.coverage_pct}%</p>}
+                      </>
+                    ) : msHa ? (
+                      <>
+                        <p className="text-2xl font-black text-violet-700 leading-none">{Number(msHa).toLocaleString('es')}</p>
+                        <p className="text-[10px] font-bold text-violet-500 mt-0.5">kg MS/ha · Manual</p>
+                      </>
+                    ) : (
+                      <p className="text-xs font-bold text-violet-400 mt-1">Sin análisis aún</p>
+                    )}
+                    <button type="button"
+                      onClick={() => { setNoteExpanded(true); setNoteMode('image') }}
+                      className="mt-2.5 text-[10px] font-black text-violet-600 hover:text-violet-800 flex items-center gap-1 transition-colors">
+                      ✨ Analizar nueva foto
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* ── HISTÓRICO DE NOTAS — estilo Bitácora ──────────────────── */}
-              <div className="pt-2 border-t border-gray-100 space-y-3">
+              {/* ── Timeline — Historial de Evidencias ── */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className={LABEL_CLS}>Historial de notas</p>
+                  <p className={LABEL_CLS}>Historial de evidencias</p>
                   {notesLoading && <Loader2 className="w-3.5 h-3.5 text-green-500 animate-spin" />}
                 </div>
 
                 {notes.length === 0 && !notesLoading && (
-                  <p className="text-xs font-medium text-gray-400 text-center py-4">Sin registros aún</p>
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
+                      <Mic className="w-6 h-6 text-gray-300" />
+                    </div>
+                    <p className="text-sm font-bold text-gray-400">Sin registros aún</p>
+                    <p className="text-[10px] text-gray-300 mt-1">Usá los botones de arriba para capturar</p>
+                  </div>
                 )}
 
-                {notes.map(note => {
-                  // Mostrar tombstone si fue eliminado localmente
-                  if (deletedNotes[note.id]) {
-                    return (
-                      <div key={note.id} className="bg-gray-50 rounded-xl border border-dashed border-gray-200 px-4 py-3 flex items-center gap-2">
-                        <Trash2 className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-                        <p className="text-[11px] text-gray-400 font-medium">
-                          Nota eliminada el {deletedNotes[note.id].toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </p>
-                      </div>
-                    )
-                  }
-
-                  const { tags, primary } = getCat(note)
-                  const { Icon: CatIcon } = primary
-                  const isOwner = !user || note.created_by === user?.id || note.created_by === user?.uid
-
-                  return (
-                    <div key={note.id} className="bg-white rounded-xl border border-gray-100 p-3.5 hover:shadow-sm transition-shadow group">
-                      <div className="flex items-start gap-3">
-                        {/* Cat icon */}
-                        <div className={`w-8 h-8 rounded-lg ${primary.bg} flex items-center justify-center shrink-0`}>
-                          <CatIcon className="w-4 h-4" style={{ color: primary.color }} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          {/* Tags + delete button */}
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <div className="flex flex-wrap gap-1">
-                              {tags.map(t => {
-                                const c = CAT_CONFIG[t] || CAT_CONFIG.GENERAL
-                                return <span key={t} className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${c.badge}`}>{c.label}</span>
-                              })}
-                            </div>
-                            {isOwner && (
-                              <button
-                                type="button"
-                                onClick={() => deleteNote(note.id)}
-                                className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all shrink-0"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
+                {/* Feed con línea de tiempo izquierda */}
+                <div className="relative">
+                  {notes.filter(n => !deletedNotes[n.id]).length > 0 && (
+                    <div className="absolute left-[18px] top-2 bottom-2 w-px bg-gray-100" />
+                  )}
+                  <div className="space-y-4">
+                    {notes.map(note => {
+                      if (deletedNotes[note.id]) {
+                        return (
+                          <div key={note.id} className="flex items-center gap-3 pl-10 opacity-30">
+                            <p className="text-[10px] text-gray-400 italic">Registro eliminado</p>
                           </div>
-                          <h4 className="text-xs font-black text-gray-900 leading-snug">{note.title}</h4>
-                          {note.content && (
-                            <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{note.content}</p>
-                          )}
-                          {/* Biomass data */}
-                          {note.analysis_result?.dry_matter_kg_ha && (
-                            <div className="mt-2 grid grid-cols-3 gap-1.5">
-                              {[
-                                { label: 'MS/ha', value: `${note.analysis_result.dry_matter_kg_ha} kg` },
-                                { label: 'Alt. pasto', value: `${note.analysis_result.grass_height_cm ?? '—'} cm` },
-                                { label: 'Cobertura', value: `${note.analysis_result.coverage_pct ?? '—'}%` },
-                              ].map(item => (
-                                <div key={item.label} className="bg-violet-50 rounded-lg px-2 py-1.5">
-                                  <p className="text-[8px] text-violet-400 font-black uppercase">{item.label}</p>
-                                  <p className="text-[11px] font-black text-violet-800">{item.value}</p>
+                        )
+                      }
+
+                      const { tags, primary } = getCat(note)
+                      const { Icon: CatIcon } = primary
+                      const isOwner = !user || note.created_by === user?.id || note.created_by === user?.uid
+                      const hasAudio = !!note.audio_url
+                      const hasPhoto = !!note.photo_url
+                      const hasAI    = !!note.analysis_result?.dry_matter_kg_ha
+
+                      return (
+                        <div key={note.id} className="flex gap-3 group">
+                          {/* Timeline node */}
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 z-10 border ${
+                            hasAudio ? 'bg-red-50 border-red-200' : hasPhoto ? 'bg-green-50 border-green-200' : `${primary.bg} ${primary.border}`
+                          }`}>
+                            {hasAudio
+                              ? <Mic className="w-4 h-4 text-red-500" />
+                              : hasPhoto
+                              ? <Camera className="w-4 h-4 text-green-600" />
+                              : <CatIcon className="w-4 h-4" style={{ color: primary.color }} />}
+                          </div>
+
+                          {/* Card */}
+                          <div className="flex-1 bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+                            {/* Header */}
+                            <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap gap-1 mb-1">
+                                  {tags.map(t => {
+                                    const c = CAT_CONFIG[t] || CAT_CONFIG.GENERAL
+                                    return <span key={t} className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${c.badge}`}>{c.label}</span>
+                                  })}
+                                  {hasAudio && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 uppercase tracking-widest">Audio</span>}
+                                  {hasAI && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase tracking-widest">IA Analizada</span>}
                                 </div>
-                              ))}
+                                <h4 className="text-xs font-black text-gray-900 leading-snug">{note.title}</h4>
+                              </div>
+                              {isOwner && (
+                                <button type="button" onClick={() => deleteNote(note.id)}
+                                  className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all shrink-0">
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
                             </div>
-                          )}
-                          {/* Photo thumbnail */}
-                          {note.photo_url && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={note.photo_url} alt="Foto" className="mt-2 rounded-xl w-full max-h-32 object-cover" />
-                          )}
-                          <p className="text-[9px] text-gray-400 mt-1.5 font-medium">{fmtDate(note.created_at)}</p>
+
+                            {/* Audio player */}
+                            {hasAudio && (
+                              <div className="px-4 pb-3">
+                                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                                <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '36px' }} />
+                              </div>
+                            )}
+
+                            {/* Photo */}
+                            {hasPhoto && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={note.photo_url} alt="Evidencia" className="w-full max-h-40 object-cover" />
+                            )}
+
+                            {/* Text */}
+                            {note.content && (
+                              <div className="px-4 pb-3">
+                                <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-3">{note.content}</p>
+                              </div>
+                            )}
+
+                            {/* AI chips */}
+                            {hasAI && (
+                              <div className="px-4 pb-3 flex gap-2 flex-wrap">
+                                {[
+                                  { l: 'MS/ha', v: `${note.analysis_result.dry_matter_kg_ha} kg` },
+                                  { l: 'Alt.', v: `${note.analysis_result.grass_height_cm ?? '—'} cm` },
+                                  { l: 'Cobertura', v: `${note.analysis_result.coverage_pct ?? '—'}%` },
+                                ].map(item => (
+                                  <div key={item.l} className="bg-violet-50 rounded-lg px-2.5 py-1.5">
+                                    <p className="text-[8px] text-violet-400 font-black uppercase">{item.l}</p>
+                                    <p className="text-[11px] font-black text-violet-800">{item.v}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Timestamp */}
+                            <div className="px-4 pb-3">
+                              <p className="text-[9px] text-gray-300 font-medium">{fmtDate(note.created_at)}</p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  )
-                })}
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer — mismo estilo que Rebaños */}
+
+        {/* Footer — con contador de sesión */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between shrink-0">
           {!isCreating ? (
             <button
@@ -1073,7 +1134,7 @@ export default function PaddockModal({
             </button>
           ) : <div />}
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
             <button onClick={onClose}
               className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
               Cancelar
@@ -1084,7 +1145,9 @@ export default function PaddockModal({
               className="px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center gap-2"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              {isCreating ? 'Crear potrero' : 'Guardar cambios'}
+              {isCreating
+                ? sessionNoteCount > 0 ? `Crear potrero (+${sessionNoteCount} registros)` : 'Crear potrero'
+                : sessionNoteCount > 0 ? `Guardar (+${sessionNoteCount} nuevos)` : 'Guardar cambios'}
             </button>
           </div>
         </div>
