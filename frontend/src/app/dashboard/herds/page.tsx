@@ -32,6 +32,13 @@ function fmtDate(iso: string | null) {
 
 type SortKey = 'name' | 'head_count' | 'avg_weight_kg' | 'admission_date' | 'total_ev'
 
+// Abbreviated labels for card badge
+const CATEGORIA_ABBR: Record<string, string> = {
+  VACAS: 'VAC', VAQUILLONAS: 'VEQ', TERNEROS: 'TER', TERNERAS: 'TRA',
+  NOVILLOS: 'NOV', NOVILLITOS: 'NVT', TOROS: 'TOR', MEJ: 'MEJ',
+  BUBALINOS: 'BUB',
+}
+
 // ── Excel export (client-side SheetJS) ────────────────────────────────────────
 
 async function exportExcel(herds: HerdData[]) {
@@ -50,6 +57,35 @@ async function exportExcel(herds: HerdData[]) {
   const wb = utils.book_new()
   utils.book_append_sheet(wb, ws, 'Rodeos')
   writeFile(wb, `rodeos-${new Date().toISOString().split('T')[0]}.xlsx`)
+}
+
+async function exportMovementsExcel(herds: HerdData[]) {
+  const { utils, writeFile } = await import('xlsx')
+  const { apiFetch } = await import('@/lib/apiFetch')
+  const res = await apiFetch('/api/movements?limit=500')
+  let movements: any[] = []
+  if (res.ok) {
+    const data = await res.json()
+    movements = data.movements || []
+  }
+  const herdMap = Object.fromEntries(herds.map(h => [h.id, h.name]))
+  const rows = movements.map(m => ({
+    'Fecha':           m.occurred_at ? new Date(m.occurred_at).toLocaleString('es-AR') : '',
+    'Tipo entidad':    m.entity_type === 'herd' ? 'Rodeo' : 'Potrero',
+    'Nombre':          m.entity_name ?? (herdMap[m.entity_id] ?? m.entity_id),
+    'Tipo evento':     m.event_type,
+    'Cantidad':        m.quantity ?? '',
+    'Peso promedio (kg)': m.weight_kg ?? '',
+    'BCS':             m.bcs_score ?? '',
+    'Categoría':       m.categoria ?? '',
+    'Raza':            m.breed ?? '',
+    'Fecha ingreso':   m.admission_date ?? '',
+    'Notas':           m.notes ?? '',
+  }))
+  const ws = utils.json_to_sheet(rows.length ? rows : [{ Nota: 'Sin movimientos registrados' }])
+  const wb = utils.book_new()
+  utils.book_append_sheet(wb, ws, 'Historial')
+  writeFile(wb, `historial-movimientos-${new Date().toISOString().split('T')[0]}.xlsx`)
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -169,7 +205,11 @@ export default function HerdsPage() {
           {/* Excel export */}
           <button onClick={() => exportExcel(filtered)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
-            <Download className="w-3.5 h-3.5" /> Descargar reporte
+            <Download className="w-3.5 h-3.5" /> Exportar rodeos
+          </button>
+          <button onClick={() => exportMovementsExcel(herds)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
+            <Download className="w-3.5 h-3.5 text-violet-500" /> Historial
           </button>
           {/* New herd */}
           <button onClick={openCreate}
@@ -318,7 +358,9 @@ export default function HerdsPage() {
                     <div className="px-5 pt-4 pb-3 flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${colors ? colors.bg : 'bg-gray-50 border-gray-200'}`}>
-                          <span className={`w-2.5 h-2.5 rounded-full ${colors?.dot ?? 'bg-gray-400'}`} />
+                          <span className={`text-[10px] font-black ${colors?.text ?? 'text-gray-500'}`}>
+                            {catKey ? (CATEGORIA_ABBR[catKey] ?? catKey.slice(0,3)) : (herd.species ?? '?').slice(0,3).toUpperCase()}
+                          </span>
                         </div>
                         <div>
                           <h3 className="text-sm font-bold text-gray-950 leading-tight">{herd.name}</h3>

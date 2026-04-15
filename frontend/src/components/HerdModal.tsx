@@ -144,7 +144,10 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
   const [catLabel,      setCatLabel]      = useState(herd?.categoria ? (CATEGORIA_LABEL_RAE[herd.categoria as CategoriaComercial] ?? herd.categoria) : CATEGORIA_LABEL_RAE['TERNEROS']!)
   const [catKey,        setCatKey]        = useState<CategoriaComercial | null>(initCatKey)
   const [name,          setName]          = useState(herd?.name ?? '')
-  const [admissionDate, setAdmissionDate] = useState(herd?.admission_date ?? todayISO())
+  // admission_date: always store as 'YYYY-MM-DD' or empty string (never null in input)
+  const [admissionDate, setAdmissionDate] = useState<string>(
+    herd?.admission_date ? String(herd.admission_date).slice(0, 10) : todayISO()
+  )
   const [count,         setCount]         = useState<number | ''>(herd?.head_count ?? '')
   const [weight,        setWeight]        = useState<number | ''>(herd?.avg_weight_kg ?? '')
   const [ageValue,      setAgeValue]      = useState<number | ''>('')
@@ -179,7 +182,8 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
       avg_weight_kg: weight !== '' ? Number(weight) : null,
       age_months: ageMonths,
       age_years: ageUnit === 'years' && ageValue !== '' ? Number(ageValue) : null,
-      admission_date: admissionDate || null,
+      // Only send date if it's a valid YYYY-MM-DD string
+      admission_date: admissionDate && admissionDate.length === 10 ? admissionDate : null,
       total_ev: liveEV || null,
     }
     try {
@@ -337,12 +341,33 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
   const saveBcs = async () => {
     if (!herd?.id) return
     setBcsSaving(true)
-    const res = await apiFetch(`/api/herds/${herd.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ bcs_score: bcsScore, bcs_label: bcsLabel(bcsScore) }),
-    })
+    const label = bcsLabel(bcsScore)
+    const [patchRes] = await Promise.all([
+      apiFetch(`/api/herds/${herd.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ bcs_score: bcsScore, bcs_label: label }),
+      }),
+      // Log to historical movements
+      apiFetch('/api/movements', {
+        method: 'POST',
+        body: JSON.stringify({
+          entity_type: 'herd',
+          entity_id: herd.id,
+          entity_name: herd.name,
+          event_type: 'bcs',
+          bcs_score: bcsScore,
+          quantity: herd.head_count,
+          weight_kg: herd.avg_weight_kg,
+          categoria: herd.categoria,
+          breed: herd.breed,
+          admission_date: herd.admission_date,
+          notes: `BCS actualizado a ${bcsScore}/9 — ${label}`,
+          metadata: { bcs_label: label, head_count: herd.head_count, ev: herd.total_ev },
+        }),
+      }),
+    ])
     setBcsSaving(false)
-    if (res.ok) { setBcsSaved(true); setTimeout(() => setBcsSaved(false), 3000) }
+    if (patchRes.ok) { setBcsSaved(true); setTimeout(() => setBcsSaved(false), 3000) }
   }
 
   const saveNote = async () => {
@@ -661,238 +686,250 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
           {tab === 'registros' && (
             <div className="flex flex-col" style={{ minHeight: 0 }}>
 
-              {/* ── BCS Slider (dato siempre visible arriba) ── */}
-              <div className="px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div>
-                    <p className={LABEL}>Condición corporal (BCS)</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5 italic">Escala 1–9 · Estimado general del rodeo</p>
+              {!isEditing ? (
+                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+                    <ClipboardList className="w-6 h-6 text-gray-300" />
                   </div>
-                  <span className={`text-xs font-black px-2.5 py-0.5 rounded-lg text-white whitespace-nowrap ${bcsColorClass(bcsScore)}`}>
-                    {bcsScore}/9 · {bcsLabel(bcsScore)}
-                  </span>
+                  <p className="text-sm font-bold text-gray-400">Guardá primero el rodeo</p>
+                  <p className="text-[10px] text-gray-300 mt-1">Los registros estarán disponibles una vez creado</p>
                 </div>
-                <div className="relative pt-1 mb-2">
-                  <div className="w-full h-2.5 rounded-full bg-gradient-to-r from-red-400 via-amber-400 via-lime-400 to-green-600" />
-                  <input type="range" min={1} max={9} step={1} value={bcsScore}
-                    onChange={e => setBcsScore(Number(e.target.value))}
-                    className="w-full cursor-pointer absolute top-0 opacity-0 h-2.5" />
-                  <div className={`absolute top-0 w-4 h-4 rounded-full border-2 border-white shadow-md -translate-y-[3px] -translate-x-1/2 transition-all ${bcsColorClass(bcsScore)}`}
-                    style={{ left: `${((bcsScore - 1) / 8) * 100}%` }} />
-                </div>
-                <div className="flex justify-between text-[9px] font-black text-gray-400 tracking-widest mb-3">{[1,2,3,4,5,6,7,8,9].map(n => <span key={n}>{n}</span>)}</div>
-                <button type="button" onClick={saveBcs} disabled={bcsSaving}
-                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-black py-2.5 rounded-xl text-xs transition-all disabled:opacity-40">
-                  {bcsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : bcsSaved ? <Check className="w-3.5 h-3.5" /> : null}
-                  {bcsSaved ? 'BCS guardado' : 'Guardar condición corporal'}
-                </button>
-              </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
 
-              {/* ── Quick Action Header — "Grabadora de Campo" ── */}
-              {isEditing && (
-                <div className="px-6 pt-4 pb-4 border-b border-gray-100 bg-gradient-to-b from-gray-50/80 to-white shrink-0">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="text-[11px] font-black text-gray-800 tracking-tight">Grabadora de campo</p>
-                      <p className="text-[10px] text-gray-400 font-medium mt-0.5">Captura rápida de eventos del rodeo</p>
+                  {/* ── CARD 1: Notas de campo (grabadora) ── */}
+                  <div className="rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
+                          <Mic className="w-3.5 h-3.5 text-gray-500" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas de campo</p>
+                          <p className="text-[9px] text-gray-400 font-medium">Audio · Texto · Foto</p>
+                        </div>
+                      </div>
+                      {sessionNoteCount > 0 && (
+                        <span className="flex items-center gap-1 bg-green-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                          <span className="w-1 h-1 rounded-full bg-green-300 animate-pulse" />
+                          +{sessionNoteCount}
+                        </span>
+                      )}
                     </div>
-                    {sessionNoteCount > 0 && (
-                      <span className="flex items-center gap-1.5 bg-green-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-300 animate-pulse" />
-                        +{sessionNoteCount} nuevos
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Three capture buttons */}
-                  <div className="grid grid-cols-3 gap-3">
-                    {/* 🔴 Mic (voice to text via SpeechRecognition) */}
-                    <button type="button"
-                      onClick={() => { if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') } }}
-                      className={`relative flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all ${
-                        noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'
-                      }`}>
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                        noteMode === 'audio' ? 'bg-red-500 shadow-lg shadow-red-200' : 'bg-red-100'
-                      }`}>
-                        {micOn
-                          ? <MicOff className={`w-5 h-5 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />
-                          : <Mic className={`w-5 h-5 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
+                    <div className="p-4">
+                      {/* Three capture buttons */}
+                      <div className="grid grid-cols-3 gap-2 mb-3">
+                        {/* Mic */}
+                        <button type="button"
+                          onClick={() => { if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') } }}
+                          className={`relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
+                            noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'
+                          }`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
+                            {micOn ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
+                          </div>
+                          <span className="text-[9px] font-black text-gray-600 tracking-wide">{micOn ? 'GRABANDO' : 'AUDIO'}</span>
+                          {micOn && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />}
+                        </button>
+                        {/* Camera */}
+                        <button type="button"
+                          onClick={() => { if (noteExpanded && noteMode === 'text') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('text') } }}
+                          className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
+                            noteMode === 'text' && noteExpanded ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'
+                          }`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'text' && noteExpanded ? 'bg-green-500 shadow-md shadow-green-200' : 'bg-green-100'}`}>
+                            <Camera className={`w-4 h-4 ${noteMode === 'text' && noteExpanded ? 'text-white' : 'text-green-600'}`} />
+                          </div>
+                          <span className="text-[9px] font-black text-gray-600 tracking-wide">FOTO</span>
+                        </button>
+                        {/* Text */}
+                        <button type="button"
+                          onClick={() => { if (noteExpanded && noteMode === null) { setNoteExpanded(false) } else { setNoteExpanded(true); setNoteMode(null) } }}
+                          className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
+                            noteExpanded && noteMode === null ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'
+                          }`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteExpanded && noteMode === null ? 'bg-gray-700 shadow-md' : 'bg-gray-100'}`}>
+                            <MessageSquarePlus className={`w-4 h-4 ${noteExpanded && noteMode === null ? 'text-white' : 'text-gray-500'}`} />
+                          </div>
+                          <span className="text-[9px] font-black text-gray-600 tracking-wide">TEXTO</span>
+                        </button>
                       </div>
-                      <span className="text-[10px] font-black text-gray-600 tracking-wide">{micOn ? 'ESCUCHANDO' : 'VOZ'}</span>
-                      {micOn && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 animate-ping" />}
-                    </button>
 
-                    {/* 🟢 Camera */}
-                    <button type="button"
-                      onClick={() => { if (noteExpanded && noteMode === 'text') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('text') } }}
-                      className={`flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all ${
-                        noteMode === 'text' && noteExpanded ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'
-                      }`}>
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                        noteMode === 'text' && noteExpanded ? 'bg-green-500 shadow-lg shadow-green-200' : 'bg-green-100'
-                      }`}>
-                        <Camera className={`w-5 h-5 ${noteMode === 'text' && noteExpanded ? 'text-white' : 'text-green-600'}`} />
-                      </div>
-                      <span className="text-[10px] font-black text-gray-600 tracking-wide">FOTO</span>
-                    </button>
-
-                    {/* ⚫ Keyboard */}
-                    <button type="button"
-                      onClick={() => {
-                        if (noteExpanded && !noteMode) { setNoteExpanded(false) }
-                        else { setNoteExpanded(true); setNoteMode(null) }
-                      }}
-                      className={`flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all ${
-                        noteExpanded && noteMode === null ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'
-                      }`}>
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                        noteExpanded && noteMode === null ? 'bg-gray-700 shadow-lg shadow-gray-200' : 'bg-gray-100'
-                      }`}>
-                        <MessageSquarePlus className={`w-5 h-5 ${noteExpanded && noteMode === null ? 'text-white' : 'text-gray-500'}`} />
-                      </div>
-                      <span className="text-[10px] font-black text-gray-600 tracking-wide">TEXTO</span>
-                    </button>
-                  </div>
-
-                  {/* Expanded form — text quick note */}
-                  {noteExpanded && (
-                    <div className="mt-4 space-y-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-                      {/* Mic voice note */}
-                      {noteMode === 'audio' && (
-                        <div className="space-y-2">
-                          <p className={LABEL}>Dictar observación</p>
-                          <button type="button" onClick={toggleMic}
-                            className={`w-full flex items-center justify-center gap-2.5 py-3 text-sm font-black rounded-2xl transition-all ${
-                              micOn ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-red-600 hover:bg-red-700 text-white'
-                            }`}>
-                            {micOn ? <><MicOff className="w-5 h-5" /> Detener</>  : <><Mic className="w-5 h-5" /> Grabar audio...</> }
-                          </button>
+                      {/* Expanded note form */}
+                      {noteExpanded && (
+                        <div className="space-y-2.5 pt-1 border-t border-gray-100 mt-1">
+                          {noteMode === 'audio' && (
+                            <button type="button" onClick={toggleMic}
+                              className={`w-full flex items-center justify-center gap-2 py-2.5 text-xs font-black rounded-xl transition-all ${micOn ? 'bg-red-500 text-white shadow-md shadow-red-200' : 'bg-red-600 hover:bg-red-700 text-white'}`}>
+                              {micOn ? <><MicOff className="w-4 h-4" /> Detener grabación</> : <><Mic className="w-4 h-4" /> Iniciar grabación de voz</>}
+                            </button>
+                          )}
                           {micOn && (
                             <div className="flex items-center justify-center gap-2 py-1">
-                              <div className="flex items-end gap-0.5 h-6">
-                                {[3,5,4,7,5,6,3].map((h, i) => (
-                                  <div key={i} className="w-1 bg-red-500 rounded-full animate-bounce"
-                                    style={{ height: `${h * 3}px`, animationDelay: `${i * 80}ms` }} />
-                                ))}
-                              </div>
-                              <span className="text-[10px] font-black text-red-600 tracking-widest uppercase">Escuchando…</span>
+                              <div className="flex items-end gap-0.5 h-5">{[3,5,4,7,5,6,3,4].map((h, i) => (<div key={i} className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: `${h * 2.5}px`, animationDelay: `${i * 80}ms` }} />))}</div>
+                              <span className="text-[9px] font-black text-red-600 tracking-widest uppercase">Escuchando…</span>
                             </div>
                           )}
+                          <textarea value={quickNote} onChange={e => setQuickNote(e.target.value)} rows={3}
+                            placeholder={noteMode === 'audio' ? 'El dictado aparecerá aquí…' : 'Observación, evento o nota…'}
+                            className={TEXTAREA} autoFocus={noteMode !== 'audio'} />
+                          <div className="flex gap-2">
+                            <button type="button"
+                              onClick={async () => { await saveNote(); setSessionNoteCount(c => c + 1); setNoteExpanded(false); setNoteMode(null) }}
+                              disabled={noteSaving || !quickNote.trim()}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all">
+                              {noteSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                              {noteSaved ? '¡Guardado!' : 'Guardar nota'}
+                            </button>
+                            <button type="button" onClick={() => { setNoteExpanded(false); setNoteMode(null); setQuickNote('') }}
+                              className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700">Cancelar</button>
+                          </div>
                         </div>
                       )}
+                    </div>
+                  </div>
 
-                      {/* Text / evento form */}
-                      <textarea value={quickNote} onChange={e => setQuickNote(e.target.value)} rows={3}
-                        placeholder={noteMode === 'audio' ? 'El texto dictado aparecerá aquí…' : 'Escribí la observación o tarea…'}
-                        className={TEXTAREA}
-                        autoFocus={noteMode !== 'audio'} />
+                  {/* ── CARD 2: Condición Corporal (BCS) ── */}
+                  <div className="rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
                       <div className="flex items-center gap-2">
-                        <button type="button" onClick={async () => { await saveNote(); setSessionNoteCount(c => c + 1); setNoteExpanded(false); setNoteMode(null) }}
-                          disabled={noteSaving || !quickNote.trim()}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all">
-                          {noteSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                          {noteSaved ? 'Guardado' : 'Guardar nota'}
-                        </button>
-                        <button type="button" onClick={() => { setNoteExpanded(false); setNoteMode(null); setQuickNote('') }}
-                          className="px-4 py-2.5 text-sm font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700 transition-all">
-                          Cancelar
+                        <div className="w-6 h-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
+                          <Scale className="w-3.5 h-3.5 text-gray-500" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Condición Corporal</p>
+                          <p className="text-[9px] text-gray-400 font-medium">BCS · Escala 1–9</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg text-white ${bcsColorClass(bcsScore)}`}>
+                          {bcsScore}/9 · {bcsLabel(bcsScore)}
+                        </span>
+                        <button type="button" onClick={saveBcs} disabled={bcsSaving}
+                          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-black text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-all">
+                          {bcsSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : bcsSaved ? <Check className="w-3 h-3" /> : null}
+                          {bcsSaved ? 'Guardado' : 'Guardar'}
                         </button>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Event form — below quick actions ── */}
-              {isEditing && (
-                <div className="px-6 py-4 border-b border-gray-100 shrink-0 space-y-3">
-                  <p className={`${LABEL} flex items-center gap-1.5`}><CalendarDays className="w-3 h-3 text-gray-400" /> Nueva tarea / evento
-                    <span className="text-[8px] text-gray-300 normal-case font-normal tracking-normal">para agenda del equipo</span>
-                  </p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {EVENT_TYPES_QUICK.map(t => (
-                      <button key={t.id} type="button" onClick={() => setNewEvType(t.id)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
-                          newEvType === t.id ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
-                        }`}>
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${t.color}`} /> {t.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="relative">
-                    <input type="text" value={newEvTitle} onChange={e => setNewEvTitle(e.target.value)}
-                      placeholder="Título del evento…" className={`${INPUT} pr-10`} />
-                    <button type="button" onClick={toggleMic}
-                      className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg transition-all ${micOn ? 'bg-red-100 text-red-600 animate-pulse' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
-                      {micOn ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="date" value={newEvDate} onChange={e => setNewEvDate(e.target.value)} className={INPUT} />
-                    <input type="date" value={newEvEndDate} onChange={e => setNewEvEndDate(e.target.value)} className={INPUT} placeholder="Fin (opc.)" />
-                  </div>
-                  {teamMembers.length > 0 && (
-                    <select value={newEvAssignee} onChange={e => setNewEvAssignee(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-green-500 cursor-pointer">
-                      <option value="">Sin asignar</option>
-                      {teamMembers.map(m => <option key={m.id} value={m.id}>{m.first_name ?? ''} {m.last_name ?? ''} ({m.email})</option>)}
-                    </select>
-                  )}
-                  <button type="button" onClick={() => { saveEvent(); setSessionNoteCount(c => c + 1) }} disabled={evSaving || !newEvTitle.trim()}
-                    className="w-full flex items-center justify-center gap-2 border-2 border-green-600 text-green-700 font-black py-2.5 rounded-xl text-sm hover:bg-green-50 transition-all disabled:opacity-40">
-                    {evSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : evSaved ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                    {evSaved ? 'Evento creado' : 'Agregar a la Agenda'}
-                  </button>
-                </div>
-              )}
-
-              {/* ── Events Timeline ── */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className={LABEL}>Historial de eventos</p>
-                  {evLoading && <Loader2 className="w-3.5 h-3.5 text-green-500 animate-spin" />}
-                </div>
-
-                {agendaEvents.length === 0 && !evLoading && (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
-                      <CalendarDays className="w-5 h-5 text-gray-300" />
+                    <div className="px-4 py-3">
+                      <div className="relative pt-1 mb-1">
+                        <div className="w-full h-2 rounded-full bg-gradient-to-r from-red-400 via-amber-400 via-lime-400 to-green-600" />
+                        <input type="range" min={1} max={9} step={1} value={bcsScore}
+                          onChange={e => setBcsScore(Number(e.target.value))}
+                          className="w-full cursor-pointer absolute top-0 opacity-0 h-2" />
+                        <div className={`absolute top-0 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md -translate-y-[3px] -translate-x-1/2 transition-all ${bcsColorClass(bcsScore)}`}
+                          style={{ left: `${((bcsScore - 1) / 8) * 100}%` }} />
+                      </div>
+                      <div className="flex justify-between text-[8px] font-black text-gray-350 tracking-widest mt-0.5">
+                        {[1,2,3,4,5,6,7,8,9].map(n => <span key={n} className={bcsScore === n ? 'text-gray-700' : 'text-gray-300'}>{n}</span>)}
+                      </div>
+                      {bcsSaved && (
+                        <p className="text-[9px] text-green-600 font-bold mt-1.5 text-center">✓ Guardado en historial de movimientos</p>
+                      )}
                     </div>
-                    <p className="text-sm font-bold text-gray-400">Sin eventos registrados</p>
-                    <p className="text-[10px] text-gray-300 mt-1">Usá los botones de arriba para agregar</p>
                   </div>
-                )}
 
-                <div className="relative">
-                  {visibleEvents.length > 0 && <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />}
-                  <div className="space-y-3">
-                    {visibleEvents.map(ev => {
-                      const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
-                      return (
-                        <div key={ev.id} className="flex gap-3">
-                          {/* Dot */}
-                          <div className="w-8 h-8 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 z-10">
-                            <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
-                          </div>
-                          {/* Card */}
-                          <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3.5 py-2.5 hover:shadow-sm transition-shadow">
-                            <p className="text-xs font-black text-gray-900 leading-snug">{ev.title}</p>
-                            <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
-                          </div>
+                  {/* ── CARD 3: Tareas y Eventos de Agenda ── */}
+                  <div className="rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
+                          <CalendarDays className="w-3.5 h-3.5 text-gray-500" />
                         </div>
-                      )
-                    })}
+                        <div>
+                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Tareas y Eventos</p>
+                          <p className="text-[9px] text-gray-400 font-medium">Agenda del equipo · Sanitario · Reproductivo</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {/* Type pills */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {EVENT_TYPES_QUICK.map(t => (
+                          <button key={t.id} type="button" onClick={() => setNewEvType(t.id)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all ${
+                              newEvType === t.id ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500 hover:border-gray-300 bg-white'
+                            }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${t.color}`} /> {t.label}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Title + mic */}
+                      <div className="relative">
+                        <input type="text" value={newEvTitle} onChange={e => setNewEvTitle(e.target.value)}
+                          placeholder="Título del evento o tarea…" className={`${INPUT} pr-10`} />
+                        <button type="button" onClick={toggleMic}
+                          className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-lg transition-all ${micOn ? 'bg-red-100 text-red-600 animate-pulse' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                          {micOn ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                        </button>
+                      </div>
+                      {/* Dates */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <p className={LABEL}>Fecha</p>
+                          <input type="date" value={newEvDate} onChange={e => setNewEvDate(e.target.value)} className={INPUT} />
+                        </div>
+                        <div className="space-y-1">
+                          <p className={LABEL}>Fin (opcional)</p>
+                          <input type="date" value={newEvEndDate} onChange={e => setNewEvEndDate(e.target.value)} className={INPUT} />
+                        </div>
+                      </div>
+                      {/* Assignee */}
+                      {teamMembers.length > 0 && (
+                        <div className="space-y-1">
+                          <p className={LABEL}><Users className="w-2.5 h-2.5 inline mr-1" />Asignar a</p>
+                          <select value={newEvAssignee} onChange={e => setNewEvAssignee(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-green-500">
+                            <option value="">Sin asignar</option>
+                            {teamMembers.map(m => <option key={m.id} value={m.id}>{m.first_name ?? ''} {m.last_name ?? ''} ({m.email})</option>)}
+                          </select>
+                        </div>
+                      )}
+                      <button type="button" onClick={() => { saveEvent(); setSessionNoteCount(c => c + 1) }} disabled={evSaving || !newEvTitle.trim()}
+                        className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-black border-2 border-green-600 text-green-700 rounded-xl hover:bg-green-50 disabled:opacity-40 transition-all">
+                        {evSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : evSaved ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        {evSaved ? 'Evento creado' : 'Agregar a la Agenda'}
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                {hiddenCount > 0 && !showAllEvents && (
-                  <button type="button" onClick={() => setShowAllEvents(true)}
-                    className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-gray-500 hover:text-green-700 py-2 rounded-xl hover:bg-green-50 transition-all border border-dashed border-gray-200">
-                    <ChevronRight className="w-3.5 h-3.5" /> Ver {hiddenCount} evento{hiddenCount !== 1 ? 's' : ''} más
-                  </button>
-                )}
-              </div>
+                  {/* ── Events Timeline ── */}
+                  {agendaEvents.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className={LABEL}>Historial de eventos</p>
+                        {evLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
+                      </div>
+                      <div className="relative">
+                        <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
+                        <div className="space-y-2">
+                          {visibleEvents.map(ev => {
+                            const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
+                            return (
+                              <div key={ev.id} className="flex gap-2.5">
+                                <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0 z-10">
+                                  <span className={`w-2 h-2 rounded-full ${dot}`} />
+                                </div>
+                                <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2 hover:shadow-sm transition-all">
+                                  <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
+                                  <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      {hiddenCount > 0 && !showAllEvents && (
+                        <button type="button" onClick={() => setShowAllEvents(true)}
+                          className="w-full flex items-center justify-center gap-1.5 text-[10px] font-bold text-gray-400 hover:text-green-700 py-2 rounded-xl hover:bg-green-50 border border-dashed border-gray-200 transition-all">
+                          <ChevronRight className="w-3 h-3" /> Ver {hiddenCount} más
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
