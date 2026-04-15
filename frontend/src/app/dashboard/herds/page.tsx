@@ -5,7 +5,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import {
   Plus, Search, Trash2, LayoutGrid, List, Download,
-  ChevronUp, ChevronDown, Filter, X, Calendar, Edit3, Beef,
+  ChevronUp, ChevronDown, Filter, X, Calendar, Edit3,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import HerdModal, { type HerdData } from '@/components/HerdModal'

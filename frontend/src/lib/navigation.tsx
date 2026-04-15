@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutDashboard, Calendar, CalendarDays, Lightbulb, NotebookPen, Users, CheckSquare, Fence, Beef } from 'lucide-react'
+import { LayoutDashboard, Calendar, CalendarDays, Lightbulb, NotebookPen, Users, CheckSquare, Fence, Layers } from 'lucide-react'
 
 export type NavItem = {
   name: string
@@ -16,7 +16,7 @@ export type NavItem = {
 export const ALL_NAV_ITEMS: NavItem[] = [
   { name: 'Panel',               href: '/dashboard',                 icon: LayoutDashboard, permissionKey: 'dashboard'   },
   { name: 'Potreros',            href: '/dashboard/mi-campo',        icon: Fence,           permissionKey: 'mi_campo'    },
-  { name: 'Rodeos',              href: '/dashboard/herds',           icon: Beef,            permissionKey: 'rebanhos'    },
+  { name: 'Rodeos',              href: '/dashboard/herds',           icon: Layers,          permissionKey: 'rebanhos'    },
   { name: 'Agenda',              href: '/dashboard/agenda',          icon: CalendarDays,    permissionKey: 'agenda'      },
   { name: 'Planificador',        href: '/dashboard/grazing',         icon: Calendar,        permissionKey: 'planificador'},
   { name: 'Bitácora',            href: '/dashboard/bitacora',        icon: NotebookPen,     permissionKey: 'bitacora'    },
