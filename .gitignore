@@ -4,3 +4,4 @@ node_modules
 tmp/
 *.pdf
 reference_materials*/
+frontend/firebase-sa-key.json
