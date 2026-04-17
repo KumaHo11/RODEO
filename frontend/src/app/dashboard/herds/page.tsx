@@ -174,8 +174,17 @@ export default function HerdsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('¿Eliminar este rodeo? Esta acción es irreversible.')) return
-    await apiFetch(`/api/herds/${id}`, { method: 'DELETE' })
-    setHerds(prev => prev.filter(h => h.id !== id))
+    try {
+      const res = await apiFetch(`/api/herds/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const errData = await res.json().catch(()=>({error: 'Error desconocido'}))
+        alert(`No se pudo eliminar: ${errData.error}`)
+      } else {
+        setHerds(prev => prev.filter(h => h.id !== id))
+      }
+    } catch(err: any) {
+      alert(`No se pudo eliminar: ${err.message}`)
+    }
   }
 
   const SortIcon = ({ k }: { k: SortKey }) =>

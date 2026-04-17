@@ -49,6 +49,7 @@ interface Props {
   onDeletePaddock?: (paddockId: string) => void
   onDeleteField?: () => void
   onDataRefresh?: () => void
+  defaultEditPaddockId?: string
 }
 
 const TECH_ICONS = [
@@ -69,6 +70,7 @@ export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0,
   onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField, onDataRefresh,
+  defaultEditPaddockId,
 }: Props) {
   const [search, setSearch]     = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -86,6 +88,9 @@ export default function PaddockSidePanel({
     paddocks.forEach(p => { map[p.id] = p.is_active ?? true })
     setActiveMap(map)
   }, [paddocks])
+
+  // Deep-link: auto-open edit modal when defaultEditPaddockId is provided
+  // (effect placed after openModal to avoid closure ordering issues)
 
   const toggleDisable = async (e: React.MouseEvent, paddockId: string) => {
     e.stopPropagation()
@@ -127,6 +132,18 @@ export default function PaddockSidePanel({
     setModalOpen(true)
     loadPaddockNotes(paddock.id)
   }
+
+  // Deep-link: auto-open edit modal when defaultEditPaddockId is provided
+  const autoOpenDone = useRef(false)
+  useEffect(() => {
+    if (!defaultEditPaddockId || loading || paddocks.length === 0 || autoOpenDone.current) return
+    const target = paddocks.find((p: Paddock) => p.id === defaultEditPaddockId)
+    if (target) {
+      autoOpenDone.current = true
+      openModal(target)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultEditPaddockId, paddocks, loading])
 
   const handleModalSave = async (
     paddockId: string,

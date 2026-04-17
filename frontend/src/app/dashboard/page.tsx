@@ -7,7 +7,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
+import { useWeather, CONDITION_EMOJI } from '@/lib/context/WeatherContext'
 import {
   TrendingUp, CloudRain, AlertTriangle, Calendar, ArrowRight,
   Layers, Navigation, Droplets, ChevronRight, CheckSquare, Leaf,
@@ -41,7 +41,7 @@ export default function DashboardOverview() {
   const [herds, setHerds]                 = useState<any[]>([])
   const [paddocks, setPaddocks]           = useState<any[]>([])
   const [org, setOrg]                     = useState<any>(null)
-  const [weather, setWeather]             = useState<WeatherData | null>(null)
+  const { current: weatherCurrent, forecast: weatherForecast, isLoading: weatherLoading } = useWeather()
   const [nextMoves, setNextMoves]         = useState<any[]>([])
   const [upcomingTasks, setUpcomingTasks] = useState<any[]>([])
   const [farmEvents, setFarmEvents]       = useState<any[]>([])
@@ -123,13 +123,7 @@ export default function DashboardOverview() {
             .slice(0, 5)
         )
 
-        // Weather from org location
-        let lat = -34.6, lon = -58.4
-        if (orgData?.location?.coordinates) {
-          lon = orgData.location.coordinates[0]; lat = orgData.location.coordinates[1]
-        }
-        const wData = await getPaddockWeather(lat, lon)
-        setWeather(wData)
+        // Weather is now provided by WeatherContext (WeatherProvider in layout)
       } catch (err) {
         console.error('Dashboard load error:', err)
       }
@@ -375,7 +369,7 @@ export default function DashboardOverview() {
         {/* DERECHA: 4 cards — Clima · Precio · Disponibilidad · Rodeos */}
         <div className="flex-1 flex flex-col gap-4">
 
-          {/* 1. Clima */}
+          {/* 1. Clima — uses shared WeatherContext (same data as /clima page) */}
           <div className="bg-[#f0f9ff] rounded-2xl border border-[#bae6fd] shadow-sm p-4 flex flex-col justify-between relative overflow-hidden">
             <div className="absolute -top-6 -right-6 text-blue-200/40 w-24 h-24">
               <Sun className="w-full h-full" />
@@ -385,25 +379,27 @@ export default function DashboardOverview() {
                 <CloudRain className="w-3 h-3" /> Clima
               </h3>
               <div className="mt-1 flex items-center gap-3">
-                {loading ? <div className="h-8 w-16 bg-blue-100/50 animate-pulse rounded-lg" /> : (
+                {loading || weatherLoading ? <div className="h-8 w-16 bg-blue-100/50 animate-pulse rounded-lg" /> : (
                   <>
-                    <p className="text-3xl font-bold text-blue-900">{weather?.forecastDays[0]?.maxTemp || '—'}°</p>
-                    {weather?.next15DaysRain !== undefined && (
-                      <p className="text-xs font-bold text-blue-800 leading-tight">
-                        {weather.next15DaysRain} mm lluvia<br/><span className="text-[10px] font-medium opacity-80">próximos 15 días</span>
-                      </p>
-                    )}
+                    <p className="text-3xl font-bold text-blue-900">{weatherCurrent?.tempC ?? '—'}°</p>
+                    <p className="text-xs font-bold text-blue-800 leading-tight">
+                      {weatherCurrent?.conditionLabel ?? '—'}
+                    </p>
                   </>
                 )}
               </div>
             </div>
-            {!loading && weather?.forecastDays?.length && (
+            {!loading && !weatherLoading && weatherForecast?.length > 0 && (
               <div className="flex gap-2 mt-3 relative z-10 justify-between">
-                {weather.forecastDays.slice(0,4).map((d, i) => (
+                {weatherForecast.slice(0, 4).map((d, i) => (
                   <div key={i} className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-blue-800/80">{WEEK_DAYS[new Date(d.date + 'T00:00:00').getDay()]}</p>
-                    <p className="text-xs my-0.5">{d.precipitationSum > 0 ? '🌧️' : '☀️'}</p>
-                    <p className="text-[10px] font-bold text-blue-900">{d.precipitationSum}<span className="text-[8px] ml-0.5">mm</span></p>
+                    <p className="text-[9px] font-bold uppercase text-blue-800/80">
+                      {WEEK_DAYS[new Date(d.date + 'T00:00:00').getDay()]}
+                    </p>
+                    <p className="text-xs my-0.5">{CONDITION_EMOJI[d.condition] ?? (d.precipitationMm > 0 ? '🌧️' : '☀️')}</p>
+                    <p className="text-[10px] font-bold text-blue-900">
+                      {d.precipitationMm > 0 ? d.precipitationMm : d.maxTempC}<span className="text-[8px] ml-0.5">{d.precipitationMm > 0 ? 'mm' : '°'}</span>
+                    </p>
                   </div>
                 ))}
               </div>

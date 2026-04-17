@@ -40,7 +40,7 @@ export async function DELETE(req: NextRequest) {
     const placeholders = toDelete.map((_, i) => `$${i + 2}`).join(', ')
     const result = await mutate(
       `DELETE FROM grazing_plans
-       WHERE org_id = $1
+       WHERE paddock_id IN (SELECT id FROM paddocks WHERE org_id = $1)
          AND status IN (${placeholders})
        RETURNING id`,
       [auth.orgId, ...toDelete]

@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import PaddockSidePanel from './components/PaddockSidePanel'
 import PaddockModal from './components/PaddockModal'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { getPaddockNDVI, SatelliteData } from '@/lib/services/satellite'
@@ -33,6 +34,8 @@ const DRAFT_PADDOCK = (name = '', area_ha = 0) => ({
 
 export default function MiCampoPage() {
   const { user } = useAuth()
+  const searchParams = useSearchParams()
+  const editPaddockId = searchParams.get('editPaddock')
   const [paddocks, setPaddocks]             = useState<any[]>([])
   const [org, setOrg]                       = useState<any>(null)
   const [fieldBoundary, setFieldBoundary]   = useState<any>(null)
@@ -250,8 +253,17 @@ export default function MiCampoPage() {
             onPaddockGeomUpdated={handlePaddockGeomUpdated}
             onNewPaddockDrawn={handleNewPaddockDrawn}
             onDeletePaddock={async (id) => {
-              await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
-              loadData()
+              try {
+                const res = await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
+                if (!res.ok) {
+                  const errData = await res.json().catch(()=>({error: 'Error desconocido'}))
+                  alert(`No se pudo eliminar el potrero: ${errData.error}`)
+                } else {
+                  loadData()
+                }
+              } catch(err: any) {
+                alert(`No se pudo eliminar: ${err.message}`)
+              }
             }}
             activeGrazingPlans={activeGrazingPlans}
             drawModeActive={drawModeActive}
@@ -319,9 +331,19 @@ export default function MiCampoPage() {
           avgNdvi={avgNdvi}
           onSetupField={() => { setSetupFieldArea(org?.total_area_ha || ''); setSetupFieldModal(true) }}
           onManualPaddockCreate={openManualCreation}
+          defaultEditPaddockId={editPaddockId || undefined}
           onDeletePaddock={async (id) => {
-            await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
-            loadData()
+            try {
+              const res = await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
+              if (!res.ok) {
+                const errData = await res.json().catch(()=>({error: 'Error desconocido'}))
+                alert(`No se pudo eliminar el potrero: ${errData.error}`)
+              } else {
+                loadData()
+              }
+            } catch(err: any) {
+              alert(`No se pudo eliminar: ${err.message}`)
+            }
           }}
           onDeleteField={async () => {
             if (window.confirm('¿Eliminar los límites del campo? Podés volver a configurarlo cuando quieras.')) {

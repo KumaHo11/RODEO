@@ -119,6 +119,6 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('DELETE /api/herds/[id] error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: err.message || 'Error del servidor' }, { status: 500 })
   }
 }

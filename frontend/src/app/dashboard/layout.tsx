@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useAuth } from '@/components/AuthProvider'
 import { usePermissions, ROLE_LABELS, ROLE_COLORS } from '@/lib/usePermissions'
-import { ALL_NAV_ITEMS, type NavItem } from '@/lib/navigation'
+import { ALL_NAV_ITEMS, NAV_GROUPS, type NavItem, type NavGroup } from '@/lib/navigation'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
@@ -17,6 +17,7 @@ import clsx from 'clsx'
 import Image from 'next/image'
 import RodeoLogo from '@/components/RodeoLogo'
 import { WelcomeScreen } from '@/components/WelcomeScreen'
+import { WeatherProvider } from '@/lib/context/WeatherContext'
 
 const NOTIF_ICONS: Record<string, React.ComponentType<any>> = {
   EVENTO:    CalendarDays,
@@ -36,9 +37,10 @@ const NOTIF_COLORS: Record<string, string> = {
 
 const PAGE_NAMES: Record<string, string> = {
   '/dashboard':              'Panel principal',
-  '/dashboard/mi-campo':     'Mi campo',
+  '/dashboard/mi-campo':     'Potreros',
   '/dashboard/herds':        'Rodeos',
   '/dashboard/agenda':       'Agenda',
+  '/dashboard/clima':        'Clima',
   '/dashboard/grazing':      'Planificador',
   '/dashboard/bitacora':     'Bitácora de potreros',
   '/dashboard/insights':     'Insights',
@@ -86,6 +88,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (item.permissionKey === null) return true // always visible (Panel, Equipo)
       return can(item.permissionKey as any)
     })
+  }, [isOwner, can])
+
+  // Groups with items filtered by permissions
+  const filteredGroups = useMemo<NavGroup[]>(() => {
+    return NAV_GROUPS.map(group => ({
+      ...group,
+      items: group.items.filter(item => {
+        if (isOwner) return true
+        if (item.permissionKey === null) return true
+        return can(item.permissionKey as any)
+      }),
+    })).filter(g => g.items.length > 0)
   }, [isOwner, can])
 
   // Mobile bottom nav: up to 5 most-used items from filtered nav
@@ -216,7 +230,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ? profile.first_name[0].toUpperCase()
     : (user.email?.[0]?.toUpperCase() ?? 'U')
 
-  // Nav item renderer
+  // ── Nav item renderer (single item) ─────────────────────────────────────────
   const renderNavItem = (item: NavItem) => {
     const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
     const showBadge = item.href === '/dashboard/tareas' && pendingTasks > 0
@@ -254,8 +268,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     )
   }
 
+  // ── Nav group renderer (label + items) ─────────────────────────────────────
+  const renderNavGroup = (group: NavGroup) => (
+    <li key={group.label}>
+      {sidebarOpen && (
+        <p className="px-2.5 pt-4 pb-1 text-[9px] font-black tracking-widest text-gray-400 uppercase select-none">
+          {group.label}
+        </p>
+      )}
+      {!sidebarOpen && <div className="pt-3" />}
+      <ul className="space-y-0.5">
+        {group.items.map(renderNavItem)}
+      </ul>
+    </li>
+  )
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
+    <WeatherProvider>
     <div className="flex h-screen bg-gray-50 overflow-hidden">
 
       {/* ── Welcome overlay (first login of guests) ───────────────────────── */}
@@ -304,16 +334,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           )}
 
-          {sidebarOpen && (
-            <div className="px-4 pt-3 pb-1">
-              <span className="text-[9px] font-black tracking-widest text-gray-400 uppercase">Menú</span>
-            </div>
-          )}
+          {/* "Menú" label removed — groups have their own labels */}
 
-          {/* Nav items */}
+          {/* Nav items grouped */}
           <nav className="flex flex-1 flex-col px-2 py-2 overflow-y-auto">
-            <ul role="list" className="flex flex-1 flex-col gap-y-1">
-              {filteredNav.map(renderNavItem)}
+            <ul role="list" className="flex flex-1 flex-col gap-y-0">
+              {filteredGroups.map(renderNavGroup)}
 
               {/* Sign out — bottom */}
               <li className="mt-auto pt-2 border-t border-gray-100">
@@ -359,31 +385,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             )}
 
             <nav className="flex-1 overflow-y-auto px-2 py-3">
-              <ul className="space-y-1">
-                {filteredNav.map(item => {
-                  const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
-                  return (
-                    <li key={item.name}>
-                      <Link
-                        href={item.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={clsx(
-                          isActive ? 'bg-green-50 text-green-700' : 'text-gray-500 hover:bg-gray-50',
-                          'flex items-center gap-3 rounded-xl p-3 text-sm font-bold transition-all'
-                        )}
-                      >
-                        <item.icon className={clsx(isActive ? 'text-green-600' : 'text-gray-400', 'h-5 w-5')} />
-                        {item.name}
-                        {item.href === '/dashboard/tareas' && pendingTasks > 0 && (
-                          <span className="ml-auto w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
-                            {pendingTasks}
-                          </span>
-                        )}
-                      </Link>
-                    </li>
-                  )
-                })}
-              </ul>
+              {filteredGroups.map(group => (
+                <div key={group.label} className="mb-1">
+                  <p className="px-3 pt-4 pb-1 text-[9px] font-black tracking-widest text-gray-400 uppercase select-none">
+                    {group.label}
+                  </p>
+                  <ul className="space-y-0.5">
+                    {group.items.map(item => {
+                      const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                      return (
+                        <li key={item.name}>
+                          <Link
+                            href={item.href}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={clsx(
+                              isActive ? 'bg-green-50 text-green-700' : 'text-gray-500 hover:bg-gray-50',
+                              'flex items-center gap-3 rounded-xl p-3 text-sm font-bold transition-all'
+                            )}
+                          >
+                            <item.icon className={clsx(isActive ? 'text-green-600' : 'text-gray-400', 'h-5 w-5')} />
+                            {item.name}
+                            {item.href === '/dashboard/tareas' && pendingTasks > 0 && (
+                              <span className="ml-auto w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                                {pendingTasks}
+                              </span>
+                            )}
+                          </Link>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
             </nav>
             <div className="px-2 pb-4 border-t border-gray-100 pt-3">
               <Link
@@ -583,5 +616,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
       </div>
     </div>
+    </WeatherProvider>
   )
 }

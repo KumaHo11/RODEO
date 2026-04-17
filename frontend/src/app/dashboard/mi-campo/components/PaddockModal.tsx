@@ -300,6 +300,7 @@ export default function PaddockModal({
   const [hasElectricity, setHasElectricity]   = useState<boolean>(paddock.technical_data?.has_electricity ?? false)
   const [electricityType, setElectricityType] = useState<string>(paddock.technical_data?.electricity_type ?? '')
   const [hasPredators, setHasPredators]       = useState<boolean>(paddock.technical_data?.has_predators ?? false)
+  const [relativeQuality, setRelativeQuality] = useState<number>(paddock.technical_data?.relative_quality ?? 0)
 
   // Tab 3 — notas e historial
   const [noteExpanded, setNoteExpanded]     = useState(false)
@@ -375,6 +376,7 @@ export default function PaddockModal({
       weeds: weedTypes,
       hasInfraIssues: fenceStatus === 'none' || fenceStatus === 'poor',
       hasPredators,
+      relative_quality: relativeQuality > 0 ? relativeQuality : undefined,
     }
     await onSave(paddock.id, name.trim(), td,
       msHa   !== '' ? Number(msHa)   : undefined,
@@ -707,6 +709,8 @@ export default function PaddockModal({
                 placeholder="Buscar tipo de acceso…"
                 allowCustom
               />
+
+
 
               {/* Electricidad */}
               <div className="space-y-2">

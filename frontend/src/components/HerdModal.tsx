@@ -93,11 +93,11 @@ const TEXTAREA = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-
 // ── Activity options — uniform grid layout ─────────────────────────────────────
 
 const ACTIVITIES = [
-  { id: 'paricion',  label: 'Parición',  color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',   dot: 'bg-blue-500',   icon: Baby },
-  { id: 'compra',    label: 'Compra',    color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200',  dot: 'bg-green-500',  icon: ShoppingCart },
-  { id: 'mortandad', label: 'Mortandad', color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200',    dot: 'bg-red-500',    icon: TrendingDown },
-  { id: 'venta',     label: 'Venta',     color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200',  dot: 'bg-amber-500',  icon: TrendingUp },
-  { id: 'destete',   label: 'Destete',   color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200', dot: 'bg-violet-500', icon: Baby },
+  { id: 'paricion',  label: 'Parición',  color: 'text-gray-700',   bg: 'bg-gray-50',   border: 'border-gray-200',   dot: 'bg-gray-400',   icon: Plus },
+  { id: 'compra',    label: 'Compra',    color: 'text-gray-700',  bg: 'bg-gray-50',  border: 'border-gray-200',  dot: 'bg-gray-400',  icon: Plus },
+  { id: 'mortandad', label: 'Mortandad', color: 'text-gray-700',    bg: 'bg-gray-50',    border: 'border-gray-200',    dot: 'bg-gray-400',    icon: Minus },
+  { id: 'venta',     label: 'Venta',     color: 'text-gray-700',  bg: 'bg-gray-50',  border: 'border-gray-200',  dot: 'bg-gray-400',  icon: Minus },
+  { id: 'destete',   label: 'Destete',   color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200', dot: 'bg-gray-400', icon: Minus },
 ]
 const ACTIVITY_ADDS   = new Set(['paricion', 'compra'])
 type ActivityId = 'paricion' | 'compra' | 'mortandad' | 'venta' | 'destete'
@@ -571,7 +571,7 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
             <div className="px-6 py-5 space-y-5">
               {!isEditing ? (
                 <div className="py-10 text-center">
-                  <Baby className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                  <ClipboardList className="w-10 h-10 text-gray-200 mx-auto mb-3" />
                   <p className="text-sm font-bold text-gray-400">Guardá primero el rodeo para registrar actividades</p>
                 </div>
               ) : (
@@ -587,7 +587,7 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
                     {weanSuccess && (
                       <motion.div key="wean-success" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                         className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
-                        <Baby className="w-4 h-4 text-green-600 shrink-0" />
+                        <Check className="w-4 h-4 text-green-600 shrink-0" />
                         <p className="text-sm font-bold text-green-700">✓ Rodeo de terneros destetados creado automáticamente</p>
                       </motion.div>
                     )}
@@ -618,8 +618,8 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
                         const sel  = actId === a.id
                         return (
                           <button key={a.id} type="button" onClick={() => setActId(sel ? null : a.id as ActivityId)}
-                            className={`flex flex-col items-center gap-2 px-3 py-4 rounded-xl border text-xs font-bold transition-all ${sel ? `${a.bg} ${a.color} ${a.border}` : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'}`}>
-                            <span className={`w-2 h-2 rounded-full ${sel ? a.dot : 'bg-gray-300'}`} />
+                            className={`flex flex-col items-center gap-2 px-3 py-4 rounded-xl border text-xs font-bold transition-all ${sel ? `bg-gray-900 border-gray-900 text-white shadow-md` : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'}`}>
+                            <span className={`w-2 h-2 rounded-full ${sel ? 'bg-white' : 'bg-gray-300'}`} />
                             <Icon className="w-5 h-5" />
                             {a.label}
                           </button>
@@ -636,8 +636,8 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
                         const sel  = actId === a.id
                         return (
                           <button key={a.id} type="button" onClick={() => setActId(sel ? null : a.id as ActivityId)}
-                            className={`flex flex-col items-center gap-2 px-3 py-4 rounded-xl border text-xs font-bold transition-all ${sel ? `${a.bg} ${a.color} ${a.border}` : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'}`}>
-                            <span className={`w-2 h-2 rounded-full ${sel ? a.dot : 'bg-gray-300'}`} />
+                            className={`flex flex-col items-center gap-2 px-3 py-4 rounded-xl border text-xs font-bold transition-all ${sel ? `bg-gray-900 border-gray-900 text-white shadow-md` : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'}`}>
+                            <span className={`w-2 h-2 rounded-full ${sel ? 'bg-white' : 'bg-gray-300'}`} />
                             <Icon className="w-5 h-5" />
                             {a.label}
                           </button>

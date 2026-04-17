@@ -39,7 +39,7 @@ export async function PATCH(
       'paddock_id', 'herd_id', 'herd_ids', 'entry_date', 'exit_date',
       'actual_entry_date', 'actual_exit_date',
       'planned_recovery_days', 'status', 'temporary_animals', 'notes',
-      'exit_notes', 'exit_dry_matter_kg_ha'
+      'exit_notes', 'exit_dry_matter_kg_ha', 'ai_analysis'
     ]
 
     for (const field of validFields) {
@@ -84,6 +84,6 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('DELETE /api/grazing-plans/[id] error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: err.message || 'Error del servidor' }, { status: 500 })
   }
 }
