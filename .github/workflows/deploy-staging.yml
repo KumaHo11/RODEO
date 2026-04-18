@@ -1,0 +1,85 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - staging
+
+env:
+  PROJECT_ID: rodeo-app-fac50
+  REGION: southamerica-east1
+  SERVICE_NAME: rodeo-staging
+  REGISTRY: southamerica-east1-docker.pkg.dev
+  # Dynamic image name including the commit SHA
+  IMAGE: southamerica-east1-docker.pkg.dev/rodeo-app-fac50/rodeo-images/rodeo-frontend:${{ github.sha }}
+  STAGING_URL: https://rodeo-staging-831756494147.southamerica-east1.run.app
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Autenticación en Google Cloud usando el Secreto JSON
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      # 2. Configurar la SDK de gcloud (para docker push y cloud run deploy)
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      # 3. Autenticación de Docker a Artifact Registry
+      - name: 'Docker auth'
+        run: |-
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # 4. Construir la imagen local de Docker
+      - name: 'Build Docker Image'
+        run: |-
+          # El contexto (directorio) donde está el frontend
+          cd frontend
+          docker build \
+            --platform linux/amd64 \
+            --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" \
+            --build-arg NEXT_PUBLIC_APP_URL="${{ env.STAGING_URL }}" \
+            -t ${{ env.IMAGE }} \
+            .
+
+      # 5. Push de la imagen a Artifact Registry
+      - name: 'Push Docker Image'
+        run: |-
+          docker push ${{ env.IMAGE }}
+
+      # 6. Despliegue en Cloud Run
+      - name: 'Deploy to Cloud Run'
+        run: |-
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ env.IMAGE }} \
+            --platform=managed \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --allow-unauthenticated \
+            --port=3000 \
+            --memory=1Gi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=3 \
+            --set-env-vars="NODE_ENV=production" \
+            --set-env-vars="NEXT_PUBLIC_APP_URL=${{ env.STAGING_URL }}" \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
+            --set-env-vars="FIREBASE_ADMIN_PROJECT_ID=${{ env.PROJECT_ID }}" \
+            --set-env-vars="FIREBASE_ADMIN_CREDENTIALS_BASE64=${{ secrets.FIREBASE_ADMIN_CREDENTIALS_BASE64 }}" \
+            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars="SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" \
+            --set-env-vars="SENDGRID_FROM_EMAIL=${{ secrets.SENDGRID_FROM_EMAIL }}" \
+            --quiet
