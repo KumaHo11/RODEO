@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
 import * as XLSX from 'xlsx'
+import { DashboardMetricsBar, DashboardMetricsData } from '@/design-system/molecules/DashboardMetricsBar'
 
 // ─────────────── CONSTANTS ───────────────
 const HERD_COLORS = [
@@ -72,6 +73,39 @@ const addDays = (iso: any, n: number): string => {
   return d.toISOString().split('T')[0]
 }
 
+// Biological Demand Evolution
+export const getDynamicHerdEV = (herd: any, dateISO: string, farmEvents: any[]): number => {
+  const baseEV = Number(herd?.total_ev) || 0
+  if (baseEV === 0) return 0
+  const headCount = Number(herd?.head_count || herd?.animal_count) || baseEV 
+
+  const sorted = farmEvents
+    .filter(e => (e.herd_id === herd.id || !e.herd_id) && e.event_date <= dateISO)
+    .sort((a, b) => a.event_date.localeCompare(b.event_date))
+
+  let currentState = 'normal'
+  let lastParicion: string | null = null
+
+  for (const ev of sorted) {
+    if (ev.event_type === 'paricion') {
+      currentState = 'lactating'
+      lastParicion = ev.event_date
+    } else if (ev.event_type === 'destete') {
+      currentState = 'normal'
+      lastParicion = null
+    }
+  }
+
+  if (currentState === 'lactating' && lastParicion && daysBetween(lastParicion, dateISO) >= 90) {
+    currentState = 'lactating_with_calf'
+  }
+
+  if (currentState === 'lactating') return headCount * 1.5
+  if (currentState === 'lactating_with_calf') return headCount * 1.8
+  return baseEV
+}
+
+
 // Event type config — colors from Bitacora reference
 const EVT_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
   servicio:              { label: 'Servicio',              emoji: '●', color: '#ef4444' },
@@ -83,6 +117,36 @@ const EVT_CONFIG: Record<string, { label: string; emoji: string; color: string }
   vacaciones:            { label: 'Vacaciones',            emoji: '●', color: '#ec4899' },
 }
 
+// ─── Multiplicadores estacionales de crecimiento de MS (Hemisferio Sur) ────────
+// Aplicados al cálculo de días durante la generación del ciclo sugerido
+const SEASONAL_MS_GROWTH: Record<number, number> = {
+  5: 0.3, 6: 0.3, 7: 0.3,          // Jun–Ago: Invierno
+  8: 1.5, 9: 1.5, 10: 1.5,          // Sep–Nov: Primavera
+  11: 1.2, 0: 1.0, 1: 0.9,          // Dic–Feb: Verano (declinando)
+  2: 0.7, 3: 0.5, 4: 0.4,           // Mar–May: Otoño
+}
+
+// ─── Trigger de Sequía Regional — SMN Argentina ─────────────────────────────
+// Devuelve el promedio histórico de referencia y el umbral de trigger por región.
+// El campo puede configurar su propio umbral; este valor es el default inicial
+// basado en las coordenadas del establecimiento.
+interface DroughtRef {
+  refMm: number
+  triggerMm: number
+  regionName: string
+}
+const REGION_DROUGHT_REF = (lat: number, lng: number): DroughtRef => {
+  // NEA: Corrientes / Chaco (lat ~-22 a -30, lng ~-55 a -65)
+  if (lat > -31 && lat < -22 && lng > -65 && lng < -55)
+    return { refMm: 130, triggerMm: 80, regionName: 'NEA (Corrientes / Chaco)' }
+  // Semiárida: San Luis / Oeste de Córdoba (lng < -64, lat -30 a -38)
+  if (lng < -64 && lat < -30 && lat > -38)
+    return { refMm: 50, triggerMm: 25, regionName: 'Región Semiárida' }
+  // Default: Pampa Húmeda
+  return { refMm: 90, triggerMm: 50, regionName: 'Pampa Húmeda' }
+}
+
+
 // ─────────────── INTERACTIVE GANTT ───────────────
 interface GanttBlock {
   plan: any
@@ -92,7 +156,8 @@ interface GanttBlock {
 
 function InteractiveGantt({
   plans, paddocks, herds, farmEvents, windowStart, windowDays, onBlockClick, onBlockMove,
-  rainfallData, onRainfallChange, weatherEvents = [], onPaddockClick
+  rainfallData, onRainfallChange, weatherEvents = [], onPaddockClick,
+  droughtThresholdMm, onDroughtThresholdChange,
 
 }: {
   plans: any[]
@@ -107,6 +172,8 @@ function InteractiveGantt({
   onRainfallChange: (monthKey: string, mm: number) => void
   weatherEvents?: any[]
   onPaddockClick?: (paddockId: string) => void
+  droughtThresholdMm: number
+  onDroughtThresholdChange: (mm: number) => void
 }) {
   const ROW_H = 60
   const LABEL_W = 200
@@ -117,6 +184,7 @@ function InteractiveGantt({
   const [selectedEvent, setSelectedEvent] = useState<any | null>(null)
   const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
   const [editingRainKey, setEditingRainKey] = useState<string | null>(null)
+  const [editingThreshold, setEditingThreshold] = useState(false)
 
   const herdColorMap = useMemo(() => {
     const map: Record<string, string> = {}
@@ -345,8 +413,23 @@ function InteractiveGantt({
         {/* ── Rainfall + Snow Row ── */}
         <div className="flex border-b border-blue-100 bg-blue-50" style={{ height: RAIN_ROW_H }}>
           <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="px-3 flex items-center gap-1.5 border-r border-blue-100 shrink-0">
-            <CloudRain className="w-3 h-3 text-blue-400" />
-            <span className="text-[9px] font-black text-blue-500 tracking-widest uppercase">Lluvia / Nieve mm</span>
+            <CloudRain className="w-3 h-3 text-blue-400 shrink-0" />
+            <span className="text-[9px] font-black text-blue-500 tracking-widest uppercase">Lluvia registrada</span>
+            {/* Drought alert — only visible when an active month is below threshold */}
+            {(() => {
+              const hasActiveDrought = Object.entries(rainfallData).some(
+                ([, mm]) => mm > 0 && mm < droughtThresholdMm
+              )
+              if (!hasActiveDrought) return null
+              return (
+                <span
+                  className="ml-auto text-[8px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded shrink-0"
+                  title={`Alerta: hay meses con lluvia por debajo de ${droughtThresholdMm}mm. El crecimiento de pasto está reducido un 30% en esos períodos.`}
+                >
+                  ⚠ Lluvia insuficiente
+                </span>
+              )
+            })()}
           </div>
           <div className="flex-1 relative">
             {(() => {
@@ -465,11 +548,30 @@ function InteractiveGantt({
                       <>
                         <span className="text-[8px] text-gray-300">•</span>
                         <span className="text-[10px] text-gray-500">
-                          <span className="font-bold text-gray-600">{msHa.toLocaleString('es')}</span> kg MS
+                          <span className="font-bold text-gray-600">{msHa.toLocaleString('es')}</span> kg pasto/ha
                         </span>
                       </>
                     )}
                   </div>
+                  {/* Row 3: Días disponibles de pasto — cálculo holístico */}
+                  {(() => {
+                    const totalHerdsEV = herds.reduce((s, h) => s + Number(h.total_ev || 0), 0)
+                    const usableMs = msHa * areaHa * 0.5
+                    const availDays = totalHerdsEV > 0 && usableMs > 0
+                      ? Math.floor(usableMs / (totalHerdsEV * 12))
+                      : 0
+                    if (availDays <= 0) return null
+                    const isShort = availDays < 7
+                    return (
+                      <div
+                        className={`flex items-center gap-1 mt-0.5 ${isShort ? 'text-amber-600' : 'text-green-700'}`}
+                        title={`Días que puede pastorear la hacienda en este potrero antes de consumir el 50% de pasto disponible (${usableMs.toFixed(0)} kg MS útil ÷ ${(totalHerdsEV * 12).toFixed(0)} kg/día de todos los rodeos)`}
+                      >
+                        <span className="text-[10px] font-black">{availDays}</span>
+                        <span className="text-[9px] font-medium">días de pasto disponible</span>
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
 
@@ -565,6 +667,31 @@ function InteractiveGantt({
                     const REAL_TOP = 36
                     const BAR_H   = 28
 
+                    // ── Ghost Bar (Barra Fantasma) — duración óptima holística ──────────
+                    // Calcula cuántos días debería durar la estadía según la biomasa real
+                    // del potrero y la demanda EV del rodeo (Regla del 50% de remanente):
+                    //   Días = (MS_disponible × 0.5) / (EV_total × 12 kg/día)
+                    const ghostPaddock  = paddocks.find((p: any) => p.id === plan.paddock_id)
+                    const ghostMsHa     = Number(ghostPaddock?.dry_matter_kg_ha) || 0
+                    const ghostAreaHa   = Number(ghostPaddock?.area_ha) || 0
+                    const ghostHerdsEV  = herds
+                      .filter((h: any) => plan.herd_ids?.includes(h.id))
+                      .reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
+                    // Apply drought coefficient if current month rainfall < threshold
+                    const ghostMonthKey      = (plan.entry_date as string)?.slice(0, 7) || ''
+                    const ghostMonthRain     = rainfallData[ghostMonthKey] || 0
+                    const ghostIsDrought     = ghostMonthRain > 0 && ghostMonthRain < droughtThresholdMm
+                    const ghostDroughtCoef   = ghostIsDrought ? 0.7 : 1.0
+                    const ghostMsAdjusted    = ghostMsHa * ghostAreaHa * 0.5 * ghostDroughtCoef
+                    const ghostDays          = ghostHerdsEV > 0 && ghostMsAdjusted > 0
+                      ? Math.max(1, Math.floor(ghostMsAdjusted / (ghostHerdsEV * 12)))
+                      : 0
+                    const ghostWidthPct      = ghostDays > 0
+                      ? Math.max(0.3, (ghostDays / windowDays) * 100)
+                      : 0
+                    // ⚠ Warning: el plan excede el remanente óptimo del 50%
+                    const exceedingRemanente = ghostDays > 0 && duration > ghostDays && !isCompleted
+
                     // ── PLAN block — diagonal stripes; faded if completed ──
                     const planBlock = (
                       <div
@@ -577,21 +704,42 @@ function InteractiveGantt({
                           height: BAR_H,
                           minWidth: 8,
                           borderRadius: 3,
-                          border: `1.5px solid ${planColor}${isCompleted ? '55' : '88'}`,
+                          border: `1.5px solid ${exceedingRemanente ? '#fb923c' : planColor}${isCompleted ? '55' : '88'}`,
                           backgroundColor: 'transparent',
                           cursor: isCompleted ? 'pointer' : 'grab',
                           zIndex: 20,
                           overflow: 'hidden',
                           opacity: isCompleted ? 0.55 : 1,
-                          backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 4px, ${planColor}50 4px, ${planColor}50 8px)`,
+                          backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 4px, ${exceedingRemanente ? '#fb923c' : planColor}50 4px, ${exceedingRemanente ? '#fb923c' : planColor}50 8px)`,
                           backgroundSize: '8px 8px'
                         }}
                         className="transition-all hover:brightness-90"
                         onMouseDown={e => !isCompleted && !hasRealEntry && handleMouseDown(e, plan)}
                         onClick={(e) => { e.stopPropagation(); onBlockClick(plan, e) }}
-                        title={`${isSuggested ? '⚡ SUGERIDA' : '✏️ MANUAL'} — ${herdLabel} · ${fmt(plan.entry_date)}→${fmt(exitDate)}${isCompleted ? ' ✔ Completado' : ''}`}
+                        title={`${isSuggested ? '⚡ SUGERIDA' : '✏️ MANUAL'} — ${herdLabel} · ${fmt(plan.entry_date)}→${fmt(exitDate)}${isCompleted ? ' ✔ Completado' : ''}${exceedingRemanente ? ` · ⚠ Excede el remanente óptimo (${ghostDays}d recomendado)` : ''}`}
                       />
                     )
+
+                    // ── Ghost Bar — dashed outline of the optimal duration ──────────────
+                    const ghostBar = ghostDays > 0 && !isCompleted ? (
+                      <div
+                        key={`ghost-${plan.id}`}
+                        style={{
+                          position: 'absolute',
+                          left: `${Math.min(leftPct, 99)}%`,
+                          width: `${Math.min(ghostWidthPct, 100 - Math.min(leftPct, 99))}%`,
+                          top: PLAN_TOP,
+                          height: BAR_H,
+                          minWidth: 4,
+                          borderRadius: 3,
+                          border: `1.5px dashed ${ghostIsDrought ? 'rgba(251,146,60,0.55)' : 'rgba(156,163,175,0.55)'}`,
+                          backgroundColor: ghostIsDrought ? 'rgba(251,146,60,0.04)' : 'rgba(156,163,175,0.06)',
+                          zIndex: 12,
+                          pointerEvents: 'none',
+                        }}
+                        title={`Duración óptima (MS×0.5 / EV×12): ${ghostDays}d${ghostIsDrought ? ` · ⚠ Déficit hídrico: lluvia <${droughtThresholdMm}mm → MS reducida 30%` : ''}`}
+                      />
+                    ) : null
 
                     // ── REAL block — solid orange, deviation badge ──
                     // Shows for any plan that has actual_entry_date set (ACTIVE or COMPLETED)
@@ -645,6 +793,8 @@ function InteractiveGantt({
                       )
                     }
 
+                    // Ghost bar removed — the orange border warning on the plan block
+                    // already communicates when the user is over the safe grazing limit.
                     return <React.Fragment key={plan.id}>{planBlock}{realBlock}</React.Fragment>
                   })
                 })()}
@@ -693,7 +843,7 @@ function InteractiveGantt({
                   <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="px-2.5 py-2.5 flex flex-col justify-center gap-1 border-r border-violet-200 shrink-0">
                     <div className="flex items-center gap-1 mb-0.5">
                       <BarChart3 className="w-3 h-3 text-violet-500" />
-                      <span className="text-[9px] font-black text-violet-600 tracking-widest uppercase">Totales</span>
+                      <span className="text-[9px] font-black text-violet-600 tracking-widest uppercase">Resumen</span>
                     </div>
                     {/* Σ ha */}
                     <div className="flex items-center justify-between">
@@ -704,13 +854,6 @@ function InteractiveGantt({
                     <div className="flex items-center justify-between">
                       <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Σ MS</span>
                       <span className="text-[10px] font-bold text-gray-700">{totalMs >= 1000 ? `${(totalMs/1000).toFixed(0)}t` : `${Math.round(totalMs)}kg`}</span>
-                    </div>
-                    {/* Carga Global EV/ha */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">EV/ha</span>
-                      <span className="text-[10px] font-bold" style={{ color: caColor }}>
-                        {cargaGlobal > 0 ? cargaGlobal.toFixed(2) : '—'}
-                      </span>
                     </div>
                   </div>
                 )
@@ -749,11 +892,7 @@ function InteractiveGantt({
                               style={{ width: `${Math.min(100, (ca / 7) * 100)}%`, backgroundColor: caColor }}
                             />
                           </div>
-                          {/* Labels */}
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full" style={{ color: caColor, backgroundColor: `${caColor}18` }}>
-                              {ca > 0 ? `${ca.toFixed(1)} EV/ha` : '—'}
-                            </span>
                             <div className="flex items-center gap-1">
                               <span className="text-[7px] text-gray-500 font-bold">{haTotal.toFixed(0)}ha</span>
                               <span className="text-[7px] text-gray-500 font-bold">{cabezas}cab</span>
@@ -762,6 +901,7 @@ function InteractiveGantt({
                             </div>
                           </div>
                         </>
+
                       ) : (
                         <span className="text-[8px] text-gray-200">—</span>
                       )}
@@ -835,6 +975,20 @@ export default function GrazingPlanner() {
       try { localStorage.setItem('rodeo_rainfall', JSON.stringify(next)) } catch {}
       return next
     })
+  }, [])
+
+  // Drought threshold: auto-detected from farm lat/lng, configurable per campo
+  // Default region: coordinates used throughout the app (-37.32, -59.13 = Pampa Húmeda)
+  const [droughtThresholdMm, setDroughtThresholdMm] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('rodeo_drought_threshold')
+      if (stored) return Number(stored)
+    } catch {}
+    return REGION_DROUGHT_REF(-37.32, -59.13).triggerMm  // Pampa Húmeda: 50mm
+  })
+  const handleDroughtThresholdChange = useCallback((mm: number) => {
+    setDroughtThresholdMm(mm)
+    try { localStorage.setItem('rodeo_drought_threshold', String(mm)) } catch {}
   }, [])
 
   // SDH/mm balance
@@ -935,7 +1089,7 @@ export default function GrazingPlanner() {
   const totalPlanEV = useMemo(() => {
     const herdsEV = formData.herd_ids.reduce((sum, hid) => {
       const h = herds.find(h => h.id === hid)
-      return sum + (Number(h?.total_ev) || 0)
+      return sum + getDynamicHerdEV(h, formData.entry_date || suggestStartDate, farmEvents)
     }, 0)
     // EV ponderado: si hay fechas del plan y del animal extra, calcular solapamiento proporcional
     const planDays = formData.entry_date && formData.exit_date
@@ -966,7 +1120,7 @@ export default function GrazingPlanner() {
     const totalMs = ms * area
     
     // Holistic Calculation: (Available - TargetRemnant) * Area / DailyDemand - GraceDays
-    const dailyDemand = totalPlanEV * 11 // 11 kg MS/EV/day
+    const dailyDemand = totalPlanEV * 12 // 12 kg MS/EV/day
     const availablePerHa = Math.max(0, ms - targetRemnant)
     const usableMsTotal = availablePerHa * area
     
@@ -974,7 +1128,7 @@ export default function GrazingPlanner() {
     const days = Math.max(0, baseDays - graceDays)
     
     // Max EV this paddock can support for the same days
-    const paddockMaxEV = days > 0 ? Math.floor(usableMsTotal / ((days + graceDays) * 11)) : 0
+    const paddockMaxEV = days > 0 ? Math.floor(usableMsTotal / ((days + graceDays) * 12)) : 0
     
     let recovery = 60
     if (weather?.currentSeason === 'SUMMER') recovery = 40
@@ -990,10 +1144,10 @@ export default function GrazingPlanner() {
       const ms = Number(p.dry_matter_kg_ha) || Number(p.estimated_adh) * 66 || 0
       return sum + (ms * Number(p.area_ha || 0))
     }, 0)
-    const dailyDemand = herds.reduce((sum, h) => sum + (Number(h.total_ev || 0) * 11), 0)
+    const dailyDemand = herds.reduce((sum, h) => sum + (getDynamicHerdEV(h, suggestStartDate, farmEvents) * 12), 0)
     const days = dailyDemand > 0 ? Math.floor(totalSupply / dailyDemand) : 0
     return { days, isCritical: days < 10 && days > 0 }
-  }, [paddocks, herds])
+  }, [paddocks, herds, suggestStartDate, farmEvents])
 
   // Detect if paddock capacity is exceeded
   const isForageLimiting = suggestion.paddockMaxEV > 0 && totalPlanEV > suggestion.paddockMaxEV
@@ -1059,10 +1213,10 @@ export default function GrazingPlanner() {
       const activeHerds    = herds.filter(h => activeHerdIds.includes(h.id))
 
       // EV total incluyendo animales temporales
-      const herdsEV = activeHerds.reduce((s, h) => s + Number(h.total_ev || 0), 0)
+      const herdsEV = activeHerds.reduce((s, h) => s + getDynamicHerdEV(h, startDate, farmEvents), 0)
       const tempEV  = tempAnimals.reduce((sum, a) => sum + (a.count * a.weight_kg) / 450, 0)
       const totalEV = herdsEV + tempEV
-      const dailyDemand = totalEV * 13 // 11 kg MS + 2 kg margen
+      const dailyDemand = totalEV * 12 // 12 kg MS (biological standard)
 
       let currentEntry = new Date(startDate + 'T12:00:00')
       const targetEndDate = new Date(currentEntry)
@@ -1120,9 +1274,18 @@ export default function GrazingPlanner() {
         herdRotationIdx++
 
         // Días de estadía según biomasa disponible (máx 14 días)
+        // Regla del 50% de Remanente: solo la mitad de la MS es "cosechable"
         const ms      = Number(chosenPaddock.dry_matter_kg_ha) || 1800
         const area    = Number(chosenPaddock.area_ha) || 10
-        const usableMs = Math.max(0, ms - 1100) * area
+        // Multiplicador estacional (H. Sur) según el mes de entrada al potrero
+        const entryMonthIdx      = currentEntry.getMonth()
+        const seasonalMultiplier = SEASONAL_MS_GROWTH[entryMonthIdx] ?? 1.0
+        // Coeficiente de sequía: si la lluvia del mes < threshold, reducir MS un 30%
+        const entryCycleKey = `${currentEntry.getFullYear()}-${String(entryMonthIdx + 1).padStart(2,'0')}`
+        const entryCycleRain = rainfallData[entryCycleKey] || 0
+        const cycleDroughtCoef = entryCycleRain > 0 && entryCycleRain < droughtThresholdMm ? 0.7 : 1.0
+        // MS aprovechable = MS_total × 50% × estacionalidad × sequía
+        const usableMs = ms * 0.5 * area * seasonalMultiplier * cycleDroughtCoef
         const rawDays  = dailyDemand > 0 ? Math.floor(usableMs / dailyDemand) : 3
         const stayDays = Math.max(1, Math.min(rawDays, 14))
 
@@ -1466,7 +1629,7 @@ export default function GrazingPlanner() {
           }, 0)
 
           const totalEVWithExtras = baseEV + extraEV
-          const dailyDemandNew    = totalEVWithExtras * 11 // 11 kg MS/EV/day
+          const dailyDemandNew    = totalEVWithExtras * 12 // 12 kg MS/EV/day
           const newDays           = dailyDemandNew > 0 ? Math.max(1, Math.floor(usableMs / dailyDemandNew)) : planDaysTotal
 
           // New exit date
@@ -1664,6 +1827,41 @@ export default function GrazingPlanner() {
   const ganttEnd = addDays(ganttWindow, WINDOW_DAYS)
   const ganttStartLabel = fmt(ganttWindow)
   const ganttEndLabel = fmt(ganttEnd)
+
+  // ── Metrics Row Data ──
+  const dashboardMetricsData = useMemo<DashboardMetricsData>(() => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    
+    // Total forage mass
+    const totalMs = paddocks.reduce((sum, p) => {
+      const msHa = Number(p.dry_matter_kg_ha) || (Number(p.estimated_adh) || 0) * 66 || 0
+      return sum + msHa * (Number(p.area_ha) || 0)
+    }, 0)
+    
+    // Total instantaneous EV
+    const totalEV = herds.reduce((sum, h) => sum + getDynamicHerdEV(h, todayStr, farmEvents), 0)
+    
+    // Average Quality (1-10) — weighted by paddock area for biological accuracy
+    let qWeightedSum = 0, qAreaSum = 0
+    paddocks.forEach(p => {
+      const q    = Number(p.technical_data?.relative_quality || p.technical_data?.quality_score)
+      const area = Number(p.area_ha) || 0
+      if (!isNaN(q) && q > 0 && area > 0) {
+        qWeightedSum += q * area
+        qAreaSum     += area
+      }
+    })
+    const avgQuality = qAreaSum > 0 ? qWeightedSum / qAreaSum : null
+    
+    // Target Recovery
+    let targetRecoveryDays = 60
+    if (weather?.currentSeason === 'SUMMER') targetRecoveryDays = 40
+    if (weather?.currentSeason === 'SPRING') targetRecoveryDays = 45
+    if (weather?.currentSeason === 'AUTUMN') targetRecoveryDays = 65
+    if (weather?.currentSeason === 'WINTER') targetRecoveryDays = 92
+    
+    return { totalMs, totalEV, avgQuality, targetRecoveryDays }
+  }, [paddocks, herds, farmEvents, weather])
 
   return (
     <div className="space-y-5 pb-10">
@@ -1883,7 +2081,13 @@ export default function GrazingPlanner() {
             onPaddockClick={(paddockId) => {
               router.push(`/dashboard/mi-campo?editPaddock=${paddockId}`)
             }}
+            droughtThresholdMm={droughtThresholdMm}
+            onDroughtThresholdChange={handleDroughtThresholdChange}
           />
+
+          <div className="mt-4">
+            <DashboardMetricsBar data={dashboardMetricsData} />
+          </div>
 
           {/* Hint + quick export */}
           <div className="flex items-center justify-between px-1 pt-1">
@@ -2451,7 +2655,7 @@ export default function GrazingPlanner() {
                     return sum + evRaw
                   }, 0)
                   const newTotalEV     = baseEV + extraEV
-                  const dailyDemandNew = newTotalEV * 11
+                  const dailyDemandNew = newTotalEV * 12
                   const newDays        = dailyDemandNew > 0 ? Math.max(1, Math.floor(usableMs / dailyDemandNew)) : planDays
                   const deltaDays      = newDays - planDays // negative = fewer days
                   const siblingsCount  = plans.filter(p => p.ai_analysis?.cycle_id === cycleId && p.entry_date > formData.entry_date).length

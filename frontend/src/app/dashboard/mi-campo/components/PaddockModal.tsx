@@ -9,6 +9,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
 import { SatelliteData } from '@/lib/services/satellite'
+import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -284,14 +285,6 @@ export default function PaddockModal({
 
   const totalMs = areaHa !== '' && msHa !== '' ? Number(areaHa) * Number(msHa) : null
   const isGeo   = Boolean(paddock.boundary || ndviData)
-
-  const qualityBadgeCls = qualityScore >= 7
-    ? 'bg-green-100 text-green-800 border-green-200'
-    : qualityScore >= 4
-    ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-    : 'bg-red-100 text-red-800 border-red-200'
-
-  const qualityDotCls = qualityScore >= 7 ? 'bg-green-500' : qualityScore >= 4 ? 'bg-yellow-500' : 'bg-red-500'
 
   // Tab 2
   const [waterSources, setWaterSources]       = useState<string[]>(paddock.technical_data?.water_sources ?? [])
@@ -617,27 +610,14 @@ export default function PaddockModal({
 
               {/* Calidad relativa */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className={LABEL_CLS}>Calidad relativa</label>
-                  <span className={`text-xs font-black px-2.5 py-0.5 rounded-lg border ${qualityBadgeCls}`}>
-                    {qualityScore}/10
-                  </span>
-                </div>
-                <div className="relative">
-                  <div className="w-full h-2 rounded-full bg-gradient-to-r from-red-400 via-yellow-400 to-green-500 mb-1" />
-                  <input
-                    type="range" min={1} max={10} step={1} value={qualityScore}
-                    onChange={e => setQuality(Number(e.target.value))}
-                    className="w-full cursor-pointer absolute top-0 opacity-0 h-2"
-                  />
-                  <div
-                    className={`absolute -top-0.5 w-3 h-3 rounded-full border-2 border-white shadow-md -translate-x-1/2 transition-all ${qualityDotCls}`}
-                    style={{ left: `${((qualityScore - 1) / 9) * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[9px] font-black text-gray-400 tracking-widest uppercase">
-                  <span>Muy mala</span><span>Regular</span><span>Excelente</span>
-                </div>
+                <SimpleNumberInput
+                  label="Calidad Relativa del Forraje"
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={qualityScore}
+                  onChange={e => setQuality(Number(e.target.value))}
+                />
               </div>
 
               {/* Composición botánica */}

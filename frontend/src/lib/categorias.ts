@@ -38,7 +38,7 @@ export const CATEGORIA_DEMAND_FACTOR: Record<CategoriaComercial, number> = {
   TERNEROS:    0.60,
   TERNERAS:    0.55,
   VACAS:       1.00,
-  TOROS:       1.25,
+  TOROS:       1.60,
   MEJ:         0.90,
   BUBALINOS:   1.10,
 }
