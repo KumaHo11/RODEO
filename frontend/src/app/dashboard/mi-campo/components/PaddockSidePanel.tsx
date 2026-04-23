@@ -50,6 +50,7 @@ interface Props {
   onDeleteField?: () => void
   onDataRefresh?: () => void
   defaultEditPaddockId?: string
+  planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
 }
 
 const TECH_ICONS = [
@@ -70,7 +71,7 @@ export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0,
   onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField, onDataRefresh,
-  defaultEditPaddockId,
+  defaultEditPaddockId, planningDefaults,
 }: Props) {
   const [search, setSearch]     = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -534,6 +535,8 @@ export default function PaddockSidePanel({
           onSave={handleModalSave}
           onDelete={onDeletePaddock}
           paddocks={paddocks}
+          herds={herds}
+          planningDefaults={planningDefaults}
           user={user}
         />
       )}

@@ -26,6 +26,9 @@ export type { BadgeProps, BadgeVariant } from './atoms/Badge';
 export { Toggle }        from './atoms/Toggle';
 export type { ToggleProps } from './atoms/Toggle';
 
+export { Tooltip }       from './atoms/Tooltip';
+export type { TooltipProps } from './atoms/Tooltip';
+
 // ── MOLECULES ────────────────────────────────────────────────────────
 export { FormField }     from './molecules/FormField';
 export type { FormFieldProps } from './molecules/FormField';

@@ -720,9 +720,14 @@ export default function EquipoPage() {
       {/* ── Invite Modal ──────────────────────────────────────────────────────── */}
       {modalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            <div className="sticky top-0 bg-white/98 backdrop-blur px-6 py-5 border-b border-gray-100 flex items-center justify-between rounded-t-3xl z-10 shrink-0">
-              <h2 className="text-lg font-black text-gray-950 tracking-tight">Invitar al equipo</h2>
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="text-lg font-black text-gray-950 tracking-tight">Invitar al equipo</h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">Enviá una invitación por email con acceso configurado</p>
+              </div>
               <button onClick={() => setModalOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
                 <X className="w-4 h-4" />
               </button>
@@ -734,103 +739,139 @@ export default function EquipoPage() {
                   <Check className="w-8 h-8 text-green-600" />
                 </div>
                 <h3 className="text-lg font-black text-gray-900 mb-1">¡Invitación enviada!</h3>
-                <p className="text-sm text-gray-500">El email con el link de acceso fue enviado a <strong>{inviteEmail}</strong></p>
+                <p className="text-sm text-gray-500">El email fue enviado a <strong>{inviteEmail}</strong></p>
               </div>
             ) : (
-              <form onSubmit={handleInvite} className="p-6 space-y-5">
-                {/* Nombre y apellido */}
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField
-                    label="Nombre"
-                    type="text"
-                    value={inviteFirstName}
-                    onChange={e => setInviteFirstName(e.target.value)}
-                    placeholder="Juan"
-                  />
-                  <FormField
-                    label="Apellido"
-                    type="text"
-                    value={inviteLastName}
-                    onChange={e => setInviteLastName(e.target.value)}
-                    placeholder="Rodríguez"
-                  />
-                </div>
+              <form onSubmit={handleInvite} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
-                {/* Email */}
-                <FormField
-                  label="Email del invitado *"
-                  type="email"
-                  required
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="veterinario@ejemplo.com"
-                />
-
-                {/* Role selector */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Rol</label>
-                    <button
-                      type="button"
-                      onClick={() => setNewRoleModalOpen(true)}
-                      className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
-                    >
-                      <BadgePlus className="w-3 h-3" /> Crear rol custom
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {allRoles.map(role => {
-                      const Icon = role.icon
-                      const isSelected = inviteRole === role.id
-                      return (
-                        <button
-                          key={role.id}
-                          type="button"
-                          onClick={() => handleRoleChange(role.id)}
-                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                            isSelected
-                              ? `${role.bg} border-current ring-2 ring-offset-1 ${role.color.replace('text-', 'ring-')}`
-                              : 'border-gray-200 hover:bg-gray-50'
-                          }`}
-                        >
-                          <Icon className={`w-4 h-4 ${isSelected ? role.color : 'text-gray-400'}`} />
-                          <div>
-                            <p className={`text-xs font-black leading-none ${isSelected ? role.color : 'text-gray-700'}`}>{role.label}</p>
-                            {role.isCustom && <p className="text-[9px] text-indigo-400 mt-0.5">Custom</p>}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Permission toggles */}
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">Módulos habilitados</label>
-                  <div className="space-y-1.5">
-                    {MODULES.map(mod => (
-                      <div key={mod.key} className="flex items-center justify-between py-1.5 px-3 rounded-xl hover:bg-gray-50">
-                        <span className="text-sm font-bold text-gray-700">{mod.label}</span>
-                        <Toggle
-                          on={!!invitePerms[mod.key]}
-                          onChange={() => setInvitePerms(p => ({ ...p, [mod.key]: !p[mod.key] }))}
+                  {/* Datos del invitado */}
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Datos del invitado</p>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nombre</label>
+                        <input
+                          type="text"
+                          value={inviteFirstName}
+                          onChange={e => setInviteFirstName(e.target.value)}
+                          placeholder="Juan"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all placeholder:text-gray-300"
                         />
                       </div>
-                    ))}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Apellido</label>
+                        <input
+                          type="text"
+                          value={inviteLastName}
+                          onChange={e => setInviteLastName(e.target.value)}
+                          placeholder="Rodríguez"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all placeholder:text-gray-300"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Email *</label>
+                      <input
+                        type="email"
+                        required
+                        value={inviteEmail}
+                        onChange={e => setInviteEmail(e.target.value)}
+                        placeholder="veterinario@ejemplo.com"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all placeholder:text-gray-300"
+                      />
+                    </div>
                   </div>
+
+                  {/* Rol */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rol</p>
+                      <button
+                        type="button"
+                        onClick={() => setNewRoleModalOpen(true)}
+                        className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                      >
+                        <BadgePlus className="w-3 h-3" /> Crear rol personalizado
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {allRoles.map(role => {
+                        const Icon = role.icon
+                        const isSelected = inviteRole === role.id
+                        return (
+                          <button
+                            key={role.id}
+                            type="button"
+                            onClick={() => handleRoleChange(role.id)}
+                            className={`flex items-center gap-3 px-3.5 py-3 rounded-2xl border-2 text-left transition-all ${
+                              isSelected
+                                ? `${role.bg} border-current`
+                                : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isSelected ? role.bg : 'bg-gray-100'}`}>
+                              <Icon className={`w-4 h-4 ${isSelected ? role.color : 'text-gray-400'}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className={`text-xs font-black leading-tight ${isSelected ? role.color : 'text-gray-800'}`}>{role.label}</p>
+                              {role.isCustom && <p className="text-[9px] text-indigo-400 mt-0.5">Personalizado</p>}
+                            </div>
+                            {isSelected && (
+                              <div className={`ml-auto w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${role.bg}`}>
+                                <Check className={`w-2.5 h-2.5 ${role.color}`} />
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Módulos */}
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Módulos habilitados</p>
+                    <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
+                      {MODULES.map(mod => (
+                        <div key={mod.key} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-gray-800 leading-tight">{mod.label}</p>
+                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">{mod.desc}</p>
+                          </div>
+                          <Toggle
+                            on={!!invitePerms[mod.key]}
+                            onChange={() => setInvitePerms(p => ({ ...p, [mod.key]: !p[mod.key] }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {inviteError && (
+                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      {inviteError}
+                    </div>
+                  )}
                 </div>
 
-                {inviteError && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{inviteError}</div>
-                )}
-
-                <div className="flex gap-3 pt-2">
-                  <Button variant="secondary" className="flex-1 py-3" type="button" onClick={() => setModalOpen(false)}>
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 shrink-0 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="flex-1 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-xl hover:bg-gray-50 transition-colors"
+                  >
                     Cancelar
-                  </Button>
-                  <Button type="submit" className="flex-1 py-3" isLoading={inviting} disabled={!inviteEmail} leftIcon={<Mail className="w-4 h-4" />}>
-                    Enviar invitación
-                  </Button>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={inviting || !inviteEmail}
+                    className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-black text-sm rounded-xl shadow-sm shadow-green-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                    {inviting ? 'Enviando...' : 'Enviar invitación'}
+                  </button>
                 </div>
               </form>
             )}
@@ -838,10 +879,13 @@ export default function EquipoPage() {
         </div>
       )}
 
+
+
+
       {/* ── New Custom Role Modal ─────────────────────────────────────────────── */}
       {newRoleModalOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-20 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
                 <h2 className="text-lg font-black text-gray-950 tracking-tight">Rol personalizado</h2>
@@ -852,55 +896,72 @@ export default function EquipoPage() {
               </button>
             </div>
 
-              <form onSubmit={handleCreateRole} className="p-6 space-y-4">
-                <FormField
-                  label="Nombre del rol *"
-                  type="text"
-                  required
-                  value={newRoleLabel}
-                  onChange={e => setNewRoleLabel(e.target.value)}
-                  placeholder="ej. Encargado de campo"
-                />
-                <FormField
-                  label="Descripción"
-                  type="text"
-                  value={newRoleDesc}
-                  onChange={e => setNewRoleDesc(e.target.value)}
-                  placeholder="ej. Responsable de todas las actividades de campo"
-                />
-
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">Permisos</label>
-                <div className="space-y-1.5">
-                  {MODULES.map(mod => (
-                    <div key={mod.key} className="flex items-center justify-between py-1.5 px-3 rounded-xl hover:bg-gray-50">
-                      <span className="text-sm font-bold text-gray-700">{mod.label}</span>
-                      <Toggle
-                        on={!!newRolePerms[mod.key]}
-                        onChange={() => setNewRolePerms(p => ({ ...p, [mod.key]: !p[mod.key] }))}
-                      />
-                    </div>
-                  ))}
+            <form onSubmit={handleCreateRole} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nombre del rol *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newRoleLabel}
+                    onChange={e => setNewRoleLabel(e.target.value)}
+                    placeholder="ej. Encargado de campo"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all placeholder:text-gray-300"
+                  />
                 </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Descripción</label>
+                  <input
+                    type="text"
+                    value={newRoleDesc}
+                    onChange={e => setNewRoleDesc(e.target.value)}
+                    placeholder="ej. Responsable de todas las actividades de campo"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all placeholder:text-gray-300"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Permisos</p>
+                  <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
+                    {MODULES.map(mod => (
+                      <div key={mod.key} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-gray-800 leading-tight">{mod.label}</p>
+                          <p className="text-[10px] text-gray-400 font-medium mt-0.5">{mod.desc}</p>
+                        </div>
+                        <Toggle
+                          on={!!newRolePerms[mod.key]}
+                          onChange={() => setNewRolePerms(p => ({ ...p, [mod.key]: !p[mod.key] }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {newRoleError && (
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    {newRoleError}
+                  </div>
+                )}
               </div>
 
-              {newRoleError && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{newRoleError}</div>
-              )}
-
-              <div className="flex gap-3 pt-2">
-                <Button variant="secondary" className="flex-1 py-3" type="button" onClick={() => setNewRoleModalOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100"
-                  isLoading={savingRole}
-                  disabled={!newRoleLabel.trim()}
-                  leftIcon={<Star className="w-4 h-4" />}
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 shrink-0 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setNewRoleModalOpen(false)}
+                  className="flex-1 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-xl hover:bg-gray-50 transition-colors"
                 >
-                  Crear rol
-                </Button>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingRole || !newRoleLabel.trim()}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm rounded-xl shadow-sm shadow-indigo-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {savingRole ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4" />}
+                  {savingRole ? 'Creando...' : 'Crear rol'}
+                </button>
               </div>
             </form>
           </div>

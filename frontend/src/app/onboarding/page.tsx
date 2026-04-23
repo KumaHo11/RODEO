@@ -53,8 +53,6 @@ function OnboardingWizard() {
     }
   }, [user, isLoading, profile, router])
 
-  if (isLoading) return null
-
   // -- Callbacks for the map singleton --------------------------------------─
   const handleLocationChange = useCallback(async (lat: number, lng: number) => {
     // Reverse geocode silently
@@ -142,6 +140,8 @@ function OnboardingWizard() {
   const drawPhase = data.fieldBoundary ? 'paddock' : 'field'
 
   const showMap = step === 1 || step === 2
+
+  if (isLoading) return null
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 font-sans text-gray-900 overflow-hidden">

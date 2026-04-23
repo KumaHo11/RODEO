@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '@/lib/apiFetch'
 import { CatCombobox, BreedCombobox } from '@/components/HerdComboboxes'
+import { Tooltip } from '@/design-system/atoms/Tooltip'
 import {
   CATEGORIA_PESO_DEFAULT,
   RAZAS_POR_CATEGORIA, CATEGORIA_COLORS, CATEGORIA_LABEL_RAE,
@@ -553,8 +554,11 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
               {liveEV > 0 && (
                 <div className="flex items-center gap-3 px-4 py-3 bg-green-50 rounded-xl border border-green-100">
                   <ClipboardList className="w-4 h-4 text-green-600 shrink-0" />
-                  <div>
-                    <p className="text-[10px] font-black text-green-600 tracking-widest uppercase">Equ. vaca (EV)</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[10px] font-black text-green-600 tracking-widest uppercase">Equ. vaca (EV)</p>
+                      <Tooltip text="El 'Estómago Estándar': convertimos todos los animales a una misma unidad. Una vaca de 400kg = 1 EV. Ternero = 0.6 EV. Toro = 1.25 EV. Así calculamos cuánto pasto necesita todo el rodeo." />
+                    </div>
                     <p className="text-xl font-black text-gray-900">{liveEV.toFixed(2)} <span className="text-xs font-normal text-gray-400">EV · {Math.round(liveEV * 11)} kg MS/día</span></p>
                   </div>
                 </div>

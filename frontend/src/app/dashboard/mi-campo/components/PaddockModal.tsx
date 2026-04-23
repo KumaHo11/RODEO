@@ -10,6 +10,7 @@ import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, B
 import { apiFetch } from '@/lib/apiFetch'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
+import { Tooltip } from '@/design-system/atoms/Tooltip'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ interface Props {
   isCreating?: boolean
   user?: any
   paddocks?: Paddock[]
+  herds?: Array<{ total_ev?: number | null }>
+  planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
 }
 
 // ─── Datos parametrizados ─────────────────────────────────────────────────────
@@ -270,7 +273,7 @@ function Collapsible({ title, children, defaultOpen = false, accent }: {
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function PaddockModal({
-  paddock, ndviData, onClose, onSave, onDelete, isCreating = false, user,
+  paddock, ndviData, onClose, onSave, onDelete, isCreating = false, user, paddocks = [], herds = [], planningDefaults,
 }: Props) {
   const [activeTab, setActiveTab] = useState<'operativo' | 'infraestructura' | 'registros'>('operativo')
   const [saving, setSaving]       = useState(false)
@@ -286,14 +289,17 @@ export default function PaddockModal({
   const totalMs = areaHa !== '' && msHa !== '' ? Number(areaHa) * Number(msHa) : null
   const isGeo   = Boolean(paddock.boundary || ndviData)
 
-  // Tab 2
-  const [waterSources, setWaterSources]       = useState<string[]>(paddock.technical_data?.water_sources ?? [])
-  const [fenceStatus, setFenceStatus]         = useState<string>(paddock.technical_data?.fence_status ?? '')
-  const [accessList, setAccessList]           = useState<string[]>(paddock.technical_data?.access ?? [])
-  const [hasElectricity, setHasElectricity]   = useState<boolean>(paddock.technical_data?.has_electricity ?? false)
-  const [electricityType, setElectricityType] = useState<string>(paddock.technical_data?.electricity_type ?? '')
-  const [hasPredators, setHasPredators]       = useState<boolean>(paddock.technical_data?.has_predators ?? false)
-  const [relativeQuality, setRelativeQuality] = useState<number>(paddock.technical_data?.relative_quality ?? 0)
+  // Tab 2 — Infraestructura
+  const [hasWaterPoint, setHasWaterPoint]         = useState<boolean>(paddock.technical_data?.has_water_point ?? (paddock.technical_data?.water_sources?.length > 0))
+  const [waterCapacityLiters, setWaterCapacityLiters] = useState<number | ''>(paddock.technical_data?.water_capacity_liters ?? '')
+  const [fenceType, setFenceType]                 = useState<string>(paddock.technical_data?.fence_type ?? paddock.technical_data?.fence_status ?? '')
+  const [fenceDropdownOpen, setFenceDropdownOpen] = useState(false)
+  const [hasShade, setHasShade]                   = useState<boolean>(paddock.technical_data?.has_shade ?? false)
+  const [accessList, setAccessList]               = useState<string[]>(paddock.technical_data?.access ?? [])
+  const [hasElectricity, setHasElectricity]       = useState<boolean>(paddock.technical_data?.has_electricity ?? false)
+  const [electricityType, setElectricityType]     = useState<string>(paddock.technical_data?.electricity_type ?? '')
+  const [hasPredators, setHasPredators]           = useState<boolean>(paddock.technical_data?.has_predators ?? false)
+  const [relativeQuality, setRelativeQuality]     = useState<number>(paddock.technical_data?.relative_quality ?? 0)
 
   // Tab 3 — notas e historial
   const [noteExpanded, setNoteExpanded]     = useState(false)
@@ -350,26 +356,27 @@ export default function PaddockModal({
   const handleSave = async () => {
     if (!name.trim()) return
     setSaving(true)
-    const customWater = waterSources.filter(w => !WATER_SOURCES_DEFAULT.includes(w))
     const td: Record<string, any> = {
       ...(paddock.technical_data || {}),
-      quality_score: qualityScore,
-      grass_types: grassTypes,
-      weed_types: weedTypes,
-      water_sources: waterSources,
-      water_sources_custom: customWater,
-      fence_status: fenceStatus,
-      access: accessList,
-      has_electricity: hasElectricity,
-      electricity_type: electricityType,
-      has_predators: hasPredators,
-      hasWater: waterSources.length > 0,
-      waterType: waterSources[0] || undefined,
-      hasPests: weedTypes.length > 0,
-      weeds: weedTypes,
-      hasInfraIssues: fenceStatus === 'none' || fenceStatus === 'poor',
+      quality_score:        qualityScore,
+      grass_types:          grassTypes,
+      weed_types:           weedTypes,
+      // Nuevos campos de infraestructura (blueprint)
+      has_water_point:      hasWaterPoint,
+      water_capacity_liters: hasWaterPoint && waterCapacityLiters !== '' ? Number(waterCapacityLiters) : null,
+      fence_type:           fenceType,
+      fence_status:         fenceType,   // backwards compat
+      has_shade:            hasShade,
+      access:               accessList,
+      has_electricity:      hasElectricity,
+      electricity_type:     electricityType,
+      has_predators:        hasPredators,
+      hasWater:             hasWaterPoint,
+      hasPests:             weedTypes.length > 0,
+      weeds:                weedTypes,
+      hasInfraIssues:       fenceType === 'none' || fenceType === 'poor',
       hasPredators,
-      relative_quality: relativeQuality > 0 ? relativeQuality : undefined,
+      relative_quality:     relativeQuality > 0 ? relativeQuality : undefined,
     }
     await onSave(paddock.id, name.trim(), td,
       msHa   !== '' ? Number(msHa)   : undefined,
@@ -590,7 +597,10 @@ export default function PaddockModal({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className={LABEL_CLS}>MS disponible (kg MS/ha)</label>
+                  <div className="flex items-center gap-1.5">
+                    <label className={LABEL_CLS}>MS disponible (kg MS/ha)</label>
+                    <Tooltip text="Kilos de pasto seco por hectárea. Es la 'comida real' sin el agua. Más de 1500 kg MS/ha = bueno. Menos de 800 = bajo. Solo usaremos el 50% para no dañar el suelo." />
+                  </div>
                   <input
                     type="number" min="0" step="50" value={msHa}
                     onChange={e => setMsHa(e.target.value === '' ? '' : Number(e.target.value))}
@@ -608,10 +618,79 @@ export default function PaddockModal({
                 </p>
               )}
 
+              {/* Métricas Holísticas */}
+              {(msHa !== '' && areaHa !== '') && (() => {
+                const _ms = Number(msHa)
+                const _ha = Number(areaHa)
+                const _remnant = planningDefaults?.targetRemnantKgHa ?? 600
+                const _daily   = planningDefaults?.dailyAllocationKg  ?? 12
+                const _totalEV = herds.reduce((s, h) => s + Number(h.total_ev || 0), 0)
+                const _usableMs = Math.max(0, (_ms - _remnant) * _ha)
+
+                // DAH Estimado
+                const _dah = _totalEV > 0 && _daily > 0 && _usableMs > 0
+                  ? Math.max(0, Math.floor(_usableMs / (_totalEV * _daily)))
+                  : null
+
+                // Coeficiente de Rendimiento
+                const _activePaddocks = paddocks.filter(p => Number(p.dry_matter_kg_ha) > 0)
+                const _modAvg = _activePaddocks.length > 0
+                  ? _activePaddocks.reduce((s, p) => s + Number(p.dry_matter_kg_ha), 0) / _activePaddocks.length
+                  : 0
+                const _coef = _modAvg > 0 && _ms > 0 ? _ms / _modAvg : null
+
+                if (_dah === null && _coef === null) return null
+
+                return (
+                  <div className="rounded-xl bg-violet-50 border border-violet-100 p-3.5 space-y-3">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[10px] font-black text-violet-700 uppercase tracking-widest">Métricas Holísticas</p>
+                      <Tooltip text="Indicadores del Manejo Holístico calculados con los datos actuales de materia seca, superficie y rodeo." />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {_dah !== null && (
+                        <div className="bg-white rounded-xl border border-violet-100 p-3 text-center">
+                          <div className="flex items-center justify-center gap-1 mb-0.5">
+                            <p className="text-[9px] font-black text-violet-500 uppercase tracking-widest">DAH Estimado</p>
+                            <Tooltip text="Días Animal por Hectárea: cuántos días puede este potrero alimentar a 1 Equivalente Vaca según el pasto actual. Fórmula: (MS − remanente) × ha / (EV × kg MS/día)." />
+                          </div>
+                          <p className="text-2xl font-black text-violet-800 leading-none">{_dah}</p>
+                          <p className="text-[9px] text-violet-500 font-bold mt-0.5">días</p>
+                        </div>
+                      )}
+                      {_coef !== null && (
+                        <div className={`bg-white rounded-xl border p-3 text-center ${
+                          _coef >= 1.1 ? 'border-green-200' : _coef >= 0.9 ? 'border-gray-200' : 'border-amber-200'
+                        }`}>
+                          <div className="flex items-center justify-center gap-1 mb-0.5">
+                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Coeficiente</p>
+                            <Tooltip text="Rendimiento relativo de este potrero frente al promedio del campo. Mayor a 1 = sobre el promedio. Menor a 1 = por debajo del promedio." />
+                          </div>
+                          <p className={`text-2xl font-black leading-none ${
+                            _coef >= 1.1 ? 'text-green-700' : _coef >= 0.9 ? 'text-gray-700' : 'text-amber-700'
+                          }`}>
+                            {_coef.toFixed(2)}
+                          </p>
+                          <p className={`text-[9px] font-bold mt-0.5 ${
+                            _coef >= 1.1 ? 'text-green-500' : _coef >= 0.9 ? 'text-gray-400' : 'text-amber-500'
+                          }`}>
+                            {_coef >= 1.1 ? 'Sobre el promedio' : _coef >= 0.9 ? 'En la media' : 'Bajo el promedio'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
               {/* Calidad relativa */}
               <div className="space-y-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className={LABEL_CLS}>Calidad Relativa del Forraje</span>
+                  <Tooltip text="Escala del 1 al 10: qué tan nutritivo y productivo es el pasto de este potrero comparado con los demás. 1-3 = pobre. 4-6 = regular. 7-10 = excelente. Sirve para priorizar cuál potrero pastorear primero." />
+                </div>
                 <SimpleNumberInput
-                  label="Calidad Relativa del Forraje"
+                  label=""
                   min={1}
                   max={10}
                   step={1}
@@ -647,40 +726,81 @@ export default function PaddockModal({
           {activeTab === 'infraestructura' && (
             <div className="px-6 py-5 space-y-5">
 
-              <SearchableMultiSelect
-                label="Agua disponible"
-                options={WATER_SOURCES_DEFAULT}
-                selected={waterSources}
-                onChange={setWaterSources}
-                placeholder="Buscar fuente de agua… (o escribir nueva)"
-                allowCustom
-              />
+              {/* ── A. Módulo de Agua ───────────────────────────────────────── */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50">
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">¿Tiene aguada?</p>
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">Bebedero, laguna, arroyo u otra fuente permanente</p>
+                  </div>
+                  <Toggle checked={hasWaterPoint} onChange={() => { setHasWaterPoint(v => !v); if (hasWaterPoint) setWaterCapacityLiters('') }} />
+                </div>
+                {hasWaterPoint && (
+                  <div className="space-y-1.5 pl-1">
+                    <label className={LABEL_CLS}>Capacidad de agua (litros)</label>
+                    <input
+                      type="number" min={0} step={100}
+                      value={waterCapacityLiters}
+                      onChange={e => setWaterCapacityLiters(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="Ej: 5000"
+                      className={INPUT_CLS}
+                      autoFocus
+                    />
+                  </div>
+                )}
+              </div>
 
-              {/* Alambrados */}
-              <div className="space-y-2">
-                <label className={LABEL_CLS}>Estado de alambrados</label>
-                <div className="space-y-2">
-                  {FENCE_OPTIONS.map(opt => (
-                    <label key={opt.value} className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
-                      <div
-                        onClick={() => setFenceStatus(opt.value)}
-                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                          fenceStatus === opt.value ? 'border-green-600 bg-green-600' : 'border-gray-300'
-                        }`}
-                      >
-                        {fenceStatus === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                      <span
-                        onClick={() => setFenceStatus(opt.value)}
-                        className={`text-sm font-bold transition-colors ${fenceStatus === opt.value ? 'text-gray-900' : 'text-gray-500'}`}
-                      >
-                        {opt.label}
-                      </span>
-                    </label>
-                  ))}
+              {/* ── B. Módulo de Alambrado (Dropdown Editable) ─────────────── */}
+              <div className="space-y-1.5">
+                <label className={LABEL_CLS}>Tipo de alambrado</label>
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={fenceType}
+                        onChange={e => setFenceType(e.target.value)}
+                        onFocus={() => setFenceDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setFenceDropdownOpen(false), 150)}
+                        placeholder="Seleccioná o escribí el tipo…"
+                        className={INPUT_CLS}
+                      />
+                      {fenceDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[10001]">
+                          {['Fijo convencional', 'Eléctrico permanente', 'Eléctrico móvil'].map(opt => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onMouseDown={() => { setFenceType(opt); setFenceDropdownOpen(false) }}
+                              className="w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-green-50 transition-colors border-b border-gray-50 last:border-0"
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {fenceType && (
+                    <button
+                      type="button"
+                      onClick={() => setFenceType('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                    >×</button>
+                  )}
                 </div>
               </div>
 
+              {/* ── C. Módulo de Sombra ─────────────────────────────────────── */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50">
+                <div>
+                  <p className="text-sm font-bold text-gray-800">Sombra disponible</p>
+                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">Árboles, cortinas forestales u otra sombra natural</p>
+                </div>
+                <Toggle checked={hasShade} onChange={() => setHasShade(v => !v)} />
+              </div>
+
+              {/* ── Accesos ─────────────────────────────────────────────────── */}
               <SearchableMultiSelect
                 label="Accesos y conectividad"
                 options={ACCESS_OPTIONS_DEFAULT}
@@ -690,9 +810,7 @@ export default function PaddockModal({
                 allowCustom
               />
 
-
-
-              {/* Electricidad */}
+              {/* ── Electricidad ─────────────────────────────────────────────── */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className={LABEL_CLS}>Electricidad</label>
@@ -708,16 +826,15 @@ export default function PaddockModal({
                 )}
               </div>
 
-              {/* Depredadores */}
-              <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+              {/* ── Depredadores ─────────────────────────────────────────────── */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50">
                 <div>
                   <p className="text-sm font-bold text-gray-700">Presencia de depredadores</p>
-                  <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mt-0.5">
-                    {hasPredators ? 'Alerta activa' : 'Sin reportes'}
-                  </p>
+                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">{hasPredators ? 'Alerta activa' : 'Sin reportes'}</p>
                 </div>
                 <Toggle checked={hasPredators} onChange={() => setHasPredators(v => !v)} />
               </div>
+
             </div>
           )}
 

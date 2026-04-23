@@ -44,6 +44,8 @@ export default function MiCampoPage() {
   const [ndviData, setNdviData]             = useState<Record<string, SatelliteData>>({})
   const [ndviLoading, setNdviLoading]       = useState(false)
   const [activeGrazingPlans, setActiveGrazingPlans] = useState<{paddock_id: string; herd_name: string; head_count: number}[]>([])
+  const [herds, setHerds] = useState<any[]>([])
+  const [planningDefaults, setPlanningDefaults] = useState({ dailyAllocationKg: 12, targetRemnantKgHa: 600 })
 
   // -- Unified creation modal ─────────────────────────────────────────────────
   const [creationModal, setCreationModal]   = useState(false)
@@ -66,17 +68,25 @@ export default function MiCampoPage() {
   const loadData = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    const [paddocksRes, orgRes, plansRes] = await Promise.all([
+    const [paddocksRes, orgRes, plansRes, herdsRes] = await Promise.all([
       apiFetch('/api/paddocks'),
       apiFetch('/api/organizations'),
       apiFetch('/api/grazing-plans'),
+      apiFetch('/api/herds'),
     ])
     const paddocksData = paddocksRes.ok ? (await paddocksRes.json()).paddocks || [] : []
     const orgData      = orgRes.ok      ? (await orgRes.json()).organization : null
     const plansData    = plansRes.ok    ? (await plansRes.json()).plans || []  : []
+    const herdsData    = herdsRes.ok    ? (await herdsRes.json()).herds || []  : []
 
     setOrg(orgData)
     if (orgData?.boundaries) setFieldBoundary(orgData.boundaries)
+    if (orgData?.default_daily_allocation_kg || orgData?.default_target_remnant_kg_ha) {
+      setPlanningDefaults({
+        dailyAllocationKg:  Number(orgData.default_daily_allocation_kg  ?? 12),
+        targetRemnantKgHa:  Number(orgData.default_target_remnant_kg_ha ?? 600),
+      })
+    }
 
     const activePlans = plansData.filter((p: any) => p.status === 'ACTIVE').map((p: any) => ({
       paddock_id: p.paddock_id,
@@ -84,6 +94,7 @@ export default function MiCampoPage() {
       head_count: p.herds?.head_count || 0,
     }))
     setActiveGrazingPlans(activePlans)
+    setHerds(herdsData)
     setPaddocks(paddocksData)
     setLoading(false)
     loadNdviForPaddocks(paddocksData)
@@ -355,6 +366,8 @@ export default function MiCampoPage() {
             }
           }}
           onDataRefresh={loadData}
+          herds={herds}
+          planningDefaults={planningDefaults}
         />
       </div>
 

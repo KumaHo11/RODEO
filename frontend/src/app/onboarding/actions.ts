@@ -97,7 +97,24 @@ export async function finishOnboarding(formData: {
     for (const p of formData.paddocks) {
       const geomJson = extractGeometry(p.geojson)
       if (!geomJson) {
-        console.warn('Skipping paddock without valid geometry:', p.name)
+        console.warn('Paddock without geometry, inserting without geom:', p.name)
+        try {
+          if (p.dry_matter_kg_ha && p.dry_matter_kg_ha > 0) {
+            await mutate(
+              `INSERT INTO paddocks (org_id, name, area_ha, current_status, dry_matter_kg_ha)
+               VALUES ($1, $2, $3, 'RESTING', $4)`,
+              [orgId, p.name, p.area_ha, p.dry_matter_kg_ha]
+            )
+          } else {
+            await mutate(
+              `INSERT INTO paddocks (org_id, name, area_ha, current_status)
+               VALUES ($1, $2, $3, 'RESTING')`,
+              [orgId, p.name, p.area_ha]
+            )
+          }
+        } catch (err: any) {
+          console.error('Insert paddock without geom error:', err.message, p.name)
+        }
         continue
       }
       try {

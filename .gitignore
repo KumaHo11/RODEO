@@ -5,3 +5,9 @@ tmp/
 *.pdf
 reference_materials*/
 frontend/firebase-sa-key.json
+# Python environments
+parser_service/venv/
+parser_service/__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
