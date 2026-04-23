@@ -96,7 +96,7 @@ function holismoScore(paddocks: any[], plans: any[], herds: any[], weather: any)
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function InsightsPage() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -153,7 +153,7 @@ export default function InsightsPage() {
         method: 'POST', 
         body: JSON.stringify({ 
           type: 'financial', 
-          org_id: user?.org_id,
+          org_id: profile?.organization_id,
           threshold_days: 15
         }) 
       })

@@ -33,6 +33,7 @@ interface Paddock {
   id: string
   name: string
   area_ha: number
+  is_active?: boolean
   dry_matter_kg_ha?: number
   technical_data?: Record<string, any>
 }
