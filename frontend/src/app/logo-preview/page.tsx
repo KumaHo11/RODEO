@@ -82,7 +82,7 @@ export default function LogoPreviewPage() {
           <div style={{ background: '#1b4332', borderRadius: 20, padding: '20px 16px', width: 220, display: 'flex', flexDirection: 'column', gap: 20 }}>
             <RodeoLogo variant="dark" size="sm" showTagline={false} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {['Panel', 'Mi Campo', 'Rebaños', 'Planificador', 'Bitácora'].map(n => (
+              {['Panel', 'Mi Campo', 'Rodeos', 'Planificador', 'Bitácora'].map(n => (
                 <div key={n} style={{ padding: '8px 12px', borderRadius: 10, color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: 600 }}>{n}</div>
               ))}
             </div>

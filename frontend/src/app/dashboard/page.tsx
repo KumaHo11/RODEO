@@ -447,7 +447,7 @@ export default function DashboardOverview() {
             <h3 className="text-[10px] font-bold text-amber-700/60 tracking-widest uppercase flex items-center gap-1 mb-1">
               <CowIcon className="w-3.5 h-3.5" /> Carga animal
             </h3>
-            <p className="text-xs font-bold text-amber-900">{herds.length} rebaños · {herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)} animales</p>
+            <p className="text-xs font-bold text-amber-900">{herds.length} rodeos · {herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)} animales</p>
             <div className="mt-3 flex items-end gap-2">
               <p className="text-4xl font-black text-[#92400e] leading-none">{cargaAnimal.toFixed(2)}</p>
               <div className="pb-1 group relative">
@@ -549,7 +549,7 @@ export default function DashboardOverview() {
                     <div>
                       <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">Recomendación</p>
                       <p className="text-[10px] text-gray-700 font-medium leading-relaxed mt-0.5">
-                        {autonomyDays > 0 ? `Mover rebaño en ${Math.min(autonomyDays, 7)} días` : 'Sin datos de forraje'}
+                        {autonomyDays > 0 ? `Mover rodeo en ${Math.min(autonomyDays, 7)} días` : 'Sin datos de forraje'}
                       </p>
                     </div>
                   </div>
@@ -588,7 +588,7 @@ export default function DashboardOverview() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-gray-900 truncate">{plan.paddocks?.name || '—'}</p>
-                      <p className="text-[10px] text-gray-400 truncate">{plan.herds?.name || 'Multi-rebaño'}</p>
+                      <p className="text-[10px] text-gray-400 truncate">{plan.herds?.name || 'Multi-rodeo'}</p>
                     </div>
                     {isActive && <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 uppercase tracking-wider">Activo</span>}
                     {isToday && !isActive && <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 uppercase">Hoy</span>}

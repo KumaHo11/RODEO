@@ -122,7 +122,7 @@ export default function LandingPage() {
       tag: 'CORE',
       title: 'Gestión de Hacienda',
       subtitle: 'Tu inventario al día, siempre',
-      description: 'Registrá rebaños con historial completo de pesadas, pariciones, sanidad y composición corporal. El Equivalente Vaca (EV) se calcula automáticamente: la métrica que alinea tu capacidad de carga con los costos de la plataforma.',
+      description: 'Registrá rodeos con historial completo de pesadas, pariciones, sanidad y composición corporal. El Equivalente Vaca (EV) se calcula automáticamente: la métrica que alinea tu capacidad de carga con los costos de la plataforma.',
       stats: [{ label: 'Cálculo EV', value: 'Automático' }, { label: 'Historial', value: 'Por animal' }],
       accent: 'from-emerald-700 to-green-800',
     },
@@ -146,7 +146,7 @@ export default function LandingPage() {
       cta: 'Empezar gratis',
       ctaStyle: 'border border-gray-300 text-gray-700 hover:bg-gray-50',
       popular: false,
-      features: ['1 establecimiento', 'Cartografía digital básica', '1 rebaño', 'Notas de campo básicas', 'Soporte por correo'],
+      features: ['1 establecimiento', 'Cartografía digital básica', '1 rodeo', 'Notas de campo básicas', 'Soporte por correo'],
       missing: ['IA Materia Seca por foto', 'Bitácora de voz', 'Planificador holístico', 'Modo Offline completo', 'NDVI satelital'],
     },
     {
@@ -182,7 +182,7 @@ export default function LandingPage() {
       popular: false,
       features: [
         'Todo de Pro Ganadero',
-        'Multi-rebaño y multi-estancia',
+        'Multi-rodeo y multi-estancia',
         'Reportes avanzados de producción',
         'API de integración',
         'Hasta 5 usuarios adicionales',

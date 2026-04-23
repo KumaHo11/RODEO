@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import {
@@ -15,6 +16,8 @@ import { DashboardMetricsBar, DashboardMetricsData } from '@/design-system/molec
 import SeasonPlanModal from './SeasonPlanModal'
 import ExcelImporter from './ExcelImporter'
 import RawDataModal from './RawDataModal'
+import { HOLISTIC_TOOLTIPS, HoverTooltip } from '@/components/ui/atoms/UsageRing'
+import { calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
 
 // ─────────────── CONSTANTS ───────────────
 const HERD_COLORS = [
@@ -520,10 +523,9 @@ function InteractiveGantt({
           // ── Métricas Holísticas ──────────────────────────
           // DAH Estimado: (MS - remanente) × ha / (EV_total × kg/día)
           const totalEV = herds.reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
-          const usableMs = msHa > 0 ? Math.max(0, (msHa - targetRemnant) * areaHa) : 0
-          const estimatedDah = totalEV > 0 && dailyAllocationKg > 0 && usableMs > 0
-            ? Math.max(0, Math.floor(usableMs / (totalEV * dailyAllocationKg)))
-            : null
+          const usableMs = calculateUsableForage(msHa, targetRemnant, areaHa)
+          const dailyDemand = totalEV * dailyAllocationKg
+          const estimatedDah = calculateGrazingDays(usableMs, dailyDemand) || null
           // Yield Coefficient: MS potrero / promedio MS módulo
           const moduleMsHaAvg = paddocks.filter((p: any) => Number(p.dry_matter_kg_ha) > 0).length > 0
             ? paddocks.filter((p: any) => Number(p.dry_matter_kg_ha) > 0).reduce((s: number, p: any) => s + Number(p.dry_matter_kg_ha), 0)
@@ -553,49 +555,56 @@ function InteractiveGantt({
                       {paddock.name}
                     </button>
                     {qualityScore != null && (
-                      <span
-                        className={`text-[10px] font-black shrink-0 min-w-[36px] text-center px-1.5 py-0.5 rounded-lg border bg-white shadow-sm ${qColor}`}
-                        title="Calidad de campo"
-                      >
-                        {qualityScore}/10
-                      </span>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <HoverTooltip text={HOLISTIC_TOOLTIPS.quality}>
+                          <span className={`text-[10px] font-black min-w-[36px] text-center px-1.5 py-0.5 rounded-lg border bg-white shadow-sm cursor-help ${qColor}`}>
+                            {qualityScore}/10
+                          </span>
+                        </HoverTooltip>
+                      </div>
                     )}
                   </div>
                   {/* Row 2: ha + MS/ha */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-bold text-gray-700">{areaHa.toFixed(1)}<span className="font-normal text-gray-400 ml-0.5">ha</span></span>
+                    <HoverTooltip text="Superficie del potrero (hectáreas)">
+                      <span className="text-[11px] font-bold text-gray-700 cursor-help">{areaHa.toFixed(1)}<span className="font-normal text-gray-400 ml-0.5">ha</span></span>
+                    </HoverTooltip>
                     {msHa > 0 && (
                       <>
                         <span className="w-0.5 h-0.5 rounded-full bg-gray-300" />
-                        <span className="text-[11px] font-bold text-gray-700">{msHa.toLocaleString('es')}<span className="font-normal text-gray-400 ml-0.5">kg/ha</span></span>
+                        <HoverTooltip text="Biomasa disponible (kg MS/ha)">
+                          <span className="text-[11px] font-bold text-gray-700 cursor-help">{msHa.toLocaleString('es')}<span className="font-normal text-gray-400 ml-0.5">kg/ha</span></span>
+                        </HoverTooltip>
                       </>
                     )}
                   </div>
-                  {/* Row 3: DAH + Coeficiente */}
-                  {(estimatedDah !== null || yieldCoef !== null) && (
-                    <div className="flex items-center gap-1.5">
-                      {estimatedDah !== null && (
-                        <span
-                          className="inline-flex items-center gap-0.5 text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-full cursor-help"
-                          title={`DAH Estimado: días que 1 ha puede alimentar a 1 EV. Calculado: (MS − remanente) × ha / (EV × kg/día).`}
-                        >
-                          {estimatedDah}d DAH
-                        </span>
-                      )}
-                      {yieldCoef !== null && (
-                        <span
-                          className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-help ${
-                            yieldCoef >= 1.1 ? 'text-green-700 bg-green-50 border-green-100'
-                            : yieldCoef >= 0.9 ? 'text-gray-600 bg-gray-50 border-gray-200'
-                            : 'text-amber-700 bg-amber-50 border-amber-100'
-                          }`}
-                          title={`Coef. de Rendimiento: ${yieldCoef.toFixed(2)}. Promedio módulo: ${moduleMsHaAvg.toFixed(0)} kg/ha. >1 = sobre el promedio.`}
-                        >
-                          ×{yieldCoef.toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  {/* Row 3: DAH + Coeficiente (Holistic Metrics) */}
+                  {(() => {
+                    return (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        {/* DAH badge */}
+                        {estimatedDah !== null && (
+                            <HoverTooltip text={HOLISTIC_TOOLTIPS.estimatedDah}>
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">
+                                {estimatedDah}d DAH
+                              </span>
+                            </HoverTooltip>
+                        )}
+                        {/* Yield Coefficient badge */}
+                        {yieldCoef !== null && (
+                            <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
+                              <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
+                                yieldCoef >= 1.05 ? 'text-green-700 bg-green-50 border-green-100'
+                                : yieldCoef >= 0.95 ? 'text-gray-600 bg-gray-50 border-gray-200'
+                                : 'text-amber-700 bg-amber-50 border-amber-100'
+                              }`}>
+                                ×{yieldCoef.toFixed(2)}
+                              </span>
+                            </HoverTooltip>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
 
@@ -690,16 +699,13 @@ function InteractiveGantt({
                     const planDuration = daysBetween(plan.entry_date, exitDate)
 
                     // Ghost/exceed vars (kept for ghost bar)
-                    const ghostPaddock     = paddocks.find((p: any) => p.id === plan.paddock_id)
-                    const ghostMsHa        = Number(ghostPaddock?.dry_matter_kg_ha) || 0
-                    const ghostAreaHa      = Number(ghostPaddock?.area_ha) || 0
+                    const ghostMsHa        = Number(paddock?.dry_matter_kg_ha) || 0
+                    const ghostAreaHa      = Number(paddock?.area_ha) || 0
                     const ghostHerdsEV     = herds.filter((h: any) => plan.herd_ids?.includes(h.id)).reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
-                    const ghostMonthKey    = (plan.entry_date as string)?.slice(0, 7) || ''
-                    const ghostMonthRain   = rainfallData[ghostMonthKey] || 0
-                    const ghostIsDrought   = ghostMonthRain > 0 && ghostMonthRain < droughtThresholdMm
-                    const ghostDroughtCoef = ghostIsDrought ? 0.7 : 1.0
-                    const ghostMsAdjusted  = ghostMsHa * ghostAreaHa * 0.5 * ghostDroughtCoef
-                    const ghostDays        = ghostHerdsEV > 0 && ghostMsAdjusted > 0 ? Math.max(1, Math.floor(ghostMsAdjusted / (ghostHerdsEV * 12))) : 0
+                    
+                    const ghostUsableMs    = calculateUsableForage(ghostMsHa, targetRemnant, ghostAreaHa)
+                    const ghostDailyDemand = ghostHerdsEV * dailyAllocationKg
+                    const ghostDays        = calculateGrazingDays(ghostUsableMs, ghostDailyDemand)
                     const ghostWidthPct    = ghostDays > 0 ? Math.max(0.3, (ghostDays / windowDays) * 100) : 0
                     const exceedingRemanente = ghostDays > 0 && duration > ghostDays && !isCompleted
 
@@ -725,29 +731,29 @@ function InteractiveGantt({
                       planColor    = 'rgba(252,165,165,0.22)'   // rojo pastel
                       patternColor = 'rgba(239,68,68,0.40)'
                     } else if (isPast) {
-                      planColor    = 'rgba(134,239,172,0.18)'   // verde pastel (en curso)
-                      patternColor = 'rgba(34,197,94,0.40)'
+                      // En curso: sugerida=cyan, manual=verde
+                      planColor    = isSuggested ? 'rgba(186,230,253,0.22)' : 'rgba(134,239,172,0.22)'
+                      patternColor = isSuggested ? 'rgba(14,165,233,0.40)' : 'rgba(34,197,94,0.40)'
                     } else {
-                      planColor    = 'rgba(186,230,253,0.22)'   // celeste pastel (futuro)
-                      patternColor = isSuggested ? 'rgba(124,58,237,0.40)' : 'rgba(14,165,233,0.40)'
+                      // Futuro planificado: sugerida=celeste, manual=verde pastel
+                      planColor    = isSuggested ? 'rgba(186,230,253,0.22)' : 'rgba(134,239,172,0.18)'
+                      patternColor = isSuggested ? 'rgba(14,165,233,0.40)' : 'rgba(34,197,94,0.40)'
                     }
 
                     const borderColor = isCompleted
                       ? ((() => { const d = plan.actual_entry_date && plan.actual_exit_date ? daysBetween(plan.actual_entry_date, plan.actual_exit_date) - planDuration : 0; return d > 1 ? 'rgba(251,146,60,0.55)' : d < -1 ? 'rgba(14,165,233,0.55)' : 'rgba(34,197,94,0.55)' })())
                       : isOverdue ? 'rgba(239,68,68,0.55)'
-                      : isPast    ? 'rgba(34,197,94,0.55)'
-                      : isSuggested ? 'rgba(124,58,237,0.45)' : 'rgba(14,165,233,0.45)'
+                      : isSuggested ? 'rgba(14,165,233,0.55)' : 'rgba(34,197,94,0.55)'
 
                     // ── % USO: días planificados / DAH estimado × 100 ─────────
-                    const planUsableMs = usableMs // ya calculado arriba con los mismos paddock data
-                    const planDahEstimated = ghostHerdsEV > 0 && dailyAllocationKg > 0 && planUsableMs > 0
-                      ? Math.max(1, Math.floor(planUsableMs / (ghostHerdsEV * dailyAllocationKg)))
-                      : 0
+                    const planUsableMs = calculateUsableForage(ghostMsHa, targetRemnant, ghostAreaHa)
+                    const planDailyDemand = ghostHerdsEV * dailyAllocationKg
+                    const planDahEstimated = Math.max(1, calculateGrazingDays(planUsableMs, planDailyDemand))
                     const usagePct = planDahEstimated > 0 ? Math.round((duration / planDahEstimated) * 100) : null
                     const usageBadgeStyle = usagePct === null ? null
-                      : usagePct < 90  ? { bg: 'rgba(14,165,233,0.85)',  label: `${usagePct}%`, tip: 'Sub-uso — queda remanente sin consumir' }
-                      : usagePct <= 110 ? { bg: 'rgba(22,163,74,0.85)',   label: `${usagePct}%`, tip: 'Uso equilibrado — presion de pastoreo óptima' }
-                      : { bg: 'rgba(220,38,38,0.85)', label: `${usagePct}%`, tip: 'Alerta sobrepastoreo — más del 100% de capacidad' }
+                      : usagePct < 90  ? { bg: '#334155',  label: `${usagePct}%`, tip: 'Sub-uso — queda remanente sin consumir' }
+                      : usagePct <= 110 ? { bg: '#166534',   label: `${usagePct}%`, tip: 'Uso equilibrado — presión de pastoreo óptima' }
+                      : { bg: '#991b1b', label: `${usagePct}%`, tip: 'Alerta sobrepastoreo — más del 100% de capacidad' }
 
                     // ── PLAN block — diagonal stripes pasteles ──
                     const planBlock = (
@@ -769,27 +775,25 @@ function InteractiveGantt({
                           backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 4px, ${patternColor} 4px, ${patternColor} 8px)`,
                           backgroundSize: '8px 8px',
                           display: 'flex',
-                          alignItems: 'flex-end',
+                          alignItems: 'center',
                           justifyContent: 'flex-start',
-                          paddingBottom: 2,
                           paddingLeft: 3,
                         }}
                         className="transition-all hover:brightness-90"
                         onMouseDown={e => !isCompleted && !hasRealEntry && handleMouseDown(e, plan)}
                         onClick={(e) => { e.stopPropagation(); onBlockClick(plan, e) }}
-                        title={`${isSuggested ? '⚡ SUGERIDA' : '✏️ MANUAL'} — ${herdLabel} · ${fmt(plan.entry_date)}→${fmt(exitDate)}${isCompleted ? ' ✔ Completado' : ''}${
-                          usagePct !== null ? ` · % USO: ${usagePct}% (Mide la presión de pastoreo. Más de 100% indica consumo por encima de la capacidad de recuperación.)` : ''
-                        }`}
+                        title={`${isSuggested ? '⚡ SUGERIDA' : '✏️ MANUAL'} — ${herdLabel} · ${fmt(plan.entry_date)}→${fmt(exitDate)}${isCompleted ? ' ✔ Completado' : ''}`}
                       >
                         {/* Badge % USO — solo en planes activos/futuros (no completados) */}
                         {usageBadgeStyle && !isCompleted && widthPct > 3 && (
-                          <span
-                            className="text-[7px] font-black px-1 py-px rounded-sm leading-none whitespace-nowrap select-none"
-                            style={{ backgroundColor: usageBadgeStyle.bg, color: 'white' }}
-                            title={usageBadgeStyle.tip}
-                          >
-                            {usageBadgeStyle.label}
-                          </span>
+                          <HoverTooltip text={usageBadgeStyle.tip} className="shrink-0 relative z-30">
+                            <span
+                              className="text-[8px] font-black px-1 py-px rounded shadow-sm whitespace-nowrap select-none"
+                              style={{ backgroundColor: usageBadgeStyle.bg, color: 'white' }}
+                            >
+                              {usageBadgeStyle.label}
+                            </span>
+                          </HoverTooltip>
                         )}
                       </div>
                     )
@@ -806,12 +810,12 @@ function InteractiveGantt({
                           height: BAR_H,
                           minWidth: 4,
                           borderRadius: 3,
-                          border: `1.5px dashed ${ghostIsDrought ? 'rgba(251,146,60,0.55)' : 'rgba(156,163,175,0.55)'}`,
-                          backgroundColor: ghostIsDrought ? 'rgba(251,146,60,0.04)' : 'rgba(156,163,175,0.06)',
+                          border: `1.5px dashed rgba(156,163,175,0.55)`,
+                          backgroundColor: 'rgba(156,163,175,0.06)',
                           zIndex: 12,
                           pointerEvents: 'none',
                         }}
-                        title={`Duración óptima (MS×0.5 / EV×12): ${ghostDays}d${ghostIsDrought ? ` · ⚠ Déficit hídrico: lluvia <${droughtThresholdMm}mm → MS reducida 30%` : ''}`}
+                        title={`Duración óptima calculada: ${ghostDays}d`}
                       />
                     ) : null
 
@@ -990,11 +994,11 @@ function InteractiveGantt({
         <div className="flex items-center gap-3 px-4 py-2.5 border-t border-gray-100 bg-gray-50/80 flex-wrap">
           <div className="flex items-center gap-3 mr-2">
             <div className="flex items-center gap-1.5">
-              <div className="w-8 h-4 border-[1.5px] border-violet-500" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(124,58,237,0.4) 3px, rgba(124,58,237,0.4) 6px)' }} />
+              <div className="w-8 h-4 border-[1.5px] border-sky-500" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(14,165,233,0.3) 3px, rgba(14,165,233,0.3) 6px)' }} />
               <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Sugerida</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-8 h-4 border-[1.5px] border-green-600" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(22,163,74,0.4) 3px, rgba(22,163,74,0.4) 6px)' }} />
+              <div className="w-8 h-4 border-[1.5px] border-green-600" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(34,197,94,0.3) 3px, rgba(34,197,94,0.3) 6px)' }} />
               <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Manual</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1098,7 +1102,8 @@ export default function GrazingPlanner() {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [ganttPeriod, setGanttPeriod] = useState<'trimestral' | 'semestral' | 'anual'>('trimestral')
-  const [seasonalFilter, setSeasonalFilter] = useState<'all' | 'abierta' | 'cerrada'>('all')
+  const [seasonalFilters, setSeasonalFilters] = useState<string[]>(['abierta', 'cerrada']) // ['abierta', 'cerrada'] mean 'all'
+
 
   // Dynamic window days based on period
   const PERIODS = { trimestral: 84, semestral: 180, anual: 365 }
@@ -1111,19 +1116,21 @@ export default function GrazingPlanner() {
     return d.toISOString().split('T')[0]
   })
 
-  // Jump to open/closed season when filter changes
+  // Jump to open/closed season when filter changes (only when exactly one is selected)
   useEffect(() => {
     const year = new Date().getFullYear()
-    if (seasonalFilter === 'abierta') {
-      const oct = new Date(year, 9, 1)
-      setGanttWindow(oct.toISOString().split('T')[0])
-      setGanttPeriod('semestral')
-    } else if (seasonalFilter === 'cerrada') {
-      const mar = new Date(year, 2, 1)
-      setGanttWindow(mar.toISOString().split('T')[0])
-      setGanttPeriod('semestral')
+    if (seasonalFilters.length === 1) {
+      if (seasonalFilters[0] === 'abierta') {
+        const oct = new Date(year, 9, 1)
+        setGanttWindow(oct.toISOString().split('T')[0])
+        setGanttPeriod('semestral')
+      } else if (seasonalFilters[0] === 'cerrada') {
+        const mar = new Date(year, 2, 1)
+        setGanttWindow(mar.toISOString().split('T')[0])
+        setGanttPeriod('semestral')
+      }
     }
-  }, [seasonalFilter])
+  }, [seasonalFilters])
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [showPlanDropdown, setShowPlanDropdown] = useState(false)
@@ -1216,10 +1223,9 @@ export default function GrazingPlanner() {
       : targetRemnant
 
     const dailyDemand = totalPlanEV * dailyAllocationKg
-    const availablePerHa = Math.max(0, ms - effectiveRemnant)
-    const usableMsTotal = availablePerHa * areaHa
+    const usableMsTotal = calculateUsableForage(ms, effectiveRemnant, areaHa)
     
-    const baseDays = dailyDemand > 0 ? Math.floor(usableMsTotal / dailyDemand) : 0
+    const baseDays = calculateGrazingDays(usableMsTotal, dailyDemand)
     const days = Math.max(0, baseDays - graceDays)
     
     // Max EV this paddock can support for the same days
@@ -1402,10 +1408,10 @@ export default function GrazingPlanner() {
           const area = Number(chosenPaddock.area_ha) || 10
           const evForCalc = totalEV > 0 ? totalEV
             : activeHerds.reduce((s, h) => s + getDynamicHerdEV(h, currentEntry.toISOString().split('T')[0], farmEvents), 0)
-          const usableMs = Math.max(0, (ms - remnant) * area)
+          const usableMs = calculateUsableForage(ms, remnant, area)
           const dailyDemand = evForCalc * dailyDemandMultiplier
           // Si no hay MS suficiente → al menos 3 días mínimos
-          const rawDays = dailyDemand > 0 && usableMs > 0 ? Math.floor(usableMs / dailyDemand) : 3
+          const rawDays = calculateGrazingDays(usableMs, dailyDemand) || 3
           stayDays = Math.max(1, rawDays)
         }
 
@@ -1727,7 +1733,7 @@ export default function GrazingPlanner() {
           const area          = Number(paddock.area_ha) || 0
           const ms            = Number(paddock.dry_matter_kg_ha) || 1800
           const remnant       = 1100 // kg MS/ha target remnant (conservative)
-          const usableMs      = Math.max(0, (ms - remnant) * area) // total consumable MS
+          const usableMs      = calculateUsableForage(ms, remnant, area)
 
           // Base EV (from selected herds, NOT the cycle expansion — use the original grazing herd)
           const originalHerdIds = Array.isArray(formData.ai_analysis?.cycle_all_herd_ids)
@@ -1755,7 +1761,7 @@ export default function GrazingPlanner() {
 
           const totalEVWithExtras = baseEV + extraEV
           const dailyDemandNew    = totalEVWithExtras * 12 // 12 kg MS/EV/day
-          const newDays           = dailyDemandNew > 0 ? Math.max(1, Math.floor(usableMs / dailyDemandNew)) : planDaysTotal
+          const newDays           = dailyDemandNew > 0 ? Math.max(1, calculateGrazingDays(usableMs, dailyDemandNew)) : planDaysTotal
 
           // New exit date
           const newExitDate = new Date(planEntry)
@@ -2089,22 +2095,22 @@ export default function GrazingPlanner() {
             {planMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setPlanMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-1 z-50">
+                <div className="absolute right-0 top-full mt-1.5 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 z-50">
                   <button
                     onClick={() => { setPlanMenuOpen(false); setShowSeasonPlan(true) }}
                     disabled={loading}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-green-50 hover:text-green-700 disabled:opacity-40 text-left transition-colors"
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-sky-50 hover:text-sky-700 disabled:opacity-40 text-left transition-colors group"
                   >
-                    <Lightbulb className="w-4 h-4 text-green-600" />
-                    Planificación sugerida
+                    <span className="w-2 h-2 rounded-full bg-sky-400 group-hover:bg-sky-500 shrink-0 transition-colors" />
+                    <span className="flex items-center gap-1"><Plus className="w-3 h-3" /> Sugerida</span>
                   </button>
                   <button
                     onClick={() => { setPlanMenuOpen(false); handleOpenModal() }}
-                    disabled={loading || paddocks.length === 0 || herds.length === 0}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-40 text-left transition-colors"
+                    disabled={loading}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-green-50 hover:text-green-700 disabled:opacity-40 text-left transition-colors group"
                   >
-                    <Calendar className="w-4 h-4 text-blue-500" />
-                    Planificación manual
+                    <span className="w-2 h-2 rounded-full bg-green-500 group-hover:bg-green-600 shrink-0 transition-colors" />
+                    <span className="flex items-center gap-1"><Plus className="w-3 h-3" /> Manual</span>
                   </button>
                 </div>
               </>
@@ -2120,16 +2126,14 @@ export default function GrazingPlanner() {
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>
             {paddocks.length === 0 && herds.length === 0
-              ? <>Todavía no tenés <strong>potreros</strong> ni <strong>rebaños</strong> cargados. Podés importar un Excel con datos históricos o completar la información en las secciones correspondientes.</>
+              ? <>Todavía no tenés <Link href="/dashboard/mi-campo" className="underline decoration-amber-300 hover:text-amber-900 transition-colors">potreros</Link> ni <Link href="/dashboard/herds" className="underline decoration-amber-300 hover:text-amber-900 transition-colors">rodeos</Link> cargados. Completá la información en las secciones correspondientes para empezar.</>
               : paddocks.length === 0
-              ? <>Sin <strong>potreros</strong> configurados. Agregálos en la sección &quot;Mapa&quot; para calcular la oferta forrajera. Igual podés planificar con los rebaños ya cargados.</>
-              : <>Sin <strong>rebaños</strong> configurados. Agregálos en &quot;Mi Rebaño&quot; para calcular la demanda. Igual podés importar datos históricos desde Excel.</>
+              ? <>Sin <Link href="/dashboard/mi-campo" className="underline decoration-amber-300 hover:text-amber-900 transition-colors">potreros</Link> configurados. Agregálos para calcular la oferta forrajera.</>
+              : <>Sin <Link href="/dashboard/herds" className="underline decoration-amber-300 hover:text-amber-900 transition-colors">rodeos</Link> configurados. Agregálos para calcular la demanda.</>
             }
           </span>
         </div>
       )}
-
-
 
       {/* MAIN CONTENT */}
       {loading ? (
@@ -2138,26 +2142,27 @@ export default function GrazingPlanner() {
         </div>
       ) : plans.length === 0 && viewMode === 'gantt' ? (
         <div className="bg-white border border-gray-100 rounded-2xl py-16 text-center shadow-sm">
-          <Calendar className="w-10 h-10 text-gray-200 mx-auto mb-4" />
-          <p className="text-sm font-bold text-gray-600">Sin planificaciones aún</p>
-          <p className="text-xs text-gray-400 mt-1 mb-6">Importá planillas de temporadas anteriores o creá un nuevo plan.</p>
+          <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
+            <Calendar className="w-8 h-8 text-gray-200" />
+          </div>
+          <p className="text-sm font-black text-gray-950">Sin planificaciones aún</p>
+          <p className="text-xs text-gray-400 mt-1 mb-6">Empezá tu primer plan de pastoreo sugerido o manual.</p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
-            {/* TODO: Excel import — temporalmente deshabilitado
-            <button
-              onClick={() => setShowExcelImporter(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 hover:border-green-400 hover:bg-green-50 text-gray-700 font-bold text-sm rounded-xl transition-all shadow-sm"
-            >
-              <Upload className="w-4 h-4" />
-              Importar Excel
-            </button>
-            */}
             <button
               onClick={() => setShowSeasonPlan(true)}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm rounded-xl transition-all shadow-sm disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-sky-400 text-sky-700 font-bold text-sm rounded-xl transition-all hover:bg-sky-50 hover:shadow-md disabled:opacity-50 group"
             >
-              <Calendar className="w-4 h-4" />
-              Planificación sugerida
+              <span className="w-2 h-2 rounded-full bg-sky-400 group-hover:scale-125 transition-transform" />
+              <Plus className="w-4 h-4" /> Sugerida
+            </button>
+            <button
+              onClick={() => { handleOpenModal() }}
+              disabled={loading}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-green-400 text-green-700 font-bold text-sm rounded-xl transition-all hover:bg-green-50 hover:shadow-md disabled:opacity-50 group"
+            >
+              <span className="w-2 h-2 rounded-full bg-green-500 group-hover:scale-125 transition-transform" />
+              <Plus className="w-4 h-4" /> Manual
             </button>
           </div>
         </div>
@@ -2166,11 +2171,10 @@ export default function GrazingPlanner() {
           {/* Gantt period control — solo Anual + filtros de temporada */}
           <div className="flex flex-wrap items-center gap-2 justify-start w-full">
             <div className="flex bg-gray-100 rounded-xl p-0.5 gap-0.5">
-              {/* Anual — única vista de período */}
               <button
-                onClick={() => { setGanttPeriod('anual'); setSeasonalFilter('all') }}
+                onClick={() => setSeasonalFilters(['abierta', 'cerrada'])}
                 className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
-                  seasonalFilter === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  seasonalFilters.length === 2 ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 Anual
@@ -2178,28 +2182,34 @@ export default function GrazingPlanner() {
               <div className="w-[1px] bg-gray-200 mx-1" />
               <button
                 onClick={() => {
-                  const now = new Date()
-                  const year = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
-                  setGanttWindow(`${year}-09-21`)
-                  setGanttPeriod('anual')
-                  setSeasonalFilter('abierta')
+                  setSeasonalFilters(prev => {
+                    if (prev.includes('abierta')) {
+                      if (prev.length === 1) return prev // don't allow empty
+                      return prev.filter(x => x !== 'abierta')
+                    }
+                    return [...prev, 'abierta']
+                  })
                 }}
                 className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
-                  seasonalFilter === 'abierta' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  seasonalFilters.includes('abierta') && seasonalFilters.length === 1 ? 'bg-white text-gray-900 shadow-sm' : 
+                  seasonalFilters.includes('abierta') ? 'bg-green-50 text-green-700' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 Temporada abierta
               </button>
               <button
                 onClick={() => {
-                  const now = new Date()
-                  const year = now.getMonth() >= 2 && now.getMonth() < 8 ? now.getFullYear() : (now.getMonth() < 2 ? now.getFullYear() - 1 : now.getFullYear())
-                  setGanttWindow(`${year}-03-21`)
-                  setGanttPeriod('anual')
-                  setSeasonalFilter('cerrada')
+                  setSeasonalFilters(prev => {
+                    if (prev.includes('cerrada')) {
+                      if (prev.length === 1) return prev // don't allow empty
+                      return prev.filter(x => x !== 'cerrada')
+                    }
+                    return [...prev, 'cerrada']
+                  })
                 }}
                 className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
-                  seasonalFilter === 'cerrada' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  seasonalFilters.includes('cerrada') && seasonalFilters.length === 1 ? 'bg-white text-gray-900 shadow-sm' :
+                  seasonalFilters.includes('cerrada') ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 Temporada cerrada
@@ -2398,7 +2408,7 @@ export default function GrazingPlanner() {
                 <div>
                   <h3 className="text-sm font-black text-gray-950">Planes de temporada</h3>
                   <p className="text-xs text-gray-500 font-medium mt-0.5">
-                    Importados desde Excel · {seasonPlans.length} temporada{seasonPlans.length !== 1 ? 's' : ''}
+                    Planes históricos · {seasonPlans.length} temporada{seasonPlans.length !== 1 ? 's' : ''}
                   </p>
                 </div>
                 {/* TODO: Excel import — temporalmente deshabilitado
@@ -2981,9 +2991,9 @@ export default function GrazingPlanner() {
                       return `Ciclo ${nPaddocks}P × ${nHerds}R · Bloque en ${paddockName} · ${totalPlanEV.toFixed(0)} EV`
                     }
                     if (formData.paddock_id && formData.herd_ids.length > 0) {
-                      return `${paddockName} · ${formData.herd_ids.length} rebaño${formData.herd_ids.length > 1 ? 's' : ''} · ${totalPlanEV > 0 ? `${totalPlanEV.toFixed(0)} EV total` : ''}`
+                      return `${paddockName} · ${formData.herd_ids.length} rodeo${formData.herd_ids.length > 1 ? 's' : ''} · ${totalPlanEV > 0 ? `${totalPlanEV.toFixed(0)} EV total` : ''}`
                     }
-                    return 'Elegí los rebaños y el potrero de destino'
+                    return 'Elegí los rodeos y el potrero de destino'
                   })()}
                 </p>
               </div>
@@ -3007,7 +3017,7 @@ export default function GrazingPlanner() {
                     <div className="flex items-center gap-2">
                       <Zap className="w-4 h-4 text-green-600 shrink-0" />
                       <p className="text-xs font-black text-green-800 uppercase tracking-wider">
-                        Ciclo Sugerido — {cyclePaddocks.length} Potreros × {cycleHerds.length} Rebaños
+                        Ciclo Sugerido — {cyclePaddocks.length} Potreros × {cycleHerds.length} Rodeos
                       </p>
                     </div>
                     {/* Paddocks in cycle */}
@@ -3041,12 +3051,12 @@ export default function GrazingPlanner() {
                     {/* Herds in cycle */}
                     {cycleHerds.length > 0 && (
                       <div>
-                        <p className="text-[9px] font-black text-green-600 tracking-widest uppercase mb-1.5">Rebaños en la rotación</p>
+                        <p className="text-[9px] font-black text-green-600 tracking-widest uppercase mb-1.5">Rodeos en la rotación</p>
                         <div className="flex flex-wrap gap-1.5">
                           {cycleHerds.map(h => (
                             <span
                               key={h.id}
-                              className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white text-violet-700 border border-violet-300"
+                              className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white text-blue-700 border border-blue-200"
                             >
                               {h.name} · {Number(h.total_ev).toFixed(0)} EV
                             </span>
@@ -3061,13 +3071,13 @@ export default function GrazingPlanner() {
                 )
               })()}
 
-              {/* ① REBAÑOS — lo más importante primero, tarjetas grandes */}
+              {/* ① RODEOS — lo más importante primero, tarjetas grandes */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-black text-gray-700 tracking-widest uppercase">
                     {formData.ai_analysis?.plan_source === 'suggested' && formData.id
-                      ? 'Rebaños del ciclo (este bloque usa el rebaño activo)'
-                      : '¿Qué rebaños van a moverse?'
+                      ? 'Rodeos del ciclo (este bloque usa el rodeo activo)'
+                      : '¿Qué rodeos van a moverse?'
                     }
                   </label>
 
@@ -3169,8 +3179,9 @@ export default function GrazingPlanner() {
                             <input
                               type="number"
                               min="0"
-                              value={ta.weight_kg}
-                              onChange={e => { const nm = [...tempAnimals]; nm[idx].weight_kg = Number(e.target.value); setTempAnimals(nm) }}
+                              step="1"
+                              value={Math.round(ta.weight_kg)}
+                              onChange={e => { const nm = [...tempAnimals]; nm[idx].weight_kg = Math.round(Number(e.target.value)); setTempAnimals(nm) }}
                               className="w-full text-xs font-bold focus:outline-none text-right"
                             />
                             <span className="text-[10px] text-gray-400 font-bold shrink-0">kg</span>
@@ -3218,7 +3229,7 @@ export default function GrazingPlanner() {
                   const area     = Number(paddock.area_ha) || 0
                   const ms       = Number(paddock.dry_matter_kg_ha) || 1800
                   const remnant  = 1100
-                  const usableMs = Math.max(0, (ms - remnant) * area)
+                  const usableMs = calculateUsableForage(ms, remnant, area)
                   // Base EV from this block's original herd
                   const origHerdId = (formData as any)._original_herd_id || formData.herd_ids[0]
                   const baseHerd = herds.find(h => h.id === origHerdId)
@@ -3239,7 +3250,7 @@ export default function GrazingPlanner() {
                   }, 0)
                   const newTotalEV     = baseEV + extraEV
                   const dailyDemandNew = newTotalEV * 12
-                  const newDays        = dailyDemandNew > 0 ? Math.max(1, Math.floor(usableMs / dailyDemandNew)) : planDays
+                  const newDays        = dailyDemandNew > 0 ? Math.max(1, calculateGrazingDays(usableMs, dailyDemandNew)) : planDays
                   const deltaDays      = newDays - planDays // negative = fewer days
                   const siblingsCount  = plans.filter(p => p.ai_analysis?.cycle_id === cycleId && p.entry_date > formData.entry_date).length
                   const extraAnimalEndDate = tempAnimals.reduce((latest, a) => a.exit_date && a.exit_date > latest ? a.exit_date : latest, formData.exit_date)
@@ -3275,31 +3286,80 @@ export default function GrazingPlanner() {
                 <div className="grid grid-cols-1 gap-1.5">
                   {paddocks.map(p => {
                     const isSelected = formData.paddock_id === p.id
+                    const pMsHa = Number(p.dry_matter_kg_ha) || 0
+                    const pAreaHa = Number(p.area_ha) || 0
+                    // Per-paddock holistic metrics for the modal paddock list
+                    const pUsableMs = pMsHa > 0 ? Math.max(0, (pMsHa - targetRemnant) * pAreaHa) : 0
+                    const pDah = totalPlanEV > 0 && dailyAllocationKg > 0 && pUsableMs > 0
+                      ? Math.max(0, Math.floor(pUsableMs / (totalPlanEV * dailyAllocationKg)))
+                      : null
+                    // yield coef vs module average
+                    const modAvg = paddocks.filter((px: any) => Number(px.dry_matter_kg_ha) > 0).length > 0
+                      ? paddocks.filter((px: any) => Number(px.dry_matter_kg_ha) > 0).reduce((s: number, px: any) => s + Number(px.dry_matter_kg_ha), 0)
+                        / paddocks.filter((px: any) => Number(px.dry_matter_kg_ha) > 0).length
+                      : 0
+                    const pCoef = modAvg > 0 && pMsHa > 0 ? pMsHa / modAvg : null
+                    // % USO: sum of planned days in active plans for this paddock / DAH
+                    const paddockActiveDays = plans
+                      .filter(pl => pl.paddock_id === p.id && pl.status !== 'COMPLETED')
+                      .reduce((s, pl) => {
+                        if (!pl.entry_date || !pl.exit_date) return s
+                        return s + Math.max(0, Math.round((new Date(pl.exit_date).getTime() - new Date(pl.entry_date).getTime()) / 86400000))
+                      }, 0)
+                    const pUsagePct = pDah !== null && pDah > 0
+                      ? Math.round((paddockActiveDays / pDah) * 100)
+                      : null
+                    const qualityScore = p.technical_data?.quality_score ?? p.technical_data?.relative_quality ?? null
                     return (
                       <button
                         key={p.id}
                         type="button"
                         onClick={() => setFormData({ ...formData, paddock_id: p.id })}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl border-2 text-left transition-all ${
+                        className={`flex items-start justify-between px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
                           isSelected ? 'border-green-600 bg-white shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                       >
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-start gap-2.5">
                           {isSelected
-                            ? <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center shrink-0"><Check className="w-2.5 h-2.5 text-white" /></div>
-                            : <div className="w-4 h-4 rounded-full border-2 border-gray-300 shrink-0" />
+                            ? <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center shrink-0 mt-0.5"><Check className="w-2.5 h-2.5 text-white" /></div>
+                            : <div className="w-4 h-4 rounded-full border-2 border-gray-300 shrink-0 mt-0.5" />
                           }
-                          <div>
+                          <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-1.5">
                               <p className="text-sm font-bold text-gray-900">{p.name}</p>
-                              {p.technical_data?.relative_quality && (
-                                <span className="text-[9px] text-gray-400 font-bold">{p.technical_data.relative_quality}/10</span>
+                              {qualityScore != null && (
+                                  <span title={HOLISTIC_TOOLTIPS.quality} className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg border bg-white cursor-help ${
+                                    qualityScore >= 7 ? 'text-green-700 border-green-200'
+                                    : qualityScore >= 4 ? 'text-amber-600 border-amber-200'
+                                    : 'text-red-600 border-red-200'
+                                  }`}>{qualityScore}/10</span>
                               )}
                             </div>
-                            <p className="text-[10px] text-gray-400">{Number(p.area_ha).toFixed(1)} ha</p>
+                            <p className="text-[10px] text-gray-400">{pAreaHa.toFixed(1)} ha · {pMsHa > 0 ? `${pMsHa.toLocaleString('es')} kg MS/ha` : 'Sin datos MS'}</p>
+                            {/* Holistic metrics row */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {pDah !== null && (
+                                  <span title={HOLISTIC_TOOLTIPS.estimatedDah} className="text-[9px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">{pDah}d DAH</span>
+                              )}
+                              {pCoef !== null && (
+                                  <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
+                                      pCoef >= 1.05 ? 'text-green-700 bg-green-50 border-green-100'
+                                      : pCoef >= 0.95 ? 'text-gray-600 bg-gray-50 border-gray-200'
+                                      : 'text-amber-700 bg-amber-50 border-amber-100'
+                                    }`}>×{pCoef.toFixed(2)}</span>
+                                  </HoverTooltip>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <p className="text-sm font-black text-gray-700 shrink-0">{p.dry_matter_kg_ha || 0} <span className="text-[9px] font-normal text-gray-400">MS/ha</span></p>
+                        {/* MS / ha - right side instead of usage ring */}
+                        <div className="flex flex-col items-center gap-0.5 shrink-0 ml-2">
+                          <span className="text-[10px] font-black text-gray-700">
+                            {pMsHa > 0 ? `${pMsHa.toLocaleString('es')}` : '—'}
+                            {pMsHa > 0 && <span className="text-[9px] font-normal text-gray-400 ml-0.5">kg/ha</span>}
+                          </span>
+                        </div>
                       </button>
                     )
                   })}

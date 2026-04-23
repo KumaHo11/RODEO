@@ -104,3 +104,29 @@ export function paddockForageOffer(params: {
     totalKgMs:  parseFloat(totalKgMs.toFixed(0)),
   }
 }
+
+/**
+ * Central function to calculate Usable Forage (Stock Aprovechable)
+ * Static photograph of current availability (Initial MS - Remnant) * Area
+ */
+export function calculateUsableForage(
+  initialMsKgHa: number,
+  targetRemnantKgHa: number,
+  areaHa: number
+): number {
+  const availablePerHa = Math.max(0, initialMsKgHa - targetRemnantKgHa);
+  return availablePerHa * areaHa;
+}
+
+/**
+ * Central function to calculate Grazing Days (DAH/Days of stay)
+ * Formula: Usable Forage (kg) / Daily Demand (kg/day)
+ */
+export function calculateGrazingDays(
+  usableKgMs: number,
+  dailyDemandKg: number
+): number {
+  if (dailyDemandKg <= 0 || usableKgMs <= 0) return 0;
+  return Math.floor(usableKgMs / dailyDemandKg);
+}
+

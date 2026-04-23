@@ -633,7 +633,7 @@ export default function AgendaPage() {
               );
             })}
             {form.herd_ids.length === 0 && (
-              <p className="text-xs text-gray-400 italic px-2">Sin rebaño seleccionado.</p>
+              <p className="text-xs text-gray-400 italic px-2">Sin rodeo seleccionado.</p>
             )}
           </div>
         </div>

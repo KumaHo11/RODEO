@@ -22,6 +22,11 @@ export const EV_BASE: Record<string, number> = {
   BUBALINOS:   1.10,
 }
 
+export function calculateBaseEV(categoria: string | null, weight: number, count: number): number {
+  const evBase = categoria ? (EV_BASE[categoria.toUpperCase()] ?? 1.0) : 1.0
+  return evBase * Math.pow((weight || 450) / 450, 0.75) * count
+}
+
 /** Temporadas de parición disponibles en el selector */
 export type ParitionSeason = 'otono' | 'primavera' | 'todo_el_año'
 
@@ -111,14 +116,28 @@ export function projectEVDemand(
       const growthKgMonth = GROWTH_RATE_KG_MONTH[categoria] ?? 0
       const projectedWeight = Math.min(baseWeight + growthKgMonth * i, 600)
 
-      // EV base ajustado por peso proyectado
-      const evBase = EV_BASE[categoria] ?? 1.0
-      const weightFactor = Math.pow(projectedWeight / 450, 0.75)
-      let ev = evBase * weightFactor * headCount
+      // Use db total_ev as baseline for month 0 to exactly match the user's known EV.
+      let baseHerdEv = Number(h.total_ev)
+      if (!baseHerdEv) {
+        baseHerdEv = calculateBaseEV(categoria, baseWeight, headCount)
+      }
 
-      // Ajuste fenológico para vacas cría
-      if (['VACAS', 'VAQUILLONAS'].includes(categoria)) {
-        ev *= vacaFenologiaFactor(i, paritionSeason)
+      let ev = baseHerdEv
+
+      // For future months, apply relative multipliers
+      if (i > 0) {
+        // Relative growth multiplier
+        const growthMultiplier = Math.pow(projectedWeight / 450, 0.75) / Math.pow(baseWeight / 450, 0.75)
+        ev *= growthMultiplier
+
+        // Relative fenology multiplier for breeding cows
+        if (['VACAS', 'VAQUILLONAS'].includes(categoria)) {
+          const factor0 = vacaFenologiaFactor(0, paritionSeason)
+          const factorI = vacaFenologiaFactor(i, paritionSeason)
+          if (factor0 > 0) {
+            ev *= (factorI / factor0)
+          }
+        }
       }
 
       return { herdName: h.name, ev: parseFloat(ev.toFixed(2)), headCount }

@@ -7,8 +7,9 @@ import {
   TrendingUp, TrendingDown, Minus, Leaf, AlertTriangle,
   CheckCircle, Info, Sparkles, BarChart3, Target, Camera,
   Loader2, RefreshCw, Sun, Snowflake, Scale, CalendarDays,
-  Zap
+  Zap, CloudRain, ArrowRight, X, DollarSign
 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface InsightCard {
@@ -99,6 +100,12 @@ export default function InsightsPage() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [showFinancialModal, setShowFinancialModal] = useState(false)
+  const [showClimateModal, setShowClimateModal] = useState(false)
+  const [financialResult, setFinancialResult] = useState<any>(null)
+  const [climateResult, setClimateResult] = useState<any>(null)
+  const [rainInput, setRainInput] = useState(25)
+  const [simulating, setSimulating] = useState(false)
   const [paddocks, setPaddocks] = useState<any[]>([])
   const [plans, setPlans] = useState<any[]>([])
   const [herds, setHerds] = useState<any[]>([])
@@ -139,6 +146,54 @@ export default function InsightsPage() {
     }
   }
 
+  const runFinancialSimulation = async () => {
+    setSimulating(true)
+    try {
+      const res = await apiFetch('/api/predictive', { 
+        method: 'POST', 
+        body: JSON.stringify({ 
+          type: 'financial', 
+          org_id: user?.org_id,
+          threshold_days: 15
+        }) 
+      })
+      
+      if (!res.ok) throw new Error('API Error')
+      
+      const data = await res.json()
+      setFinancialResult(data)
+      setShowFinancialModal(true)
+    } catch (e) {
+      console.error('Financial simulation failed:', e)
+    } finally {
+      setSimulating(false)
+    }
+  }
+
+  const runClimateSimulation = async () => {
+    setSimulating(true)
+    try {
+      const res = await apiFetch('/api/predictive', { 
+        method: 'POST', 
+        body: JSON.stringify({ 
+          type: 'climate', 
+          paddock_id: paddocks[0]?.id || 'default', // Using first paddock for simulation
+          rainfall_mm: rainInput,
+          days_forecast: 21
+        }) 
+      })
+
+      if (!res.ok) throw new Error('API Error')
+
+      const data = await res.json()
+      setClimateResult(data)
+    } catch (e) {
+      console.error('Climate simulation failed:', e)
+    } finally {
+      setSimulating(false)
+    }
+  }
+
   useEffect(() => { loadData() }, [user])
 
   // ── Derived metrics ────────────────────────────────────────────────────────
@@ -171,9 +226,10 @@ export default function InsightsPage() {
 
   // Average MS from paddocks that have data
   const avgPaddockMs = useMemo(() => {
-    const withMs = paddocks.filter(p => p.dry_matter_kg_ha > 0)
+    const withMs = paddocks.filter(p => Number(p.dry_matter_kg_ha) > 0)
     if (withMs.length === 0) return null
-    return Math.round(withMs.reduce((s, p) => s + p.dry_matter_kg_ha, 0) / withMs.length)
+    const sum = withMs.reduce((s, p) => s + Number(p.dry_matter_kg_ha), 0)
+    return Math.round(sum / withMs.length)
   }, [paddocks])
 
   const bestMs = lastBiomassMs || avgPaddockMs
@@ -243,6 +299,27 @@ export default function InsightsPage() {
   // ── Insight cards ──────────────────────────────────────────────────────────
   const cards: InsightCard[] = [
     {
+      id: 'daily_capacity',
+      title: 'Autonomía forrajera',
+      value: forecastedDaysAvailable ? `${forecastedDaysAvailable} días` : '—',
+      subtitle: dailyDemandKg > 0
+        ? `Demanda diaria: ${Math.round(dailyDemandKg).toLocaleString()} kg MS/día · ${totalEV.toFixed(0)} EV`
+        : 'Configurá tus rodeos para calcular la demanda',
+      trend: forecastedDaysAvailable
+        ? (forecastedDaysAvailable > 30 ? 'ok' : forecastedDaysAvailable > 14 ? 'neutral' : 'warning')
+        : 'neutral',
+      icon: <Target className="w-5 h-5" />,
+      color: 'bg-emerald-50 border-emerald-100',
+      badge: forecastedDaysAvailable && forecastedDaysAvailable < 15 ? 'Crítico' : undefined,
+      badgeColor: 'bg-red-100 text-red-700',
+      detail: `Con ${totalEV.toFixed(1)} EV y ~11 kg MS/EV/día, tu rodeo consume ${Math.round(dailyDemandKg).toLocaleString()} kg MS por día.`,
+      recommendation: forecastedDaysAvailable && forecastedDaysAvailable < 15
+        ? 'Autonomía crítica. Evaluá suplementación inmediata.'
+        : forecastedDaysAvailable
+        ? 'Autonomía razonable. Monitorea semanalmente.'
+        : 'Registrá MS en potreros para calcular la autonomía forrajera.',
+    },
+    {
       id: 'stocking',
       title: 'Carga animal',
       value: totalHectares > 0 ? `${stockingRate.toFixed(2)} EV/ha` : '—',
@@ -261,10 +338,10 @@ export default function InsightsPage() {
     {
       id: 'biomass',
       title: 'Materia seca · MS/ha',
-      value: bestMs ? `${bestMs.toLocaleString()} kg MS/ha` : 'Sin datos',
+      value: bestMs ? `${Number(bestMs).toLocaleString()} kg MS/ha` : 'Sin datos',
       subtitle: lastBiomassNote
         ? `IA Gemini · ${new Date(lastBiomassNote.created_at).toLocaleDateString('es')}`
-        : avgPaddockMs ? `Promedio ${paddocks.filter(p => p.dry_matter_kg_ha > 0).length} potreros`
+        : avgPaddockMs ? `Promedio ${paddocks.filter(p => Number(p.dry_matter_kg_ha) > 0).length} potreros`
         : 'Analizá fotos IA en Bitácora para registrar',
       trend: bestMs ? (bestMs > 1500 ? 'up' : bestMs > 800 ? 'neutral' : 'down') : 'neutral',
       icon: <Leaf className="w-5 h-5" />,
@@ -276,6 +353,21 @@ export default function InsightsPage() {
         ? 'Biomasa baja. Extendé el descanso de este potrero y evaluá suplementación.'
         : bestMs ? 'Nivel de biomasa adecuado.'
         : 'Fotografiá tus pasturas desde Bitácora para análisis IA automático.',
+    },
+    {
+      id: 'paddock_capacity',
+      title: 'Mejor potrero disponible',
+      value: paddockCapacities[0] ? `${paddockCapacities[0].evDays} días` : '—',
+      subtitle: paddockCapacities[0]
+        ? `${paddockCapacities[0].name} · ${Number(paddockCapacities[0].dry_matter_kg_ha)?.toLocaleString()} kg MS/ha · ${Number(paddockCapacities[0].area_ha)?.toFixed(1)} ha`
+        : 'Con datos de MS verás cuál está listo',
+      trend: paddockCapacities[0]?.evDays > 7 ? 'ok' : 'neutral',
+      icon: <Zap className="w-5 h-5" />,
+      color: 'bg-gray-50',
+      detail: 'Días de autonomía = (MS × ha × 60%) / demanda diaria.',
+      recommendation: paddockCapacities[0]
+        ? `"${paddockCapacities[0].name}" tiene la mayor oferta disponible.`
+        : 'Registrá análisis de materia seca.',
     },
     {
       id: 'rest_season',
@@ -304,29 +396,8 @@ export default function InsightsPage() {
       recommendation: rotationRatio > 0.65
         ? 'Excelente distribución de descanso.'
         : rotationRatio > 0.4
-        ? 'Hay oportunidad de mejorar. Mové el rebaño más frecuentemente.'
+        ? 'Hay oportunidad de mejorar. Mové el rodeo más frecuentemente.'
         : 'Baja proporción en descanso. El sistema puede estar sobreconcentrando la presión.',
-    },
-    {
-      id: 'daily_capacity',
-      title: 'Autonomía forrajera',
-      value: forecastedDaysAvailable ? `${forecastedDaysAvailable} días` : '—',
-      subtitle: dailyDemandKg > 0
-        ? `Demanda diaria: ${Math.round(dailyDemandKg).toLocaleString()} kg MS/día · ${totalEV.toFixed(0)} EV`
-        : 'Configurá tus rebaños para calcular la demanda',
-      trend: forecastedDaysAvailable
-        ? (forecastedDaysAvailable > 30 ? 'ok' : forecastedDaysAvailable > 14 ? 'neutral' : 'warning')
-        : 'neutral',
-      icon: <Target className="w-5 h-5" />,
-      color: 'bg-gray-50',
-      badge: forecastedDaysAvailable && forecastedDaysAvailable < 15 ? 'Crítico' : undefined,
-      badgeColor: 'bg-red-100 text-red-700',
-      detail: `Con ${totalEV.toFixed(1)} EV y ~11 kg MS/EV/día, tu rodeo consume ${Math.round(dailyDemandKg).toLocaleString()} kg MS por día.`,
-      recommendation: forecastedDaysAvailable && forecastedDaysAvailable < 15
-        ? 'Autonomía crítica. Evaluá suplementación inmediata.'
-        : forecastedDaysAvailable
-        ? 'Autonomía razonable. Monitorea semanalmente.'
-        : 'Registrá MS en potreros para calcular la autonomía forrajera.',
     },
     {
       id: 'animal_condition',
@@ -350,24 +421,9 @@ export default function InsightsPage() {
         : 'Fotografiá tus animales desde Bitácora para estimación de CC.',
     },
     {
-      id: 'paddock_capacity',
-      title: 'Mejor potrero disponible',
-      value: paddockCapacities[0] ? `${paddockCapacities[0].evDays} días` : '—',
-      subtitle: paddockCapacities[0]
-        ? `${paddockCapacities[0].name} · ${paddockCapacities[0].dry_matter_kg_ha?.toLocaleString()} kg MS/ha · ${paddockCapacities[0].area_ha?.toFixed(1)} ha`
-        : 'Con datos de MS verás cuál está listo',
-      trend: paddockCapacities[0]?.evDays > 7 ? 'ok' : 'neutral',
-      icon: <Zap className="w-5 h-5" />,
-      color: 'bg-gray-50',
-      detail: 'Días de autonomía = (MS × ha × 60%) / demanda diaria.',
-      recommendation: paddockCapacities[0]
-        ? `"${paddockCapacities[0].name}" tiene la mayor oferta disponible.`
-        : 'Registrá análisis de materia seca.',
-    },
-    {
       id: 'events',
-      title: 'Próximos eventos',
-      value: upcoming30.length > 0 ? `${upcoming30.length} evento${upcoming30.length > 1 ? 's' : ''}` : 'Sin eventos',
+      title: 'Eventos de campo',
+      value: upcoming30.length > 0 ? `${upcoming30.length} pendiente${upcoming30.length > 1 ? 's' : ''}` : 'Sin eventos',
       subtitle: upcoming30.length > 0
         ? (() => {
             const ev0 = upcoming30[0]
@@ -375,7 +431,13 @@ export default function InsightsPage() {
             const edLabel = ed ? new Date(ed + 'T00:00:00').toLocaleDateString('es') : '—'
             return `Próximo: ${ev0 ? edLabel + ' · ' + ev0.title : '—'}`
           })()
-        : 'Agendá servicio, vacunación y otras fechas críticas',
+        : (() => {
+            const lastEv = farmEvents.filter(e => safeIso(e.event_date) < today).sort((a,b) => safeIso(b.event_date).localeCompare(safeIso(a.event_date)))[0]
+            if (lastEv) {
+              return `Último registro: ${lastEv.title} (${new Date(safeIso(lastEv.event_date) + 'T00:00:00').toLocaleDateString('es')})`
+            }
+            return 'Agendá servicio, vacunación y otras fechas críticas'
+          })(),
       trend: 'neutral',
       icon: <CalendarDays className="w-5 h-5" />,
       color: 'bg-gray-50',
@@ -396,22 +458,69 @@ export default function InsightsPage() {
   return (
     <div className="space-y-6">
 
+      {/* Forage Autonomy Highlight - Reordered above Holistic Score */}
+      {cards.find(c => c.id === 'daily_capacity') && (
+        <div className="bg-emerald-900 rounded-2xl p-6 text-white overflow-hidden relative shadow-xl">
+          <div className="absolute top-0 right-0 p-8 opacity-10">
+            <Target className="w-32 h-32" />
+          </div>
+          <div className="relative z-10 flex items-center justify-between">
+            <div>
+              <p className="text-emerald-300 text-xs font-black uppercase tracking-widest mb-1">Autonomía Forrajera Actual</p>
+              <h2 className="text-5xl font-black">{forecastedDaysAvailable ?? '—'} <span className="text-2xl opacity-60">días</span></h2>
+              <p className="text-emerald-100/70 text-sm mt-2 font-medium max-w-md">
+                {forecastedDaysAvailable && forecastedDaysAvailable < 15
+                  ? '⚠️ Alerta: Stock de pasto crítico. Considerá mover animales o suplementar.'
+                  : 'Tu rodeo tiene suficiente pasto para el corto plazo bajo manejo rotativo.'}
+              </p>
+              <div className="flex gap-3 mt-4">
+                {forecastedDaysAvailable && forecastedDaysAvailable < 15 && (
+                  <button 
+                    onClick={runFinancialSimulation}
+                    disabled={simulating}
+                    className="bg-white text-emerald-900 px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:bg-emerald-50 transition-all active:scale-95 disabled:opacity-50 shadow-lg"
+                  >
+                    {simulating ? <Loader2 className="w-4 h-4 animate-spin" /> : <TrendingDown className="w-4 h-4" />}
+                    Simular Escenario Financiero
+                  </button>
+                )}
+                <button 
+                  onClick={() => setShowClimateModal(true)}
+                  className="bg-emerald-800/40 border border-emerald-700/50 text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:bg-emerald-800/60 transition-all"
+                >
+                  <CloudRain className="w-4 h-4" />
+                  Proyectar Lluvia
+                </button>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="bg-emerald-800/50 rounded-xl p-3 border border-emerald-700/50">
+                <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">Demanda diaria</p>
+                <p className="text-xl font-black">{Math.round(dailyDemandKg).toLocaleString()} <span className="text-xs opacity-50">kg MS</span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-950">Insights</h1>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Dashboard de Control</h1>
           <p className="text-sm text-gray-500 font-medium mt-1">
-            Análisis holístico de tu campo · {season.name} · Descanso óptimo: {season.restDaysMin}–{season.restDaysMax} días
+            Motor Predictivo · {season.name} · Descanso óptimo: {season.restDaysMin}–{season.restDaysMax} días
           </p>
         </div>
-        <button
-          onClick={loadData}
-          disabled={refreshing}
-          className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Actualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={loadData}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Sincronizar
+          </button>
+        </div>
       </div>
 
       {/* Holistic Score */}
@@ -562,6 +671,178 @@ export default function InsightsPage() {
         </div>
       </div>
 
+      {/* Modals */}
+      <AnimatePresence>
+        {showFinancialModal && financialResult && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-950/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl border border-gray-100"
+            >
+              <div className="bg-emerald-900 p-6 text-white relative">
+                <button onClick={() => setShowFinancialModal(false)} className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full">
+                  <X className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="bg-emerald-500/20 p-2 rounded-lg">
+                    <Scale className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <h3 className="text-xl font-black tracking-tight">Simulación Financiera</h3>
+                </div>
+                <p className="text-emerald-100/70 text-sm font-medium">Escenario: Venta Estratégica vs Suplementación</p>
+              </div>
+
+              <div className="p-8 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
+                    <p className="text-[10px] font-black text-emerald-700 uppercase mb-1">Capital Liberado</p>
+                    <p className="text-2xl font-black text-emerald-900">${financialResult.capital_released_by_sale.toLocaleString()}</p>
+                    <p className="text-[10px] text-emerald-600 font-bold mt-1">Venta {financialResult.sell_pct * 100}% {financialResult.sell_category}</p>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                    <p className="text-[10px] font-black text-blue-700 uppercase mb-1">Ahorro Mensual</p>
+                    <p className="text-2xl font-black text-blue-900">${financialResult.supplement_cost_monthly.toLocaleString()}</p>
+                    <p className="text-[10px] text-blue-600 font-bold mt-1">Gasto evitado en maíz</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <Leaf className="w-12 h-12 text-green-600" />
+                  </div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Impacto en Autonomía</p>
+                  <div className="flex items-center gap-4">
+                    <div className="text-center">
+                      <p className="text-xs font-bold text-gray-400">Actual</p>
+                      <p className="text-xl font-black text-gray-500">{financialResult.autonomy_days} días</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-300" />
+                    <div className="text-center">
+                      <p className="text-xs font-bold text-emerald-600">Proyectado</p>
+                      <p className="text-xl font-black text-emerald-700">{financialResult.autonomy_days + financialResult.days_gained_by_sale} días</p>
+                    </div>
+                    <div className="bg-emerald-500 text-white text-[10px] font-black px-2 py-1 rounded-full">
+                      +{financialResult.days_gained_by_sale} DÍAS
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-emerald-50 rounded-2xl border-l-4 border-emerald-500">
+                  <div className="flex gap-3">
+                    <Sparkles className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <p className="text-sm font-bold text-emerald-900 leading-relaxed">
+                      {financialResult.recommendation}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button 
+                    onClick={() => window.location.href = '/dashboard/grazing'}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-emerald-200"
+                  >
+                    Planificar Movimiento
+                  </button>
+                  <button 
+                    onClick={() => setShowFinancialModal(false)}
+                    className="px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-black rounded-2xl transition-all"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showClimateModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-950/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl"
+            >
+              <div className="bg-blue-900 p-6 text-white relative">
+                <button onClick={() => setShowClimateModal(false)} className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full">
+                  <X className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-3 mb-2">
+                  <CloudRain className="w-6 h-6 text-blue-400" />
+                  <h3 className="text-xl font-black">Proyección Climática</h3>
+                </div>
+                <p className="text-blue-100/70 text-sm">Calculá el rebrote basado en lluvia esperada</p>
+              </div>
+
+              <div className="p-8 space-y-6">
+                {!climateResult ? (
+                  <>
+                    <div className="space-y-4">
+                      <label className="text-sm font-black text-gray-700 uppercase tracking-widest">¿Cuántos mm esperás?</label>
+                      <input 
+                        type="range" 
+                        min="5" max="150" step="5"
+                        value={rainInput}
+                        onChange={(e) => setRainInput(parseInt(e.target.value))}
+                        className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                      <div className="flex justify-between text-4xl font-black text-blue-900">
+                        <span>{rainInput}</span>
+                        <span className="text-xl opacity-30 self-end mb-1">mm</span>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={runClimateSimulation}
+                      disabled={simulating}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
+                    >
+                      {simulating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                      Proyectar Rebrote
+                    </button>
+                  </>
+                ) : (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                    <div className="flex justify-around items-center py-4">
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Crecimiento Extra</p>
+                        <p className="text-3xl font-black text-blue-600">+{climateResult.projected_rebrote_kg_ha} <span className="text-xs">kg/ha</span></p>
+                      </div>
+                      <div className="w-px h-12 bg-gray-100" />
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Autonomía Ganada</p>
+                        <p className="text-3xl font-black text-emerald-600">+{climateResult.new_autonomy_days} <span className="text-xs">días</span></p>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100 text-sm font-bold text-blue-900 flex gap-3">
+                      <Info className="w-5 h-5 shrink-0" />
+                      {climateResult.message}
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setClimateResult(null)}
+                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-black py-4 rounded-2xl transition-all"
+                      >
+                        Volver a simular
+                      </button>
+                      <button 
+                        onClick={() => setShowClimateModal(false)}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all"
+                      >
+                        Aceptar
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -604,6 +885,22 @@ function InsightCardComponent({ card }: { card: InsightCard }) {
             <div className="bg-gray-50 rounded-xl p-3">
               <p className="text-xs font-bold text-gray-700 leading-relaxed">{card.recommendation}</p>
             </div>
+          )}
+          {card.id === 'paddock_capacity' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                // We'll use the ID from the card's custom data or similar
+                // For now, let's assume the ID is passed via a custom property if we had one
+                // Since InsightCard doesn't have it, let's just use a placeholder or better: 
+                // fix the mapping to include it if possible.
+                window.location.href = `/dashboard/grazing`;
+              }}
+              className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              Planificar movimiento
+              <Zap className="w-3 h-3" />
+            </button>
           )}
         </div>
       )}

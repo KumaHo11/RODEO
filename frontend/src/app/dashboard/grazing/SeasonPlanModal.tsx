@@ -13,16 +13,20 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import Link from 'next/link'
 import {
   X, Check, Loader2, ChevronDown, ChevronUp,
   Calendar, Leaf, BarChart3, AlertTriangle, TrendingUp,
   Upload, BookOpen, CloudRain, Archive, ArrowRight,
 } from 'lucide-react'
+import { Plus, Minus, Info, HelpCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { apiFetch } from '@/lib/apiFetch'
+import { Modal } from '@/design-system/molecules/Modal'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
-import { projectEVDemand, type ParitionSeason } from '@/lib/grazing/evProjection'
-import { paddockForageOffer, HARVEST_EFFICIENCY, type HarvestEfficiency } from '@/lib/grazing/forageCurves'
+import { apiFetch } from '@/lib/apiFetch'
+import { projectEVDemand, calculateBaseEV, type ParitionSeason } from '@/lib/grazing/evProjection'
+import { paddockForageOffer, HARVEST_EFFICIENCY, type HarvestEfficiency, calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
+import { HOLISTIC_TOOLTIPS, UsageRing, HoverTooltip } from '@/components/ui/atoms/UsageRing'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Paddock {
@@ -73,25 +77,6 @@ const INPUT = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 t
 const todayISO = () => new Date().toISOString().split('T')[0]
 const currentYear = new Date().getFullYear()
 
-// Equivalente Vaca por categoría (factor multiplicador)
-const EV_FACTORS: Record<string, number> = {
-  VACAS: 1.0, NOVILLOS: 1.0, NOVILLITOS: 0.9, VAQUILLONAS: 0.9,
-  TERNEROS: 0.6, TERNERAS: 0.55, TOROS: 1.25, MEJ: 0.9, BUBALINOS: 1.1,
-}
-const calcEV = (categoria: string | null, weight: number, count: number) => {
-  const f = categoria ? (EV_FACTORS[categoria] ?? 1.0) : 1.0
-  return parseFloat((Math.pow((weight || 400) / 400, 0.75) * f * count).toFixed(2))
-}
-
-// Proyección EV a 6 meses (curva de crecimiento simplificada +5% mensual para categorías jóvenes)
-const projectEV = (herd: Herd, monthsAhead: number): number => {
-  const isYoung = ['TERNEROS', 'TERNERAS', 'NOVILLITOS', 'VAQUILLONAS'].includes(herd.categoria || '')
-  const growthRate = isYoung ? 1.05 : 1.01  // 5% mensual jóvenes, 1% adultos
-  const base = Number(herd.total_ev) > 0
-    ? Number(herd.total_ev)
-    : calcEV(herd.categoria, Number(herd.avg_weight_kg) || 400, Number(herd.head_count))
-  return parseFloat((base * Math.pow(growthRate, monthsAhead)).toFixed(2))
-}
 
 // Semáforo de balance
 const balanceColor = (pct: number) =>
@@ -204,6 +189,14 @@ export default function SeasonPlanModal({
   const [paddockRemnants, setPaddockRemnants] = useState<Record<string, number>>(() => ({}))
   const getPaddockRemnant = (paddockId: string) =>
     paddockRemnants[paddockId] !== undefined ? paddockRemnants[paddockId] : targetRemnant
+  // Paddock multi-selection — inicializa con todos los potreros activos
+  const [selectedPaddockIds, setSelectedPaddockIds] = useState<string[]>(() => 
+    paddocks.filter(p => p.is_active !== false).map(p => p.id)
+  )
+  const togglePaddock = (id: string) =>
+    setSelectedPaddockIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  const selectedPaddocks = paddocks.filter(p => selectedPaddockIds.includes(p.id))
+
   // Herd multi-selection — inicializa con todos los rodeos seleccionados
   const [selectedHerdIds, setSelectedHerdIds] = useState<string[]>(() => herds.map(h => h.id))
   const toggleHerd = (id: string) =>
@@ -258,7 +251,7 @@ export default function SeasonPlanModal({
     Math.max(...projectedEVByMonth.map(m => m.totalEV), 0.1), [projectedEVByMonth])
 
   // ── Tab 3: Oferta forrajera real (curvas de crecimiento) ────────────────
-  // Sortear potreros numéricamente para que 2, 3, 4 … 9, 10, 2B no queden desordenados
+  // Sortear potreros numéricamente
   const sortedPaddocks = useMemo(() =>
     [...paddocks].sort((a, b) => {
       const numA = parseInt(a.name, 10)
@@ -278,11 +271,13 @@ export default function SeasonPlanModal({
     // Garantizamos la lectura correcta de la demanda EV usando la proyección real (evita problemas de EV null en base de datos)
     const baseTotalEV = projectedEVByMonth.length > 0 ? projectedEVByMonth[0].totalEV : 0
 
+    // Filtramos para cálculos globales pero mostramos todos en la lista
     return sortedPaddocks.map(p => {
+      const isSelected = selectedPaddockIds.includes(p.id)
       const msHa    = Number(p.dry_matter_kg_ha) || 0
       const areaHa  = Number(p.area_ha) || 0
       const remnant = getPaddockRemnant(p.id)
-      const { usableKgMs, growthKgMs, stockKgMs, totalKgMs } = paddockForageOffer({
+      const { growthKgMs, stockKgMs, totalKgMs } = paddockForageOffer({
         initialMsKgHa: msHa,
         areaHa,
         startMonthIndex,
@@ -290,15 +285,18 @@ export default function SeasonPlanModal({
         targetRemnantKgHa: remnant,
         startYear,
       })
-      const availDays = baseTotalEV > 0 && usableKgMs > 0
-        ? Math.floor(usableKgMs / (baseTotalEV * dailyAllocationKg))
-        : 0
-      return { paddock: p, msHa, areaHa, totalMs: totalKgMs, usableMs: usableKgMs, growthKgMs, stockKgMs, availDays, remnant }
+
+      // We calculate usableMs as a static photograph (Initial MS - Remnant) * Area
+      const usableKgMs = calculateUsableForage(msHa, remnant, areaHa)
+      const dailyDemand = baseTotalEV * dailyAllocationKg
+      const availDays = calculateGrazingDays(usableKgMs, dailyDemand)
+
+      return { paddock: p, msHa, areaHa, totalMs: totalKgMs, usableMs: isSelected ? usableKgMs : 0, growthKgMs, stockKgMs, availDays, remnant, isSelected }
     })
-  }, [sortedPaddocks, projectedEVByMonth, dailyAllocationKg, targetRemnant, paddockRemnants, startDate, seasonDays])
+  }, [sortedPaddocks, selectedPaddockIds, projectedEVByMonth, dailyAllocationKg, targetRemnant, paddockRemnants, startDate, seasonDays])
 
   // Balance global
-  const totalOfertaKgMs  = supplyData.reduce((s, d) => s + d.usableMs, 0)
+  const totalOfertaKgMs  = supplyData.filter(d => d.isSelected).reduce((s, d) => s + d.usableMs, 0)
   const currentTotalEV   = projectedEVByMonth.length > 0 ? projectedEVByMonth[0].totalEV : 0
   const demandaTotalKgMs = currentTotalEV * dailyAllocationKg * Math.max(1, seasonDays - droughtReserveDays)
   const balancePct = demandaTotalKgMs > 0
@@ -331,10 +329,10 @@ export default function SeasonPlanModal({
     }
 
     const supply_snapshot = {
-      total_ha: supplyData.reduce((s, d) => s + d.areaHa, 0),
-      total_kg_ms: supplyData.reduce((s, d) => s + d.totalMs, 0),
+      total_ha: supplyData.filter(d => d.isSelected).reduce((s, d) => s + d.areaHa, 0),
+      total_kg_ms: supplyData.filter(d => d.isSelected).reduce((s, d) => s + d.totalMs, 0),
       usable_kg_ms: totalOfertaKgMs,
-      by_paddock: supplyData.map(d => ({
+      by_paddock: supplyData.filter(d => d.isSelected).map(d => ({
         id: d.paddock.id, name: d.paddock.name,
         area_ha: d.areaHa, ms_ha: d.msHa,
         total_ms: d.totalMs, usable_ms: d.usableMs,
@@ -585,14 +583,14 @@ export default function SeasonPlanModal({
                 {herds.length === 0 ? (
                   <div className="py-8 text-center bg-gray-50 rounded-xl border border-gray-100">
                     <p className="text-sm font-bold text-gray-400">No hay rodeos cargados.</p>
-                    <p className="text-xs text-gray-300 mt-1">Cargá tus rodeos en la sección "Mi Rebaño" primero.</p>
+                    <p className="text-xs text-gray-500 mt-1">Cargá tus rodeos en la sección <Link href="/dashboard/herds" className="text-gray-600 hover:text-green-600 underline underline-offset-2">Rodeos</Link> primero.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-1.5">
                     {herds.map(h => {
                       const isSelected = selectedHerdIds.includes(h.id)
                       const hevBase = Number(h.total_ev) > 0 ? Number(h.total_ev)
-                        : calcEV(h.categoria, Number(h.avg_weight_kg) || 400, Number(h.head_count))
+                        : calculateBaseEV(h.categoria, Number(h.avg_weight_kg) || 450, Number(h.head_count))
                       return (
                         <button
                           key={h.id}
@@ -676,19 +674,32 @@ export default function SeasonPlanModal({
               </div>
 
               {/* EV + Demanda diaria — resumen */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* EV + Demanda diaria — resumen */}
+              <div className="grid grid-cols-3 gap-3">
                 <div className="bg-gray-50 rounded-xl border border-gray-100 p-3.5">
-                  <p className={LABEL + ' mb-1'}>EV seleccionado</p>
-                  <p className="text-2xl font-black text-gray-900">
+                  <p className={LABEL + ' mb-1'}>Animales</p>
+                  <p className="text-xl font-black text-gray-900">
+                    {selectedHerds.reduce((s, h) => s + (h.head_count || 0), 0)}
+                    <span className="text-[10px] font-normal text-gray-400 ml-1">cabezas</span>
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-xl border border-gray-100 p-3.5">
+                  <div className="flex items-center gap-1 mb-1">
+                    <p className={LABEL}>Carga (EV)</p>
+                    <HoverTooltip text="Equivalente Vaca. Ajustado por categoría biológica y peso. (Ej. 350 cabezas pueden ser 372 EV).">
+                      <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
+                    </HoverTooltip>
+                  </div>
+                  <p className="text-xl font-black text-gray-900">
                     {currentTotalEV.toFixed(0)}
-                    <span className="text-xs font-normal text-gray-400 ml-1">EV</span>
+                    <span className="text-[10px] font-normal text-gray-400 ml-1">EV</span>
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-xl border border-gray-100 p-3.5">
                   <p className={LABEL + ' mb-1'}>Demanda diaria</p>
-                  <p className="text-2xl font-black text-gray-900">
+                  <p className="text-xl font-black text-gray-900">
                     {(currentTotalEV * dailyAllocationKg).toFixed(0)}
-                    <span className="text-xs font-normal text-gray-400 ml-1">kg MS/día</span>
+                    <span className="text-[10px] font-normal text-gray-400 ml-1">kg MS/día</span>
                   </p>
                 </div>
               </div>
@@ -787,51 +798,103 @@ export default function SeasonPlanModal({
                     <label className={LABEL}>Oferta por potrero</label>
                     <Tooltip text={`Pasto aprovechable = (kg MS/ha − remanente) × ha. El remanente por defecto es ${targetRemnant} kg/ha pero podés cambiarlo potrero a potrero.`} />
                   </div>
-                  {supplyData.map(({ paddock, msHa, areaHa, usableMs, availDays, remnant }) => {
+                  {supplyData.map(({ paddock, msHa, areaHa, usableMs, availDays, remnant, isSelected }) => {
                     const hasData = msHa > 0
                     const isRisky = hasData && msHa <= remnant
                     const paddockRemnantVal = paddockRemnants[paddock.id] !== undefined ? paddockRemnants[paddock.id] : targetRemnant
+                    const isActive = paddock.is_active !== false
+
+                    // ── Holistic Metrics ──
+                    const moduleAvg = supplyData.filter(d => d.msHa > 0).length > 0
+                      ? supplyData.filter(d => d.msHa > 0).reduce((s, d) => s + d.msHa, 0)
+                        / supplyData.filter(d => d.msHa > 0).length
+                      : 0
+                    const yieldCoef = moduleAvg > 0 && msHa > 0 ? msHa / moduleAvg : null
+                    const usagePct = seasonDays > 0 && availDays >= 0
+                      ? Math.round((availDays / Math.max(1, seasonDays)) * 100)
+                      : null
+
                     return (
-                      <div key={paddock.id} className={`rounded-xl border px-4 py-3 ${
-                        isRisky ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'
-                      }`}>
+                      <div 
+                        key={paddock.id} 
+                        onClick={() => isActive && togglePaddock(paddock.id)}
+                        className={`rounded-xl border px-4 py-3 transition-all ${
+                          !isActive ? 'opacity-40 grayscale pointer-events-none bg-gray-50 border-gray-100' :
+                          isSelected ? (isRisky ? 'bg-red-50 border-red-300 ring-1 ring-red-100 cursor-pointer' : 'bg-white border-green-500 shadow-sm ring-1 ring-green-100 cursor-pointer') :
+                          'bg-gray-50 border-gray-100 hover:border-gray-200 cursor-pointer'
+                        }`}
+                      >
                         <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-black text-gray-800">{paddock.name}</p>
-                            {isRisky && (
-                              <span className="text-[9px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">Sin pasto aprovechable</span>
-                            )}
+                          <div className="flex items-center gap-3">
+                            {isSelected
+                              ? <div className="w-4 h-4 bg-green-600 rounded-md flex items-center justify-center shrink-0"><Check className="w-3 h-3 text-white" strokeWidth={4} /></div>
+                              : <div className="w-4 h-4 rounded-md border-2 border-gray-300 bg-white shrink-0" />
+                            }
+                            <div className="flex items-center gap-2">
+                              <p className={`text-sm font-black ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{paddock.name}</p>
+                              {!isActive && <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">Inhabilitado</span>}
+                              {isRisky && (
+                                <span className="text-[9px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">Sin pasto aprovechable</span>
+                              )}
+                              {yieldCoef !== null && !isRisky && (
+                                  <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
+                                      yieldCoef >= 1.05 ? 'text-green-700 bg-green-50 border-green-100'
+                                      : yieldCoef >= 0.95 ? 'text-gray-600 bg-white border-gray-200'
+                                      : 'text-amber-700 bg-amber-50 border-amber-100'
+                                    }`}>×{yieldCoef.toFixed(2)}</span>
+                                  </HoverTooltip>
+                              )}
+                            </div>
                           </div>
-                          <span className="text-[10px] font-bold text-gray-400">{areaHa.toFixed(1)} ha</span>
+                          <div className="flex items-center gap-2" title="Superficie del potrero (hectáreas)">
+                            <span className="text-[10px] font-bold text-gray-400">{areaHa.toFixed(1)} ha</span>
+                          </div>
                         </div>
                         {hasData ? (
                           <>
-                            <div className="grid grid-cols-3 gap-2 mb-2">
-                              <div className="bg-white rounded-lg border border-gray-200 px-2.5 py-2 text-center">
-                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Disponible</p>
-                                <p className="text-sm font-black text-gray-800">{msHa.toLocaleString('es')} kg/ha</p>
-                              </div>
-                              <div className="bg-white rounded-lg border border-gray-200 px-2.5 py-2 text-center">
-                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Aprovechable</p>
-                                <p className="text-sm font-black text-gray-800">
-                                  {usableMs > 0 ? `${(usableMs / 1000).toFixed(1)} t` : <span className="text-red-500">—</span>}
-                                </p>
-                                <p className="text-[7px] text-gray-400">{msHa} − {remnant} kg/ha × {areaHa}ha</p>
-                              </div>
-                              <div className={`rounded-lg border px-2.5 py-2 text-center ${
-                                !hasData || isRisky ? 'bg-red-50 border-red-200'
-                                : availDays < 7 ? 'bg-amber-50 border-amber-200'
-                                : availDays < 14 ? 'bg-yellow-50 border-yellow-200'
-                                : 'bg-green-50 border-green-200'
-                              }`}>
-                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Días disp.</p>
-                                <p className={`text-sm font-black ${
-                                  isRisky ? 'text-red-600'
-                                  : availDays < 7 ? 'text-amber-700'
-                                  : availDays < 14 ? 'text-yellow-700'
-                                  : 'text-green-700'
-                                }`}>{availDays > 0 ? availDays : '0'}</p>
-                              </div>
+                            <div className="grid grid-cols-4 gap-2 mb-2 items-stretch">
+                              <HoverTooltip text="Biomasa disponible actual por hectárea" className="w-full">
+                                <div className="bg-white rounded-lg border border-gray-200 px-1.5 py-1.5 text-center h-full flex flex-col justify-center">
+                                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest cursor-help mb-0.5">Disponible</p>
+                                  <p className="text-xs font-black text-gray-800">
+                                    {msHa.toLocaleString('es')} <span className="text-[9px] font-semibold text-gray-500">kg/ha</span>
+                                  </p>
+                                </div>
+                              </HoverTooltip>
+                              
+                              <HoverTooltip text="Stock de materia seca total (Disponible - Remanente) x Hectáreas" className="w-full">
+                                <div className="bg-white rounded-lg border border-gray-200 px-1.5 py-1.5 text-center h-full flex flex-col justify-center">
+                                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest border-b border-dashed border-gray-300 inline-block mb-0.5 cursor-help">Aprovechable</p>
+                                  <p className="text-xs font-black text-gray-800">
+                                    {(Math.max(0, msHa - remnant) * areaHa) > 0 ? (
+                                      <>
+                                        {Math.round(Math.max(0, msHa - remnant) * areaHa).toLocaleString('es')} <span className="text-[9px] font-semibold text-gray-500">kg</span>
+                                      </>
+                                    ) : <span className="text-red-500">—</span>}
+                                  </p>
+                                </div>
+                              </HoverTooltip>
+                              
+                              <HoverTooltip text={HOLISTIC_TOOLTIPS.estimatedDah} className="w-full">
+                                <div className={`bg-white rounded-lg border px-1.5 py-1.5 text-center h-full flex flex-col justify-center ${
+                                  !hasData || isRisky ? 'border-red-200 bg-red-50' : 'border-gray-200'
+                                }`}>
+                                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest cursor-help mb-0.5">Días DAH</p>
+                                  <p className={`text-xs font-black ${
+                                    isRisky ? 'text-red-600' : 'text-gray-800'
+                                  }`}>{availDays > 0 ? availDays : '0'}</p>
+                                </div>
+                              </HoverTooltip>
+                              
+                              <HoverTooltip text={HOLISTIC_TOOLTIPS.usagePct} className="w-full">
+                                <div className={`bg-white rounded-lg border px-1.5 py-1.5 flex flex-col items-center justify-center h-full ${
+                                  !hasData || isRisky ? 'border-red-200 bg-red-50' : 'border-gray-200'
+                                }`}>
+                                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest cursor-help mb-0.5">% Uso</p>
+                                  {usagePct !== null ? <UsageRing usagePct={usagePct} size="sm" showLabel={false} /> : <span className="text-red-500">—</span>}
+                                </div>
+                              </HoverTooltip>
                             </div>
                             {/* Remanente por potrero */}
                             <div className="flex items-center gap-2 mt-1">
@@ -841,14 +904,21 @@ export default function SeasonPlanModal({
                                 step={50}
                                 min={0}
                                 value={paddockRemnantVal}
-                                onChange={e => setPaddockRemnants(prev => ({ ...prev, [paddock.id]: Number(e.target.value) }))}
+                                onChange={e => {
+                                  e.stopPropagation()
+                                  setPaddockRemnants(prev => ({ ...prev, [paddock.id]: Number(e.target.value) }))
+                                }}
+                                onClick={e => e.stopPropagation()}
                                 className="w-20 text-xs font-bold bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-700 text-center outline-none focus:border-green-400"
                               />
                               <span className="text-[9px] text-gray-400">kg MS/ha</span>
                               {paddockRemnants[paddock.id] !== undefined && (
                                 <button
                                   type="button"
-                                  onClick={() => setPaddockRemnants(prev => { const n = { ...prev }; delete n[paddock.id]; return n })}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setPaddockRemnants(prev => { const n = { ...prev }; delete n[paddock.id]; return n })
+                                  }}
                                   className="text-[9px] text-gray-400 hover:text-gray-600 font-bold"
                                 >
                                   ↺ usar global

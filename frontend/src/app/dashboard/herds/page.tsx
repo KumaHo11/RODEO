@@ -106,8 +106,10 @@ export default function HerdsPage() {
   const [filterDateTo,  setFilterDateTo]  = useState('')
   const [showFilters,   setShowFilters]   = useState(false)
 
-  // View
-  const [view, setView] = useState<'cards' | 'list'>('cards')
+  // View - default to list
+  const [view, setView] = useState<'cards' | 'list' | 'historial'>('list')
+  const [movements, setMovements] = useState<any[]>([])
+  const [loadingMov, setLoadingMov] = useState(false)
 
   // Sort (list view)
   const [sortKey,  setSortKey]  = useState<SortKey>('name')
@@ -125,12 +127,19 @@ export default function HerdsPage() {
     setLoading(false)
   }
 
+  const loadMovements = async () => {
+    setLoadingMov(true)
+    const res = await apiFetch('/api/movements?limit=200')
+    if (res.ok) { const d = await res.json(); setMovements(d.movements || []) }
+    setLoadingMov(false)
+  }
+
   useEffect(() => { loadHerds() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived data ────────────────────────────────────────────────────────────
 
-  const totalAnimals = herds.reduce((s, h) => s + (h.head_count || 0), 0)
-  const totalEV      = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
+  const totalAnimals = Math.round(herds.reduce((s, h) => s + (h.head_count || 0), 0))
+  const totalEV      = Math.round(herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0))
   const totalMsDay   = Math.round(totalEV * 11)
 
   const filtered = useMemo(() => {
@@ -206,25 +215,32 @@ export default function HerdsPage() {
         <div className="flex items-center gap-2 shrink-0">
           {/* View toggle */}
           <div className="bg-gray-100 rounded-xl p-0.5 flex gap-0.5">
-            <button onClick={() => setView('cards')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'cards' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              <LayoutGrid className="w-3.5 h-3.5" /> Tarjetas
-            </button>
             <button onClick={() => setView('list')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               <List className="w-3.5 h-3.5" /> Lista
             </button>
+            <button onClick={() => setView('cards')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'cards' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              <LayoutGrid className="w-3.5 h-3.5" /> Tarjetas
+            </button>
+            <button onClick={() => { setView('historial'); loadMovements() }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'historial' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              <Calendar className="w-3.5 h-3.5" /> Historial
+            </button>
           </div>
-          {/* Excel export */}
-          <button onClick={() => exportExcel(filtered)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
-            <Download className="w-3.5 h-3.5" /> Exportar rodeos
-          </button>
-          <button onClick={() => exportMovementsExcel(herds)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
-            <Download className="w-3.5 h-3.5 text-violet-500" /> Historial
-          </button>
-          {/* New herd */}
+          {/* Per-section export */}
+          {view !== 'historial' && (
+            <button onClick={() => exportExcel(filtered)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
+              <Download className="w-3.5 h-3.5" /> Exportar rodeos
+            </button>
+          )}
+          {view === 'historial' && (
+            <button onClick={() => exportMovementsExcel(herds)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
+              <Download className="w-3.5 h-3.5" /> Exportar historial
+            </button>
+          )}
           <button onClick={openCreate}
             className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200">
             <Plus className="w-4 h-4" /> Nuevo rodeo
@@ -237,24 +253,22 @@ export default function HerdsPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Total rodeos</p>
           <p className="text-4xl font-black text-gray-950">{herds.length}</p>
-          <p className="text-[9px] text-gray-400 mt-1">{totalAnimals.toLocaleString()} animales</p>
-        </div>
-        <div className="bg-green-50 rounded-2xl border border-green-100 shadow-sm p-5">
-          <p className="text-[10px] font-bold text-green-700 tracking-widest uppercase mb-2">Consumo diario</p>
-          <p className="text-4xl font-bold text-green-900">
-            {totalMsDay >= 1000 ? `${(totalMsDay / 1000).toFixed(1)}k` : totalMsDay.toLocaleString()}
-          </p>
-          <p className="text-[9px] text-green-600 mt-1 font-medium">kg MS/día · {totalEV.toFixed(1)} EV</p>
+          <p className="text-[9px] text-gray-400 mt-1">{totalAnimals.toLocaleString('es-AR')} animales</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-2">Carga (EV)</p>
-          <p className="text-4xl font-bold text-green-800">{totalEV.toFixed(1)}</p>
-          <p className="text-[9px] text-gray-400 mt-1 font-medium">Equivalente vaca total</p>
+          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Consumo diario</p>
+          <p className="text-4xl font-black text-gray-950">{totalMsDay.toLocaleString('es-AR')}</p>
+          <p className="text-[9px] text-gray-400 mt-1 font-medium">kg MS/día totales · {totalEV.toLocaleString('es-AR')} EV</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Carga (EV)</p>
+          <p className="text-4xl font-black text-gray-950">{totalEV.toLocaleString('es-AR')}</p>
+          <p className="text-[9px] text-gray-400 mt-1 font-medium">Equivalente Vaca (EV) total</p>
         </div>
       </div>
 
       {/* ── Search + Filters toolbar ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3">
+      {view !== 'historial' && (<div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3">
         <div className="flex gap-3 flex-wrap items-center">
           {/* Unified search */}
           <div className="relative flex-1 min-w-[200px]">
@@ -320,10 +334,10 @@ export default function HerdsPage() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </div>)}
 
       {/* ── Results count ── */}
-      {!loading && (
+      {!loading && view !== 'historial' && (
         <p className="text-[11px] text-gray-400 font-bold tracking-wide">
           {filtered.length} rodeo{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
           {filtered.length !== herds.length && ` de ${herds.length}`}
@@ -352,7 +366,6 @@ export default function HerdsPage() {
                 const colors     = catKey ? CATEGORIA_COLORS[catKey] : null
                 const catDisp    = catKey ? (CATEGORIA_LABEL_RAE[catKey] ?? catKey) : herd.species
                 const ev         = Number(herd.total_ev) || calcEV(Number(herd.avg_weight_kg), herd.head_count, catKey)
-                const evPct      = totalEV > 0 ? (ev / totalEV) * 100 : 0
                 const msDay      = Math.round(ev * 11)
 
                 return (
@@ -365,26 +378,25 @@ export default function HerdsPage() {
                     className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group cursor-pointer"
                     onClick={() => openEdit(herd)}
                   >
-                    {/* Category color bar */}
-                    <div className={`h-1 w-full ${colors ? colors.dot.replace('bg-', 'bg-') : 'bg-gray-200'} opacity-60`} />
+                    {/* Category color top border */}
+                    <div className={`h-1.5 w-full ${colors?.dot ?? 'bg-gray-200'}`} />
 
                     <div className="px-5 pt-4 pb-3 flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${colors ? colors.bg : 'bg-gray-50 border-gray-200'}`}>
-                          <span className={`text-[10px] font-black ${colors?.text ?? 'text-gray-500'}`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border border-gray-100 bg-gray-50`}>
+                          <span className={`text-[10px] font-black text-gray-400`}>
                             {catKey ? (CATEGORIA_ABBR[catKey] ?? catKey.slice(0,3)) : (herd.species ?? '?').slice(0,3).toUpperCase()}
                           </span>
                         </div>
                         <div>
                           <h3 className="text-sm font-bold text-gray-950 leading-tight">{herd.name}</h3>
-                          <p className="text-[10px] font-medium text-gray-500 mt-0.5">{catDisp}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <div className={`w-1.5 h-1.5 rounded-full ${colors?.dot ?? 'bg-gray-300'}`} />
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">{catDisp}</p>
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        {/* Edit icon — visible on hover */}
-                        <span className="w-7 h-7 flex items-center justify-center text-gray-400 bg-gray-50 border border-gray-200 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </span>
                         <button
                           onClick={e => { e.stopPropagation(); handleDelete(herd.id!) }}
                           className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
@@ -393,43 +405,30 @@ export default function HerdsPage() {
                       </div>
                     </div>
 
-                    <div className="px-5 py-3 border-t border-gray-50">
-                      <div className="mb-3">
-                        <p className="text-[9px] font-bold text-green-600 tracking-widest uppercase mb-0.5">Consumo diario</p>
-                        <div className="flex items-baseline gap-2">
-                          <p className="text-3xl font-bold text-gray-950 tracking-tighter">{msDay.toLocaleString()}</p>
-                          <span className="text-xs font-bold text-gray-400">kg MS/día</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
+                    <div className="px-5 py-4 border-t border-gray-50">
+                      <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <p className="text-[9px] font-bold text-gray-400 tracking-widest uppercase mb-0.5">Stock</p>
-                          <p className="text-lg font-bold text-gray-700">{herd.head_count}</p>
+                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">Stock</p>
+                          <p className="text-xl font-black text-gray-950">{Math.round(herd.head_count).toLocaleString('es-AR')}</p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Cabezas</p>
                         </div>
                         <div>
-                          <p className="text-[9px] font-bold text-gray-400 tracking-widest uppercase mb-0.5">Ev total</p>
-                          <p className="text-lg font-bold text-green-700">{ev.toFixed(1)}</p>
+                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">EV</p>
+                          <p className="text-xl font-black text-gray-950">{Math.round(ev).toLocaleString('es-AR')}</p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Equiv.</p>
                         </div>
-                        <div className="col-span-2">
-                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Raza</p>
-                          <p className="text-xs font-bold text-gray-700 truncate">{herd.breed || '—'}</p>
+                        <div className="text-right">
+                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">Consumo</p>
+                          <p className="text-xl font-black text-gray-950">{Math.round(msDay).toLocaleString('es-AR')}</p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">kg MS/día</p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="px-5 pb-4 space-y-3">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-[9px] font-bold text-gray-400">% carga total</p>
-                          <p className="text-[9px] font-black text-gray-600">{evPct.toFixed(1)}%</p>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                          <div className="bg-green-600 h-1.5 rounded-full transition-all" style={{ width: `${evPct}%` }} />
-                        </div>
-                      </div>
+                    <div className="px-5 pb-4">
                       {/* Fecha de alta */}
                       {herd.admission_date && (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 mt-2">
                           <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
                           <p className="text-[10px] text-gray-400">Alta: {fmtDate(herd.admission_date)}</p>
                         </div>
@@ -497,16 +496,18 @@ export default function HerdsPage() {
                         <p className="text-sm font-bold text-gray-900">{herd.name}</p>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg border ${colors ? `${colors.bg} ${colors.text}` : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${colors?.dot ?? 'bg-gray-400'}`} />
-                          {catDisp}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${colors?.dot ?? 'bg-gray-300'}`} />
+                          <span className="text-xs font-bold text-gray-600 uppercase tracking-tighter">
+                            {catDisp}
+                          </span>
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm font-bold text-gray-800">{herd.head_count.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{herd.avg_weight_kg ? `${herd.avg_weight_kg} kg` : '—'}</td>
+                      <td className="px-4 py-3 text-sm font-bold text-gray-800">{Math.round(herd.head_count).toLocaleString('es-AR')}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{herd.avg_weight_kg ? `${Math.round(herd.avg_weight_kg)} kg` : '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{herd.breed || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{fmtDate(herd.admission_date)}</td>
-                      <td className="px-4 py-3 text-sm font-bold text-orange-500">{ev.toFixed(1)}</td>
+                      <td className="px-4 py-3 text-sm font-black text-gray-950">{Math.round(ev).toLocaleString('es-AR')}</td>
                       <td className="px-4 py-3">
                         <button
                           onClick={e => { e.stopPropagation(); handleDelete(herd.id!) }}
@@ -523,7 +524,53 @@ export default function HerdsPage() {
         )
       )}
 
+      {/* ════ HISTORIAL VIEW ════ */}
+      {view === 'historial' && (
+        loadingMov ? (
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
+          </div>
+        ) : movements.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
+            <p className="text-sm font-bold text-gray-400">Sin movimientos registrados</p>
+            <p className="text-[10px] text-gray-300 mt-1">Los movimientos aparecerán aquí cuando edites un rodeo</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table className="w-full">
+              <thead className="border-b border-gray-100 bg-gray-50/70">
+                <tr>
+                  {['Fecha', 'Tipo', 'Rodeo / Entidad', 'Cantidad', 'Peso prom. (kg)', 'Notas'].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-gray-400 tracking-widest uppercase">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {movements.map((m, i) => {
+                  const herdName = herds.find(h => h.id === m.entity_id)?.name ?? m.entity_name ?? m.entity_id
+                  return (
+                    <tr key={m.id ?? i} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3 text-xs font-bold text-gray-600 tabular-nums whitespace-nowrap">
+                        {m.occurred_at ? new Date(m.occurred_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gray-100 text-gray-600">{m.event_type ?? '—'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-gray-800">{herdName}</td>
+                      <td className="px-4 py-3 text-sm font-bold text-gray-700">{m.quantity != null ? m.quantity.toLocaleString() : '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{m.weight_kg ? `${Math.round(m.weight_kg)} kg` : '—'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{m.notes || '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
       {/* ── Modal ── */}
+
       {modalOpen && (
         <HerdModal
           herd={editingHerd}

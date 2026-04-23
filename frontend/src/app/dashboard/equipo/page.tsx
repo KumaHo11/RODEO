@@ -31,7 +31,7 @@ const PRESET_ROLES = [
   {
     id: 'CAPATAZ',
     label: 'Capataz',
-    desc: 'Recorrida de campos, bitácora, rebaños',
+    desc: 'Recorrida de campos, bitácora, rodeos',
     icon: Wrench,
     color: 'text-orange-600',
     bg: 'bg-orange-50',

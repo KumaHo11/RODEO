@@ -90,7 +90,7 @@ export default function MiCampoPage() {
 
     const activePlans = plansData.filter((p: any) => p.status === 'ACTIVE').map((p: any) => ({
       paddock_id: p.paddock_id,
-      herd_name: p.herds?.name || 'Rebaño',
+      herd_name: p.herds?.name || 'Rodeo',
       head_count: p.herds?.head_count || 0,
     }))
     setActiveGrazingPlans(activePlans)

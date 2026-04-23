@@ -401,7 +401,7 @@ export default function TareasPage() {
                 <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Título *</label>
                 <input required value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Ej: Vaccionar rebaño 1" />
+                  placeholder="Ej: Vaccionar rodeo 1" />
               </div>
 
               <div>

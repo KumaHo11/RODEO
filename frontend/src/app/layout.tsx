@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'RODEO — Gestión Ganadera Regenerativa',
-  description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rebaños, pastoreo rotacional y bitácora de campo con IA.',
+  description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rodeos, pastoreo rotacional y bitácora de campo con IA.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,

@@ -27,23 +27,35 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const paddockId = searchParams.get('paddock_id')
 
-    let sql = `SELECT * FROM field_notes WHERE org_id = $1`
+    let sql = `
+      SELECT
+        fn.*,
+        COALESCE(p.first_name || ' ' || p.last_name, p.email) AS user_display_name,
+        p.email         AS user_email,
+        pa.name         AS paddock_name
+      FROM field_notes fn
+      LEFT JOIN profiles p  ON p.id = fn.created_by
+      LEFT JOIN paddocks pa ON pa.id = fn.paddock_id
+      WHERE fn.org_id = $1
+    `
     const vals: any[] = [auth.orgId]
 
     if (paddockId) {
-      sql += ` AND paddock_id = $2`
+      sql += ` AND fn.paddock_id = $2`
       vals.push(paddockId)
     }
 
-    sql += ` ORDER BY created_at DESC LIMIT 50`
+    sql += ` ORDER BY fn.created_at DESC LIMIT 100`
 
     const rows = await query(sql, vals)
     return NextResponse.json({ notes: rows })
   } catch (err: any) {
     console.error('GET /api/field-notes error:', err)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error', detail: err?.message }, { status: 500 })
   }
 }
+
+
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,15 +65,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       paddock_id, tags, title, content,
-      lat, lng, photo_url, audio_url, analysis_result
+      lat, lng, photo_url, audio_url, analysis_result,
+      // audio_duration_secs — stored as comment until DB column is added
     } = body
 
     const category = Array.isArray(tags) && tags.length > 0 ? tags[0] : 'GENERAL'
 
     const { rows } = await mutate(
       `INSERT INTO field_notes
-         (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, audio_url, analysis_result)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, audio_url, analysis_result, audio_duration_secs)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING *`,
       [
         auth.orgId, auth.profileId,
@@ -75,12 +88,17 @@ export async function POST(req: NextRequest) {
         photo_url || null,
         audio_url || null,
         analysis_result ? JSON.stringify(analysis_result) : null,
+        body.audio_duration_secs || null,
       ]
     )
 
     return NextResponse.json({ note: rows[0] }, { status: 201 })
   } catch (err: any) {
     console.error('POST /api/field-notes error:', err)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Internal Server Error', 
+      message: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    }, { status: 500 })
   }
 }
