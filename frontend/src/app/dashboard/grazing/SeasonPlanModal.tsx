@@ -192,7 +192,7 @@ export default function SeasonPlanModal({
     paddockRemnants[paddockId] !== undefined ? paddockRemnants[paddockId] : targetRemnant
   // Paddock multi-selection — inicializa con todos los potreros activos
   const [selectedPaddockIds, setSelectedPaddockIds] = useState<string[]>(() => 
-    paddocks.filter(p => p.is_active !== false).map(p => p.id)
+    paddocks.map(p => p.id) // Select all paddocks by default
   )
   const togglePaddock = (id: string) =>
     setSelectedPaddockIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
