@@ -25,6 +25,7 @@ function LoginContent() {
   const [showPassword, setShowPassword] = useState(false)
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
   const justVerified = searchParams.get('verified') === '1'
+  const isDisabled   = searchParams.get('disabled') === '1'
 
   useEffect(() => {
     // Only redirect if email is verified
@@ -84,6 +85,8 @@ function LoginContent() {
         setError('Correo electrónico o contraseña incorrectos.')
       } else if (code === 'auth/too-many-requests') {
         setError('Demasiados intentos fallidos. Intenta más tarde.')
+      } else if (code === 'auth/user-disabled') {
+        setError('Tu cuenta fue suspendida. Contactá a soporte en soporte@rodeoagtech.com')
       } else {
         setError('Error al iniciar sesión. Intenta nuevamente.')
       }
@@ -108,6 +111,20 @@ function LoginContent() {
             <h2 className="text-3xl font-black tracking-tight text-gray-950 mb-2">Inicia sesión</h2>
             <p className="text-gray-500 text-sm">Ingresa a tu cuenta para gestionar tu campo.</p>
           </div>
+
+          {/* Account disabled banner */}
+          {isDisabled && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+              className="mb-6 bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3"
+            >
+              <span className="text-red-500 text-base leading-none mt-0.5">⛔</span>
+              <div>
+                <p className="text-red-900 text-xs font-black mb-0.5">Cuenta suspendida</p>
+                <p className="text-red-700 text-xs">Tu acceso fue deshabilitado por un administrador. Contactá a soporte en <strong>soporte@rodeoagtech.com</strong></p>
+              </div>
+            </motion.div>
+          )}
 
           {/* Email verified success banner */}
           {justVerified && (

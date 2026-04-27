@@ -63,19 +63,12 @@ function calcEV(catKey: string | null, weight: number, count: number): number {
   const f = catKey ? (FACTORS[catKey] ?? 1.0) : 1.0
   return parseFloat((Math.pow((weight || 400) / 400, 0.75) * f * count).toFixed(2))
 }
-
-function bcsColorClass(s: number) {
-  if (s <= 3) return 'bg-red-500'
-  if (s <= 5) return 'bg-amber-400'
-  if (s <= 7) return 'bg-lime-500'
-  return 'bg-green-600'
-}
 function bcsLabel(s: number) {
-  if (s <= 2) return 'Muy bajo'
-  if (s <= 4) return 'Bajo'
-  if (s <= 6) return 'Moderado'
-  if (s <= 8) return 'Bueno'
-  return 'Óptimo'
+  if (s <= 1) return 'Muy baja'
+  if (s <= 2) return 'Baja'
+  if (s <= 3) return 'Óptima'
+  if (s <= 4) return 'Alta'
+  return 'Muy alta'
 }
 
 // Event type dots palette
@@ -284,9 +277,12 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
   }
 
   // ── Tab 3: Registros ──────────────────────────────────────────────────────
-  const [bcsScore,      setBcsScore]      = useState(herd?.bcs_score ?? 5)
+  const [bcsScore,      setBcsScore]      = useState(herd?.bcs_score ?? 3)
   const [bcsSaving,     setBcsSaving]     = useState(false)
   const [bcsSaved,      setBcsSaved]      = useState(false)
+  const [bcsPhotoFile,  setBcsPhotoFile]  = useState<File | null>(null)
+  const [bcsPhotoPreview, setBcsPhotoPreview] = useState<string | null>(null)
+  const bcsCameraRef = useRef<HTMLInputElement>(null)
   const [showNote,      setShowNote]      = useState(false)
   const [quickNote,     setQuickNote]     = useState('')
   const [noteMode,      setNoteMode]      = useState<'text' | 'audio' | null>(null)
@@ -342,6 +338,16 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
   const saveBcs = async () => {
     if (!herd?.id) return
     setBcsSaving(true)
+
+    let photo_url: string | null = null
+    if (bcsPhotoFile) {
+      const fd = new FormData()
+      fd.append('file', bcsPhotoFile)
+      fd.append('folder', 'bcs-photos')
+      const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+      if (up.ok) ({ url: photo_url } = await up.json())
+    }
+
     const label = bcsLabel(bcsScore)
     const [patchRes] = await Promise.all([
       apiFetch(`/api/herds/${herd.id}`, {
@@ -362,13 +368,21 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
           categoria: herd.categoria,
           breed: herd.breed,
           admission_date: herd.admission_date,
-          notes: `BCS actualizado a ${bcsScore}/9 — ${label}`,
-          metadata: { bcs_label: label, head_count: herd.head_count, ev: herd.total_ev },
+          notes: `Condición Corporal registrada: ${bcsScore}/5 — ${label}`,
+          metadata: { bcs_label: label, head_count: herd.head_count, ev: herd.total_ev, photo_url },
         }),
       }),
     ])
     setBcsSaving(false)
-    if (patchRes.ok) { setBcsSaved(true); setTimeout(() => setBcsSaved(false), 3000) }
+    if (patchRes.ok) { 
+      setBcsSaved(true)
+      setSessionNoteCount(c => c + 1)
+      setTimeout(() => {
+        setBcsSaved(false)
+        setBcsPhotoFile(null)
+        setBcsPhotoPreview(null)
+      }, 3000) 
+    }
   }
 
   const saveNote = async () => {
@@ -802,34 +816,60 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
                         </div>
                         <div>
                           <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Condición Corporal</p>
-                          <p className="text-[9px] text-gray-400 font-medium">BCS · Escala 1–9</p>
+                          <p className="text-[9px] text-gray-400 font-medium">BCS · Escala 1–5</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg text-white ${bcsColorClass(bcsScore)}`}>
-                          {bcsScore}/9 · {bcsLabel(bcsScore)}
-                        </span>
                         <button type="button" onClick={saveBcs} disabled={bcsSaving}
-                          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-black text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-all">
-                          {bcsSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : bcsSaved ? <Check className="w-3 h-3" /> : null}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-all">
+                          {bcsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : bcsSaved ? <Check className="w-3.5 h-3.5" /> : null}
                           {bcsSaved ? 'Guardado' : 'Guardar'}
                         </button>
                       </div>
                     </div>
-                    <div className="px-4 py-3">
-                      <div className="relative pt-1 mb-1">
-                        <div className="w-full h-2 rounded-full bg-gradient-to-r from-red-400 via-amber-400 via-lime-400 to-green-600" />
-                        <input type="range" min={1} max={9} step={1} value={bcsScore}
-                          onChange={e => setBcsScore(Number(e.target.value))}
-                          className="w-full cursor-pointer absolute top-0 opacity-0 h-2" />
-                        <div className={`absolute top-0 w-3.5 h-3.5 rounded-full border-2 border-white shadow-md -translate-y-[3px] -translate-x-1/2 transition-all ${bcsColorClass(bcsScore)}`}
-                          style={{ left: `${((bcsScore - 1) / 8) * 100}%` }} />
+                    <div className="px-4 py-4 space-y-4">
+                      <div className="flex items-center justify-between gap-2">
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setBcsScore(n)}
+                            className={`flex-1 py-3 rounded-xl border-2 text-base font-black transition-all ${
+                              bcsScore === n 
+                                ? 'bg-green-400 border-green-400 text-white shadow-md scale-105' 
+                                : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
+                            }`}
+                          >
+                            {n}
+                          </button>
+                        ))}
                       </div>
-                      <div className="flex justify-between text-[8px] font-black text-gray-350 tracking-widest mt-0.5">
-                        {[1,2,3,4,5,6,7,8,9].map(n => <span key={n} className={bcsScore === n ? 'text-gray-700' : 'text-gray-300'}>{n}</span>)}
+                      
+                      {/* Photo capture */}
+                      <div className="border-t border-gray-100 pt-4 flex flex-col gap-2">
+                        {!bcsPhotoFile ? (
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => bcsCameraRef.current?.click()}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-gray-600 border border-dashed border-gray-300 rounded-xl hover:border-green-400 hover:text-green-700 bg-gray-50 transition-all">
+                              <Camera className="w-4 h-4" /> Agregar foto de evidencia (opcional)
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="relative animate-in zoom-in-95 duration-200">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={bcsPhotoPreview!} alt="BCS" className="w-full max-h-48 object-cover rounded-xl border border-gray-200 shadow-sm" />
+                            <button type="button" onClick={() => { setBcsPhotoFile(null); setBcsPhotoPreview(null) }}
+                              className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-black/50 hover:bg-black/70 backdrop-blur-md text-white rounded-full transition-all">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                        <input ref={bcsCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) { setBcsPhotoFile(f); setBcsPhotoPreview(URL.createObjectURL(f)) } }} />
                       </div>
+
                       {bcsSaved && (
-                        <p className="text-[9px] text-green-600 font-bold mt-1.5 text-center">✓ Guardado en historial de movimientos</p>
+                        <p className="text-[10px] text-green-600 font-bold mt-2 text-center animate-in fade-in zoom-in duration-300">✓ Guardado en historial de evidencias</p>
                       )}
                     </div>
                   </div>

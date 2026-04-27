@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
+import { FeatureGate } from '@/components/FeatureGate'
 import {
   Calendar, Plus, CheckCircle2, Clock, MapPin, Search, Filter,
   AlignJustify, CalendarDays, Lightbulb, CloudRain, Sun, ChevronLeft, ChevronRight,
@@ -18,6 +19,8 @@ import ExcelImporter from './ExcelImporter'
 import RawDataModal from './RawDataModal'
 import { HOLISTIC_TOOLTIPS, HoverTooltip } from '@/components/ui/atoms/UsageRing'
 import { calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
+import { toast } from 'sonner'
+import { useConfirm } from '@/components/ui/ConfirmModal'
 
 // ─────────────── CONSTANTS ───────────────
 const HERD_COLORS = [
@@ -1031,6 +1034,20 @@ function InteractiveGantt({
 export default function GrazingPlanner() {
   const { user } = useAuth()
   const router = useRouter()
+  return (
+    <FeatureGate
+      feature="grazing_planner"
+      title="Planificador de Pastoreo"
+      description="Planíficá tus rotaciones, visualizá el Gantt y analizá el balance forrajero de tu campo. Disponible desde el plan Planificador."
+      requiredPlan="Planificador"
+    >
+      <GrazingPlannerContent user={user} router={router} />
+    </FeatureGate>
+  )
+}
+
+function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
+  const { confirm, ConfirmModal } = useConfirm()
 
   const [plans, setPlans] = useState<any[]>([])
   const [paddocks, setPaddocks] = useState<any[]>([])
@@ -1305,19 +1322,20 @@ export default function GrazingPlanner() {
     const startDate = seasonPlan.start_date || new Date().toISOString().split('T')[0]
 
     if (activeHerds.length === 0 || activePaddocks.length === 0 || !startDate) {
-      alert('Se necesitan potreros y rodeos configurados para generar la rotación.\nVerificá que existan en "Potreros" y "Rodeos".')
+      toast.error('Faltá configurar potreros y rodeos. Verificá que existan en "Potreros" y "Rodeos".')
       return
     }
 
     // Advertir si ningún potrero tiene datos de MS
     const paddocksWithMs = activePaddocks.filter(p => Number(p.dry_matter_kg_ha) > 0)
     if (paddocksWithMs.length === 0) {
-      const proceed = confirm(
-        '⚠️ Ningún potrero tiene datos de biomasa (kg MS/ha) cargados.\n\n' +
-        'Se generará la planificación con una estimación mínima de 1200 kg MS/ha.\n' +
-        'Para mayor precisión, completá los datos de forraje en cada potrero.\n\n' +
-        '¿Continuar de todas formas?'
-      )
+      const proceed = await confirm({
+        title: 'Sin datos de biomasa',
+        description: 'Ningún potrero tiene datos de biomasa (kg MS/ha) cargados. Se usará una estimación mínima de 1200 kg MS/ha. Para mayor precisión, completá los datos de forraje en cada potrero.',
+        confirmLabel: 'Continuar de todas formas',
+        cancelLabel: 'Cancelar',
+        variant: 'warning',
+      })
       if (!proceed) return
     } else if (paddocksWithMs.length < activePaddocks.length) {
       const sinDatos = activePaddocks.filter(p => !Number(p.dry_matter_kg_ha))
@@ -1452,13 +1470,9 @@ export default function GrazingPlanner() {
       }
 
       if (newPlans.length === 0) {
-        alert(
-          'No se pudieron generar planificaciones.\n\n' +
-          'Posibles causas:\n' +
-          '• Los rodeos aún no tienen EV calculado (completá peso y categoría)\n' +
-          '• Las fechas de inicio/fin del plan son iguales o inválidas\n' +
-          '• El remanente objetivo supera el pasto disponible en todos los potreros\n\n' +
-          'El plan maestro se guardó igual en el historial.'
+        toast.error(
+          'No se pudieron generar planificaciones. Verificá que los rodeos tengan EV calculado, las fechas sean válidas y que el remanente objetivo no supere el pasto disponible.',
+          { duration: 7000 }
         )
         setSaving(false)
         return
@@ -1469,11 +1483,11 @@ export default function GrazingPlanner() {
         newPlans.map(p => apiFetch('/api/grazing-plans', { method: 'POST', body: JSON.stringify(p) }))
       )
 
-      alert(`✅ Gantt generado con éxito!\nSe crearon ${newPlans.length} bloques de pastoreo para ${activePaddocks.length} potreros según las reglas de la temporada.`)
+      toast.success(`Gantt generado: ${newPlans.length} bloques de pastoreo creados para ${activePaddocks.length} potreros`)
       loadData()
     } catch(err) {
       console.error(err)
-      alert('Se guardó el plan, pero hubo un error al renderizar el Gantt. Por favor, revisá.')
+      toast.error('Se guardó el plan, pero hubo un error al renderizar el Gantt. Intentá refrescar la página.')
     } finally {
       setSaving(false)
     }
@@ -1481,20 +1495,27 @@ export default function GrazingPlanner() {
 
   const handleDeletePlan = async () => {
     if (!formData.id) return
-    if (!confirm('¿Estás seguro de que deseas eliminar esta planificación?')) return
+    const ok = await confirm({
+      title: '¿Eliminar esta planificación?',
+      description: 'Esta acción es irreversible. El bloque de pastoreo será eliminado del Gantt.',
+      confirmLabel: 'Sí, eliminar',
+      variant: 'danger',
+    })
+    if (!ok) return
     setSaving(true)
     try {
       const res = await apiFetch(`/api/grazing-plans/${formData.id}`, { method: 'DELETE' })
       if (res.ok) {
         setPlans(prev => prev.filter(p => p.id !== formData.id))
         setIsModalOpen(false)
+        toast.success('Planificación eliminada')
       } else {
-        const errData = await res.json().catch(()=>({error: 'Error desconocido'}))
-        alert(`No se pudo eliminar: ${errData.error}`)
+        const errData = await res.json().catch(() => ({ error: 'Error desconocido' }))
+        toast.error(`No se pudo eliminar: ${errData.error}`)
       }
     } catch(err: any) {
       console.error(err)
-      alert(`No se pudo eliminar: ${err.message}`)
+      toast.error(`No se pudo eliminar: ${err.message}`)
     } finally {
       setSaving(false)
     }
@@ -1503,23 +1524,29 @@ export default function GrazingPlanner() {
   const handleBulkDeletePlanned = async () => {
     const plannedCount = plans.filter(p => p.status === 'PLANNED').length
     if (plannedCount === 0) {
-      alert('No hay planificaciones sugeridas para eliminar.')
+      toast.info('No hay planificaciones en estado "Planificado" para eliminar.')
       return
     }
-    if (!confirm(`¿Eliminar ${plannedCount} planificaci${plannedCount === 1 ? 'ón' : 'ones'} sugerida${plannedCount === 1 ? '' : 's'}? Esta acción no se puede deshacer.`)) return
+    const ok = await confirm({
+      title: `¿Eliminar ${plannedCount} planificaci${plannedCount === 1 ? 'ón' : 'ones'}?`,
+      description: `Se borrarán ${plannedCount} planificaci${plannedCount === 1 ? 'ón sugerida' : 'ones sugeridas'} del Gantt. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Sí, eliminar todo',
+      variant: 'danger',
+    })
+    if (!ok) return
     setSaving(true)
     try {
       const res = await apiFetch('/api/grazing-plans/bulk-delete?status=PLANNED', { method: 'DELETE' })
       if (res.ok) {
         const { deleted } = await res.json()
         setPlans(prev => prev.filter(p => p.status !== 'PLANNED'))
-        alert(`✅ Se eliminaron ${deleted} planificaciones sugeridas.`)
+        toast.success(`Se eliminaron ${deleted} planificaciones sugeridas`)
       } else {
-        alert('Error al eliminar las planificaciones. Intentá nuevamente.')
+        toast.error('Error al eliminar las planificaciones. Intentá nuevamente.')
       }
     } catch(err) {
       console.error(err)
-      alert('Error de conexión.')
+      toast.error('Error de conexión al intentar eliminar.')
     } finally {
       setSaving(false)
     }
@@ -1686,7 +1713,10 @@ export default function GrazingPlanner() {
         const paddockAvailable = addDays(conflictExit, recoveryDays)
         // Block if: new entry is before the end of the rest period, AND new exit is after conflict start
         if (newEntry < paddockAvailable && newExit >= conflict.entry_date) {
-          alert(`🚨 Potrero bloqueado hasta el ${paddockAvailable} (salida ${conflictExit} + ${recoveryDays} días de descanso regenerativo obligatorio). No se puede solapar ni interrumpir la recuperación del pasto.`)
+          toast.warning(
+            `Potrero bloqueado hasta el ${paddockAvailable} (salida ${conflictExit} + ${recoveryDays} días de descanso regenerativo). No se puede solapar la recuperación del pasto.`,
+            { duration: 8000 }
+          )
           return
         }
       }
@@ -1882,7 +1912,7 @@ export default function GrazingPlanner() {
       }
     } catch (err) {
       console.error('handleSave error:', err)
-      alert('Error al guardar. Por favor, intentá de nuevo.')
+      toast.error('Error al guardar. Intentá de nuevo.')
     } finally {
       setIsModalOpen(false)
       setSaving(false)
@@ -1919,7 +1949,7 @@ export default function GrazingPlanner() {
   const handleExportExcel = async () => {
     try {
       const res = await apiFetch('/api/grazing-plans/export')
-      if (!res.ok) { alert('Error al exportar. Intentá de nuevo.'); return }
+      if (!res.ok) { toast.error('Error al exportar el historial. Intentá de nuevo.'); return }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
@@ -1931,7 +1961,7 @@ export default function GrazingPlanner() {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Export error:', err)
-      alert('Error al exportar el historial.')
+      toast.error('Error al exportar el historial.')
     }
   }
 
@@ -1954,17 +1984,24 @@ export default function GrazingPlanner() {
 
   // ── History Tab Actions ───────────────────────────────────────────────────
   const handleDeleteSeasonPlan = async (id: string, name: string) => {
-    if (!confirm(`¿Estás seguro de que querés eliminar el plan de temporada "${name}"? Se borrarán todos los movimientos en el Gantt asociados a esta importación en modo cascada.`)) return
+    const ok = await confirm({
+      title: `¿Eliminar el plan "${name}"?`,
+      description: 'Se borrarán todos los movimientos del Gantt asociados a esta importación en modo cascada. Esta acción no se puede deshacer.',
+      confirmLabel: 'Sí, eliminar en cascada',
+      variant: 'danger',
+    })
+    if (!ok) return
     try {
       const res = await apiFetch(`/api/season-plans/${id}`, { method: 'DELETE' })
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || 'Error al eliminar el archivo.')
+        toast.error(error.error || 'Error al eliminar el plan de temporada.')
         return
       }
+      toast.success('Plan de temporada eliminado')
       loadData()
     } catch (e) {
-      alert('Error de red al intentar eliminar.')
+      toast.error('Error de red al intentar eliminar.')
     }
   }
 
@@ -2025,7 +2062,9 @@ export default function GrazingPlanner() {
   }, [paddocks, herds, farmEvents, weather])
 
   return (
-    <div className="space-y-5 pb-10">
+    <>
+      <ConfirmModal />
+      <div className="space-y-5 pb-10">
 
       {/* ─── Header simplificado ─── */}
       <div className="flex items-center justify-between gap-4">
@@ -2747,17 +2786,24 @@ export default function GrazingPlanner() {
                       )}
                       <button
                         onClick={async () => {
-                          if (!confirm('¿Eliminar esta planificación?')) return
+                          const ok = await confirm({
+                            title: '¿Eliminar esta planificación?',
+                            description: 'El bloque de pastoreo será eliminado del Gantt.',
+                            confirmLabel: 'Eliminar',
+                            variant: 'danger',
+                          })
+                          if (!ok) return
                           try {
                             const res = await apiFetch(`/api/grazing-plans/${plan.id}`, { method: 'DELETE' })
                             if (res.ok) {
                               setPlans((prev: any[]) => prev.filter(p => p.id !== plan.id))
                               setPlanPopover(null)
+                              toast.success('Planificación eliminada')
                             } else {
                               const err = await res.json().catch(() => ({ error: 'Error' }))
-                              alert(err.error || 'No se pudo eliminar')
+                              toast.error(err.error || 'No se pudo eliminar')
                             }
-                          } catch(e: any) { alert(e.message) }
+                          } catch(e: any) { toast.error(e.message) }
                         }}
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
                         title="Eliminar"
@@ -2888,9 +2934,9 @@ export default function GrazingPlanner() {
                         setClosePlanModal(null)
                       } else {
                         const err = await res.json().catch(() => ({ error: 'Error' }))
-                        alert(err.error || 'No se pudo guardar')
+                        toast.error(err.error || 'No se pudo guardar')
                       }
-                    } catch(e: any) { alert(e.message) }
+                    } catch(e: any) { toast.error(e.message) }
                     setSavingClose(false)
                   }}
                   className="flex-2 px-8 py-2.5 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 transition-all disabled:opacity-40 flex items-center gap-2"
@@ -2933,11 +2979,11 @@ export default function GrazingPlanner() {
                         const { deleted } = await res.json()
                         setPlans(prev => prev.filter(p => p.status !== 'PLANNED'))
                       } else {
-                        alert('Error al eliminar las planificaciones. Intentá nuevamente.')
+                        toast.error('Error al eliminar las planificaciones. Intentá nuevamente.')
                       }
                     } catch(err) {
                       console.error(err)
-                      alert('Error de conexión.')
+                      toast.error('Error de conexión.')
                     } finally {
                       setSaving(false)
                       setShowDeleteConfirm(false)
@@ -3687,6 +3733,7 @@ export default function GrazingPlanner() {
         />
       )}
     </div>
+    </>
   )
 }
 

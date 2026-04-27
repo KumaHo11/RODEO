@@ -50,7 +50,7 @@ interface Herd {
 interface SeasonPlan {
   id?: string
   name: string
-  season_type: 'cerrado' | 'abierto'
+  season_type: 'cerrado' | 'abierto' | 'ambos'
   year: number
   start_date: string
   end_date: string
@@ -58,7 +58,7 @@ interface SeasonPlan {
   no_growth_to: string
   drought_reserve_days: number
   daily_allocation_kg: number
-  cell_name: string
+  cell_name?: string | null
   notes: string
   status: 'draft' | 'active' | 'closed'
   source: 'manual' | 'excel_import'
@@ -110,27 +110,47 @@ function FieldRow({
 // ─── SubComponent: SeasonTypeSelector ──────────────────────────────────────────
 function SeasonTypeSelector({
   value, onChange,
-}: { value: 'cerrado' | 'abierto'; onChange: (v: 'cerrado' | 'abierto') => void }) {
+}: { value: 'cerrado' | 'abierto' | 'ambos'; onChange: (v: 'cerrado' | 'abierto' | 'ambos') => void }) {
+  
+  const toggle = (type: 'cerrado' | 'abierto') => {
+    if (value === 'ambos') {
+      onChange(type === 'cerrado' ? 'abierto' : 'cerrado')
+    } else if (value === type) {
+      // Avoid unselecting the only active option
+    } else {
+      onChange('ambos')
+    }
+  }
+
+  const isSelected = (type: 'cerrado' | 'abierto') => value === 'ambos' || value === type
+
   return (
     <div className="grid grid-cols-2 gap-2">
       {(['cerrado', 'abierto'] as const).map(type => {
-        const sel = value === type
+        const sel = isSelected(type)
         const label  = type === 'cerrado' ? 'Plan cerrado' : 'Plan abierto'
         const desc   = type === 'cerrado'
-          ? 'Otoño/Invierno — el pasto no crece, racionás lo que hay guardado'
-          : 'Primavera/Verano — el pasto crece mientras el rodeo pasta'
+          ? 'Otoño/Invierno'
+          : 'Primavera/Verano'
         return (
           <button
             key={type}
             type="button"
-            onClick={() => onChange(type)}
-            className={`flex flex-col items-start gap-1 p-3.5 rounded-xl border-2 text-left transition-all ${
+            onClick={() => toggle(type)}
+            className={`flex flex-col items-start gap-1.5 p-3.5 rounded-xl border-2 text-left transition-all ${
               sel
                 ? 'border-green-500 bg-green-50 shadow-sm'
                 : 'border-gray-200 bg-white hover:border-gray-300'
             }`}
           >
-            <p className={`text-xs font-black ${sel ? 'text-green-700' : 'text-gray-700'}`}>{label}</p>
+            <div className="flex items-center justify-between w-full">
+              <p className={`text-xs font-black ${sel ? 'text-green-700' : 'text-gray-700'}`}>{label}</p>
+              <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                 sel ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'
+              }`}>
+                 {sel && <Check className="w-3 h-3 text-white" strokeWidth={4} />}
+              </div>
+            </div>
             <p className="text-[10px] text-gray-400 leading-relaxed font-medium">{desc}</p>
           </button>
         )
@@ -172,15 +192,13 @@ export default function SeasonPlanModal({
 
   // ── Tab 1: La Temporada ───────────────────────────────────────────
   const [name,               setName]               = useState(existingPlan?.name ?? `Plan ${currentYear}`)
-  const [seasonType,         setSeasonType]         = useState<'cerrado' | 'abierto'>(existingPlan?.season_type ?? 'cerrado')
-  const [year,               setYear]               = useState<number>(existingPlan?.year ?? currentYear)
+  const [seasonType,         setSeasonType]         = useState<'cerrado' | 'abierto' | 'ambos'>(existingPlan?.season_type ?? 'cerrado')
   const [startDate,          setStartDate]          = useState(existingPlan?.start_date ?? '')
   const [endDate,            setEndDate]            = useState(existingPlan?.end_date ?? '')
   const [noGrowthFrom,       setNoGrowthFrom]       = useState(existingPlan?.no_growth_from ?? '')
   const [noGrowthTo,         setNoGrowthTo]         = useState(existingPlan?.no_growth_to ?? '')
   const [droughtReserveDays, setDroughtReserveDays] = useState<number>(existingPlan?.drought_reserve_days ?? 0)
   const [dailyAllocationKg,  setDailyAllocationKg]  = useState<number>(existingPlan?.daily_allocation_kg ?? 12)
-  const [cellName,           setCellName]           = useState(existingPlan?.cell_name ?? '')
   const [notes,              setNotes]              = useState(existingPlan?.notes ?? '')
 
   // ── Tab 2: parámetros biológicos ──────────────────────────────────────────
@@ -223,17 +241,22 @@ export default function SeasonPlanModal({
   useEffect(() => {
     if (isEditing) return
     if (seasonType === 'cerrado') {
-      setStartDate(`${year}-05-15`)
-      setEndDate(`${year}-09-15`)
-      setNoGrowthFrom(`${year}-06-01`)
-      setNoGrowthTo(`${year}-08-31`)
-    } else {
-      setStartDate(`${year}-09-16`)
-      setEndDate(`${year + 1}-05-14`)
+      setStartDate(`${currentYear}-05-15`)
+      setEndDate(`${currentYear}-09-15`)
+      setNoGrowthFrom(`${currentYear}-06-01`)
+      setNoGrowthTo(`${currentYear}-08-31`)
+    } else if (seasonType === 'abierto') {
+      setStartDate(`${currentYear}-09-16`)
+      setEndDate(`${currentYear + 1}-05-14`)
       setNoGrowthFrom('')
       setNoGrowthTo('')
+    } else if (seasonType === 'ambos') {
+      setStartDate(`${currentYear}-05-15`)
+      setEndDate(`${currentYear + 1}-05-14`)
+      setNoGrowthFrom(`${currentYear}-06-01`)
+      setNoGrowthTo(`${currentYear}-08-31`)
     }
-  }, [seasonType, year, isEditing])
+  }, [seasonType, isEditing])
 
   // ── seasonDays (necesario antes de supplyData) ─────────────────────────
   const seasonDays = startDate && endDate
@@ -351,12 +374,13 @@ export default function SeasonPlanModal({
 
     const payload = {
       name: name.trim(), season_type: seasonType,
-      year, start_date: startDate || null, end_date: endDate || null,
+      year: startDate ? parseInt(startDate.split('-')[0]) : new Date().getFullYear(),
+      start_date: startDate || null, end_date: endDate || null,
       no_growth_from: noGrowthFrom || null, no_growth_to: noGrowthTo || null,
       drought_reserve_days: droughtReserveDays,
       daily_allocation_kg: dailyAllocationKg,
       target_remnant_kg_ha: targetRemnant,
-      cell_name: cellName.trim() || null,
+      cell_name: null,
       source: 'manual', status: 'draft',
       notes: notes.trim() || null,
       demand_snapshot, supply_snapshot, metrics,
@@ -395,9 +419,9 @@ export default function SeasonPlanModal({
       setSaving(false)
     }
   }, [
-    name, seasonType, year, startDate, endDate,
+    name, seasonType, startDate, endDate,
     noGrowthFrom, noGrowthTo, droughtReserveDays, dailyAllocationKg,
-    cellName, notes,
+    notes,
     isEditing, existingPlan, onSaved, onClose,
     currentTotalEV, projectedEVByMonth, supplyData,
     totalOfertaKgMs, demandaTotalKgMs, balancePct, seasonDays, balance,
@@ -422,7 +446,7 @@ export default function SeasonPlanModal({
                 {isEditing ? name : 'Planificación sugerida'}
               </h3>
               <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
-                {isEditing ? `Editando · Temporada ${year}` : 'Plan forrajero por temporada'}
+                {isEditing ? `Editando plan` : 'Plan forrajero por temporada'}
               </p>
             </div>
           </div>
@@ -478,17 +502,6 @@ export default function SeasonPlanModal({
                 />
               </FieldRow>
 
-              {/* 3. Año */}
-              <FieldRow label="Año" tooltip="El año de referencia del plan. Queda guardado en el histórico para comparar temporadas.">
-                <input
-                  type="number"
-                  value={year}
-                  min={2000}
-                  max={2100}
-                  onChange={e => setYear(Number(e.target.value))}
-                  className={INPUT}
-                />
-              </FieldRow>
 
               {/* Fechas de temporada */}
               <div className="grid grid-cols-2 gap-3">
@@ -536,19 +549,7 @@ export default function SeasonPlanModal({
                 </div>
               </FieldRow>
 
-              {/* Célula / módulo */}
-              <FieldRow
-                label="Nombre del módulo / célula"
-                tooltip="Grupo específico de potreros que se planifican juntos. Útil si tu campo tiene distintas unidades de manejo. Ej: 'El Solito', 'Módulo Norte'."
-              >
-                <input
-                  type="text"
-                  value={cellName}
-                  onChange={e => setCellName(e.target.value)}
-                  placeholder="Ej: Módulo Norte, El Solito…"
-                  className={INPUT}
-                />
-              </FieldRow>
+
 
               {/* Notas */}
               <FieldRow label="Observaciones del plan">
@@ -732,13 +733,13 @@ export default function SeasonPlanModal({
                   <div className="bg-white/60 rounded-lg px-3 py-2">
                     <p className={`text-[9px] font-black uppercase tracking-widest ${balance.text}`}>Oferta total</p>
                     <p className="text-sm font-black text-gray-900">
-                      {(totalOfertaKgMs / 1000).toFixed(1)} t MS
+                      {Math.round(totalOfertaKgMs).toLocaleString('es')} kg MS
                     </p>
                   </div>
                   <div className="bg-white/60 rounded-lg px-3 py-2">
                     <p className={`text-[9px] font-black uppercase tracking-widest ${balance.text}`}>Demanda total</p>
                     <p className="text-sm font-black text-gray-900">
-                      {(demandaTotalKgMs / 1000).toFixed(1)} t MS
+                      {Math.round(demandaTotalKgMs).toLocaleString('es')} kg MS
                     </p>
                   </div>
                 </div>
@@ -825,80 +826,72 @@ export default function SeasonPlanModal({
                           'bg-gray-50 border-gray-100 hover:border-gray-200 cursor-pointer'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-3">
+                        <div className="flex items-start justify-between w-full mb-2">
+                          <div className="flex items-start gap-2.5">
                             {isSelected
-                              ? <div className="w-4 h-4 bg-green-600 rounded-md flex items-center justify-center shrink-0"><Check className="w-3 h-3 text-white" strokeWidth={4} /></div>
-                              : <div className="w-4 h-4 rounded-md border-2 border-gray-300 bg-white shrink-0" />
+                              ? <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center shrink-0 mt-0.5"><Check className="w-2.5 h-2.5 text-white" /></div>
+                              : <div className="w-4 h-4 rounded-full border-2 border-gray-300 bg-white shrink-0 mt-0.5" />
                             }
-                            <div className="flex items-center gap-2">
-                              <p className={`text-sm font-black ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{paddock.name}</p>
-                              {!isActive && <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">Inhabilitado</span>}
-                              {isRisky && (
-                                <span className="text-[9px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">Sin pasto aprovechable</span>
-                              )}
-                              {yieldCoef !== null && !isRisky && (
-                                  <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
-                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
-                                      yieldCoef >= 1.05 ? 'text-green-700 bg-green-50 border-green-100'
-                                      : yieldCoef >= 0.95 ? 'text-gray-600 bg-white border-gray-200'
-                                      : 'text-amber-700 bg-amber-50 border-amber-100'
-                                    }`}>×{yieldCoef.toFixed(2)}</span>
-                                  </HoverTooltip>
-                              )}
+                            <div className="flex flex-col gap-1 text-left">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className={`text-sm font-bold ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{paddock.name}</p>
+                                {!isActive && <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">Inhabilitado</span>}
+                                {(paddock.technical_data?.quality_score ?? paddock.technical_data?.relative_quality) != null && (
+                                    <span title={HOLISTIC_TOOLTIPS.quality} className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg border bg-white cursor-help ${
+                                      (paddock.technical_data?.quality_score ?? paddock.technical_data?.relative_quality) >= 7 ? 'text-green-700 border-green-200'
+                                      : (paddock.technical_data?.quality_score ?? paddock.technical_data?.relative_quality) >= 4 ? 'text-amber-600 border-amber-200'
+                                      : 'text-red-600 border-red-200'
+                                    }`}>{(paddock.technical_data?.quality_score ?? paddock.technical_data?.relative_quality)}/10</span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-gray-400">{areaHa.toFixed(1)} ha · {msHa > 0 ? `${msHa.toLocaleString('es')} kg MS/ha` : 'Sin datos MS'}</p>
+                              
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {isRisky && (
+                                  <span className="text-[9px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">Sin pasto aprovechable</span>
+                                )}
+                                {hasData && !isRisky && availDays !== null && (
+                                    <HoverTooltip text={HOLISTIC_TOOLTIPS.estimatedDah}>
+                                      <span className="text-[9px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">
+                                        {availDays}d DAH
+                                      </span>
+                                    </HoverTooltip>
+                                )}
+                                {hasData && !isRisky && usagePct !== null && (
+                                    <HoverTooltip text={HOLISTIC_TOOLTIPS.usagePct}>
+                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
+                                        usagePct > 110 ? 'text-red-700 bg-red-50 border-red-100'
+                                        : usagePct >= 80 ? 'text-green-700 bg-green-50 border-green-100'
+                                        : 'text-amber-700 bg-amber-50 border-amber-100'
+                                      }`}>
+                                        {usagePct}% USO
+                                      </span>
+                                    </HoverTooltip>
+                                )}
+                                {yieldCoef !== null && !isRisky && (
+                                    <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
+                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
+                                        yieldCoef >= 1.05 ? 'text-green-700 bg-green-50 border-green-100'
+                                        : yieldCoef >= 0.95 ? 'text-gray-600 bg-white border-gray-200'
+                                        : 'text-amber-700 bg-amber-50 border-amber-100'
+                                      }`}>×{yieldCoef.toFixed(2)}</span>
+                                    </HoverTooltip>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2" title="Superficie del potrero (hectáreas)">
-                            <span className="text-[10px] font-bold text-gray-400">{areaHa.toFixed(1)} ha</span>
+                          
+                          <div className="flex flex-col items-end gap-0.5 shrink-0 ml-2">
+                            <span className="text-[10px] font-black text-gray-700">
+                              {msHa > 0 ? `${msHa.toLocaleString('es')}` : '—'}
+                              {msHa > 0 && <span className="text-[9px] font-normal text-gray-400 ml-0.5">kg/ha</span>}
+                            </span>
                           </div>
                         </div>
                         {hasData ? (
-                          <>
-                            <div className="grid grid-cols-4 gap-2 mb-2 items-stretch">
-                              <HoverTooltip text="Biomasa disponible actual por hectárea" className="w-full">
-                                <div className="bg-white rounded-lg border border-gray-200 px-1.5 py-1.5 text-center h-full flex flex-col justify-center">
-                                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest cursor-help mb-0.5">Disponible</p>
-                                  <p className="text-xs font-black text-gray-800">
-                                    {msHa.toLocaleString('es')} <span className="text-[9px] font-semibold text-gray-500">kg/ha</span>
-                                  </p>
-                                </div>
-                              </HoverTooltip>
-                              
-                              <HoverTooltip text="Stock de materia seca total (Disponible - Remanente) x Hectáreas" className="w-full">
-                                <div className="bg-white rounded-lg border border-gray-200 px-1.5 py-1.5 text-center h-full flex flex-col justify-center">
-                                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest border-b border-dashed border-gray-300 inline-block mb-0.5 cursor-help">Aprovechable</p>
-                                  <p className="text-xs font-black text-gray-800">
-                                    {(Math.max(0, msHa - remnant) * areaHa) > 0 ? (
-                                      <>
-                                        {Math.round(Math.max(0, msHa - remnant) * areaHa).toLocaleString('es')} <span className="text-[9px] font-semibold text-gray-500">kg</span>
-                                      </>
-                                    ) : <span className="text-red-500">—</span>}
-                                  </p>
-                                </div>
-                              </HoverTooltip>
-                              
-                              <HoverTooltip text={HOLISTIC_TOOLTIPS.estimatedDah} className="w-full">
-                                <div className={`bg-white rounded-lg border px-1.5 py-1.5 text-center h-full flex flex-col justify-center ${
-                                  !hasData || isRisky ? 'border-red-200 bg-red-50' : 'border-gray-200'
-                                }`}>
-                                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest cursor-help mb-0.5">Días DAH</p>
-                                  <p className={`text-xs font-black ${
-                                    isRisky ? 'text-red-600' : 'text-gray-800'
-                                  }`}>{availDays > 0 ? availDays : '0'}</p>
-                                </div>
-                              </HoverTooltip>
-                              
-                              <HoverTooltip text={HOLISTIC_TOOLTIPS.usagePct} className="w-full">
-                                <div className={`bg-white rounded-lg border px-1.5 py-1.5 flex flex-col items-center justify-center h-full ${
-                                  !hasData || isRisky ? 'border-red-200 bg-red-50' : 'border-gray-200'
-                                }`}>
-                                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest cursor-help mb-0.5">% Uso</p>
-                                  {usagePct !== null ? <UsageRing usagePct={usagePct} size="sm" showLabel={false} /> : <span className="text-red-500">—</span>}
-                                </div>
-                              </HoverTooltip>
-                            </div>
+                          <div className="pl-6 ml-1 mt-1">
                             {/* Remanente por potrero */}
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2">
                               <span className="text-[9px] text-gray-400 font-bold shrink-0">Remanente específico:</span>
                               <input
                                 type="number"
@@ -910,7 +903,7 @@ export default function SeasonPlanModal({
                                   setPaddockRemnants(prev => ({ ...prev, [paddock.id]: Number(e.target.value) }))
                                 }}
                                 onClick={e => e.stopPropagation()}
-                                className="w-20 text-xs font-bold bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-700 text-center outline-none focus:border-green-400"
+                                className="w-16 text-[10px] font-bold bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-gray-700 text-center outline-none focus:border-green-400"
                               />
                               <span className="text-[9px] text-gray-400">kg MS/ha</span>
                               {paddockRemnants[paddock.id] !== undefined && (
@@ -931,9 +924,9 @@ export default function SeasonPlanModal({
                                 ⚠️ El pasto disponible ({msHa} kg/ha) no supera el remanente ({remnant} kg/ha). Agregar animales en este potrero es riesgoso.
                               </p>
                             )}
-                          </>
+                          </div>
                         ) : (
-                          <p className="text-[10px] text-gray-300 italic">Sin datos de biomasa — completá en el potrero</p>
+                          <p className="text-[10px] text-gray-300 italic pl-6 ml-1 mt-1">Sin datos de biomasa — completá en el potrero</p>
                         )}
                       </div>
                     )

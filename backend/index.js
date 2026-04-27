@@ -4,13 +4,37 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// Restrict CORS to known origins — never allow wildcard in production
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'https://rodeo.app',
+  'https://www.rodeo.app',
+]
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.) only in development
+    if (!origin && process.env.NODE_ENV !== 'production') return callback(null, true)
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+    callback(new Error('Not allowed by CORS'))
+  },
+  credentials: true,
+}))
+app.use(express.json())
+
+// Validate required env vars at startup
+const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_ANON_KEY']
+const missing = REQUIRED_ENV.filter(k => !process.env[k])
+if (missing.length > 0) {
+  console.error(`[FATAL] Missing required env vars: ${missing.join(', ')}`)
+  // In production, crash fast. In dev, warn but continue.
+  if (process.env.NODE_ENV === 'production') process.exit(1)
+}
 
 // Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || 'placeholder_key';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseKey = process.env.SUPABASE_ANON_KEY
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null
 
 // GET /map-data
 // Fetches paddocks geometries and converts PostGIS to GeoJSON mapping Format

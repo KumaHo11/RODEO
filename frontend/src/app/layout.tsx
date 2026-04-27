@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
 import OfflineIndicator from '@/components/OfflineIndicator'
+import { Toaster } from 'sonner'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -52,6 +53,18 @@ export default function RootLayout({
           {children}
           <OfflineIndicator />
         </AuthProvider>
+        <Toaster
+          position="bottom-right"
+          richColors
+          closeButton
+          toastOptions={{
+            style: { fontFamily: 'inherit' },
+            classNames: {
+              success: 'border-green-200',
+              error: 'border-red-200',
+            },
+          }}
+        />
       </body>
     </html>
   )

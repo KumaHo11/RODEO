@@ -9,6 +9,8 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { getPaddockNDVI, SatelliteData } from '@/lib/services/satellite'
 import { X, Check, Plus, Satellite, Image as ImageIcon } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmModal'
+import { toast } from 'sonner'
 
 const MiCampoMap = dynamic(() => import('./components/MiCampoMap'), {
   ssr: false,
@@ -34,6 +36,7 @@ const DRAFT_PADDOCK = (name = '', area_ha = 0) => ({
 
 export default function MiCampoPage() {
   const { user } = useAuth()
+  const { confirm, ConfirmModal } = useConfirm()
   const searchParams = useSearchParams()
   const editPaddockId = searchParams.get('editPaddock')
   const [paddocks, setPaddocks]             = useState<any[]>([])
@@ -267,13 +270,14 @@ export default function MiCampoPage() {
               try {
                 const res = await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
                 if (!res.ok) {
-                  const errData = await res.json().catch(()=>({error: 'Error desconocido'}))
-                  alert(`No se pudo eliminar el potrero: ${errData.error}`)
+                  const errData = await res.json().catch(() => ({ error: 'Error desconocido' }))
+                  toast.error(`No se pudo eliminar el potrero: ${errData.error}`)
                 } else {
+                  toast.success('Potrero eliminado')
                   loadData()
                 }
-              } catch(err: any) {
-                alert(`No se pudo eliminar: ${err.message}`)
+              } catch (err: any) {
+                toast.error(`No se pudo eliminar: ${err.message}`)
               }
             }}
             activeGrazingPlans={activeGrazingPlans}
@@ -347,21 +351,29 @@ export default function MiCampoPage() {
             try {
               const res = await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
               if (!res.ok) {
-                const errData = await res.json().catch(()=>({error: 'Error desconocido'}))
-                alert(`No se pudo eliminar el potrero: ${errData.error}`)
+                const errData = await res.json().catch(() => ({ error: 'Error desconocido' }))
+                toast.error(`No se pudo eliminar el potrero: ${errData.error}`)
               } else {
+                toast.success('Potrero eliminado')
                 loadData()
               }
-            } catch(err: any) {
-              alert(`No se pudo eliminar: ${err.message}`)
+            } catch (err: any) {
+              toast.error(`No se pudo eliminar: ${err.message}`)
             }
           }}
           onDeleteField={async () => {
-            if (window.confirm('¿Eliminar los límites del campo? Podés volver a configurarlo cuando quieras.')) {
+            const ok = await confirm({
+              title: '¿Eliminar los límites del campo?',
+              description: 'Podés volver a configurarlo cuando quieras desde esta sección.',
+              confirmLabel: 'Sí, eliminar',
+              variant: 'warning',
+            })
+            if (ok) {
               await apiFetch('/api/organizations', {
                 method: 'PATCH',
                 body: JSON.stringify({ boundaries: null, total_area_ha: null }),
               })
+              toast.success('Límites del campo eliminados')
               loadData()
             }
           }}
@@ -435,6 +447,7 @@ export default function MiCampoPage() {
           </div>
         </div>
       )}
+      <ConfirmModal />
     </div>
   )
 }

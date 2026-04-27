@@ -3,25 +3,12 @@
  * POST /api/paddocks  — Crea un nuevo potrero
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
-
-async function getOrgId(req: NextRequest): Promise<{ orgId: string; uid: string } | null> {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
-  if (!token) return null
-  const decoded = await verifyFirebaseToken(token)
-  if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
-    'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
-    [decoded.uid]
-  )
-  if (!profile?.organization_id) return null
-  return { orgId: profile.organization_id, uid: decoded.uid }
-}
+import { requireAuth } from '@/lib/auth'
+import { query, mutate } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await getOrgId(req)
+    const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const paddocks = await query(
@@ -61,7 +48,7 @@ function extractGeometry(geojson: any): any | null {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await getOrgId(req)
+    const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const body = await req.json()

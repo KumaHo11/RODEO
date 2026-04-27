@@ -1,12 +1,11 @@
 /**
- * Centralized email sender — uses SendGrid (Google's GCP-recommended email partner)
- * Set SENDGRID_API_KEY in environment (.env.local and Cloud Run secrets)
+ * Centralized email sender — uses Resend (https://resend.com)
+ * Set RESEND_API_KEY in environment (.env.local and Cloud Run secrets)
+ * Free tier: 3,000 emails/month · No credit card required
  */
-import sgMail from '@sendgrid/mail'
+import { Resend } from 'resend'
 
-// This MUST match a Sender Identity verified in your SendGrid account.
-// Go to https://app.sendgrid.com/settings/sender_auth → Single Sender Verification
-const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'josorio@rodeoagtech.com'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'soporte@rodeoagtech.com'
 const FROM_NAME  = 'RODEO'
 
 // ── Template builder ───────────────────────────────────────────────────────
@@ -132,22 +131,22 @@ export async function sendEmail<T extends EmailType>(
   to: string,
   params: Parameters<typeof templates[T]>[0]
 ): Promise<void> {
-  const apiKey = process.env.SENDGRID_API_KEY
+  const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
-    console.warn('[sendEmail] SENDGRID_API_KEY not set — skipping email')
+    console.warn('[sendEmail] RESEND_API_KEY not set — skipping email')
     return
   }
 
-  sgMail.setApiKey(apiKey)
-
+  const resend = new Resend(apiKey)
   const tpl = (templates[type] as (p: any) => { subject: string; html: string })(params)
 
-  await sgMail.send({
+  const { error } = await resend.emails.send({
     to,
-    from: { email: FROM_EMAIL, name: FROM_NAME },
+    from: `${FROM_NAME} <${FROM_EMAIL}>`,
     subject: tpl.subject,
     html: tpl.html,
   })
 
+  if (error) throw new Error(`[sendEmail] Resend error: ${error.message}`)
   console.log(`[sendEmail] ✓ sent type=${type} to=${to}`)
 }

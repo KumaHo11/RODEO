@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
+import { FeatureGate } from '@/components/FeatureGate'
 import {
   TrendingUp, TrendingDown, Minus, Leaf, AlertTriangle,
   CheckCircle, Info, Sparkles, BarChart3, Target, Camera,
@@ -97,6 +98,20 @@ function holismoScore(paddocks: any[], plans: any[], herds: any[], weather: any)
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function InsightsPage() {
   const { user, profile } = useAuth()
+
+  return (
+    <FeatureGate
+      feature="ai_insights"
+      title="Módulo Insights IA"
+      description="Analizá tu campo con inteligencia artificial. Obtené recomendaciones predictivas de carga, forraje y clima basadas en tus datos reales."
+      requiredPlan="Holístico"
+    >
+      <InsightsContent user={user} profile={profile} />
+    </FeatureGate>
+  )
+}
+
+function InsightsContent({ user, profile }: { user: any; profile: any }) {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)

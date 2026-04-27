@@ -15,9 +15,14 @@ function createPool(): Pool {
     ssl: process.env.NODE_ENV === 'production'
       ? { rejectUnauthorized: false }
       : false,
-    max: 10,
+    // Scale: 20 max connections per Next.js instance (Cloud Run scales horizontally)
+    // Min 2 keeps connections warm to avoid cold-start latency on first requests
+    max: parseInt(process.env.DB_POOL_MAX || '20'),
+    min: parseInt(process.env.DB_POOL_MIN || '2'),
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
+    // Prevent runaway queries from blocking the pool under stress
+    statement_timeout: 30000, // 30s hard limit per query
   })
 
   pool.on('error', (err) => {

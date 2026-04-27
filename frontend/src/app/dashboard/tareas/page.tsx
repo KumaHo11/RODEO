@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
+import { FeatureGate } from '@/components/FeatureGate'
 import {
   Plus, CheckSquare, Clock, AlertTriangle, X, Check,
   ChevronDown, Loader2, User, Calendar, MapPin,
@@ -154,6 +155,19 @@ function TaskCard({ task, onStatusChange, isOwner }: {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function TareasPage() {
   const { user } = useAuth()
+  return (
+    <FeatureGate
+      feature="tareas"
+      title="Módulo de Tareas"
+      description="Assigná tareas al equipo, hacelos seguimiento y organizalos en Kanban. Disponible desde el plan Planificador."
+      requiredPlan="Planificador"
+    >
+      <TareasContent user={user} />
+    </FeatureGate>
+  )
+}
+
+function TareasContent({ user }: { user: any }) {
 
   const [tasks, setTasks]         = useState<Task[]>([])
   const [members, setMembers]     = useState<any[]>([])

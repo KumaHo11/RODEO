@@ -1,83 +1,76 @@
+'use client'
 /**
- * RodeoLogo — Wordmark SVG inline (fondo 100% transparente)
- * "RODEO" bold + "GANADERÍA DE PRECISIÓN" alineada al mismo ancho
- *
- * variant "light" → texto verde oscuro  (fondos blancos/claros)
- * variant "dark"  → texto blanco        (fondos oscuros: sidebar, login panel, hero)
+ * RodeoLogo — Solo Wordmark (Sin isotipo)
+ * 
+ * Basado en la última instrucción: "solo deja la palabra Rodeo".
+ * Se eliminó el isotipo circular para mantener la máxima simplicidad.
  */
 
+import React from 'react'
+
 interface RodeoLogoProps {
-  variant?: 'light' | 'dark' | 'green'
+  variant?: 'light' | 'dark'
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   showTagline?: boolean
-  iconOnly?: boolean   // no-op, mantenido por compatibilidad
   className?: string
+}
+
+const SIZES: Record<string, number> = {
+  xs: 18,
+  sm: 24,
+  md: 32,
+  lg: 44,
+  xl: 64,
 }
 
 export default function RodeoLogo({
   variant = 'light',
   size = 'md',
-  showTagline = false,
+  showTagline = true,
   className = '',
 }: RodeoLogoProps) {
   const isDark = variant === 'dark'
+  const fontSize = SIZES[size] ?? 32
 
-  const colWord    = isDark ? '#ffffff' : '#14532d'
-  const colTagline = isDark ? 'rgba(255,255,255,0.6)' : '#9ca3af'
-
-  // Alturas — header +20%, login +50% respecto a original
-  const heights: Record<string, number> = {
-    xs: 20,
-    sm: 28,
-    md: 36,   // header (+20%)
-    lg: 48,
-    xl: 72,   // login / registro (+50%)
-  }
-  const h = heights[size] ?? 36
-  const viewH = showTagline ? 40 : 26
+  const wordColor = isDark ? '#ffffff' : '#14532d'
+  const tagColor = isDark ? 'rgba(255,255,255,0.7)' : '#16a34a'
 
   return (
-    <svg
-      viewBox={`0 0 88 ${viewH}`}
-      height={h}
-      xmlns="http://www.w3.org/2000/svg"
-      aria-label="Rodeo — Ganadería de Precisión"
+    <div
+      className={`inline-flex flex-col ${className}`}
+      style={{ lineHeight: 1, flexShrink: 0 }}
       role="img"
-      className={className}
-      style={{ flexShrink: 0 }}
+      aria-label="RODEO"
     >
-      {/* RODEO — ancho ~84px en este viewBox */}
-      <text
-        x="0"
-        y={showTagline ? '17' : '20'}
-        fontFamily="'Helvetica Neue', Helvetica, Arial, sans-serif"
-        fontSize="22"
-        fontWeight="800"
-        letterSpacing="1.5"
-        fill={colWord}
-        dominantBaseline="middle"
-        textAnchor="start"
+      <span
+        style={{
+          fontFamily: "'Inter', 'Google Sans', system-ui, sans-serif",
+          fontWeight: 800,
+          fontSize: fontSize,
+          letterSpacing: '-0.03em',
+          color: wordColor,
+          lineHeight: 1,
+        }}
       >
         RODEO
-      </text>
+      </span>
 
-      {/* GANADERÍA DE PRECISIÓN — forzada al mismo ancho que RODEO */}
       {showTagline && (
-        <text
-          x="0"
-          y="33"
-          fontFamily="'Helvetica Neue', Helvetica, Arial, sans-serif"
-          fontSize="6"
-          fontWeight="400"
-          fill={colTagline}
-          dominantBaseline="middle"
-          textAnchor="start"
-          textLength="84"
-          lengthAdjust="spacingAndGlyphs"
+        <span
+          style={{
+            fontFamily: "'Inter', 'Google Sans', system-ui, sans-serif",
+            fontWeight: 600,
+            fontSize: Math.max(9, Math.round(fontSize * 0.28)),
+            letterSpacing: '0.12em',
+            color: tagColor,
+            marginTop: Math.round(fontSize * 0.1),
+            lineHeight: 1,
+            textTransform: 'uppercase',
+          }}
         >
-          GANADERÍA DE PRECISIÓN
-        </text>
+          Ganadería regenerativa
+        </span>
       )}
-    </svg>
+    </div>
   )
 }

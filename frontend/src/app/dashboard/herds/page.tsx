@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import {
   Plus, Search, Trash2, LayoutGrid, List, Download,
-  ChevronUp, ChevronDown, Filter, X, Calendar, Edit3,
+  ChevronUp, ChevronDown, Filter, X, Calendar, Edit3, Loader2,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import HerdModal, { type HerdData } from '@/components/HerdModal'
@@ -13,6 +13,8 @@ import {
   CATEGORIAS_COMERCIALES, CATEGORIA_LABEL_RAE, CATEGORIA_COLORS,
   type CategoriaComercial,
 } from '@/lib/categorias'
+import { useConfirm } from '@/components/ui/ConfirmModal'
+import { toast } from 'sonner'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +38,26 @@ function fmtDate(iso: string | null | undefined) {
 
 type SortKey = 'name' | 'head_count' | 'avg_weight_kg' | 'admission_date' | 'total_ev'
 
-// Abbreviated labels for card badge
+// ── Event type catalogue ─────────────────────────────────────────────────────
+
+const EVENT_TYPES = [
+  { key: 'pesada',        label: 'Pesada',                badge: 'bg-blue-100 text-blue-700',      needsQty: true,  needsWeight: true  },
+  { key: 'paricion',      label: 'Parición',              badge: 'bg-green-100 text-green-700',    needsQty: true,  needsWeight: false },
+  { key: 'destete',       label: 'Destete',               badge: 'bg-teal-100 text-teal-700',      needsQty: true,  needsWeight: true  },
+  { key: 'mortandad',     label: 'Mortandad',             badge: 'bg-red-100 text-red-700',        needsQty: true,  needsWeight: false },
+  { key: 'compra',        label: 'Compra',                badge: 'bg-emerald-100 text-emerald-700',needsQty: true,  needsWeight: true  },
+  { key: 'venta',         label: 'Venta',                 badge: 'bg-orange-100 text-orange-700',  needsQty: true,  needsWeight: true  },
+  { key: 'caravana',      label: 'Caravana / Marcación',  badge: 'bg-violet-100 text-violet-700',  needsQty: true,  needsWeight: false },
+  { key: 'sanidad',       label: 'Sanidad / Vacuna',      badge: 'bg-yellow-100 text-yellow-700',  needsQty: true,  needsWeight: false },
+  { key: 'traslado',      label: 'Traslado de potrero',   badge: 'bg-sky-100 text-sky-700',        needsQty: true,  needsWeight: false },
+  { key: 'stock_inicial', label: 'Stock inicial',         badge: 'bg-gray-100 text-gray-600',      needsQty: true,  needsWeight: true  },
+  { key: 'nota',          label: 'Nota',                  badge: 'bg-gray-100 text-gray-500',      needsQty: false, needsWeight: false },
+] as const
+
+const EVENT_BADGE: Record<string, string> = Object.fromEntries(EVENT_TYPES.map(e => [e.key, e.badge]))
+const EVENT_LABEL: Record<string, string> = Object.fromEntries(EVENT_TYPES.map(e => [e.key, e.label]))
+
+// ── Abbreviated labels for card badge ────────────────────────────────────────
 const CATEGORIA_ABBR: Record<string, string> = {
   VACAS: 'VAC', VAQUILLONAS: 'VEQ', TERNEROS: 'TER', TERNERAS: 'TRA',
   NOVILLOS: 'NOV', NOVILLITOS: 'NVT', TOROS: 'TOR', MEJ: 'MEJ',
@@ -96,6 +117,7 @@ async function exportMovementsExcel(herds: HerdData[]) {
 
 export default function HerdsPage() {
   const { user } = useAuth()
+  const { confirm, ConfirmModal } = useConfirm()
   const [herds,   setHerds]   = useState<HerdData[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -118,6 +140,16 @@ export default function HerdsPage() {
   // Modal
   const [modalOpen,    setModalOpen]    = useState(false)
   const [editingHerd,  setEditingHerd]  = useState<HerdData | null>(null)
+
+  // Event log
+  const [eventFilter,   setEventFilter]   = useState('all')
+  const [showEventForm, setShowEventForm] = useState(false)
+  const [savingEvent,   setSavingEvent]   = useState(false)
+  const [eventForm, setEventForm] = useState({
+    herd_id: '', event_type: 'pesada',
+    occurred_at: new Date().toISOString().split('T')[0],
+    quantity: '', weight_kg: '', notes: '',
+  })
 
   const loadHerds = async () => {
     if (!user) return
@@ -182,17 +214,25 @@ export default function HerdsPage() {
   const openEdit   = (h: HerdData) => { setEditingHerd(h); setModalOpen(true) }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este rodeo? Esta acción es irreversible.')) return
+    const ok = await confirm({
+      title: '¿Eliminar este rodeo?',
+      description: 'Esta acción es irreversible. Se borrarán todos los datos asociados al rodeo.',
+      confirmLabel: 'Sí, eliminar',
+      cancelLabel: 'Cancelar',
+      variant: 'danger',
+    })
+    if (!ok) return
     try {
       const res = await apiFetch(`/api/herds/${id}`, { method: 'DELETE' })
       if (!res.ok) {
-        const errData = await res.json().catch(()=>({error: 'Error desconocido'}))
-        alert(`No se pudo eliminar: ${errData.error}`)
+        const errData = await res.json().catch(() => ({ error: 'Error desconocido' }))
+        toast.error(`No se pudo eliminar: ${errData.error}`)
       } else {
         setHerds(prev => prev.filter(h => h.id !== id))
+        toast.success('Rodeo eliminado correctamente')
       }
-    } catch(err: any) {
-      alert(`No se pudo eliminar: ${err.message}`)
+    } catch (err: any) {
+      toast.error(`No se pudo eliminar: ${err.message}`)
     }
   }
 
@@ -526,47 +566,180 @@ export default function HerdsPage() {
 
       {/* ════ HISTORIAL VIEW ════ */}
       {view === 'historial' && (
-        loadingMov ? (
-          <div className="space-y-2">
-            {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
+        <div className="space-y-4">
+
+          {/* Toolbar: filters + new event button */}
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={() => setEventFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  eventFilter === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}>
+                Todos
+              </button>
+              {EVENT_TYPES.map(et => (
+                <button key={et.key} onClick={() => setEventFilter(et.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    eventFilter === et.key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}>
+                  {et.label}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowEventForm(v => !v)}
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 shrink-0">
+              <Plus className="w-4 h-4" /> Nuevo evento
+            </button>
           </div>
-        ) : movements.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
-            <p className="text-sm font-bold text-gray-400">Sin movimientos registrados</p>
-            <p className="text-[10px] text-gray-300 mt-1">Los movimientos aparecerán aquí cuando edites un rodeo</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <table className="w-full">
-              <thead className="border-b border-gray-100 bg-gray-50/70">
-                <tr>
-                  {['Fecha', 'Tipo', 'Rodeo / Entidad', 'Cantidad', 'Peso prom. (kg)', 'Notas'].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-gray-400 tracking-widest uppercase">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {movements.map((m, i) => {
-                  const herdName = herds.find(h => h.id === m.entity_id)?.name ?? m.entity_name ?? m.entity_id
-                  return (
-                    <tr key={m.id ?? i} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3 text-xs font-bold text-gray-600 tabular-nums whitespace-nowrap">
-                        {m.occurred_at ? new Date(m.occurred_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gray-100 text-gray-600">{m.event_type ?? '—'}</span>
-                      </td>
-                      <td className="px-4 py-3 text-sm font-bold text-gray-800">{herdName}</td>
-                      <td className="px-4 py-3 text-sm font-bold text-gray-700">{m.quantity != null ? m.quantity.toLocaleString() : '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500">{m.weight_kg ? `${Math.round(m.weight_kg)} kg` : '—'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{m.notes || '—'}</td>
+
+          {/* New event form */}
+          {showEventForm && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h3 className="text-sm font-black text-gray-900 mb-4">Registrar nuevo evento de hacienda</h3>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">RODEO *</label>
+                  <select value={eventForm.herd_id}
+                    onChange={e => setEventForm(f => ({ ...f, herd_id: e.target.value }))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-900 outline-none focus:ring-1 focus:ring-green-600">
+                    <option value="">Seleccioná un rodeo</option>
+                    {herds.map(h => <option key={h.id} value={h.id!}>{h.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">TIPO DE EVENTO *</label>
+                  <select value={eventForm.event_type}
+                    onChange={e => setEventForm(f => ({ ...f, event_type: e.target.value }))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-900 outline-none focus:ring-1 focus:ring-green-600">
+                    {EVENT_TYPES.map(et => <option key={et.key} value={et.key}>{et.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">FECHA *</label>
+                  <input type="date" value={eventForm.occurred_at}
+                    onChange={e => setEventForm(f => ({ ...f, occurred_at: e.target.value }))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                </div>
+                {EVENT_TYPES.find(e => e.key === eventForm.event_type)?.needsQty && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">CANTIDAD (cabezas)</label>
+                    <input type="number" min="0" value={eventForm.quantity}
+                      onChange={e => setEventForm(f => ({ ...f, quantity: e.target.value }))}
+                      placeholder="0"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                  </div>
+                )}
+                {EVENT_TYPES.find(e => e.key === eventForm.event_type)?.needsWeight && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">PESO PROMEDIO (kg)</label>
+                    <input type="number" min="0" value={eventForm.weight_kg}
+                      onChange={e => setEventForm(f => ({ ...f, weight_kg: e.target.value }))}
+                      placeholder="0"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">NOTAS</label>
+                  <input type="text" value={eventForm.notes}
+                    onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="Detalle adicional..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100">
+                <button
+                  disabled={!eventForm.herd_id || savingEvent}
+                  onClick={async () => {
+                    if (!eventForm.herd_id) return
+                    setSavingEvent(true)
+                    const herd = herds.find(h => h.id === eventForm.herd_id)
+                    try {
+                      const res = await apiFetch('/api/movements', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          entity_type: 'herd',
+                          entity_id:   eventForm.herd_id,
+                          entity_name: herd?.name,
+                          event_type:  eventForm.event_type,
+                          occurred_at: eventForm.occurred_at || new Date().toISOString(),
+                          quantity:    eventForm.quantity  ? Number(eventForm.quantity)  : null,
+                          weight_kg:   eventForm.weight_kg ? Number(eventForm.weight_kg) : null,
+                          notes:       eventForm.notes || null,
+                        }),
+                      })
+                      if (res.ok) {
+                        toast.success('Evento registrado correctamente')
+                        setEventForm({ herd_id: '', event_type: 'pesada', occurred_at: new Date().toISOString().split('T')[0], quantity: '', weight_kg: '', notes: '' })
+                        setShowEventForm(false)
+                        loadMovements()
+                      } else {
+                        toast.error('Error al guardar el evento')
+                      }
+                    } catch { toast.error('Error de conexión') }
+                    setSavingEvent(false)
+                  }}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all">
+                  {savingEvent ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Guardar evento
+                </button>
+                <button onClick={() => setShowEventForm(false)}
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-sm transition-all">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Table */}
+          {loadingMov ? (
+            <div className="space-y-2">
+              {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
+            </div>
+          ) : (() => {
+            const filteredMov = eventFilter === 'all' ? movements : movements.filter(m => m.event_type === eventFilter)
+            return filteredMov.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
+                <p className="text-sm font-bold text-gray-400">
+                  Sin eventos {eventFilter !== 'all' ? `de tipo "${EVENT_LABEL[eventFilter] ?? eventFilter}"` : 'registrados'}
+                </p>
+                <p className="text-[10px] text-gray-300 mt-1">Usá el botón «Nuevo evento» para registrar el primero</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <table className="w-full">
+                  <thead className="border-b border-gray-100 bg-gray-50/70">
+                    <tr>
+                      {['Fecha', 'Tipo', 'Rodeo', 'Cantidad', 'Peso prom.', 'Notas'].map(h => (
+                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-gray-400 tracking-widest uppercase">{h}</th>
+                      ))}
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredMov.map((m, i) => {
+                      const herdName = herds.find(h => h.id === m.entity_id)?.name ?? m.entity_name ?? '—'
+                      const badge = EVENT_BADGE[m.event_type] ?? 'bg-gray-100 text-gray-500'
+                      const label = EVENT_LABEL[m.event_type] ?? m.event_type
+                      return (
+                        <tr key={m.id ?? i} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-4 py-3 text-xs font-bold text-gray-600 tabular-nums whitespace-nowrap">
+                            {m.occurred_at ? new Date(m.occurred_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${badge}`}>{label}</span>
+                          </td>
+                          <td className="px-4 py-3 text-sm font-bold text-gray-800">{herdName}</td>
+                          <td className="px-4 py-3 text-sm font-bold text-gray-700">{m.quantity != null ? m.quantity.toLocaleString('es-AR') : '—'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{m.weight_kg ? `${Math.round(m.weight_kg)} kg` : '—'}</td>
+                          <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{m.notes || '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
+        </div>
       )}
 
       {/* ── Modal ── */}
@@ -579,6 +752,7 @@ export default function HerdsPage() {
           onSaved={loadHerds}
         />
       )}
+      <ConfirmModal />
     </div>
   )
 }

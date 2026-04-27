@@ -4,7 +4,10 @@
  * Funciona en Edge Runtime y sin credenciales de service account
  */
 
-const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'rodeo-app-fac50'
+const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+if (!FIREBASE_PROJECT_ID) {
+  throw new Error('NEXT_PUBLIC_FIREBASE_PROJECT_ID env var is not set')
+}
 
 interface FirebaseTokenPayload {
   uid: string
@@ -17,6 +20,9 @@ interface FirebaseTokenPayload {
   aud: string
   iss: string
   sub: string
+  /** Custom claim seteado por Firebase Admin SDK */
+  system_role?: string
+  [key: string]: unknown
 }
 
 /**
@@ -80,6 +86,8 @@ export async function verifyFirebaseToken(idToken: string): Promise<FirebaseToke
       aud: typeof payload.aud === 'string' ? payload.aud : payload.aud![0],
       iss: payload.iss!,
       sub: payload.sub!,
+      // Custom claims (Firebase Admin SDK sets these on the JWT)
+      system_role: payload['system_role'] as string | undefined,
     }
   } catch (err) {
     console.error('Firebase token verification failed:', err)

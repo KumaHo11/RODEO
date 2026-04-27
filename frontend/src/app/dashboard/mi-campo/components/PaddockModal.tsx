@@ -11,6 +11,8 @@ import { apiFetch } from '@/lib/apiFetch'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
+import { toast } from 'sonner'
+import { useConfirm } from '@/components/ui/ConfirmModal'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -275,6 +277,7 @@ function Collapsible({ title, children, defaultOpen = false, accent }: {
 export default function PaddockModal({
   paddock, ndviData, onClose, onSave, onDelete, isCreating = false, user, paddocks = [], herds = [], planningDefaults,
 }: Props) {
+  const { confirm, ConfirmModal } = useConfirm()
   const [activeTab, setActiveTab] = useState<'operativo' | 'infraestructura' | 'registros'>('operativo')
   const [saving, setSaving]       = useState(false)
 
@@ -388,9 +391,9 @@ export default function PaddockModal({
 
   // ── Audio con SpeechRecognition + MediaRecorder ────────────────────────────
   const startRecording = useCallback(async () => {
+    // Reset ONLY audio state — never touch noteTitle (shared state)
     setAudioTranscript('')
     setAudioBlob(null); setAudioUrl(null)
-    // SpeechRecognition para transcripción en vivo
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (SR) {
       const rec = new SR()
@@ -399,12 +402,11 @@ export default function PaddockModal({
         let full = ''
         for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript
         setAudioTranscript(full)
-        if (!noteTitle) setNoteTitle(full.split('.')[0].slice(0, 60))
+        // Do NOT write to noteTitle from here — user controls the title field
       }
       rec.start()
       speechRef.current = rec
     }
-    // MediaRecorder para archivo de audio
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mr = new MediaRecorder(stream)
@@ -418,14 +420,31 @@ export default function PaddockModal({
       }
       mr.start()
       mediaRecorderRef.current = mr
-    } catch { alert('No se pudo acceder al micrófono.') }
+    } catch { toast.error('No se pudo acceder al micrófono. Verificá los permisos del navegador.') }
     setRecording(true)
-  }, [noteTitle])
+  }, [])
 
   const stopRecording = useCallback(() => {
     speechRef.current?.stop()
     mediaRecorderRef.current?.stop()
     setRecording(false)
+  }, [])
+
+  // ── Helper: reset ALL capture state after saving ───────────────────────────
+  const resetNoteCapture = useCallback(() => {
+    setNoteText('')
+    setNoteTitle('')
+    setAudioTranscript('')
+    setAudioBlob(null)
+    setAudioUrl(null)
+    setNoteImage(null)
+    setNoteImagePreview(null)
+    setNoteResult(null)
+    setNoteMode(null)
+    setNoteExpanded(false)
+    setRecording(false)
+    speechRef.current?.stop()
+    mediaRecorderRef.current?.stop()
   }, [])
 
   // ── Guardar nota ───────────────────────────────────────────────────────────
@@ -450,9 +469,24 @@ export default function PaddockModal({
       fd.append('folder', 'field-notes-audio')
       const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
       if (up.ok) ({ url: audio_url } = await up.json())
+
+      // Transcribe with Gemini for better accuracy (enhances Web Speech transcript)
+      try {
+        const tf = new FormData()
+        tf.append('file', new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
+        const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
+        if (tr.ok) {
+          const d = await tr.json()
+          if (d.transcript && d.transcript !== '[Sin voz detectable]') {
+            setAudioTranscript(d.transcript) // update for title fallback below
+          }
+        }
+      } catch { /* keep Web Speech transcript */ }
     }
 
-    const title = noteTitle.trim() || content?.slice(0, 60) || noteImage?.name || 'Nota de campo'
+    const finalContent = noteText || audioTranscript
+    const title = noteTitle.trim() || finalContent?.slice(0, 60) || noteImage?.name || 'Nota de campo'
+
     await apiFetch('/api/field-notes', {
       method: 'POST',
       body: JSON.stringify({
@@ -460,35 +494,57 @@ export default function PaddockModal({
         category: noteResult ? 'BIOMASA' : 'GENERAL',
         tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
         title,
-        content: content || null,
+        content: finalContent || null,
         photo_url,
         audio_url,
         analysis_result: noteResult || null,
       }),
     })
-    setNoteSaving(false); setNoteSaved(true)
-    setNoteText(''); setAudioTranscript(''); setNoteMode(null); setNoteResult(null); setNoteImage(null)
-    setNoteExpanded(false)
+
+    setNoteSaving(false)
+    setNoteSaved(true)
     setTimeout(() => setNoteSaved(false), 3000)
-    loadNotes() // recarga el historial
-  }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes, noteTitle, audioBlob])
+    resetNoteCapture() // ← Full reset: clears ALL state for next capture
+    loadNotes()
+  }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes, noteTitle, audioBlob, resetNoteCapture])
 
   // ── Eliminar nota (solo creador) ─────────────────────────────────────────────
   const deleteNote = useCallback(async (noteId: string) => {
-    if (!confirm('¿Eliminar este registro? Quedará marcado como eliminado en el historial.')) return
+    const ok = await confirm({
+      title: '¿Eliminar este registro?',
+      description: 'El registro quedará marcado como eliminado en el historial.',
+      confirmLabel: 'Eliminar',
+      variant: 'danger',
+    })
+    if (!ok) return
     await apiFetch(`/api/field-notes/${noteId}`, { method: 'DELETE' })
     setDeletedNotes(prev => ({ ...prev, [noteId]: new Date() }))
-  }, [])
+  }, [confirm])
 
   const analyzeNoteImage = useCallback(async () => {
     if (!noteImage) return
     setNoteAnalyzing(true)
+    setNoteResult(null)
     try {
       const reader = new FileReader()
-      const b64: string = await new Promise((res, rej) => { reader.onload = () => res((reader.result as string).split(',')[1]); reader.onerror = rej; reader.readAsDataURL(noteImage) })
-      const resp = await fetch('/api/analyze-biomass', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: b64, mimeType: noteImage.type, area_ha: areaHa }) })
-      setNoteResult(resp.ok ? await resp.json() : null)
-    } catch {}
+      const b64: string = await new Promise((res, rej) => {
+        reader.onload = () => res((reader.result as string).split(',')[1])
+        reader.onerror = rej
+        reader.readAsDataURL(noteImage)
+      })
+      // Use apiFetch so Firebase auth token is included
+      const resp = await apiFetch('/api/analyze-biomass', {
+        method: 'POST',
+        body: JSON.stringify({ imageBase64: b64, mimeType: noteImage.type, area_ha: areaHa })
+      })
+      const data = resp.ok ? await resp.json() : null
+      if (data?.success && data?.data) {
+        setNoteResult(data.data)
+      } else if (data?.dry_matter_kg_ha) {
+        // legacy shape
+        setNoteResult(data)
+      }
+    } catch (e) { console.error('analyzeNoteImage error:', e) }
     setNoteAnalyzing(false)
   }, [noteImage, areaHa])
 
@@ -532,6 +588,7 @@ export default function PaddockModal({
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+      <ConfirmModal />
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col">
 
         {/* Header — mismo estilo que Rebaños */}
@@ -863,11 +920,19 @@ export default function PaddockModal({
                     )}
                   </div>
                   <div className="p-4">
-                    {/* Three capture buttons */}
+                    {/* Three capture buttons — switching mode resets previous mode state */}
                     <div className="grid grid-cols-3 gap-2 mb-3">
                       {/* Mic */}
                       <button type="button"
-                        onClick={() => { if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') } }}
+                        onClick={() => {
+                          if (noteMode === 'audio') {
+                            setNoteExpanded(false); setNoteMode(null)
+                          } else {
+                            // Clear previous mode data before switching
+                            setNoteText(''); setNoteImage(null); setNoteImagePreview(null); setNoteResult(null)
+                            setNoteExpanded(true); setNoteMode('audio')
+                          }
+                        }}
                         className={`relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'}`}>
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
                           {recording ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
@@ -877,7 +942,16 @@ export default function PaddockModal({
                       </button>
                       {/* Camera */}
                       <button type="button"
-                        onClick={() => { if (noteExpanded && noteMode === 'image') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('image') } }}
+                        onClick={() => {
+                          if (noteMode === 'image') {
+                            setNoteExpanded(false); setNoteMode(null)
+                          } else {
+                            // Clear previous mode data
+                            setAudioTranscript(''); setAudioBlob(null); setAudioUrl(null); setNoteText('')
+                            speechRef.current?.stop(); mediaRecorderRef.current?.stop(); setRecording(false)
+                            setNoteExpanded(true); setNoteMode('image')
+                          }
+                        }}
                         className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'image' ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'}`}>
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'image' ? 'bg-green-500 shadow-md shadow-green-200' : 'bg-green-100'}`}>
                           <Camera className={`w-4 h-4 ${noteMode === 'image' ? 'text-white' : 'text-green-600'}`} />
@@ -886,7 +960,17 @@ export default function PaddockModal({
                       </button>
                       {/* Text */}
                       <button type="button"
-                        onClick={() => { if (noteExpanded && noteMode === 'text') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('text') } }}
+                        onClick={() => {
+                          if (noteMode === 'text') {
+                            setNoteExpanded(false); setNoteMode(null)
+                          } else {
+                            // Clear previous mode data
+                            setAudioTranscript(''); setAudioBlob(null); setAudioUrl(null)
+                            setNoteImage(null); setNoteImagePreview(null); setNoteResult(null)
+                            speechRef.current?.stop(); mediaRecorderRef.current?.stop(); setRecording(false)
+                            setNoteExpanded(true); setNoteMode('text')
+                          }
+                        }}
                         className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'text' ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'}`}>
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'text' ? 'bg-gray-700 shadow-md' : 'bg-gray-100'}`}>
                           <BookOpen className={`w-4 h-4 ${noteMode === 'text' ? 'text-white' : 'text-gray-500'}`} />
@@ -980,7 +1064,11 @@ export default function PaddockModal({
                         <div className="flex gap-2">
                           {(noteText || audioTranscript || noteImage || audioBlob) && (
                             <button type="button"
-                              onClick={async () => { await saveQuickNote(); setSessionNoteCount(c => c + 1) }}
+                              onClick={async () => {
+                                await saveQuickNote()
+                                setSessionNoteCount(c => c + 1)
+                                // resetNoteCapture() is called inside saveQuickNote — no need here
+                              }}
                               disabled={noteSaving}
                               className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">
                               {noteSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -988,7 +1076,7 @@ export default function PaddockModal({
                             </button>
                           )}
                           <button type="button"
-                            onClick={() => { setNoteExpanded(false); setNoteMode(null); setNoteTitle(''); setNoteText(''); setAudioTranscript(''); setNoteImage(null); setNoteImagePreview(null); setAudioBlob(null); setAudioUrl(null) }}
+                            onClick={resetNoteCapture}
                             className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700">Cancelar</button>
                         </div>
                       </div>
@@ -1180,7 +1268,15 @@ export default function PaddockModal({
           {!isCreating ? (
             <button
               type="button"
-              onClick={() => { if (window.confirm(`¿Eliminar el potrero "${paddock.name}"?`)) { onDelete?.(paddock.id); onClose() } }}
+                          onClick={async () => {
+                const ok = await confirm({
+                  title: `¿Eliminar el potrero "${paddock.name}"?`,
+                  description: 'Esta acción eliminará el potrero y todos sus registros asociados.',
+                  confirmLabel: 'Eliminar potrero',
+                  variant: 'danger',
+                })
+                if (ok) { onDelete?.(paddock.id); onClose() }
+              }}
               className="text-sm font-bold text-red-500 hover:text-red-700 flex items-center gap-1.5 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" /> Eliminar

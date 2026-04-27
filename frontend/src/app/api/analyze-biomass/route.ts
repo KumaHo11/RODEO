@@ -1,20 +1,31 @@
+/**
+ * POST /api/analyze-biomass
+ * Analiza una foto de pastura y devuelve estimación de biomasa con Gemini.
+ */
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextRequest, NextResponse } from 'next/server'
+import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 export async function POST(req: NextRequest) {
   try {
+    // Auth opcional (no bloqueante para facilitar debugging)
+    const authHeader = req.headers.get('authorization') || ''
+    const token = authHeader.replace('Bearer ', '').trim()
+    if (token) {
+      const decoded = await verifyFirebaseToken(token)
+      if (!decoded) return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
+    }
+
     const { imageBase64, mimeType = 'image/jpeg' } = await req.json()
 
     if (!imageBase64) {
       return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 })
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
-
-
+    // Use gemini-2.0-flash (stable, supports vision)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
     const prompt = `Eres un experto agronómico especializado en pasturas y forraje del cono sur de América Latina.
 Analizá esta foto de pastura/potrero y respondé SOLO con un objeto JSON válido, sin texto adicional, con exactamente estos campos:
@@ -30,7 +41,7 @@ Analizá esta foto de pastura/potrero y respondé SOLO con un objeto JSON válid
   "notes": texto breve con observaciones adicionales sobre el estado de la pastura
 }
 Si la imagen NO es de una pastura o pasto, devolvé: {"error": "La imagen no parece ser de una pastura"}
-Respondé SOLO con el JSON, sin markdown, sin explicaciones.`
+Respondé SOLO con el JSON, sin markdown, sin bloques de código, sin explicaciones.`
 
     const result = await model.generateContent([
       {
@@ -44,10 +55,13 @@ Respondé SOLO con el JSON, sin markdown, sin explicaciones.`
 
     const text = result.response.text().trim()
 
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    // Strip markdown code fences if model wraps in ```json ... ```
+    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ success: false, error: 'No se pudo parsear la respuesta de IA' }, { status: 500 })
+      console.error('Biomass: no JSON in response:', text)
+      return NextResponse.json({ success: false, error: 'No se pudo parsear la respuesta de IA', raw: text }, { status: 500 })
     }
 
     const data = JSON.parse(jsonMatch[0])
@@ -58,7 +72,7 @@ Respondé SOLO con el JSON, sin markdown, sin explicaciones.`
 
     return NextResponse.json({ success: true, data })
   } catch (err: any) {
-    console.error('Gemini analyze error:', err)
+    console.error('Gemini analyze-biomass error:', err)
     return NextResponse.json({ success: false, error: err.message || 'Error en análisis de IA' }, { status: 500 })
   }
 }

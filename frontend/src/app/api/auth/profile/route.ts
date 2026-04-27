@@ -25,11 +25,14 @@ export async function GET(req: NextRequest) {
 
     // Buscar perfil en Cloud SQL
     const profile = await queryOne(
-      `SELECT id, firebase_uid, email, first_name, last_name, avatar_url,
-              organization_id, onboarding_step, team_role, permissions,
-              country_code, role, phone, is_first_login
-       FROM profiles
-       WHERE firebase_uid = $1`,
+      `SELECT p.id, p.firebase_uid, p.email, p.first_name, p.last_name, p.avatar_url,
+              p.organization_id, p.onboarding_step, p.team_role, p.permissions,
+              p.country_code, p.role, p.phone, p.is_first_login, p.is_active, p.system_role,
+              sp.slug AS plan_slug, sp.name AS plan_name
+       FROM profiles p
+       LEFT JOIN organizations o ON p.organization_id = o.id
+       LEFT JOIN subscriptions_plans sp ON o.subscription_plan_id = sp.id
+       WHERE p.firebase_uid = $1`,
       [firebaseUid]
     )
 
@@ -37,7 +40,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ profile })
+    // Bloquear acceso si el usuario fue deshabilitado por el admin
+    if ((profile as any).is_active === false) {
+      return NextResponse.json(
+        { error: 'Cuenta deshabilitada. Contactá a soporte.', code: 'account_disabled' },
+        { status: 403 }
+      )
+    }
+
+    // Cargar feature flags del plan de la organización
+    let plan_feature_flags: any[] = []
+    if ((profile as any).organization_id) {
+      plan_feature_flags = await query(
+        `SELECT pff.flag_key, pff.flag_value, pff.flag_type, pff.label
+         FROM plan_feature_flags pff
+         JOIN subscriptions_plans sp ON pff.plan_id = sp.id
+         JOIN organizations o ON o.subscription_plan_id = sp.id
+         WHERE o.id = $1`,
+        [(profile as any).organization_id]
+      )
+    }
+
+    return NextResponse.json({ profile: { ...profile, plan_feature_flags } })
   } catch (err: any) {
     console.error('GET /api/auth/profile error:', err)
     if (err.code === 'auth/id-token-expired' || err.code === 'auth/argument-error') {
