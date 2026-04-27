@@ -208,21 +208,31 @@ export default function MiCampoPage() {
       if (setupFieldArea && Number(setupFieldArea) > 0) patch.total_area_ha = Number(setupFieldArea)
       if (setupFieldName.trim()) patch.name = setupFieldName.trim()
       if (setupFieldLocation.trim()) patch.location_label = setupFieldLocation.trim()
-      // Only persist a real server URL (not a local blob: URL which is temporary)
-      const hasRealImgUrl = setupImgUrl && !setupImgUrl.startsWith('blob:')
-      if (hasRealImgUrl) patch.technical_data = { ...(org?.technical_data || {}), field_image_url: setupImgUrl }
+
+      // Always carry the field_image_url forward:
+      // - If a new real server URL was uploaded this session, use it
+      // - Otherwise keep whatever was already in the DB
+      const existingImgUrl = org?.technical_data?.field_image_url as string | null
+      const newServerUrl   = setupImgUrl && !setupImgUrl.startsWith('blob:') ? setupImgUrl : null
+      const finalImgUrl    = newServerUrl || existingImgUrl || null
+
+      // Always write technical_data so we don't accidentally drop field_image_url
+      patch.technical_data = {
+        ...(org?.technical_data || {}),
+        ...(finalImgUrl ? { field_image_url: finalImgUrl } : {}),
+      }
+
       const res = await apiFetch('/api/organizations', {
         method: 'PATCH',
         body: JSON.stringify(patch),
       })
       if (res.ok) {
-        const hadImg = !!setupImgUrl
         setSetupFieldModal(false)
         setSetupImgUrl(null)
         setSetupImgFile(null)
         await loadData()
-        // Keep image view active after saving
-        if (hadImg || sessionFieldImg) setMapView('image')
+        // Keep image view active after saving if any image exists
+        if (finalImgUrl || sessionFieldImg) setMapView('image')
       }
     } catch {}
     setSavingField(false)
@@ -237,6 +247,24 @@ export default function MiCampoPage() {
         const { url } = await res.json()
         setSetupImgUrl(url)           // replace blob URL with real server URL
         setSessionFieldImg(url)       // update session image too
+
+        // ── Persist immediately to DB so navigation away doesn't lose the image ──
+        // Merge with existing technical_data to avoid overwriting other fields
+        await apiFetch('/api/organizations', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            technical_data: {
+              ...(org?.technical_data || {}),
+              field_image_url: url,
+            },
+          }),
+        })
+        // Silently refresh org state so fieldImg is up-to-date
+        const orgRes = await apiFetch('/api/organizations')
+        if (orgRes.ok) {
+          const { organization } = await orgRes.json()
+          setOrg(organization)
+        }
       } else {
         console.warn('Image upload failed, local blob preview will not persist')
       }
@@ -260,7 +288,9 @@ export default function MiCampoPage() {
     setSetupFieldArea(org?.total_area_ha || '')
     setSetupFieldName(org?.name || '')
     setSetupFieldLocation(org?.location_label || '')
-    setSetupImgUrl(null)
+    // Pre-load the existing server URL so the modal shows the current photo
+    const existingImgUrl = org?.technical_data?.field_image_url as string | null
+    setSetupImgUrl(existingImgUrl || null)
     setSetupImgFile(null)
     setSetupFieldModal(true)
   }
