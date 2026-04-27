@@ -717,29 +717,54 @@ function InteractiveGantt({
                     const REAL_TOP = 36
                     const BAR_H    = 28
 
+                    // ── Season detection (Hemisferio Sur) ──
+                    // Cerrada: otoño+invierno (meses 3-8)
+                    // Abierta: primavera+verano (meses 9-2)
+                    const entryMonth = new Date(plan.entry_date + 'T00:00:00').getMonth() + 1
+                    const isCerrada = entryMonth >= 3 && entryMonth <= 8
+
+                    // ── Color scheme ──
+                    // Temporada CERRADA → azules
+                    //   Planificado futuro: azul pastel con rayas
+                    //   Completado: azul sólido
+                    // Temporada ABIERTA → verdes (comportamiento previo)
+                    //   Planificado futuro: verde pastel con rayas
+                    //   Completado: verde sólido
                     let planColor: string
                     let patternColor: string
+                    let isSolid = false
+
                     if (isCompleted) {
-                      // Completado: grisado — la info real la muestra la barra verde debajo
-                      planColor    = 'rgba(156,163,175,0.12)'
-                      patternColor = 'rgba(156,163,175,0.25)'
+                      planColor    = isCerrada ? 'rgba(37,99,235,0.85)'  : 'rgba(22,163,74,0.85)'   // azul sólido | verde sólido
+                      patternColor = planColor
+                      isSolid = true
+                    } else if (hasRealEntry) {
+                      // En curso: color sólido según temporada
+                      planColor    = isCerrada ? '#3b82f6' : '#16a34a'
+                      patternColor = planColor
+                      isSolid = true
                     } else if (isOverdue) {
-                      planColor    = 'rgba(252,165,165,0.22)'   // rojo pastel
+                      planColor    = 'rgba(252,165,165,0.22)'
                       patternColor = 'rgba(239,68,68,0.40)'
-                    } else if (isPast) {
-                      // En curso: sugerida=cyan, manual=verde
-                      planColor    = isSuggested ? 'rgba(186,230,253,0.22)' : 'rgba(134,239,172,0.22)'
-                      patternColor = isSuggested ? 'rgba(14,165,233,0.40)' : 'rgba(34,197,94,0.40)'
                     } else {
-                      // Futuro planificado: sugerida=celeste, manual=verde pastel
-                      planColor    = isSuggested ? 'rgba(186,230,253,0.22)' : 'rgba(134,239,172,0.18)'
-                      patternColor = isSuggested ? 'rgba(14,165,233,0.40)' : 'rgba(34,197,94,0.40)'
+                      // Planificado futuro: rayas diagonales por temporada
+                      planColor    = isCerrada
+                        ? 'rgba(219,234,254,0.30)'    // azul muy claro
+                        : (isSuggested ? 'rgba(186,230,253,0.22)' : 'rgba(134,239,172,0.18)')
+                      patternColor = isCerrada
+                        ? 'rgba(59,130,246,0.45)'     // azul
+                        : (isSuggested ? 'rgba(14,165,233,0.40)' : 'rgba(34,197,94,0.40)')
                     }
 
                     const borderColor = isCompleted
-                      ? 'rgba(156,163,175,0.40)'
-                      : isOverdue ? 'rgba(239,68,68,0.55)'
-                      : isSuggested ? 'rgba(14,165,233,0.55)' : 'rgba(34,197,94,0.55)'
+                      ? (isCerrada ? 'rgba(37,99,235,0.70)' : 'rgba(22,163,74,0.70)')
+                      : hasRealEntry
+                        ? (isCerrada ? '#2563eb' : '#15803d')
+                        : isOverdue
+                          ? 'rgba(239,68,68,0.55)'
+                          : isCerrada
+                            ? 'rgba(59,130,246,0.55)'
+                            : (isSuggested ? 'rgba(14,165,233,0.55)' : 'rgba(34,197,94,0.55)')
 
                     // ── % USO: días planificados / DAH estimado × 100 ─────────
                     const planUsableMs = calculateUsableForage(ghostMsHa, targetRemnant, ghostAreaHa)
@@ -768,7 +793,7 @@ function InteractiveGantt({
                           cursor: isCompleted ? 'pointer' : 'grab',
                           zIndex: 20,
                           overflow: 'hidden',
-                          backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 4px, ${patternColor} 4px, ${patternColor} 8px)`,
+                          backgroundImage: isSolid ? 'none' : `repeating-linear-gradient(45deg, transparent, transparent 4px, ${patternColor} 4px, ${patternColor} 8px)`,
                           backgroundSize: '8px 8px',
                           display: 'flex',
                           alignItems: 'center',
@@ -999,8 +1024,8 @@ function InteractiveGantt({
               <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Manual</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-8 h-4 rounded-sm bg-orange-400" />
-              <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Real</span>
+              <div className="w-8 h-4 rounded-sm bg-green-600" />
+              <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Activo/Real</span>
             </div>
           </div>
           <div className="w-px h-4 bg-gray-200" />
@@ -1131,7 +1156,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     return d.toISOString().split('T')[0]
   })
 
-  // Jump to open/closed season when filter changes (only when exactly one is selected)
+  // Jump to correct window when filter changes
   useEffect(() => {
     const year = new Date().getFullYear()
     if (seasonalFilters.length === 1) {
@@ -1144,8 +1169,28 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         setGanttWindow(mar.toISOString().split('T')[0])
         setGanttPeriod('semestral')
       }
+    } else if (seasonalFilters.length === 2) {
+      // ANUAL: compute real span from all plans
+      const allDates = plans.flatMap(p => [p.entry_date, p.exit_date].filter(Boolean)) as string[]
+      if (allDates.length >= 2) {
+        const minDate = allDates.reduce((a, b) => (a < b ? a : b))
+        const maxDate = allDates.reduce((a, b) => (a > b ? a : b))
+        const spanDays = daysBetween(minDate, maxDate) + 14  // 2-week padding
+        // Start window 1 week before first plan
+        const startD = new Date(minDate + 'T00:00:00')
+        startD.setDate(startD.getDate() - 7)
+        setGanttWindow(startD.toISOString().split('T')[0])
+        // Pick the best period bucket that covers the full span
+        if (spanDays <= 84)        setGanttPeriod('trimestral')
+        else if (spanDays <= 180)  setGanttPeriod('semestral')
+        else                       setGanttPeriod('anual')
+      } else {
+        // No plans yet — show current year from Jan
+        setGanttWindow(`${year}-01-01`)
+        setGanttPeriod('anual')
+      }
     }
-  }, [seasonalFilters])
+  }, [seasonalFilters, plans])
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [showPlanDropdown, setShowPlanDropdown] = useState(false)
@@ -1563,25 +1608,37 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     if (!user) return
     setLoading(true)
     try {
-      const [paddocksRes, herdsRes, plansRes, eventsRes, mercadoRes] = await Promise.all([
+      const [paddocksRes, herdsRes, plansRes, eventsRes, mercadoRes, orgRes] = await Promise.all([
         apiFetch('/api/paddocks').catch(() => null),
         apiFetch('/api/herds').catch(() => null),
         apiFetch('/api/grazing-plans').catch(() => null),
         apiFetch('/api/farm-events').catch(() => null),
         fetch('/api/mercado').catch(() => null),
+        apiFetch('/api/organizations').catch(() => null),
       ])
 
-      const [paddocksResJson, herdsResJson, plansResJson, eventsResJson] = await Promise.all([
+      const [paddocksResJson, herdsResJson, plansResJson, eventsResJson, orgResJson] = await Promise.all([
         paddocksRes?.ok ? paddocksRes.json() : Promise.resolve({ paddocks: [] }),
         herdsRes?.ok    ? herdsRes.json()    : Promise.resolve({ herds: [] }),
         plansRes?.ok    ? plansRes.json()    : Promise.resolve({ plans: [] }),
         eventsRes?.ok   ? eventsRes.json()   : Promise.resolve({ events: [] }),
+        orgRes?.ok      ? orgRes.json()      : Promise.resolve({ organization: null }),
       ])
       setPaddocks(paddocksResJson.paddocks ?? [])
       setHerds(herdsResJson.herds ?? [])
       setPlans(plansResJson.plans ?? [])
       setFarmEvents(eventsResJson.events ?? [])
       setMercado(mercadoRes?.ok ? (await mercadoRes.json()) : null)
+
+      if (orgResJson.organization) {
+        const org = orgResJson.organization
+        const newDaily = Number(org.default_daily_allocation_kg ?? 12)
+        const newRemnant = Number(org.default_target_remnant_kg_ha ?? 600)
+        setDailyAllocationKg(newDaily)
+        setRawDailyAlloc(String(newDaily))
+        setTargetRemnant(newRemnant)
+        setRawTargetRemnant(String(newRemnant))
+      }
 
       // Cargar planes de temporada históricos (Excel imports + season plans guardados)
       try {
@@ -1981,8 +2038,16 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       const plannedDays = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : (plan.planned_recovery_days || '')
       const effectiveEntry = plan.actual_entry_date || (plan.status === 'COMPLETED' ? plan.entry_date : null)
       const actualDays = (effectiveEntry && plan.actual_exit_date) ? daysBetween(effectiveEntry, plan.actual_exit_date) : ''
-      const stockTotal = pHerds.reduce((s, h) => s + (Number(h.animal_count || h.head_count) || 0), 0)
-      const stockFin = plan.status === 'COMPLETED' && stockTotal > 0 ? stockTotal : ''
+      let stockInicio = pHerds.reduce((s, h) => s + (Number(h.animal_count || h.head_count) || 0), 0)
+      let stockFin: string | number = ''
+      if (plan.ai_analysis?.closing_stock && Array.isArray(plan.ai_analysis.closing_stock)) {
+        stockInicio = plan.ai_analysis.closing_stock.reduce((s: number, r: any) => s + (Number(r.initial) || 0), 0)
+        if (plan.status === 'COMPLETED') {
+          stockFin = plan.ai_analysis.closing_stock.reduce((s: number, r: any) => s + (Number(r.final) || 0), 0)
+        }
+      } else if (plan.status === 'COMPLETED' && stockInicio > 0) {
+        stockFin = stockInicio
+      }
       const desvio = actualDays !== '' && Number(plannedDays) > 0 ? Number(actualDays) - Number(plannedDays) : ''
       return [
         plan.paddocks?.name || '',
@@ -1994,7 +2059,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         fmtCsv(plan.actual_exit_date),
         plannedDays,
         actualDays,
-        stockTotal || '',
+        stockInicio || '',
         stockFin,
         plan.exit_dry_matter_kg_ha || '',
         desvio !== '' ? (Number(desvio) > 0 ? `+${desvio}` : desvio) : '',
@@ -2660,9 +2725,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   const hasDeviation = daysDev !== 0
 
                   // Stock: suma de cabezas de los rodeos asignados
-                  const stockTotal = pHerds.reduce((s, h) => s + (Number(h.animal_count || h.head_count) || 0), 0)
+                  let stockInicio = pHerds.reduce((s, h) => s + (Number(h.animal_count || h.head_count) || 0), 0)
+                  let stockFinVal: number | null = null
 
                   const isCompletedPlan = plan.status === 'COMPLETED'
+                  if (plan.ai_analysis?.closing_stock && Array.isArray(plan.ai_analysis.closing_stock)) {
+                    stockInicio = plan.ai_analysis.closing_stock.reduce((s: number, r: any) => s + (Number(r.initial) || 0), 0)
+                    if (isCompletedPlan) {
+                      stockFinVal = plan.ai_analysis.closing_stock.reduce((s: number, r: any) => s + (Number(r.final) || 0), 0)
+                    }
+                  } else if (isCompletedPlan) {
+                    stockFinVal = stockInicio
+                  }
                   return (
                     <tr
                       key={plan.id}
@@ -2709,10 +2783,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       </td>
                       {/* Entrada real */}
                       <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {plan.actual_entry_date ? (
+                        {effectiveEntry ? (
                           <span className={`font-bold ${
-                            plan.entry_date && plan.actual_entry_date !== plan.entry_date ? 'text-amber-700' : 'text-gray-900'
-                          }`}>{fmt(plan.actual_entry_date)}</span>
+                            plan.entry_date && effectiveEntry !== plan.entry_date ? 'text-amber-700' : 'text-gray-900'
+                          }`}>{fmt(effectiveEntry)}</span>
                         ) : (
                           <span className="text-gray-300 text-[10px]">No reg.</span>
                         )}
@@ -2743,14 +2817,14 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       </td>
                       {/* Stock inicio */}
                       <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {stockTotal > 0
-                          ? <span className="font-bold text-gray-700">{stockTotal} <span className="text-[10px] text-gray-400 font-normal">cab.</span></span>
+                        {stockInicio > 0
+                          ? <span className="font-bold text-gray-700">{stockInicio} <span className="text-[10px] text-gray-400 font-normal">cab.</span></span>
                           : <span className="text-gray-300">—</span>}
                       </td>
                       {/* Stock fin */}
                       <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {isCompletedPlan && stockTotal > 0
-                          ? <span className="font-bold text-gray-700">{stockTotal} <span className="text-[10px] text-gray-400 font-normal">cab.</span></span>
+                        {stockFinVal !== null
+                          ? <span className={`font-bold ${stockFinVal !== stockInicio ? 'text-amber-700' : 'text-gray-700'}`}>{stockFinVal} <span className="text-[10px] text-gray-400 font-normal">cab.</span></span>
                           : <span className="text-gray-300">—</span>}
                       </td>
                       {/* Remanente */}
@@ -3114,6 +3188,9 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       const body: any = {
                         status: 'COMPLETED',
                         actual_exit_date: closeForm.actual_exit_date,
+                      }
+                      if (!plan.actual_entry_date) {
+                        body.actual_entry_date = plan.entry_date
                       }
                       if (closeForm.exit_dry_matter_kg_ha) {
                         body.exit_dry_matter_kg_ha = Number(closeForm.exit_dry_matter_kg_ha)

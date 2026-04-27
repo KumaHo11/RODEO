@@ -669,7 +669,6 @@ export default function LandingPage() {
                     )}
 
                     <div className="mb-4">
-                      <div className="text-xl mb-1">{(plan as any).icon}</div>
                       <h3 className={`text-base font-black mb-1 ${isPopular || isEnterprise ? 'text-white' : 'text-gray-950'}`}>
                         {plan.name}
                       </h3>

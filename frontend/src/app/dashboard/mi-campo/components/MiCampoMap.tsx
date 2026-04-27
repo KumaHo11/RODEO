@@ -70,6 +70,22 @@ function MapController({
   const fieldLayerRef = useRef<L.Layer | null>(null)
   const badgeGroupRef = useRef<L.LayerGroup | null>(null)
   const hasInitialFitRef = useRef(false)
+  const prevInitialCenter = useRef<[number, number] | undefined>(undefined)
+
+  // -- Fly-to when user picks a location (e.g. from setup modal) ───────────────
+  useEffect(() => {
+    if (!initialCenter) return
+    const prev = prevInitialCenter.current
+    // Skip on first mount (prev is undefined) or if same coords
+    if (
+      prev &&
+      Math.abs(prev[0] - initialCenter[0]) < 0.0001 &&
+      Math.abs(prev[1] - initialCenter[1]) < 0.0001
+    ) return
+    prevInitialCenter.current = initialCenter
+    if (!prev) return // first mount — let the normal fit logic handle it
+    map.flyTo(initialCenter, 13, { animate: true, duration: 1.5 })
+  }, [initialCenter, map])
 
   // -- Geoman init + pm:create handler --------------------------------------
   useEffect(() => {

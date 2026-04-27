@@ -574,25 +574,95 @@ export default function DashboardOverview() {
               nextMoves.map((plan: any, i: number) => {
                 const HERD_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#be185d']
                 const color = HERD_COLORS[i % HERD_COLORS.length]
+                const todayMid = new Date(); todayMid.setHours(0,0,0,0)
                 const today = new Date().toISOString().split('T')[0]
                 const isActive = plan.status === 'ACTIVE' || plan.entry_date <= today
-                const isToday = plan.entry_date === today
-                const d = new Date(plan.entry_date + 'T00:00:00')
-                const daysUntil = Math.round((d.getTime() - new Date().setHours(0,0,0,0)) / 86400000)
+
+                // Exit-date countdown (days until animals must LEAVE)
+                const exitDate = plan.exit_date
+                const daysUntilExit = exitDate
+                  ? Math.round((new Date(exitDate + 'T00:00:00').getTime() - todayMid.getTime()) / 86400000)
+                  : null
+                const isExitToday     = daysUntilExit === 0
+                const isExitTomorrow  = daysUntilExit === 1
+                const isExitOverdue   = daysUntilExit !== null && daysUntilExit < 0
+                const isExitUrgent    = daysUntilExit !== null && daysUntilExit <= 1
+
+                // Entry-date countdown (days until animals ENTER)
+                const entryD = new Date(plan.entry_date + 'T00:00:00')
+                const daysUntilEntry = Math.round((entryD.getTime() - todayMid.getTime()) / 86400000)
+
+                // Animals grazing
+                const planHerds = herds.filter((h: any) => plan.herd_ids?.includes(h.id))
+                const totalHeads = planHerds.reduce((s: number, h: any) =>
+                  s + (Number(h.head_count) || Number(h.animal_count) || 0), 0)
+                const herdLabel = planHerds.length > 0
+                  ? planHerds.map((h: any) => h.name).join(', ')
+                  : (plan.herds?.name || 'Multi-rodeo')
+
                 return (
-                  <div key={plan.id} className={`px-5 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${isActive ? 'bg-amber-50/30' : ''}`}
-                    style={{ borderLeft: `3px solid ${isActive ? '#D4A373' : color}` }}>
+                  <div
+                    key={plan.id}
+                    className={`px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
+                      isExitUrgent ? 'bg-amber-50/40' : isActive ? 'bg-green-50/20' : ''
+                    }`}
+                    style={{ borderLeft: `3px solid ${isExitOverdue ? '#ef4444' : isExitUrgent ? '#f59e0b' : isActive ? '#D4A373' : color}` }}
+                  >
+                    {/* Date block */}
                     <div className="w-12 shrink-0 text-center">
-                      <p className="text-lg font-black text-gray-900 leading-none">{d.getDate()}</p>
-                      <p className="text-[9px] font-bold text-gray-400 uppercase">{d.toLocaleDateString('es', { month: 'short' })}</p>
+                      <p className="text-lg font-black text-gray-900 leading-none">{entryD.getDate()}</p>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase">{entryD.toLocaleDateString('es', { month: 'short' })}</p>
                     </div>
+
+                    {/* Main content */}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-gray-900 truncate">{plan.paddocks?.name || '—'}</p>
-                      <p className="text-[10px] text-gray-400 truncate">{plan.herds?.name || 'Multi-rodeo'}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="text-[10px] text-gray-500 truncate">{herdLabel}</span>
+                        {totalHeads > 0 && (
+                          <>
+                            <span className="text-gray-200 text-[10px]">·</span>
+                            <span className="text-[10px] font-bold text-gray-600 flex items-center gap-0.5">
+                              <CowIcon className="w-2.5 h-2.5" />
+                              {totalHeads} cab.
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    {isActive && <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 uppercase tracking-wider">Activo</span>}
-                    {isToday && !isActive && <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 uppercase">Hoy</span>}
-                    {daysUntil > 0 && <span className="shrink-0 text-[9px] font-bold text-gray-400">{daysUntil}d</span>}
+
+                    {/* Right: countdown badges */}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {/* Exit badge */}
+                      {exitDate && (
+                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                          isExitOverdue  ? 'bg-red-100 text-red-700' :
+                          isExitToday    ? 'bg-red-100 text-red-700' :
+                          isExitTomorrow ? 'bg-amber-100 text-amber-800' :
+                          'bg-gray-100 text-gray-500'
+                        }`}>
+                          {isExitOverdue
+                            ? `Venció hace ${Math.abs(daysUntilExit!)}d`
+                            : isExitToday
+                              ? '¡Sale HOY!'
+                              : isExitTomorrow
+                                ? '¡Sale mañana!'
+                                : `Sale en ${daysUntilExit}d`}
+                        </span>
+                      )}
+
+                      {/* Entry countdown when not yet active */}
+                      {!isActive && daysUntilEntry > 0 && (
+                        <span className="text-[9px] font-bold text-gray-400">
+                          entra en {daysUntilEntry}d
+                        </span>
+                      )}
+                      {isActive && !exitDate && (
+                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 uppercase tracking-wider">
+                          Activo
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })

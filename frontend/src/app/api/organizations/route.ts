@@ -11,7 +11,9 @@ async function ensurePlanningColumns() {
   await mutate(`
     ALTER TABLE organizations
       ADD COLUMN IF NOT EXISTS default_daily_allocation_kg  NUMERIC(8,2)  DEFAULT 12,
-      ADD COLUMN IF NOT EXISTS default_target_remnant_kg_ha NUMERIC(10,2) DEFAULT 600
+      ADD COLUMN IF NOT EXISTS default_target_remnant_kg_ha NUMERIC(10,2) DEFAULT 600,
+      ADD COLUMN IF NOT EXISTS location_label               TEXT,
+      ADD COLUMN IF NOT EXISTS technical_data               JSONB         DEFAULT '{}'
   `)
 }
 
@@ -39,6 +41,7 @@ export async function GET(req: NextRequest) {
       `SELECT
          id, owner_id, name, total_area_ha, region_id, drought_plan_buffer,
          default_daily_allocation_kg, default_target_remnant_kg_ha,
+         location_label, technical_data,
          ST_AsGeoJSON(location)::json AS location,
          ST_AsGeoJSON(boundaries)::json AS boundaries,
          created_at, updated_at
@@ -60,7 +63,11 @@ export async function PATCH(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const body = await req.json()
-    const { name, total_area_ha, region_id, boundaries, default_daily_allocation_kg, default_target_remnant_kg_ha } = body
+    const {
+      name, total_area_ha, region_id, boundaries,
+      default_daily_allocation_kg, default_target_remnant_kg_ha,
+      location_label, technical_data
+    } = body
 
     await ensurePlanningColumns()
 
@@ -68,9 +75,11 @@ export async function PATCH(req: NextRequest) {
     const vals: any[] = []
     let i = 1
 
-    if (name !== undefined)         { sets.push(`name = $${i++}`); vals.push(name) }
-    if (total_area_ha !== undefined) { sets.push(`total_area_ha = $${i++}`); vals.push(total_area_ha) }
-    if (region_id !== undefined)    { sets.push(`region_id = $${i++}`); vals.push(region_id) }
+    if (name !== undefined)           { sets.push(`name = $${i++}`);           vals.push(name) }
+    if (total_area_ha !== undefined)  { sets.push(`total_area_ha = $${i++}`);  vals.push(total_area_ha) }
+    if (region_id !== undefined)      { sets.push(`region_id = $${i++}`);      vals.push(region_id) }
+    if (location_label !== undefined) { sets.push(`location_label = $${i++}`); vals.push(location_label) }
+    if (technical_data !== undefined) { sets.push(`technical_data = $${i++}`); vals.push(JSON.stringify(technical_data)) }
     if (default_daily_allocation_kg !== undefined)  { sets.push(`default_daily_allocation_kg = $${i++}`);  vals.push(Number(default_daily_allocation_kg)) }
     if (default_target_remnant_kg_ha !== undefined) { sets.push(`default_target_remnant_kg_ha = $${i++}`); vals.push(Number(default_target_remnant_kg_ha)) }
     if (boundaries !== undefined) {

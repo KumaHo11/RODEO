@@ -120,6 +120,63 @@ const templates = {
     `),
   }),
 
+  paddock_move_reminder: (p: {
+    ownerName: string
+    orgName: string
+    moves: Array<{
+      paddockName: string
+      herdName: string
+      headCount: number
+      exitDate: string      // formatted date string e.g. "28 de abril de 2026"
+      recoveryDays: number
+    }>
+    dashboardUrl: string
+  }) => ({
+    subject: `🐄 Recordatorio: ${p.moves.length > 1 ? `${p.moves.length} movimientos` : 'movimiento de animales'} mañana — ${p.orgName}`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 6px;color:#111827;font-size:22px;font-weight:900">Mañana hay movimientos programados 🐄</h2>
+      <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
+        Hola <strong>${p.ownerName}</strong>, te recordamos que mañana tenés
+        <strong>${p.moves.length} movimiento${p.moves.length !== 1 ? 's' : ''}</strong>
+        de animales planificado${p.moves.length !== 1 ? 's' : ''} en <strong>${p.orgName}</strong>.
+      </p>
+      <div style="margin-bottom:28px">
+        ${p.moves.map(m => `
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:18px 20px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <div style="width:10px;height:10px;border-radius:50%;background:#16a34a;flex-shrink:0"></div>
+              <p style="margin:0;color:#111827;font-size:16px;font-weight:800">${m.paddockName}</p>
+            </div>
+            <p style="margin:0 0 8px;color:#4b5563;font-size:13px;font-weight:500">
+              Rodeo: <strong>${m.herdName}</strong> · <strong>${m.headCount}</strong> cab.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="background:#fff;border:1px solid #d1fae5;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#059669">
+                📅 Salida: ${m.exitDate}
+              </span>
+              <span style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#374151">
+                ⏱ Descanso siguiente: ${m.recoveryDays}d
+              </span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;margin-bottom:28px">
+        <p style="margin:0;color:#92400e;font-size:13px;font-weight:600">
+          💡 Recordá preparar el potrero receptor, controlar el agua y el alambrado antes del movimiento.
+        </p>
+      </div>
+      <div style="text-align:center;margin-bottom:20px">
+        <a href="${p.dashboardUrl}" style="display:inline-block;background:#16a34a;color:#fff;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:800;text-decoration:none">
+          Ver planificador →
+        </a>
+      </div>
+      <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">
+        Accedé desde: <a href="${p.dashboardUrl}" style="color:#16a34a">${p.dashboardUrl}</a>
+      </p>
+    `),
+  }),
+
 } satisfies Record<string, (params: any) => { subject: string; html: string }>
 
 // ── Public API ─────────────────────────────────────────────────────────────

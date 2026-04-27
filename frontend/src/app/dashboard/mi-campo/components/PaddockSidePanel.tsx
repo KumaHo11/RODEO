@@ -49,6 +49,7 @@ interface Props {
   onDeletePaddock?: (paddockId: string) => void
   onDeleteField?: () => void
   onDataRefresh?: () => void
+  onFieldImageUploaded?: (url: string) => void
   defaultEditPaddockId?: string
   planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
 }
@@ -71,7 +72,7 @@ export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0,
   onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField, onDataRefresh,
-  defaultEditPaddockId, planningDefaults,
+  onFieldImageUploaded, defaultEditPaddockId, planningDefaults,
 }: Props) {
   const [search, setSearch]     = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -109,15 +110,6 @@ export default function PaddockSidePanel({
   const [kmlImporting, setKmlImporting] = useState(false)
   const [kmlMessage, setKmlMessage]     = useState<string | null>(null)
 
-  // Field image — initial state from org prop
-  const fieldImgRef           = useRef<HTMLInputElement>(null)
-  const [fieldImg, setFieldImg] = useState<string | null>(org?.technical_data?.field_image_url || null)
-  const [imgUploading, setImgUploading] = useState(false)
-
-  // Sync fieldImg when org changes (after parent loadData)
-  useEffect(() => {
-    setFieldImg(org?.technical_data?.field_image_url || null)
-  }, [org?.technical_data?.field_image_url])
 
   // ── Notes ──────────────────────────────────────────────────────────────────
   const loadPaddockNotes = useCallback(async (paddockId: string) => {
@@ -188,27 +180,7 @@ export default function PaddockSidePanel({
     finally { setKmlImporting(false) }
   }, [onDataRefresh])
 
-  // ── Field image upload ─────────────────────────────────────────────────────
-  const handleFieldImage = useCallback(async (file: File) => {
-    setImgUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      if (!res.ok) throw new Error('Upload failed')
-      const { url } = await res.json()
-      setFieldImg(url)
-      // Save to org technical_data — endpoint correcto
-      await apiFetch('/api/organizations', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          technical_data: { ...(org?.technical_data || {}), field_image_url: url }
-        })
-      })
-      onDataRefresh?.()
-    } catch {}
-    setImgUploading(false)
-  }, [org])
+
 
   // ── Computed ───────────────────────────────────────────────────────────────
   const filtered      = paddocks.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()))
@@ -234,96 +206,100 @@ export default function PaddockSidePanel({
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-2xl font-black text-gray-950 tracking-tight">{org?.name || 'Mi Campo'}</h2>
-            {ndviLoading && <Loader2 className="w-4 h-4 text-green-500 animate-spin" />}
-          </div>
+          <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 flex items-start gap-3 relative overflow-hidden">
+            
+            {/* Thumbnail del campo */}
+            {hasFieldSetup ? (
+              org?.technical_data?.field_image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={org.technical_data.field_image_url} alt="Campo" className="w-14 h-14 rounded-xl object-cover border border-gray-200 shrink-0" />
+              ) : (
+                <div className="w-14 h-14 rounded-xl bg-green-600 flex items-center justify-center shrink-0">
+                  <Map className="w-6 h-6 text-white" />
+                </div>
+              )
+            ) : (
+              <div className="w-14 h-14 rounded-xl bg-gray-200 flex items-center justify-center shrink-0">
+                <Map className="w-6 h-6 text-gray-400" />
+              </div>
+            )}
 
-          {hasFieldSetup ? (
-            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
-              <div className="flex items-start gap-3">
-                {/* Thumbnail del campo */}
-                {fieldImg ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={fieldImg} alt="Campo" className="w-12 h-12 rounded-lg object-cover border border-gray-200 shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 rounded-lg bg-green-600 flex items-center justify-center shrink-0">
-                    <Map className="w-6 h-6 text-white" />
-                  </div>
-                )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <h2 className="text-xl font-black text-gray-950 tracking-tight truncate">{org?.name || 'Mi Campo'}</h2>
+                {ndviLoading && <Loader2 className="w-3.5 h-3.5 text-green-500 animate-spin" />}
+              </div>
+              
+              {org?.location_label && (
+                <p className="flex items-center gap-1 text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2 truncate">
+                  <MapPin className="w-3 h-3 shrink-0" />{org.location_label}
+                </p>
+              )}
 
-                <div className="flex-1 min-w-0">
-                  {/* Ha y potreros — tamaño prominente */}
-                  <p className="text-2xl font-black text-gray-900 leading-none">
+              {hasFieldSetup ? (
+                <>
+                  <p className="text-xl font-black text-gray-900 leading-none">
                     {Number(org.total_area_ha || totalArea || 0).toFixed(0)} ha
-                    <span className="text-base font-bold text-gray-500 ml-2">· {paddocks.length} potreros</span>
+                    <span className="text-sm font-bold text-gray-500 ml-1.5">· {paddocks.length} potreros</span>
                   </p>
                   {grazingCount > 0 && (
-                    <p className="text-xs text-orange-600 font-bold mt-0.5">{grazingCount} en pastoreo</p>
+                    <p className="text-xs text-orange-600 font-bold mt-1.5">{grazingCount} en pastoreo</p>
                   )}
-                  {/* NDVI — solo texto, no botón */}
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <p className="text-xs text-gray-500 font-medium">
+                  {/* NDVI — solo texto */}
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <p className="text-[10px] text-gray-500 font-medium">
                       NDVI: <span className="font-bold text-gray-700">{avgNdvi != null ? avgNdvi.toFixed(3) : '—'}</span>
                       {avgNdvi != null && (
                         <span className="ml-1 text-gray-400">· {getNdviLabel(avgNdvi).label}</span>
                       )}
                     </p>
                     {avgQuality != null && (
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${qualityBadgeColor}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${qualityBadgeColor}`}>
                         Calidad {avgQuality}/10
                       </span>
                     )}
                   </div>
-                </div>
-
-                {/* Acciones del campo */}
-                <div className="flex flex-col gap-1 shrink-0">
-                  <button
-                    onClick={() => fieldImgRef.current?.click()}
-                    disabled={imgUploading}
-                    className="w-7 h-7 flex items-center justify-center text-gray-500 bg-white hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
-                    title="Subir foto del campo"
-                  >
-                    {imgUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-                  </button>
+                </>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-gray-500">No hay configuración espacial registrada.</p>
                   {onSetupField && (
                     <button
                       onClick={onSetupField}
-                      className="w-7 h-7 flex items-center justify-center text-gray-500 bg-white hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
-                      title="Editar campo"
+                      className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-all"
                     >
-                      <PenLine className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  {onDeleteField && (
-                    <button
-                      onClick={onDeleteField}
-                      className="w-7 h-7 flex items-center justify-center text-red-500 bg-white hover:bg-red-50 rounded-lg transition-colors border border-red-200"
-                      title="Eliminar campo"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Map className="w-3.5 h-3.5" /> Configurar campo
                     </button>
                   )}
                 </div>
-              </div>
+              )}
             </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">No hay campo configurado aún.</p>
-              {onSetupField && (
+
+            {/* Acciones del campo */}
+            <div className="flex flex-col gap-1.5 shrink-0">
+
+              {hasFieldSetup && onSetupField && (
                 <button
                   onClick={onSetupField}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold text-green-700 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-all"
+                  className="w-8 h-8 flex items-center justify-center text-gray-500 bg-white hover:bg-gray-100 rounded-xl transition-colors border border-gray-200 shadow-sm"
+                  title="Editar campo"
                 >
-                  <Map className="w-4 h-4" /> Configurar campo
+                  <PenLine className="w-4 h-4" />
+                </button>
+              )}
+              {hasFieldSetup && onDeleteField && (
+                <button
+                  onClick={onDeleteField}
+                  className="w-8 h-8 flex items-center justify-center text-red-500 bg-white hover:bg-red-50 rounded-xl transition-colors border border-red-200 shadow-sm"
+                  title="Eliminar campo"
+                >
+                  <Trash2 className="w-4 h-4" />
                 </button>
               )}
             </div>
-          )}
 
-          <input ref={fieldImgRef} type="file" accept="image/*" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleFieldImage(f) }} />
+          </div>
+          
         </div>
 
         {/* ── Paddock list ─────────────────────────────────────────────────── */}
