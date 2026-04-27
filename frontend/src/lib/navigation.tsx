@@ -54,12 +54,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: 'Carbono', href: '/dashboard/carbono', icon: Leaf, permissionKey: 'carbono' },
     ],
   },
-  {
-    label: 'CUENTA',
-    items: [
-      { name: 'Planes y suscripción', href: '/dashboard/planes', icon: CreditCard, permissionKey: null },
-    ],
-  },
 ]
 
 /**

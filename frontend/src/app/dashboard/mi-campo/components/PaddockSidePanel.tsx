@@ -5,6 +5,7 @@ import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, Satellite, Loader2
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
+import { usePlan } from '@/hooks/usePlan'
 import BitacoraModal from '../../bitacora/components/BitacoraModal'
 import PaddockModal from './PaddockModal'
 import { kml as kmlToGeo } from '@tmcw/togeojson'
@@ -78,6 +79,8 @@ export default function PaddockSidePanel({
   const [modalOpen, setModalOpen] = useState(false)
   const [bitacoraModalOpen, setBitacoraModalOpen] = useState(false)
   const { user } = useAuth()
+  const { hasFeature } = usePlan()
+  const canNdvi = hasFeature('ndvi_access')
   const [editingPaddock, setEditingPaddock] = useState<Paddock | null>(null)
   const [paddockNotes, setPaddockNotes]     = useState<any[]>([])
   const [notesLoading, setNotesLoading]     = useState(false)
@@ -245,20 +248,22 @@ export default function PaddockSidePanel({
                   {grazingCount > 0 && (
                     <p className="text-xs text-orange-600 font-bold mt-1.5">{grazingCount} en pastoreo</p>
                   )}
-                  {/* NDVI — solo texto */}
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <p className="text-[10px] text-gray-500 font-medium">
-                      NDVI: <span className="font-bold text-gray-700">{avgNdvi != null ? avgNdvi.toFixed(3) : '—'}</span>
-                      {avgNdvi != null && (
-                        <span className="ml-1 text-gray-400">· {getNdviLabel(avgNdvi).label}</span>
+                  {/* NDVI — solo visible con plan ndvi_access */}
+                  {canNdvi && (
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <p className="text-[10px] text-gray-500 font-medium">
+                        NDVI: <span className="font-bold text-gray-700">{avgNdvi != null ? avgNdvi.toFixed(3) : '—'}</span>
+                        {avgNdvi != null && (
+                          <span className="ml-1 text-gray-400">· {getNdviLabel(avgNdvi).label}</span>
+                        )}
+                      </p>
+                      {avgQuality != null && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${qualityBadgeColor}`}>
+                          Calidad {avgQuality}/10
+                        </span>
                       )}
-                    </p>
-                    {avgQuality != null && (
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${qualityBadgeColor}`}>
-                        Calidad {avgQuality}/10
-                      </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="mt-2 space-y-2">

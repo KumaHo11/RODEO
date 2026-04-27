@@ -115,7 +115,7 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<'perfil' | 'facturacion'>('perfil')
+  const [activeTab, setActiveTab] = useState<'perfil' | 'facturacion' | 'planes'>('perfil')
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -240,6 +240,7 @@ export default function ProfilePage() {
         items={[
           { id: 'perfil', label: 'Mi perfil' },
           { id: 'facturacion', label: 'Facturación' },
+          { id: 'planes', label: 'Mis planes' },
         ]}
       />
 
@@ -355,6 +356,28 @@ export default function ProfilePage() {
                </div>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* === PLANES TAB === */}
+      {activeTab === 'planes' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <CreditCard className="w-7 h-7 text-green-700" />
+            </div>
+            <h3 className="text-lg font-black text-gray-900 mb-1">Planes y suscripción</h3>
+            <p className="text-sm text-gray-400 mb-5">
+              Administrá tu suscripción, cambiá de plan o renová con descuento anual.
+            </p>
+            <a
+              href="/dashboard/planes"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-black transition-all shadow-lg"
+            >
+              <CreditCard className="w-4 h-4" />
+              Ver planes y contratar
+            </a>
+          </div>
         </div>
       )}
 

@@ -220,9 +220,8 @@ function MapController({
         },
       })
 
-      const ndviLabel = ndvi != null ? ` · NDVI ${Number(ndvi).toFixed(2)}` : ''
       layer.bindTooltip(
-        `<strong>${paddock.name}</strong>${ndviLabel}<br/>${Number(paddock.area_ha || 0).toFixed(1)} ha`,
+        `<strong>${paddock.name}</strong><br/>${Number(paddock.area_ha || 0).toFixed(1)} ha`,
         { permanent: false, className: 'text-xs font-bold rounded-lg' }
       )
 
@@ -265,12 +264,14 @@ function MapController({
     }
   }, [paddocks, selectedPaddockId, map])
 
-  // -- Herd badges on GRAZING paddocks ----------------------------------------─
+  // -- Herd badges on GRAZING paddocks ─────────────────────────────────────
   useEffect(() => {
-    if (!badgeGroupRef.current) {
-      badgeGroupRef.current = L.layerGroup().addTo(map)
+    // Recreate on every render to ensure badges stay above paddock polygons
+    if (badgeGroupRef.current) {
+      badgeGroupRef.current.remove()
+      badgeGroupRef.current = null
     }
-    badgeGroupRef.current.clearLayers()
+    badgeGroupRef.current = L.layerGroup().addTo(map)
     if (activeGrazingPlans.length === 0) return
 
     activeGrazingPlans.forEach(plan => {

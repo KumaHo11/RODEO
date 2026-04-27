@@ -129,7 +129,7 @@ export default function HerdsPage() {
   const [showFilters,   setShowFilters]   = useState(false)
 
   // View - default to list
-  const [view, setView] = useState<'cards' | 'list' | 'historial'>('list')
+  const [view, setView] = useState<'cards' | 'list' | 'historial'>('cards')
   const [movements, setMovements] = useState<any[]>([])
   const [loadingMov, setLoadingMov] = useState(false)
 
@@ -418,8 +418,7 @@ export default function HerdsPage() {
                     className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group cursor-pointer"
                     onClick={() => openEdit(herd)}
                   >
-                    {/* Category color top border */}
-                    <div className={`h-1.5 w-full ${colors?.dot ?? 'bg-gray-200'}`} />
+
 
                     <div className="px-5 pt-4 pb-3 flex items-start justify-between">
                       <div className="flex items-center gap-3">

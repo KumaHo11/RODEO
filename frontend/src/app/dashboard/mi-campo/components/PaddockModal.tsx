@@ -282,6 +282,7 @@ export default function PaddockModal({
   const { hasFeature } = usePlan()
   const canVoice     = hasFeature('voice_bitacora') // audio + transcripción IA
   const canAiInsight = hasFeature('ai_insights')    // análisis biomasa IA
+  const canNdvi      = hasFeature('ndvi_access')    // NDVI satelital
   const [activeTab, setActiveTab] = useState<'operativo' | 'infraestructura' | 'registros'>('operativo')
   const [saving, setSaving]       = useState(false)
 
@@ -1090,6 +1091,7 @@ export default function PaddockModal({
                 </div>
 
                 {/* ══ CARD 2: INTELIGENCIA DE CAMPO ══ */}
+                {canNdvi ? (
                 <div className="rounded-2xl border border-gray-200 overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
                     <div className="flex items-center gap-2">
@@ -1162,6 +1164,18 @@ export default function PaddockModal({
                     </div>
                   </div>
                 </div>
+                ) : (
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 flex items-center gap-3">
+                    <span className="text-2xl">🛰️</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-black text-gray-700">NDVI e Inteligencia de campo</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Disponible desde el plan Latifundio.</p>
+                    </div>
+                    <a href="/dashboard/planes" className="shrink-0 text-[9px] font-black px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all whitespace-nowrap">
+                      Ver planes
+                    </a>
+                  </div>
+                )}
 
                 {/* ══ HISTORIAL DE EVIDENCIAS ══ */}
                 <div>
