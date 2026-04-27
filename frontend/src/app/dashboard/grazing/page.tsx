@@ -720,16 +720,9 @@ function InteractiveGantt({
                     let planColor: string
                     let patternColor: string
                     if (isCompleted) {
-                      const realDur = plan.actual_entry_date && plan.actual_exit_date
-                        ? daysBetween(plan.actual_entry_date, plan.actual_exit_date) : planDuration
-                      const deviation = realDur - planDuration
-                      // Verde pastel si cumplió, naranja pastel si se pasó, celeste pastel si sobró
-                      planColor    = deviation > 1 ? 'rgba(251,146,60,0.18)'   // naranja pastel
-                                  : deviation < -1 ? 'rgba(125,211,252,0.22)'  // celeste pastel
-                                  : 'rgba(134,239,172,0.25)'                    // verde pastel
-                      patternColor = deviation > 1 ? 'rgba(251,146,60,0.35)'
-                                  : deviation < -1 ? 'rgba(14,165,233,0.35)'
-                                  : 'rgba(34,197,94,0.35)'
+                      // Completado: grisado — la info real la muestra la barra verde debajo
+                      planColor    = 'rgba(156,163,175,0.12)'
+                      patternColor = 'rgba(156,163,175,0.25)'
                     } else if (isOverdue) {
                       planColor    = 'rgba(252,165,165,0.22)'   // rojo pastel
                       patternColor = 'rgba(239,68,68,0.40)'
@@ -744,7 +737,7 @@ function InteractiveGantt({
                     }
 
                     const borderColor = isCompleted
-                      ? ((() => { const d = plan.actual_entry_date && plan.actual_exit_date ? daysBetween(plan.actual_entry_date, plan.actual_exit_date) - planDuration : 0; return d > 1 ? 'rgba(251,146,60,0.55)' : d < -1 ? 'rgba(14,165,233,0.55)' : 'rgba(34,197,94,0.55)' })())
+                      ? 'rgba(156,163,175,0.40)'
                       : isOverdue ? 'rgba(239,68,68,0.55)'
                       : isSuggested ? 'rgba(14,165,233,0.55)' : 'rgba(34,197,94,0.55)'
 
@@ -822,8 +815,8 @@ function InteractiveGantt({
                       />
                     ) : null
 
-                    // ── REAL block — sólido naranja con badge de desvío ──
-                    // Aparece cuando hay actual_exit_date (aunque no haya actual_entry_date)
+                    // ── REAL block — sólido VERDE con badge de desvío ──
+                    // Aparece cuando el plan está completado
                     let realBlock = null
                     const effectiveRealEntry = plan.actual_entry_date || (isCompleted ? plan.entry_date : null)
                     if (effectiveRealEntry && isCompleted) {
@@ -836,8 +829,9 @@ function InteractiveGantt({
                       const plannedDuration = daysBetween(plan.entry_date, exitDate)
                       const devDays  = realDuration - plannedDuration
                       const devLabel = devDays === 0 ? '= plan' : (devDays > 0 ? `+${devDays}d` : `${devDays}d`)
-                      const ORANGE   = '#f97316'
-                      const devColor = devDays === 0 ? 'rgba(0,0,0,0.25)' : devDays > 0 ? '#854d0e' : '#14532d'
+                      const GREEN    = '#16a34a'
+                      // Badge color: verde oscuro si cumplió, rojo si se pasó, azul si salió antes
+                      const devColor = devDays === 0 ? '#14532d' : devDays > 0 ? '#991b1b' : '#1e40af'
 
                       realBlock = (
                         <div
@@ -850,10 +844,10 @@ function InteractiveGantt({
                             height: BAR_H,
                             minWidth: 6,
                             borderRadius: 3,
-                            backgroundColor: ORANGE,
+                            backgroundColor: GREEN,
                             zIndex: 25,
                             cursor: 'pointer',
-                            boxShadow: `0 1px 4px ${ORANGE}55`,
+                            boxShadow: `0 1px 4px ${GREEN}55`,
                             overflow: 'visible',
                             display: 'flex',
                             alignItems: 'center',
@@ -2210,45 +2204,36 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           {/* Gantt period control — solo Anual + filtros de temporada */}
           <div className="flex flex-wrap items-center gap-2 justify-start w-full">
             <div className="flex bg-gray-100 rounded-xl p-0.5 gap-0.5">
+              {/* Anual = ambas temporadas activas */}
               <button
                 onClick={() => setSeasonalFilters(['abierta', 'cerrada'])}
                 className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
-                  seasonalFilters.length === 2 ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  seasonalFilters.length === 2
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 Anual
               </button>
-              <div className="w-[1px] bg-gray-200 mx-1" />
+              <div className="w-[1px] bg-gray-200 mx-0.5" />
+              {/* Temporada abierta — selección exclusiva */}
               <button
-                onClick={() => {
-                  setSeasonalFilters(prev => {
-                    if (prev.includes('abierta')) {
-                      if (prev.length === 1) return prev // don't allow empty
-                      return prev.filter(x => x !== 'abierta')
-                    }
-                    return [...prev, 'abierta']
-                  })
-                }}
+                onClick={() => setSeasonalFilters(['abierta'])}
                 className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
-                  seasonalFilters.includes('abierta') && seasonalFilters.length === 1 ? 'bg-white text-gray-900 shadow-sm' : 
-                  seasonalFilters.includes('abierta') ? 'bg-green-50 text-green-700' : 'text-gray-500 hover:text-gray-700'
+                  seasonalFilters.length === 1 && seasonalFilters.includes('abierta')
+                    ? 'bg-green-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 Temporada abierta
               </button>
+              {/* Temporada cerrada — selección exclusiva */}
               <button
-                onClick={() => {
-                  setSeasonalFilters(prev => {
-                    if (prev.includes('cerrada')) {
-                      if (prev.length === 1) return prev // don't allow empty
-                      return prev.filter(x => x !== 'cerrada')
-                    }
-                    return [...prev, 'cerrada']
-                  })
-                }}
+                onClick={() => setSeasonalFilters(['cerrada'])}
                 className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
-                  seasonalFilters.includes('cerrada') && seasonalFilters.length === 1 ? 'bg-white text-gray-900 shadow-sm' :
-                  seasonalFilters.includes('cerrada') ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
+                  seasonalFilters.length === 1 && seasonalFilters.includes('cerrada')
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 Temporada cerrada
@@ -2538,7 +2523,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Potrero / Rodeo', 'Estado', 'Entrada plan', 'Entrada real', 'Salida plan', 'Salida real', 'Días plan', 'Días reales', 'Remanente', 'Desvío vs plan'].map(h => (
+                  {['Potrero / Rodeo', 'Estado', 'Entrada plan', 'Entrada real', 'Salida plan', 'Salida real', 'Días plan', 'Días reales', 'Stock inicio', 'Stock fin', 'Remanente', 'Desvío vs plan'].map(h => (
                     <th key={h} className="px-4 py-3.5 text-left text-[10px] font-black text-gray-400 tracking-widest uppercase whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -2549,15 +2534,24 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   const pHerds = herds.filter(h => plan.herd_ids?.includes(h.id))
                   const herdNames = pHerds.length > 0 ? pHerds.map(h => h.name).join(', ') : 'Rodeo desconocido'
                   const color = herdColorMap[plan.herd_ids?.[0]] || '#9ca3af'
-                  
-                  const plannedDays = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : 0
-                  const actualDays = (plan.actual_entry_date && plan.actual_exit_date) 
-                    ? daysBetween(plan.actual_entry_date, plan.actual_exit_date) 
+
+                  // Días plan: usar exit_date si existe, sino planned_recovery_days
+                  const plannedDays = plan.exit_date
+                    ? daysBetween(plan.entry_date, plan.exit_date)
+                    : (plan.planned_recovery_days || 0)
+
+                  // Días reales: si no hay actual_entry_date, usar entry_date como proxy
+                  const effectiveEntry = plan.actual_entry_date || (plan.status === 'COMPLETED' ? plan.entry_date : null)
+                  const actualDays = (effectiveEntry && plan.actual_exit_date)
+                    ? daysBetween(effectiveEntry, plan.actual_exit_date)
                     : null
-                    
+
                   const daysDev = actualDays !== null && plannedDays > 0 ? (actualDays - plannedDays) : 0
                   const hasDeviation = daysDev !== 0
-                  
+
+                  // Stock: suma de cabezas de los rodeos asignados
+                  const stockTotal = pHerds.reduce((s, h) => s + (Number(h.animal_count || h.head_count) || 0), 0)
+
                   const isCompletedPlan = plan.status === 'COMPLETED'
                   return (
                     <tr
@@ -2626,6 +2620,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       <td className="px-4 py-3.5 text-xs tabular-nums">
                         {actualDays !== null
                           ? <><span className="font-black text-gray-900">{actualDays}</span> <span className="text-[10px] text-gray-400">d</span></>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      {/* Stock inicio */}
+                      <td className="px-4 py-3.5 text-xs tabular-nums">
+                        {stockTotal > 0
+                          ? <span className="font-bold text-gray-700">{stockTotal} <span className="text-[10px] text-gray-400 font-normal">cab.</span></span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      {/* Stock fin */}
+                      <td className="px-4 py-3.5 text-xs tabular-nums">
+                        {isCompletedPlan && stockTotal > 0
+                          ? <span className="font-bold text-gray-700">{stockTotal} <span className="text-[10px] text-gray-400 font-normal">cab.</span></span>
                           : <span className="text-gray-300">—</span>}
                       </td>
                       {/* Remanente */}
