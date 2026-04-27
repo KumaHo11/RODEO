@@ -12,6 +12,7 @@ interface RodeoLogoProps {
   variant?: 'light' | 'dark'
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   showTagline?: boolean
+  iconOnly?: boolean
   className?: string
 }
 
@@ -27,13 +28,35 @@ export default function RodeoLogo({
   variant = 'light',
   size = 'md',
   showTagline = true,
+  iconOnly = false,
   className = '',
 }: RodeoLogoProps) {
   const isDark = variant === 'dark'
   const fontSize = SIZES[size] ?? 32
 
   const wordColor = isDark ? '#ffffff' : '#14532d'
-  const tagColor = isDark ? 'rgba(255,255,255,0.7)' : '#16a34a'
+  const tagColor  = isDark ? 'rgba(255,255,255,0.7)' : '#16a34a'
+
+  if (iconOnly) {
+    return (
+      <span
+        className={className}
+        role="img"
+        aria-label="RODEO"
+        style={{
+          fontFamily: "'Inter', 'Google Sans', system-ui, sans-serif",
+          fontWeight: 900,
+          fontSize: fontSize,
+          letterSpacing: '-0.03em',
+          color: wordColor,
+          lineHeight: 1,
+          flexShrink: 0,
+        }}
+      >
+        R
+      </span>
+    )
+  }
 
   return (
     <div

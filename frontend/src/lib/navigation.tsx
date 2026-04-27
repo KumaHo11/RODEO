@@ -2,7 +2,7 @@
 
 import {
   LayoutDashboard, CalendarDays, Lightbulb, NotebookPen,
-  Users, CheckSquare, Fence, Layers, Calendar, Cloud, BookOpen, Leaf
+  Users, CheckSquare, Fence, Layers, Calendar, Cloud, BookOpen, Leaf, MessageCircle
 } from 'lucide-react'
 
 export type NavItem = {
@@ -34,8 +34,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: 'Potreros', href: '/dashboard/mi-campo',  icon: Fence,        permissionKey: 'mi_campo'    },
       { name: 'Rodeos',   href: '/dashboard/herds',     icon: Layers,       permissionKey: 'rebanhos'    },
       { name: 'Agenda',   href: '/dashboard/agenda',    icon: CalendarDays, permissionKey: 'agenda'      },
-      { name: 'Bitácora', href: '/dashboard/bitacora',  icon: BookOpen,     permissionKey: 'bitacora'    },
-      { name: 'Clima',    href: '/dashboard/clima',     icon: Cloud,        permissionKey: 'clima'       },
+      { name: 'Bitácora', href: '/dashboard/bitacora',        icon: BookOpen,       permissionKey: 'bitacora' },
+      { name: 'Bandeja WA', href: '/dashboard/bitacora/bandeja', icon: MessageCircle,  permissionKey: 'bitacora' },
+      { name: 'Clima',    href: '/dashboard/clima',             icon: Cloud,          permissionKey: 'clima'    },
     ],
   },
   {
@@ -72,7 +73,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/agenda':    'agenda',
   '/dashboard/clima':     'clima',
   '/dashboard/grazing':   'planificador',
-  '/dashboard/bitacora':  'bitacora',
+  '/dashboard/bitacora':          'bitacora',
+  '/dashboard/bitacora/bandeja':  'bitacora',
   '/dashboard/insights':  'insights',
   '/dashboard/tareas':    'tareas',
   '/dashboard/carbono':   'carbono',

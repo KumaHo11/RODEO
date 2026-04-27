@@ -26,6 +26,8 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const paddockId = searchParams.get('paddock_id')
+    const source    = searchParams.get('source')   // 'WHATSAPP' | 'APP'
+    const status    = searchParams.get('status')   // 'PENDING_REVIEW' | 'APPROVED'
 
     let sql = `
       SELECT
@@ -40,12 +42,11 @@ export async function GET(req: NextRequest) {
     `
     const vals: any[] = [auth.orgId]
 
-    if (paddockId) {
-      sql += ` AND fn.paddock_id = $2`
-      vals.push(paddockId)
-    }
+    if (paddockId) { sql += ` AND fn.paddock_id = $${vals.length + 1}`; vals.push(paddockId) }
+    if (source)    { sql += ` AND fn.source = $${vals.length + 1}`;     vals.push(source) }
+    if (status)    { sql += ` AND fn.status = $${vals.length + 1}`;     vals.push(status) }
 
-    sql += ` ORDER BY fn.created_at DESC LIMIT 100`
+    sql += ` ORDER BY fn.created_at DESC LIMIT 200`
 
     const rows = await query(sql, vals)
     return NextResponse.json({ notes: rows })
