@@ -246,19 +246,13 @@ export default function MiCampoPage() {
       const res = await apiFetch('/api/upload', { method: 'POST', body: fd })
       if (res.ok) {
         const data = await res.json()
-        const url: string = data.url
+        const url: string = data.url  // GCS URL or /uploads/<filename> local fallback
 
-        // If GCS unavailable and server returned a data URL, warn and skip persistence
-        if (url.startsWith('data:')) {
-          console.warn('[upload] GCS unavailable — data URL too large to persist in DB, skipping')
-          setSetupImgUploading(false)
-          return
-        }
+        setSetupImgUrl(url)
+        setSessionFieldImg(url)
+        setMapView('image')
 
-        setSetupImgUrl(url)           // replace blob URL with real server URL
-        setSessionFieldImg(url)       // update session image too
-
-        // ── Persist immediately to DB so navigation away doesn't lose the image ──
+        // Persist immediately to DB — navigation away won't lose the image
         await apiFetch('/api/organizations', {
           method: 'PATCH',
           body: JSON.stringify({
@@ -268,14 +262,15 @@ export default function MiCampoPage() {
             },
           }),
         })
-        // Silently refresh org state so fieldImg is up-to-date
+        // Refresh org state so fieldImg is up-to-date
         const orgRes = await apiFetch('/api/organizations')
         if (orgRes.ok) {
           const { organization } = await orgRes.json()
           setOrg(organization)
         }
       } else {
-        console.warn('[upload] Image upload failed:', res.status, res.statusText)
+        const errData = await res.json().catch(() => ({}))
+        console.warn('[upload] Image upload failed:', res.status, errData.error || res.statusText)
       }
     } catch (e) {
       console.warn('[upload] Image upload error', e)
