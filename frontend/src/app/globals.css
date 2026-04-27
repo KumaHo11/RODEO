@@ -6,38 +6,48 @@
   --background: #ffffff;
   --foreground: #111827; /* gray-900 */
 
-  /* ── Rodeo Design Tokens ─────────────────────────── */
-  /* Brand */
-  --rodeo-green:       #16a34a;
-  --rodeo-green-dark:  #15803d;
-  --rodeo-green-light: #bbf7d0;
+  /* ── Rodeo Design Tokens (Atomic Design System) ── */
+  
+  /* Core Colors */
+  --color-primary:       #16a34a; /* Rodeo Green (600) */
+  --color-primary-dark:  #15803d; /* 700 */
+  --color-primary-light: #bbf7d0; /* 200 */
+  --color-secondary:     #2563eb; /* Rodeo Blue (600) - Usado para perímetros */
+  
+  /* Surface / Backgrounds */
+  --color-bg-base:       #ffffff;
+  --color-bg-subtle:     #f9fafb; /* gray-50 */
+  --color-bg-muted:      #f3f4f6; /* gray-100 */
 
-  /* Semáforo operativo */
+  /* Borders */
+  --color-border-default: #e5e7eb; /* gray-200 */
+  --color-border-subtle:  #f3f4f6; /* gray-100 */
+
+  /* Typography */
+  --color-text-main:      #111827; /* gray-900 */
+  --color-text-sub:       #4b5563; /* gray-600 */
+  --color-text-muted:     #9ca3af; /* gray-400 */
+  --color-text-placeholder: #d1d5db;
+
+  /* Semantic / Operational */
   --signal-ok:         #16a34a;
   --signal-warning:    #d97706;
   --signal-critical:   #dc2626;
 
-  /* Neutros técnicos */
-  --surface-base:      #ffffff;
-  --surface-subtle:    #f9fafb;
-  --surface-muted:     #f3f4f6;
-  --border-default:    #e5e7eb;
-  --border-subtle:     #f3f4f6;
-  --text-primary:      #030712;
-  --text-secondary:    #374151;
-  --text-muted:        #9ca3af;
-  --text-placeholder:  #d1d5db;
-
-  /* NDVI semánticos */
+  /* NDVI */
   --ndvi-optimal:      #16a34a;
   --ndvi-good:         #65a30d;
   --ndvi-fair:         #ca8a04;
   --ndvi-low:          #dc2626;
 
-  /* Radios */
+  /* Layout Tokens */
   --radius-card:       16px;
   --radius-button:     12px;
+  --radius-input:      12px;
   --radius-badge:      999px;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 }
 
 @theme inline {

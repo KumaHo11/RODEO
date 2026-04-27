@@ -1,12 +1,11 @@
 /**
- * Centralized email sender — uses SendGrid (Google's GCP-recommended email partner)
- * Set SENDGRID_API_KEY in environment (.env.local and Cloud Run secrets)
+ * Centralized email sender — uses Resend (https://resend.com)
+ * Set RESEND_API_KEY in environment (.env.local and Cloud Run secrets)
+ * Free tier: 3,000 emails/month · No credit card required
  */
-import sgMail from '@sendgrid/mail'
+import { Resend } from 'resend'
 
-// This MUST match a Sender Identity verified in your SendGrid account.
-// Go to https://app.sendgrid.com/settings/sender_auth → Single Sender Verification
-const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'josorio@rodeoagtech.com'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'soporte@rodeoagtech.com'
 const FROM_NAME  = 'RODEO'
 
 // ── Template builder ───────────────────────────────────────────────────────
@@ -121,6 +120,63 @@ const templates = {
     `),
   }),
 
+  paddock_move_reminder: (p: {
+    ownerName: string
+    orgName: string
+    moves: Array<{
+      paddockName: string
+      herdName: string
+      headCount: number
+      exitDate: string      // formatted date string e.g. "28 de abril de 2026"
+      recoveryDays: number
+    }>
+    dashboardUrl: string
+  }) => ({
+    subject: `🐄 Recordatorio: ${p.moves.length > 1 ? `${p.moves.length} movimientos` : 'movimiento de animales'} mañana — ${p.orgName}`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 6px;color:#111827;font-size:22px;font-weight:900">Mañana hay movimientos programados 🐄</h2>
+      <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
+        Hola <strong>${p.ownerName}</strong>, te recordamos que mañana tenés
+        <strong>${p.moves.length} movimiento${p.moves.length !== 1 ? 's' : ''}</strong>
+        de animales planificado${p.moves.length !== 1 ? 's' : ''} en <strong>${p.orgName}</strong>.
+      </p>
+      <div style="margin-bottom:28px">
+        ${p.moves.map(m => `
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:18px 20px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <div style="width:10px;height:10px;border-radius:50%;background:#16a34a;flex-shrink:0"></div>
+              <p style="margin:0;color:#111827;font-size:16px;font-weight:800">${m.paddockName}</p>
+            </div>
+            <p style="margin:0 0 8px;color:#4b5563;font-size:13px;font-weight:500">
+              Rodeo: <strong>${m.herdName}</strong> · <strong>${m.headCount}</strong> cab.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="background:#fff;border:1px solid #d1fae5;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#059669">
+                📅 Salida: ${m.exitDate}
+              </span>
+              <span style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#374151">
+                ⏱ Descanso siguiente: ${m.recoveryDays}d
+              </span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;margin-bottom:28px">
+        <p style="margin:0;color:#92400e;font-size:13px;font-weight:600">
+          💡 Recordá preparar el potrero receptor, controlar el agua y el alambrado antes del movimiento.
+        </p>
+      </div>
+      <div style="text-align:center;margin-bottom:20px">
+        <a href="${p.dashboardUrl}" style="display:inline-block;background:#16a34a;color:#fff;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:800;text-decoration:none">
+          Ver planificador →
+        </a>
+      </div>
+      <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">
+        Accedé desde: <a href="${p.dashboardUrl}" style="color:#16a34a">${p.dashboardUrl}</a>
+      </p>
+    `),
+  }),
+
 } satisfies Record<string, (params: any) => { subject: string; html: string }>
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -132,22 +188,22 @@ export async function sendEmail<T extends EmailType>(
   to: string,
   params: Parameters<typeof templates[T]>[0]
 ): Promise<void> {
-  const apiKey = process.env.SENDGRID_API_KEY
+  const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
-    console.warn('[sendEmail] SENDGRID_API_KEY not set — skipping email')
+    console.warn('[sendEmail] RESEND_API_KEY not set — skipping email')
     return
   }
 
-  sgMail.setApiKey(apiKey)
-
+  const resend = new Resend(apiKey)
   const tpl = (templates[type] as (p: any) => { subject: string; html: string })(params)
 
-  await sgMail.send({
+  const { error } = await resend.emails.send({
     to,
-    from: { email: FROM_EMAIL, name: FROM_NAME },
+    from: `${FROM_NAME} <${FROM_EMAIL}>`,
     subject: tpl.subject,
     html: tpl.html,
   })
 
+  if (error) throw new Error(`[sendEmail] Resend error: ${error.message}`)
   console.log(`[sendEmail] ✓ sent type=${type} to=${to}`)
 }

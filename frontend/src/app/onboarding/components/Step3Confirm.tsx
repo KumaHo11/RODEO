@@ -125,7 +125,7 @@ export default function Step3Confirm() {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Hacienda</p>
-                <h2 className="text-lg font-bold text-gray-900 tracking-tight">Inventario de rebaños</h2>
+                <h2 className="text-lg font-bold text-gray-900 tracking-tight">Inventario de rodeos</h2>
               </div>
             </div>
             {data.herds.length > 0 && (
@@ -166,7 +166,7 @@ export default function Step3Confirm() {
             {data.herds.length === 0 && (
               <div className="p-4 bg-orange-50 rounded-xl border border-orange-100 flex items-center gap-3">
                 <Users className="w-4 h-4 text-orange-300 shrink-0" />
-                <p className="text-xs font-bold text-orange-600">Sin rebaños registrados</p>
+                <p className="text-xs font-bold text-orange-600">Sin rodeos registrados</p>
               </div>
             )}
             {error && (

@@ -39,18 +39,24 @@ const EMPTY_FORM = {
   status: 'pendiente',
   herd_id: '',
   herd_ids: [] as string[],
+  body_condition: '',
 }
 
 export default function AgendaPage() {
   const { user } = useAuth()
   const [events, setEvents] = useState<any[]>([])
   const [herds, setHerds] = useState<any[]>([])
+  const [grazingPlans, setGrazingPlans] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [conflictModalOpen, setConflictModalOpen] = useState(false)
+  const [pendingPayload, setPendingPayload] = useState<any>(null)
+  const [activeTab, setActiveTab] = useState<'info'>('info')
   const [editingEvent, setEditingEvent] = useState<any | null>(null)
   const [form, setForm] = useState<{
     title: string; event_type: string; event_date: string; end_date: string;
     description: string; status: string; herd_id: string; herd_ids: string[];
+    body_condition: string;
   }>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
@@ -64,12 +70,14 @@ export default function AgendaPage() {
   const loadData = async () => {
     if (!user) return
     setLoading(true)
-    const [eventsRes, herdsRes] = await Promise.all([
+    const [eventsRes, herdsRes, plansRes] = await Promise.all([
       apiFetch('/api/farm-events'),
       apiFetch('/api/herds'),
+      apiFetch('/api/grazing-plans'),
     ])
     setEvents(eventsRes.ok ? (await eventsRes.json()).events || [] : [])
     setHerds(herdsRes.ok ? (await herdsRes.json()).herds || [] : [])
+    setGrazingPlans(plansRes.ok ? (await plansRes.json()).plans || [] : [])
     setLoading(false)
   }
 
@@ -102,11 +110,13 @@ export default function AgendaPage() {
       status: event.status,
       herd_id: event.herd_id || '',
       herd_ids: parsedHerdIds,
+      body_condition: event.body_condition || '',
     })
     setModalOpen(true)
+    setActiveTab('info')
   }
 
-  const handleSave = async () => {
+  const handleSave = async (skipConflictCheck = false) => {
     if (!form.title || !form.event_date) return
     setSaving(true)
     const payload = {
@@ -116,22 +126,52 @@ export default function AgendaPage() {
       end_date: form.end_date || null,
       description: form.description || null,
       status: form.status,
-      // Pass the arrays. For backwards compat, if we only have 1, also set herd_id
       herd_id: form.herd_ids.length > 0 ? form.herd_ids[0] : null,
       herd_ids: form.herd_ids,
+      body_condition: form.body_condition || null,
     }
 
-    if (editingEvent) {
-      await apiFetch(`/api/farm-events/${editingEvent.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-    } else {
-      await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify(payload) })
+    if (!skipConflictCheck) {
+      const isConflict = grazingPlans.some(p => 
+        p.status !== 'COMPLETED' &&
+        p.herd_ids?.some((hid: string) => payload.herd_ids.includes(hid)) &&
+        payload.event_date <= (p.exit_date || p.entry_date) &&
+        (payload.end_date || payload.event_date) >= p.entry_date
+      );
+      if (isConflict) {
+        setPendingPayload(payload);
+        setConflictModalOpen(true);
+        setSaving(false);
+        return;
+      }
     }
 
-    setSaving(false)
-    setModalOpen(false)
-    setForm(EMPTY_FORM)
-    setEditingEvent(null)
-    loadData()
+    await savePayload(payload);
+  }
+
+  const savePayload = async (payload: any, adjustPlans = false) => {
+    setSaving(true)
+    try {
+      if (editingEvent) {
+        await apiFetch(`/api/farm-events/${editingEvent.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      } else {
+        await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify(payload) })
+      }
+      
+      if (adjustPlans) {
+        // En un caso real, aquí iría la lógica para ajustar las planificaciones automáticamente
+        // por ejemplo, dividirlas o cambiarles la fecha.
+      }
+    } catch(e) {
+      console.error(e)
+    } finally {
+      setSaving(false)
+      setConflictModalOpen(false)
+      setModalOpen(false)
+      setForm(EMPTY_FORM)
+      setEditingEvent(null)
+      loadData()
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -475,19 +515,41 @@ export default function AgendaPage() {
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-              <h3 className="text-base font-black text-gray-950">
-                {editingEvent ? 'Editar Evento' : 'Nuevo Evento'}
-              </h3>
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+              <div>
+                <h3 className="text-lg font-black text-gray-950">
+                  {editingEvent ? 'Editar Evento' : 'Nuevo Evento'}
+                </h3>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <p className="text-xs text-gray-500 font-medium">Completá los detalles de la agenda ganadera</p>
+                  {form.body_condition && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-900 text-white tracking-wide">
+                      CC: {form.body_condition}
+                    </span>
+                  )}
+                </div>
+              </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-600 transition-all"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100 px-6 bg-gray-50/20">
+              <button
+                className={`py-3 text-sm font-bold border-b-2 px-2 transition-all ${
+                  activeTab === 'info' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+                onClick={() => setActiveTab('info')}
+              >
+                Información del Evento
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
               {/* Title */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Título del Evento *</label>
@@ -500,21 +562,31 @@ export default function AgendaPage() {
                 />
               </div>
 
-              {/* Event Type */}
+              {/* Event Type — Dropdown */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Tipo de Evento *</label>
-                <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={form.event_type}
+                  onChange={e => setForm({ ...form, event_type: e.target.value })}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-800 focus:ring-1 focus:ring-green-600 outline-none cursor-pointer appearance-none"
+                >
                   {EVENT_TYPES.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => setForm({ ...form, event_type: t.id })}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all border text-left ${form.event_type === t.id ? `${t.bg} ${t.text} border-transparent shadow-sm` : 'border-gray-100 text-gray-600 hover:border-gray-200 bg-gray-50'}`}
-                    >
-                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${t.dot}`} />
+                    <option key={t.id} value={t.id}>
                       {t.label}
-                    </button>
+                    </option>
                   ))}
-                </div>
+                </select>
+                {/* Visual badge for selected type */}
+                {(() => {
+                  const sel = EVENT_TYPES.find(t => t.id === form.event_type)
+                  if (!sel) return null
+                  return (
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${sel.dot}`} />
+                      <span className={`text-[10px] font-bold ${sel.text}`}>{sel.label}</span>
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Dates */}
@@ -539,11 +611,11 @@ export default function AgendaPage() {
                 </div>
               </div>
 
-              {/* Rebaños Multiple Selection */}
+              {/* Rodeos Multiple Selection */}
       {herds.length > 0 && (
         <div className="space-y-2">
           <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
-            Rebaños (Selección Múltiple)
+            Rodeos (Selección Múltiple)
           </label>
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2">
             {herds.map((h) => {
@@ -561,13 +633,28 @@ export default function AgendaPage() {
               );
             })}
             {form.herd_ids.length === 0 && (
-              <p className="text-xs text-gray-400 italic px-2">Sin rebaño seleccionado.</p>
+              <p className="text-xs text-gray-400 italic px-2">Sin rodeo seleccionado.</p>
             )}
           </div>
         </div>
       )}
 
 
+
+              {/* Body Condition */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Condición Corporal (OPCIONAL)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  max="5"
+                  value={form.body_condition}
+                  onChange={e => setForm({ ...form, body_condition: e.target.value })}
+                  placeholder="Ej: 3.5"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
+                />
+              </div>
 
               {/* Description */}
               <div className="space-y-1.5">
@@ -582,7 +669,7 @@ export default function AgendaPage() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">
               <button
                 onClick={() => setModalOpen(false)}
                 className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
@@ -590,12 +677,57 @@ export default function AgendaPage() {
                 Cancelar
               </button>
               <button
-                onClick={handleSave}
+                onClick={() => handleSave(false)}
                 disabled={saving || !form.title || !form.event_date}
                 className="px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center gap-2"
               >
                 {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
                 {editingEvent ? 'Actualizar' : 'Crear Evento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conflict Modal */}
+      {conflictModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
+            <div className="px-6 py-5 border-b border-red-100 bg-red-50/50 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-red-900">Alerta de Superposición</h3>
+                <p className="text-xs text-red-700 font-medium">Conflicto con el Planificador de Pastoreo</p>
+              </div>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-gray-700 font-medium">
+                Este evento que estás intentando crear colisiona temporalmente con un movimiento de pastoreo ya planificado para los rodeos seleccionados.
+              </p>
+              <p className="text-sm text-gray-700 font-medium mt-3">
+                ¿Qué deseas hacer?
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex flex-col gap-2 bg-gray-50">
+              <button
+                onClick={() => savePayload(pendingPayload, true)}
+                className="w-full py-2.5 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-all text-center"
+              >
+                Guardar y reajustar planificación automáticamente
+              </button>
+              <button
+                onClick={() => savePayload(pendingPayload, false)}
+                className="w-full py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all text-center"
+              >
+                Guardar evento de todas formas sin modificar pastoreo
+              </button>
+              <button
+                onClick={() => setConflictModalOpen(false)}
+                className="w-full py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-xl transition-all text-center mt-2"
+              >
+                Cancelar y revisar fechas
               </button>
             </div>
           </div>

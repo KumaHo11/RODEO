@@ -3,12 +3,13 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
 import OfflineIndicator from '@/components/OfflineIndicator'
+import { Toaster } from 'sonner'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'RODEO — Gestión Ganadera Regenerativa',
-  description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rebaños, pastoreo rotacional y bitácora de campo con IA.',
+  description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rodeos, pastoreo rotacional y bitácora de campo con IA.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -52,6 +53,18 @@ export default function RootLayout({
           {children}
           <OfflineIndicator />
         </AuthProvider>
+        <Toaster
+          position="bottom-right"
+          richColors
+          closeButton
+          toastOptions={{
+            style: { fontFamily: 'inherit' },
+            classNames: {
+              success: 'border-green-200',
+              error: 'border-red-200',
+            },
+          }}
+        />
       </body>
     </html>
   )

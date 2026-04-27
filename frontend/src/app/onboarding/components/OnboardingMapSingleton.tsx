@@ -2,7 +2,7 @@
 
 /**
  * OnboardingMapSingleton
- * ──────────────────────
+ * ----------------------
  * Single Leaflet MapContainer that NEVER unmounts during steps 1–2.
  * Changes only its interaction mode:
  *
@@ -38,12 +38,13 @@ const greenIcon = typeof window !== 'undefined' ? new L.Icon({
   iconSize:   [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
 }) : undefined
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 // Types
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 export type MapMode = 'locate' | 'draw'
 
 export interface DrawnShape {
+  id?: number
   geojson: any
   area_ha: number
   layer: L.Layer
@@ -59,11 +60,13 @@ export interface OnboardingMapSingletonProps {
   paddockCount: number               // for color cycling
   onShapeDrawn: (shape: DrawnShape) => void
   onMidDraw: (areaHa: number | null) => void
+  onShapeEdited?: (layerId: number, geojson: any, areaHa: number) => void
+  onShapeRemoved?: (layerId: number) => void
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 // Inner controller — runs inside MapContainer, never re-mounts
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 function MapController({
   mode,
   location,
@@ -72,6 +75,8 @@ function MapController({
   paddockCount,
   onShapeDrawn,
   onMidDraw,
+  onShapeEdited,
+  onShapeRemoved,
 }: OnboardingMapSingletonProps) {
   const map           = useMap()
   const modeRef       = useRef<MapMode>(mode)
@@ -84,7 +89,7 @@ function MapController({
   useEffect(() => { drawPhaseRef.current = drawPhase }, [drawPhase])
   useEffect(() => { paddockRef.current = paddockCount }, [paddockCount])
 
-  // ── On location set: fly map there (only once, or if location changes) ──────
+  // -- On location set: fly map there (only once, or if location changes) ------
   useEffect(() => {
     if (!location) return
     if (!didFlyRef.current) {
@@ -93,7 +98,7 @@ function MapController({
     }
   }, [location, map])
 
-  // ── Click in 'locate' mode → set location ────────────────────────────────
+  // -- Click in 'locate' mode → set location --------------------------------
   useEffect(() => {
     const handler = async (e: L.LeafletMouseEvent) => {
       if (modeRef.current !== 'locate') return
@@ -105,7 +110,7 @@ function MapController({
     return () => { map.off('click', handler) }
   }, [map, onLocationChange])
 
-  // ── Geoman setup (once) ────────────────────────────────────────────────────
+  // -- Geoman setup (once) ----------------------------------------------------
   useEffect(() => {
     if (geomanInited.current) return
     geomanInited.current = true
@@ -115,7 +120,7 @@ function MapController({
       drawMarker: false, drawPolyline: false, drawRectangle: false,
       drawCircle: false, drawCircleMarker: false, drawText: false,
       cutPolygon: false, dragMode: false, editMode: true,
-      removalMode: false, drawPolygon: true,
+      removalMode: true, drawPolygon: true,
     })
 
     map.pm.setGlobalOptions({ snappable: true, snapDistance: 15, allowSelfIntersection: false })
@@ -147,11 +152,24 @@ function MapController({
         layer.setStyle({ color, fillColor: color, fillOpacity: 0.35, weight: 2, dashArray: undefined })
       }
 
-      onShapeDrawn({ geojson, area_ha, layer })
+      const layerId = (layer as any)._leaflet_id
+
+      layer.on('pm:edit', (evt: any) => {
+        const editedLayer = evt.layer || evt.target
+        const updatedGeoJSON = editedLayer.toGeoJSON()
+        const updatedArea = parseFloat((turfArea(updatedGeoJSON) / 10000).toFixed(2))
+        onShapeEdited?.(layerId, updatedGeoJSON.geometry || updatedGeoJSON, updatedArea)
+      })
+
+      layer.on('pm:remove', () => {
+        onShapeRemoved?.(layerId)
+      })
+
+      onShapeDrawn({ id: layerId, geojson, area_ha, layer })
     })
   }, [map]) // intentionally no deps — setup runs once
 
-  // ── Mode switching — hide/show Geoman controls ─────────────────────────────
+  // -- Mode switching — hide/show Geoman controls ----------------------------─
   useEffect(() => {
     if (mode === 'locate') {
       // Disable drawing
@@ -164,7 +182,7 @@ function MapController({
         drawMarker: false, drawPolyline: false, drawRectangle: false,
         drawCircle: false, drawCircleMarker: false, drawText: false,
         cutPolygon: false, dragMode: false, editMode: true,
-        removalMode: false, drawPolygon: true,
+        removalMode: true, drawPolygon: true,
       })
       // Auto-start polygon drawing after a brief delay
       const t = setTimeout(() => {
@@ -177,9 +195,9 @@ function MapController({
   return null
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 // Exported component — the singleton wrapper
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 export default function OnboardingMapSingleton(props: OnboardingMapSingletonProps) {
   const DEFAULT_CENTER: [number, number] = [-34.6037, -60.5]
 
@@ -253,24 +271,22 @@ export default function OnboardingMapSingleton(props: OnboardingMapSingletonProp
             </div>
           </div>
 
-          {/* Arrow indicator pointing to the polygon button (Geoman puts controls at top-left, ~44px from top) */}
+          {/* Arrow indicator pointing to Geoman Polygon tool natively on its right side */}
           <div
             className="absolute z-[1100] pointer-events-none"
-            style={{ top: '38px', left: '4px' }}
+            style={{ top: '80px', left: '44px' }}
           >
-            <div className="flex flex-col items-center">
-              {/* Animated arrow pointing UP to the button */}
-              <svg
-                className="animate-bounce"
-                width="18" height="22" viewBox="0 0 18 22" fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.5))' }}
-              >
-                <path d="M9 0L0 10H6V22H12V10H18L9 0Z" fill="#16a34a" />
-              </svg>
-              <div className="mt-1 bg-green-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full whitespace-nowrap shadow-md">
+            <div className="flex items-center gap-1.5 animate-pulse">
+              <div className="bg-green-600 text-white text-[9px] font-black px-2.5 py-1 rounded-full whitespace-nowrap shadow-md">
                 Click aquí
               </div>
+              <svg
+                width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3"
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}
+              >
+                <path d="M19 12H5M5 12L12 19M5 12L12 5" />
+              </svg>
             </div>
           </div>
         </>

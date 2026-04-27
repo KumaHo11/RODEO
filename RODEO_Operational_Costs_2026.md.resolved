@@ -1,0 +1,221 @@
+# 💰 RODEO — Costos Operativos Mensuales 2026
+> **Actualizado:** Abril 2026 | **Región:** `southamerica-east1` (São Paulo, Brasil)  
+> **Proyecto GCP:** `rodeo-app-fac50`
+
+---
+
+## 🧱 Stack Activo
+
+| Capa | Tecnología | Servicio |
+|:--|:--|:--|
+| **Frontend** | Next.js 16 (Docker) | Google Cloud Run |
+| **Parser** | Python/FastAPI (Docker) | Google Cloud Run (2° servicio) |
+| **Base de datos** | PostgreSQL via Prisma/pg | Google Cloud SQL |
+| **Autenticación** | Firebase Auth + Admin SDK | Firebase (GCP) |
+| **Almacenamiento** | Firebase Storage | Google Cloud Storage |
+| **IA / Insights** | Gemini API | Google AI Studio |
+| **Mapas** | Leaflet + Esri Satellite | **$0** (tiles open source) |
+| **Email** | Resend (`josorio@rodeoagtech.com`) | Resend.com |
+| **Pagos** | Stripe | Stripe |
+| **Imágenes Docker** | Artifact Registry | Google Artifact Registry |
+
+> ~~Supabase~~ — eliminado  
+> ~~Google Maps API~~ — eliminado, reemplazado por Leaflet + Esri (gratis)  
+> ~~SendGrid~~ — migrado a Resend (ahorra $20/mes)
+
+---
+
+## 📊 Desglose por Servicio
+
+### ☁️ Cloud Run — Frontend (Next.js)
+`1 vCPU · 1 GiB RAM · min-instances=0 · max-instances=3`
+
+| Escenario | Costo/mes |
+|:--|:--|
+| MVP (scale-to-zero, tráfico bajo) | $0 – $10 |
+| Crecimiento (~50% uptime) | $20 – $40 |
+| Escala (min=1, always-on) | $60 – $90 |
+
+Free tier: 180k vCPU-seg + 360k GiB-seg + 2M requests/mes incluidos.
+
+---
+
+### 🐍 Cloud Run — Parser Python/FastAPI
+
+| Escenario | Costo/mes |
+|:--|:--|
+| MVP (on-demand) | $0 |
+| Crecimiento | $5 – $15 |
+| Escala | $15 – $30 |
+
+---
+
+### 🗄️ Cloud SQL — PostgreSQL
+
+| Componente | MVP (`db-f1-micro`) | Crecimiento (`db-g1-small`) | Escala (dedicado) |
+|:--|:--|:--|:--|
+| Instancia compute | $8 – $10 | $30 – $45 | $80 – $130 |
+| Almacenamiento SSD | $1 – $2 | $3 – $5 | $10 – $20 |
+| Backups | $0.20 | $0.50 | $2 |
+| **Subtotal** | **$9 – $12** | **$34 – $51** | **$92 – $152** |
+
+> Sin free tier. Único costo fijo desde el día 1.
+
+---
+
+### 🔥 Firebase Auth
+Hasta 50,000 MAU/mes → **$0**. Más allá: $0.0025/MAU adicional.
+
+---
+
+### 📦 Firebase Storage
+
+| Escenario | GB estimados | Costo/mes |
+|:--|:--|:--|
+| MVP | ~10–20 GB | $1 – $3 |
+| Crecimiento | ~50–100 GB | $2 – $5 |
+| Escala | ~200–500 GB | $6 – $15 |
+
+---
+
+### 🤖 Gemini API
+`gemini-2.0-flash: ~$0.10/1M tokens input · $0.40/1M tokens output`
+
+| Escenario | Consultas/mes | Costo/mes |
+|:--|:--|:--|
+| MVP (50 usuarios) | ~500 | $1 – $2 |
+| Crecimiento (500 usuarios) | ~5,000 | $5 – $15 |
+| Escala (5k usuarios) | ~50,000 | $30 – $80 |
+
+---
+
+### 🗺️ Leaflet + Esri Satellite
+Tiles open source. **$0/mes en todos los escenarios.**
+
+---
+
+### 📬 Resend (Email transaccional)
+`Free tier: 3,000 emails/mes · Dominio: rodeoagtech.com verificado`
+
+| Escenario | Emails/mes | Costo/mes |
+|:--|:--|:--|
+| MVP | ~500 – 2,000 | **$0** |
+| Crecimiento | ~5,000 – 15,000 | $0 – $20 |
+| Escala | ~30,000 – 80,000 | $20 – $89 |
+
+---
+
+### 🐳 Artifact Registry (imágenes Docker)
+`$0.10/GB · Free: 0.5 GB/mes`
+
+Todos los escenarios: **~$0.50 – $1/mes**
+
+---
+
+### 💳 Stripe (procesamiento de pagos)
+`2.9% + $0.30 por transacción exitosa · Sin costo fijo mensual`
+
+| MRR | Costo Stripe/mes |
+|:--|:--|
+| $1,000 | ~$32 |
+| $3,000 | ~$93 |
+| $5,000 | ~$160 |
+| $10,000 | ~$320 |
+| $20,000 | ~$610 |
+
+---
+
+## 🧾 TOTALES MENSUALES POR ESCENARIO
+
+### 🌱 MVP — 0 a 50 usuarios activos
+
+| Servicio | Mínimo | Máximo |
+|:--|--:|--:|
+| Cloud Run Frontend | $0 | $10 |
+| Cloud Run Parser | $0 | $0 |
+| Cloud SQL PostgreSQL | $9 | $12 |
+| Firebase Auth | $0 | $0 |
+| Firebase Storage | $1 | $3 |
+| Gemini API | $1 | $2 |
+| Mapas (Leaflet) | $0 | $0 |
+| Resend Email | $0 | $0 |
+| Artifact Registry | $0.50 | $1 |
+| **TOTAL INFRAESTRUCTURA** | **$11.50** | **$28** |
+| + Stripe (ej. $1k MRR) | $32 | $32 |
+| **TOTAL CON STRIPE** | **~$44** | **~$60/mes** |
+
+---
+
+### 🚜 Crecimiento — 50 a 500 usuarios activos
+
+| Servicio | Mínimo | Máximo |
+|:--|--:|--:|
+| Cloud Run Frontend | $20 | $40 |
+| Cloud Run Parser | $5 | $15 |
+| Cloud SQL PostgreSQL | $34 | $51 |
+| Firebase Auth | $0 | $0 |
+| Firebase Storage | $2 | $5 |
+| Gemini API | $5 | $15 |
+| Mapas (Leaflet) | $0 | $0 |
+| Resend Email | $0 | $20 |
+| Artifact Registry | $0.50 | $1 |
+| **TOTAL INFRAESTRUCTURA** | **$66.50** | **$147** |
+| + Stripe (ej. $5k MRR) | $160 | $160 |
+| **TOTAL CON STRIPE** | **~$227** | **~$307/mes** |
+
+---
+
+### 🌍 Escala — 500 a 5,000 usuarios activos
+
+| Servicio | Mínimo | Máximo |
+|:--|--:|--:|
+| Cloud Run Frontend | $60 | $90 |
+| Cloud Run Parser | $15 | $30 |
+| Cloud SQL PostgreSQL | $92 | $152 |
+| Firebase Auth | $0 | $10 |
+| Firebase Storage | $6 | $15 |
+| Gemini API | $30 | $80 |
+| Mapas (Leaflet) | $0 | $0 |
+| Resend Email | $20 | $89 |
+| Artifact Registry | $1 | $1 |
+| **TOTAL INFRAESTRUCTURA** | **$224** | **$467** |
+| + Stripe (ej. $20k MRR) | $610 | $610 |
+| **TOTAL CON STRIPE** | **~$834** | **~$1,077/mes** |
+
+---
+
+## 📈 Tabla Resumen Ejecutivo
+
+| Fase | Usuarios | Infra/mes | Stripe (ejemplo MRR) | **TOTAL/mes** |
+|:--|:--|:--|:--|:--|
+| 🌱 MVP | 0 – 50 | $12 – $28 | ~$32 (a $1k MRR) | **~$44 – $60** |
+| 🚜 Crecimiento | 50 – 500 | $67 – $147 | ~$160 (a $5k MRR) | **~$227 – $307** |
+| 🌍 Escala | 500 – 5k | $224 – $467 | ~$610 (a $20k MRR) | **~$834 – $1,077** |
+
+> **Margen operativo:** A $5,000 MRR el costo total (infra + Stripe) representa ~4–6% de los ingresos.  
+> A $20,000 MRR baja a ~4–5%. Muy saludable para un SaaS AgTech.
+
+---
+
+## ✅ Optimizaciones Aplicadas
+
+| Acción | Ahorro mensual |
+|:--|:--|
+| SendGrid → Resend | **-$20/mes** (desde MVP) |
+| Supabase eliminado | **-$25/mes** |
+| Google Maps → Leaflet + Esri | **-$0 a -$280/mes** (según tráfico) |
+| Scale-to-zero en Cloud Run | **-$50/mes** en staging |
+
+---
+
+## 🔗 Referencias de Precios
+
+| Servicio | URL |
+|:--|:--|
+| GCP Calculator | https://cloud.google.com/products/calculator |
+| Cloud Run | https://cloud.google.com/run/pricing |
+| Cloud SQL | https://cloud.google.com/sql/pricing |
+| Firebase | https://firebase.google.com/pricing |
+| Gemini API | https://ai.google.dev/pricing |
+| Resend | https://resend.com/pricing |
+| Stripe | https://stripe.com/pricing |

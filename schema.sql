@@ -23,6 +23,9 @@ CREATE TABLE organizations (
     region_id VARCHAR(50),
     drought_plan_buffer INT DEFAULT 20,
     subscription_plan_id UUID REFERENCES subscriptions_plans(id),
+    -- Planning defaults (persisted per org, pre-filled in the planning modal)
+    default_daily_allocation_kg  NUMERIC(8,2)  DEFAULT 12,   -- kg MS/EqVaca/día
+    default_target_remnant_kg_ha NUMERIC(10,2) DEFAULT 600,  -- kg MS/ha remanente objetivo
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

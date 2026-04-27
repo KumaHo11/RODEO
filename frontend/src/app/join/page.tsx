@@ -179,7 +179,7 @@ function JoinContent() {
   const roleLabel = invitation ? (ROLE_LABELS[invitation.team_role] ?? invitation.team_role) : ''
   const roleColors = invitation ? (ROLE_COLORS[invitation.team_role] ?? ROLE_COLORS.OWNER) : ROLE_COLORS.OWNER
   const moduleLabels: Record<string, string> = {
-    dashboard: 'Panel', mi_campo: 'Mi campo', rebanhos: 'Rebaños',
+    dashboard: 'Panel', mi_campo: 'Mi campo', rebanhos: 'Rodeos',
     agenda: 'Agenda', planificador: 'Planificador', bitacora: 'Bitácora',
     insights: 'Insights', tareas: 'Tareas',
   }

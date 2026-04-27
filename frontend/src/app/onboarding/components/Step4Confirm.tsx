@@ -191,7 +191,7 @@ export default function Step4Confirm() {
                 </div>
                 <div>
                   <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Hacienda</p>
-                  <h3 className="text-base font-black text-gray-900 leading-tight">Inventario de rebaños</h3>
+                  <h3 className="text-base font-black text-gray-900 leading-tight">Inventario de rodeos</h3>
                 </div>
               </div>
             </div>
@@ -253,8 +253,8 @@ export default function Step4Confirm() {
                 <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-start gap-3">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-xs font-bold text-amber-700">Sin rebaños registrados</p>
-                    <p className="text-[9px] text-amber-500 mt-0.5">Podés completarlo desde la sección Rebaños del Dashboard.</p>
+                    <p className="text-xs font-bold text-amber-700">Sin rodeos registrados</p>
+                    <p className="text-[9px] text-amber-500 mt-0.5">Podés completarlo desde la sección Rodeos del Dashboard.</p>
                   </div>
                 </div>
               )}

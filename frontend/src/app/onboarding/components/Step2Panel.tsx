@@ -16,10 +16,11 @@ import { useAuth } from '@/components/AuthProvider'
 import {
   ArrowRight, ArrowLeft, Trash2, Ruler, MapPin,
   SkipForward, AlertTriangle, CheckCircle2, Loader2,
-  RefreshCw, PenLine, Plus
+  RefreshCw, PenLine, Plus, Upload, FileSpreadsheet
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PADDOCK_COLORS } from './paddockColors'
+import * as XLSX from 'xlsx'
 
 interface Props {
   midDrawArea: number | null
@@ -33,6 +34,53 @@ export default function Step2Panel({ midDrawArea }: Props) {
   const draftShape = (data as any)._draftShape ?? null
   const [draftName, setDraftName] = useState(data.fieldName || '')
   const [showSkipWarning, setShowSkipWarning] = useState(false)
+  const fileRef = React.useRef<HTMLInputElement>(null)
+
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        const wb = XLSX.read(event.target?.result, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const excelData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' })
+        if (excelData.length < 2) throw new Error("Sin datos")
+        
+        const rawHeaders = excelData[0].map((h: any) => String(h ?? '').trim().toLowerCase())
+        const idxName = rawHeaders.findIndex(h => h.includes('nombre') || h.includes('potrero') || h.includes('lote') || h.includes('paddock'))
+        const idxArea = rawHeaders.findIndex(h => h.includes('ha') || h.includes('hectarea') || h.includes('superficie') || h.includes('area'))
+        const idxForraje = rawHeaders.findIndex(h => h.includes('forraje') || h.includes('ms') || h.includes('materia seca'))
+        
+        if (idxName === -1 || idxArea === -1) {
+           alert("El Excel debe tener al menos una columna para Nombre y otra para Hectáreas (Ha o similar).")
+           return
+        }
+
+        const newPaddocks = excelData.slice(1)
+          .filter(row => row[idxName] && row[idxArea])
+          .map(row => ({
+            name: String(row[idxName]).trim(),
+            area_ha: Number(row[idxArea]) || 0,
+            dry_matter_kg_ha: idxForraje !== -1 ? (Number(row[idxForraje]) || undefined) : undefined,
+            geojson: null
+          }))
+          .filter(p => p.name && p.area_ha > 0)
+
+        if (newPaddocks.length > 0) {
+           const combined = [...data.paddocks, ...newPaddocks] as any[]
+           updateData({ 
+              paddocks: combined, 
+              totalArea: parseFloat(combined.reduce((s, p) => s + p.area_ha, 0).toFixed(2)) 
+           } as any)
+        }
+      } catch (err: any) {
+        alert("Error al leer el archivo: " + err.message)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   const phase   = data.fieldBoundary ? 'paddock' : 'field'
   const hasField = !!data.fieldBoundary
@@ -41,6 +89,7 @@ export default function Step2Panel({ midDrawArea }: Props) {
   const confirmField = () => {
     if (!draftShape || !draftName.trim()) return
     updateData({
+      fieldLayerId:    draftShape.id,
       fieldBoundary:   draftShape.geojson,
       fieldBoundaryHa: draftShape.area_ha,
       totalArea:       draftShape.area_ha,
@@ -97,7 +146,7 @@ export default function Step2Panel({ midDrawArea }: Props) {
   }
 
   const handleNext = async () => {
-    updateData({ skippedMap: false })
+    updateData({ skippedMap: !hasField })
     await persistStep(2)
     nextStep()
   }
@@ -108,7 +157,7 @@ export default function Step2Panel({ midDrawArea }: Props) {
     nextStep()
   }
 
-  const canNext  = hasField                           // at least field boundary
+  const canNext  = hasField || data.paddocks.length > 0
   const hasDraft = !!draftShape && !hasField
 
   return (
@@ -190,9 +239,9 @@ export default function Step2Panel({ midDrawArea }: Props) {
             </div>
           </div>
 
-          {/* Step B: Add paddocks (only visible after field confirmed) */}
+          {/* Step B: Add paddocks */}
           <AnimatePresence>
-            {hasField && (
+            {(hasField || data.paddocks.length > 0) && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex items-start gap-3 p-3.5 rounded-2xl border transition-all ${
                 data.paddocks.length > 0 ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
               }`}>
@@ -210,6 +259,9 @@ export default function Step2Panel({ midDrawArea }: Props) {
                       ? `${data.paddocks.reduce((s, p) => s + p.area_ha, 0).toFixed(1)} ha divididas`
                       : 'Seguí dibujando dentro del perímetro para agregar potreros'}
                   </p>
+                  <button onClick={() => fileRef.current?.click()} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 text-[10px] font-bold rounded-lg hover:bg-gray-50 transition-colors">
+                    <Upload className="w-3 h-3"/> Importar potreros (Excel)
+                  </button>
                 </div>
               </motion.div>
             )}
@@ -267,13 +319,22 @@ export default function Step2Panel({ midDrawArea }: Props) {
         </AnimatePresence>
 
         {/* Empty state / guide */}
-        {!hasField && !hasDraft && (
+        {!hasField && !hasDraft && data.paddocks.length === 0 && (
           <div className="border-2 border-dashed border-gray-100 rounded-2xl py-8 flex flex-col items-center gap-2 text-center">
             <PenLine className="w-8 h-8 text-gray-200" />
             <p className="text-xs font-bold text-gray-400">El perímetro aparecerá aquí</p>
             <p className="text-[10px] text-gray-300 font-normal">Dibujá el contorno en el mapa →</p>
+            
+            <div className="mt-4 flex flex-col items-center">
+              <span className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-2">O si ya lo tenés</span>
+              <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold rounded-lg hover:bg-green-100 transition-colors">
+                <FileSpreadsheet className="w-3 h-3"/> Cargar potreros desde Excel
+              </button>
+            </div>
           </div>
         )}
+
+        <input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} />
 
         {/* Skip warning */}
         <AnimatePresence>

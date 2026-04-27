@@ -1,14 +1,21 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
-  Map, Footprints, Leaf, CalendarDays, Mic, Target, TrendingUp, Sprout,
+  Map, Footprints, CalendarDays, Mic, Target, TrendingUp, Sprout,
   ArrowRight, Check, X, ChevronDown, Building2, CheckCircle2,
-  Camera, WifiOff, Brain, BarChart3, Zap, Shield,
+  Camera, WifiOff, Brain, BarChart3, Zap, Shield, Loader2,
 } from 'lucide-react'
 import RodeoLogo from '@/components/RodeoLogo'
+
+interface ApiPlan {
+  id: string; name: string; slug: string; description: string
+  price: number; price_yearly: number; color: string
+  is_popular: boolean; sort_order: number
+  feature_flags: { flag_key: string; flag_value: any; flag_type: string; label: string }[]
+}
 
 function useCounter(target: number, duration = 2000, start = false) {
   const [count, setCount] = useState(0)
@@ -41,23 +48,27 @@ function useInView(threshold = 0.2) {
 
 function StatsSection() {
   const { ref, inView } = useInView()
-  const hectares = useCounter(2400000, 2200, inView)
-  const ranchers = useCounter(12000, 2000, inView)
-  const countries = useCounter(8, 1200, inView)
-  const efficiency = useCounter(34, 1800, inView)
+  const hectares   = useCounter(2400000, 2200, inView)
+  const ranchers   = useCounter(12000,   2000, inView)
+  const countries  = useCounter(8,       1200, inView)
+  const efficiency = useCounter(34,      1800, inView)
+  const stats = [
+    { value: hectares,   suffix: '+', prefix: '',  label: 'Hectáreas gestionadas'   },
+    { value: ranchers,   suffix: '+', prefix: '',  label: 'Productores activos'      },
+    { value: countries,  suffix: '',  prefix: '',  label: 'Países en LATAM'          },
+    { value: efficiency, suffix: '%', prefix: '+', label: 'Aumento de carga animal' },
+  ]
   return (
-    <div ref={ref} className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-      {[
-        { value: hectares, suffix: 'M', prefix: '', label: 'Hectáreas gestionadas' },
-        { value: ranchers, suffix: '+', prefix: '', label: 'Productores activos' },
-        { value: countries, suffix: '', prefix: '', label: 'Países en LATAM' },
-        { value: efficiency, suffix: '%', prefix: '+', label: 'Aumento de carga animal promedio' },
-      ].map((stat, i) => (
-        <div key={i} className="text-center">
-          <div className="text-4xl lg:text-5xl font-black text-white mb-1">
-            {stat.prefix}{stat.value.toLocaleString()}{stat.suffix}
+    <div ref={ref} className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+      {stats.map((stat, i) => (
+        <div key={i} className="text-center flex flex-col items-center">
+          <div
+            className="font-black text-white leading-none tabular-nums whitespace-nowrap"
+            style={{ fontSize: 'clamp(1.4rem, 3.5vw, 3rem)' }}
+          >
+            {stat.prefix}{stat.value.toLocaleString('es-AR')}{stat.suffix}
           </div>
-          <div className="text-sm text-green-200 font-medium">{stat.label}</div>
+          <div className="text-xs md:text-sm text-green-200 font-medium mt-2 leading-snug">{stat.label}</div>
         </div>
       ))}
     </div>
@@ -74,14 +85,24 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function LandingPage() {
   const [activeFeature, setActiveFeature] = useState(0)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
-  const [activePlan, setActivePlan] = useState<'monthly' | 'annual'>('annual')
+  const [menuOpen, setMenuOpen]           = useState(false)
+  const [scrolled, setScrolled]           = useState(false)
+  const [activePlan, setActivePlan]       = useState<'monthly' | 'annual'>('annual')
+  const [apiPlans, setApiPlans]           = useState<ApiPlan[]>([])
+  const [plansLoading, setPlansLoading]   = useState(true)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
     window.addEventListener('scroll', onScroll)
     return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/plans')
+      .then(r => r.json())
+      .then(d => setApiPlans(d.plans || []))
+      .catch(() => {})
+      .finally(() => setPlansLoading(false))
   }, [])
 
   useEffect(() => {
@@ -93,7 +114,7 @@ export default function LandingPage() {
     {
       Icon: Camera,
       tag: 'NUEVO · IA',
-      title: 'IA Ganadera — Materia Seca por Foto',
+      title: 'IA ganadera — materia seca por foto',
       subtitle: 'Del ojo del ganadero al análisis científico',
       description: 'Fotografiá cualquier potrero con tu celular y nuestro motor de IA Gemini estimará en segundos los kg de Materia Seca disponible por hectárea. Calibrado con índices NDVI satelitales para máxima precisión.',
       stats: [{ label: 'Resultado', value: '< 5 seg' }, { label: 'Integración', value: 'NDVI + IA' }],
@@ -102,7 +123,7 @@ export default function LandingPage() {
     {
       Icon: Mic,
       tag: 'NUEVO · OFFLINE',
-      title: 'Bitácora Multimodal Offline',
+      title: 'Bitácora multimodal offline',
       subtitle: 'Registrá sin bajar del caballo',
       description: 'Grabá notas de voz en campo, incluso sin señal. La IA transcribe y categoriza automáticamente tus observaciones (Infraestructura, Sanidad, Plagas, Pasturas) y las asigna al potrero correspondiente. Todo se sincroniza en cuanto hay Wi-Fi o 4G.',
       stats: [{ label: 'Modo', value: '100% Offline' }, { label: 'Categorización', value: 'Automática IA' }],
@@ -111,7 +132,7 @@ export default function LandingPage() {
     {
       Icon: Map,
       tag: 'ACTUALIZADO',
-      title: 'Mi Campo — Mapa Integrado',
+      title: 'Mi campo — mapa integrado',
       subtitle: 'Cartografía y potreros en un solo panel',
       description: 'Mapa satelital enmarcado con panel Master-Detail. Dibujá potreros, visualizá el semáforo de disponibilidad de pasto por color y accedé al historial de cada lote con un toque.',
       stats: [{ label: 'Precisión GPS', value: '±2 m' }, { label: 'Potreros', value: 'Ilimitados' }],
@@ -120,16 +141,16 @@ export default function LandingPage() {
     {
       Icon: Footprints,
       tag: 'CORE',
-      title: 'Gestión de Hacienda',
+      title: 'Gestión de hacienda',
       subtitle: 'Tu inventario al día, siempre',
-      description: 'Registrá rebaños con historial completo de pesadas, pariciones, sanidad y composición corporal. El Equivalente Vaca (EV) se calcula automáticamente: la métrica que alinea tu capacidad de carga con los costos de la plataforma.',
+      description: 'Registrá rodeos con historial completo de pesadas, pariciones, sanidad y composición corporal. El Equivalente Vaca (EV) se calcula automáticamente: la métrica que alinea tu capacidad de carga con los costos de la plataforma.',
       stats: [{ label: 'Cálculo EV', value: 'Automático' }, { label: 'Historial', value: 'Por animal' }],
       accent: 'from-emerald-700 to-green-800',
     },
     {
       Icon: CalendarDays,
       tag: 'ACTUALIZADO',
-      title: 'Planificador Holístico e Insights',
+      title: 'Planificador holístico e insights',
       subtitle: 'Decidí con datos, no con intuición',
       description: 'Visualizá tu cronograma en Gantt anual o por temporada. Obtené recomendaciones inteligentes sobre los próximos movimientos de hacienda basadas en tu historial de materia seca, días de pastoreo y tiempos de recuperación.',
       stats: [{ label: 'Vista Gantt', value: 'Multiescala' }, { label: 'Proyección', value: '12 meses' }],
@@ -137,62 +158,40 @@ export default function LandingPage() {
     },
   ]
 
-  const plans = [
-    {
-      name: 'Campo Libre',
-      description: 'Para empezar a digitalizar tu campo',
-      price: { monthly: 0, annual: 0 },
-      ev: 'Hasta 50 EV',
-      cta: 'Empezar gratis',
-      ctaStyle: 'border border-gray-300 text-gray-700 hover:bg-gray-50',
-      popular: false,
-      features: ['1 establecimiento', 'Cartografía digital básica', '1 rebaño', 'Notas de campo básicas', 'Soporte por correo'],
-      missing: ['IA Materia Seca por foto', 'Bitácora de voz', 'Planificador holístico', 'Modo Offline completo', 'NDVI satelital'],
-    },
-    {
-      name: 'Pro Ganadero',
-      description: 'Para ganaderos que quieren precisión total',
-      price: { monthly: 0.60, annual: 0.50 },
-      ev: 'Cobro por EV/mes',
-      evExample: 'Ej: 500 EV = USD 250/mes',
-      cta: 'Probar 30 días gratis',
-      ctaStyle: 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/20',
-      popular: true,
-      features: [
-        'Hacienda ilimitada',
-        'IA Materia Seca por foto (Gemini)',
-        'Integración NDVI satelital',
-        'Bitácora de voz con transcripción IA',
-        'Modo Offline + sincronización diferida',
-        'Planificador holístico dinámico',
-        'Semáforo de disponibilidad de pasto',
-        'Gantt multiescala',
-        'Soporte prioritario',
-      ],
-      missing: [],
-    },
-    {
-      name: 'Pro Ganadero+',
-      description: 'Para operaciones que escalan rápido',
-      price: { monthly: 0.45, annual: 0.38 },
-      ev: '+1.500 EV · Multi-estancia',
-      evExample: 'Precio escala con volumen',
-      cta: 'Contactar ventas',
-      ctaStyle: 'border border-gray-900 text-gray-900 hover:bg-gray-950 hover:text-white',
-      popular: false,
-      features: [
-        'Todo de Pro Ganadero',
-        'Multi-rebaño y multi-estancia',
-        'Reportes avanzados de producción',
-        'API de integración',
-        'Hasta 5 usuarios adicionales',
-        'Exportación CSV/Excel',
-        'SLA garantizado',
-        'Soporte dedicado',
-      ],
-      missing: [],
-    },
-  ]
+  // Map API plans to display format
+  const FLAG_LABELS: Record<string, string> = {
+    ndvi_access:      'Integración NDVI satelital',
+    ai_insights:      'IA Materia Seca por foto (Gemini)',
+    offline_mode:     'Modo Offline + sincronización diferida',
+    voice_bitacora:   'Bitácora de voz con transcripción IA',
+    advanced_reports: 'Reportes avanzados de producción',
+    api_access:       'Acceso API corporativa',
+    carbon_module:    'Módulo de Carbono y bonos (MRV)',
+  }
+  const PLAN_META: Record<string, { cta: string; ctaStyle: string; icon: string }> = {
+    brote:       { cta: 'Empezar gratis',         ctaStyle: 'border border-gray-300 text-gray-700 hover:bg-gray-50',                                         icon: '🌱' },
+    planificador:{ cta: 'Comenzar prueba gratis',  ctaStyle: 'border border-green-600 text-green-700 hover:bg-green-50',                                      icon: '🚜' },
+    holistico:   { cta: 'Elegir Holístico',        ctaStyle: 'bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-600/30',                       icon: '🌿' },
+    latifundio:  { cta: 'Hablar con ventas →',     ctaStyle: 'bg-white text-gray-950 hover:bg-gray-100 font-black',                                           icon: '🌍' },
+  }
+  const BASE_FEATURES: Record<string, string[]> = {
+    brote:        ['Mapeo de hasta 20 potreros', 'Gestión de hacienda (1 rodeo)', 'Bitácora de campo básica', 'Cálculo estático de Carga Animal'],
+    planificador: ['Potreros y rodeos ilimitados', 'Planificador Gantt de pastoreo', 'Cálculo dinámico Carga Animal vs Receptividad', 'Alertas de sanidad e infraestructura'],
+    holistico:    ['Todo lo del Plan Planificador', 'Planificación forrajera Savory', 'Integración satelital NDVI', 'Motor predictivo Bio-Económico (ADA)'],
+    latifundio:   ['Todo lo del Plan Holístico', 'Dashboard multi-establecimientos', 'Integración con balanzas y ERPs', 'Soporte prioritario dedicado'],
+  }
+  const getEnabledFeatures = (plan: ApiPlan) => {
+    const base = BASE_FEATURES[plan.slug] || ['Cartografía digital de potreros', 'Gestión de hacienda', 'Bitácora de campo']
+    const extras = plan.feature_flags
+      .filter(f => f.flag_type === 'boolean' && f.flag_value === true)
+      .map(f => FLAG_LABELS[f.flag_key] || f.label)
+      .filter(label => !base.some(b => b.toLowerCase().includes(label.toLowerCase().split(' ')[0])))
+    return [...base, ...extras]
+  }
+  const plans = apiPlans.map(p => {
+    const meta = PLAN_META[p.slug] || { cta: 'Empezar', ctaStyle: 'border border-gray-300 text-gray-700 hover:bg-gray-50', icon: '🌿' }
+    return { ...p, ...meta, features: getEnabledFeatures(p) }
+  })
 
   const testimonials = [
     {
@@ -615,14 +614,14 @@ export default function LandingPage() {
 
       {/* ── PRICING ── */}
       <section id="precios" className="py-24 bg-gray-50">
-        <div className="max-w-6xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-12">
             <SectionLabel>PRECIOS</SectionLabel>
             <h2 className="text-4xl lg:text-5xl font-black text-gray-950 mb-4">
               Simple. Justo. Escalable.
             </h2>
-            <p className="text-base text-gray-500 mb-2 max-w-lg mx-auto">
-              Cobramos por Equivalente Vaca (EV), no por hectárea. Si tu campo crece, Rodeo crece con vos. Un productor con 500 EV paga lo mismo en costo operativo que genera en ahorro de pasto.
+            <p className="text-base text-gray-500 mb-2 max-w-xl mx-auto">
+              Cuatro planes diseñados para cada escala de operación ganadera. Empezá gratis y crecé cuando tu campo lo pida.
             </p>
             <p className="text-sm text-green-600 font-semibold mb-8">El valor que Rodeo entrega es siempre mayor al costo.</p>
 
@@ -637,85 +636,101 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-5 items-stretch">
-            {plans.map((plan, i) => (
-              <div key={i}
-                className={`relative rounded-2xl p-7 flex flex-col transition-all ${plan.popular ? 'bg-gray-950 text-white shadow-xl ring-1 ring-green-600 md:scale-[1.02]' : 'bg-white border border-gray-200'}`}>
-                {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full tracking-widest">
-                    MÁS POPULAR
-                  </div>
-                )}
-
-                <div className="mb-5">
-                  <div className={`text-[10px] font-black tracking-widest mb-2 ${plan.popular ? 'text-green-400' : 'text-green-600'}`}>
-                    {plan.ev}
-                  </div>
-                  <h3 className={`text-lg font-black mb-1 ${plan.popular ? 'text-white' : 'text-gray-950'}`}>{plan.name}</h3>
-                  <p className={`text-sm ${plan.popular ? 'text-gray-400' : 'text-gray-500'}`}>{plan.description}</p>
-                </div>
-
-                <div className="mb-2">
-                  <div className={`font-black ${plan.popular ? 'text-white' : 'text-gray-950'}`}>
-                    {plan.price[activePlan] === 0 ? (
-                      <span className="text-4xl">Gratis</span>
-                    ) : (
-                      <>
-                        <span className="text-4xl">
-                          <span className="text-lg font-bold mr-1">USD</span>
-                          {plan.price[activePlan].toFixed(2)}
-                        </span>
-                        <span className={`text-base font-medium ml-1 ${plan.popular ? 'text-gray-400' : 'text-gray-500'}`}>/EV/mes</span>
-                      </>
-                    )}
-                  </div>
-                  {'evExample' in plan && (
-                    <div className={`text-xs mt-1 font-semibold ${plan.popular ? 'text-green-400' : 'text-green-600'}`}>
-                      {plan.evExample}
-                    </div>
-                  )}
-                </div>
-
-                <Link href="/register"
-                  className={`w-full text-center font-bold py-3 rounded-xl text-sm transition-all mb-6 mt-4 block ${plan.ctaStyle}`}>
-                  {plan.cta}
-                </Link>
-
-                <div className="space-y-2 flex-1">
-                  {plan.features.map((feat, j) => (
-                    <div key={j} className={`flex items-start gap-2 text-sm ${plan.popular ? 'text-gray-300' : 'text-gray-600'}`}>
-                      <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" />
-                      {feat}
-                    </div>
-                  ))}
-                  {plan.missing.map((feat, j) => (
-                    <div key={j} className={`flex items-start gap-2 text-sm ${plan.popular ? 'text-gray-600' : 'text-gray-300'}`}>
-                      <X className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 opacity-40" />
-                      {feat}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Enterprise */}
-          <div className="mt-5 bg-gray-950 rounded-2xl p-7 flex flex-col md:flex-row items-center justify-between gap-5">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Building2 className="w-5 h-5 text-gray-400" />
-              </div>
-              <div>
-                <div className="text-[10px] font-black text-green-400 tracking-widest mb-0.5">ENTERPRISE</div>
-                <h3 className="text-base font-black text-white mb-0.5">Para grandes corporaciones y multi-establecimientos</h3>
-                <p className="text-gray-500 text-sm">+1.500 EV · Multi-estancia · Soporte dedicado · SLA garantizado · Integraciones a medida</p>
-              </div>
+          {plansLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 text-green-600 animate-spin mr-2" />
+              <span className="text-gray-400 text-sm">Cargando planes…</span>
             </div>
-            <a href="mailto:ventas@rodeoapp.io"
-              className="flex-shrink-0 bg-white text-gray-950 font-bold px-6 py-2.5 rounded-xl hover:bg-gray-100 transition-colors text-sm">
-              Hablar con ventas →
-            </a>
-          </div>
+          ) : plans.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 text-sm">
+              Próximamente — contactá a ventas para más información.
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+              {plans.map((plan) => {
+                const price = activePlan === 'annual' ? Number(plan.price_yearly) : Number(plan.price)
+                const hasPrice = price > 0
+                const isPopular = plan.is_popular
+                const isEnterprise = plan.slug === 'latifundio'
+                return (
+                  <div key={plan.id}
+                    className={`relative rounded-2xl p-6 flex flex-col transition-all ${
+                      isEnterprise
+                        ? 'bg-gray-950 text-white ring-1 ring-white/10'
+                        : isPopular
+                          ? 'bg-gray-950 text-white shadow-xl ring-2 ring-green-500'
+                          : 'bg-white border border-gray-200'
+                    }`}>
+
+                    {isPopular && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-white text-[10px] font-black px-4 py-1.5 rounded-full tracking-widest whitespace-nowrap">
+                        ⭐ MEJOR VALOR
+                      </div>
+                    )}
+
+                    <div className="mb-4">
+                      <h3 className={`text-base font-black mb-1 ${isPopular || isEnterprise ? 'text-white' : 'text-gray-950'}`}>
+                        {plan.name}
+                      </h3>
+                      <p className={`text-xs leading-relaxed ${isPopular || isEnterprise ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {plan.description}
+                      </p>
+                    </div>
+
+                    <div className="mb-5 min-h-[60px] flex flex-col justify-center">
+                      {plan.slug === 'brote' ? (
+                        <>
+                          <div className={`text-3xl font-black ${isPopular || isEnterprise ? 'text-white' : 'text-gray-950'}`}>Gratis</div>
+                          <div className={`text-xs mt-0.5 ${isPopular || isEnterprise ? 'text-gray-500' : 'text-gray-400'}`}>Sin tarjeta de crédito</div>
+                        </>
+                      ) : plan.slug === 'latifundio' ? (
+                        <>
+                          <div className="text-base font-black text-white">Precio a consultar</div>
+                          <div className="text-xs text-gray-500 mt-0.5">Cotización personalizada</div>
+                        </>
+                      ) : hasPrice ? (
+                        <>
+                          <div className={`font-black ${isPopular ? 'text-white' : 'text-gray-950'}`}>
+                            <span className="text-3xl">USD {price}</span>
+                            <span className={`text-xs font-medium ml-1 ${isPopular ? 'text-gray-400' : 'text-gray-500'}`}>/mes</span>
+                          </div>
+                          {activePlan === 'annual' && <div className="text-xs text-green-400 font-semibold mt-0.5">Facturación anual</div>}
+                        </>
+                      ) : (
+                        <div className={`text-sm font-medium ${isPopular || isEnterprise ? 'text-gray-400' : 'text-gray-400'}`}>Precio a consultar</div>
+                      )}
+                    </div>
+
+                    {plan.slug === 'latifundio' ? (
+                      <a href="mailto:ventas@rodeoagtech.com"
+                        className={`w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all mb-5 block ${(plan as any).ctaStyle}`}>
+                        {(plan as any).cta}
+                      </a>
+                    ) : (
+                      <Link href="/register"
+                        className={`w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all mb-5 block ${(plan as any).ctaStyle}`}>
+                        {(plan as any).cta}
+                      </Link>
+                    )}
+
+                    <div className="space-y-2 flex-1">
+                      {plan.features.map((feat: string, j: number) => (
+                        <div key={j} className={`flex items-start gap-2 text-xs ${isPopular || isEnterprise ? 'text-gray-300' : 'text-gray-600'}`}>
+                          <Check className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                          {feat}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Nota inferior */}
+          <p className="text-center text-xs text-gray-400 mt-6">
+            Todos los planes incluyen actualizaciones automáticas · Sin contratos de permanencia · Cancelá cuando quieras
+          </p>
         </div>
       </section>
 
@@ -825,15 +840,32 @@ export default function LandingPage() {
             </div>
 
             {[
-              { title: 'Producto', links: ['IA Materia Seca', 'Bitácora de Voz', 'Gestión de Hacienda', 'Planificador Holístico', 'Modo Offline'] },
-              { title: 'Empresa', links: ['Sobre Rodeo', 'Blog', 'Prensa', 'Casos de éxito', 'Trabajá con nosotros'] },
-              { title: 'Soporte', links: ['Centro de ayuda', 'Contacto', 'Estado del servicio', 'Términos de uso', 'Privacidad'] },
+              { title: 'Producto', links: [
+                { label: 'IA Materia Seca',       href: '/producto/ia-materia-seca' },
+                { label: 'Bitácora de Voz',        href: '/producto/bitacora-de-voz' },
+                { label: 'Gestión de Hacienda',    href: '/producto/gestion-de-hacienda' },
+                { label: 'Planificador Holístico', href: '/producto/planificador-holistico' },
+                { label: 'Modo Offline',           href: '/producto/modo-offline' },
+              ]},
+              { title: 'Empresa', links: [
+                { label: 'Sobre Rodeo',    href: '/empresa/sobre-rodeo' },
+                { label: 'Blog',           href: '/blog' },
+                { label: 'Prensa',         href: '/empresa/prensa' },
+                { label: 'Casos de éxito', href: '/empresa/casos-de-exito' },
+              ]},
+              { title: 'Soporte', links: [
+                { label: 'Centro de ayuda',     href: '/soporte/centro-de-ayuda' },
+                { label: 'Contacto',            href: '/soporte/contacto' },
+                { label: 'Estado del servicio', href: '/soporte/estado-del-servicio' },
+                { label: 'Términos de uso',     href: '/soporte/terminos-de-uso' },
+                { label: 'Privacidad',          href: '/soporte/privacidad' },
+              ]},
             ].map((col, i) => (
               <div key={i}>
                 <div className="text-[10px] font-black text-gray-400 tracking-widest mb-4">{col.title.toUpperCase()}</div>
                 <div className="space-y-2.5">
                   {col.links.map(link => (
-                    <a key={link} href="#" className="block text-sm text-gray-600 hover:text-gray-200 transition-colors">{link}</a>
+                    <a key={link.href} href={link.href} className="block text-sm text-gray-600 hover:text-gray-200 transition-colors">{link.label}</a>
                   ))}
                 </div>
               </div>

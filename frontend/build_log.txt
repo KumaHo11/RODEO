@@ -1,0 +1,83 @@
+▲ Next.js 16.2.1 (Turbopack)
+- Environments: .env.local, .env
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.8s
+  Running TypeScript ...
+  Finished TypeScript in 3.2s ...
+  Collecting page data using 10 workers ...
+  Generating static pages using 10 workers (0/54) ...
+  Generating static pages using 10 workers (13/54) 
+  Generating static pages using 10 workers (26/54) 
+  Generating static pages using 10 workers (40/54) 
+✓ Generating static pages using 10 workers (54/54) in 265ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/analyze-biomass
+├ ƒ /api/analyze-body-condition
+├ ƒ /api/analyze-remnant
+├ ƒ /api/auth/ensure-profile
+├ ƒ /api/auth/onboarding
+├ ƒ /api/auth/onboarding-step
+├ ƒ /api/auth/profile
+├ ƒ /api/auth/register
+├ ƒ /api/auth/set-password
+├ ƒ /api/farm-events
+├ ƒ /api/farm-events/[id]
+├ ƒ /api/field-notes
+├ ƒ /api/field-notes/[id]
+├ ƒ /api/geocode
+├ ƒ /api/grazing-plans
+├ ƒ /api/grazing-plans/[id]
+├ ƒ /api/grazing-plans/bulk-delete
+├ ƒ /api/herds
+├ ƒ /api/herds/[id]
+├ ƒ /api/insights-ai
+├ ƒ /api/invitations
+├ ƒ /api/invitations/accept
+├ ƒ /api/mercado
+├ ƒ /api/ndvi
+├ ƒ /api/notifications
+├ ƒ /api/organizations
+├ ƒ /api/paddocks
+├ ƒ /api/paddocks/[id]
+├ ƒ /api/planning/suggest
+├ ƒ /api/roles
+├ ƒ /api/send-email
+├ ƒ /api/tasks
+├ ƒ /api/tasks/[id]
+├ ƒ /api/team
+├ ƒ /api/team/[id]
+├ ƒ /api/upload
+├ ○ /dashboard
+├ ○ /dashboard/agenda
+├ ○ /dashboard/bitacora
+├ ○ /dashboard/equipo
+├ ○ /dashboard/grazing
+├ ○ /dashboard/guest-setup
+├ ○ /dashboard/herds
+├ ○ /dashboard/insights
+├ ○ /dashboard/map
+├ ○ /dashboard/mi-campo
+├ ○ /dashboard/paddocks-list
+├ ○ /dashboard/profile
+├ ○ /dashboard/tareas
+├ ○ /forgot-password
+├ ○ /join
+├ ○ /landing
+├ ○ /login
+├ ○ /logo-preview
+├ ○ /onboarding
+├ ○ /register
+└ ○ /reset-password
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

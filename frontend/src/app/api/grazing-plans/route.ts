@@ -3,25 +3,13 @@
  * POST /api/grazing-plans  — Crea un nuevo plan de pastoreo
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { requireAuth } from '@/lib/auth'
+import { query, mutate } from '@/lib/db'
 
-async function getOrgId(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
-  if (!token) return null
-  const decoded = await verifyFirebaseToken(token)
-  if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
-    'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
-    [decoded.uid]
-  )
-  if (!profile?.organization_id) return null
-  return { orgId: profile.organization_id, uid: decoded.uid }
-}
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await getOrgId(req)
+    const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const plans = await query(
@@ -56,7 +44,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await getOrgId(req)
+    const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const body = await req.json()
@@ -64,7 +52,7 @@ export async function POST(req: NextRequest) {
       paddock_id, herd_id, herd_ids, entry_date, exit_date,
       actual_entry_date, actual_exit_date,
       planned_recovery_days, status, temporary_animals, notes,
-      exit_notes, exit_dry_matter_kg_ha, org_id
+      exit_notes, exit_dry_matter_kg_ha, org_id, ai_analysis
     } = body
 
     if (!paddock_id || !herd_id || !entry_date) {
@@ -76,8 +64,8 @@ export async function POST(req: NextRequest) {
          (paddock_id, herd_id, herd_ids, org_id, entry_date, exit_date,
           actual_entry_date, actual_exit_date,
           planned_recovery_days, status, temporary_animals, notes,
-          exit_notes, exit_dry_matter_kg_ha)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          exit_notes, exit_dry_matter_kg_ha, ai_analysis)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING id`,
       [
         paddock_id, herd_id,
@@ -91,6 +79,7 @@ export async function POST(req: NextRequest) {
         notes || null,
         exit_notes || null,
         exit_dry_matter_kg_ha || null,
+        ai_analysis ? JSON.stringify(ai_analysis) : null,
       ]
     )
 

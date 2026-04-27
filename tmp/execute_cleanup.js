@@ -1,66 +1,43 @@
-const { Client } = require('pg');
-const fs = require('fs');
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', 'frontend', '.env') });
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: 'postgresql://postgres:Rodeo2026%21Secure%23@35.247.199.183:5432/rodeo' });
 
-async function run() {
-  let connectionString = process.env.DATABASE_URL;
-
-  if (!connectionString) {
-    console.error('DATABASE_URL not found in environment');
-    process.exit(1);
-  }
-
-  // URL Encode special characters in the connection string if they exist
-  // specifically '#' in the password which causes ERR_INVALID_URL
-  if (connectionString.includes('#') && !connectionString.includes('%23')) {
-    // We expect the format postgresql://user:pass@host:port/db
-    // We find the part between ':' and '@' after 'postgresql://'
-    const prefix = 'postgresql://';
-    if (connectionString.startsWith(prefix)) {
-      const rest = connectionString.substring(prefix.length);
-      const atIdx = rest.lastIndexOf('@');
-      const credentials = rest.substring(0, atIdx);
-      const hostPart = rest.substring(atIdx + 1);
-      
-      const [user, ...passParts] = credentials.split(':');
-      const pass = passParts.join(':'); // handles ':' in password if any
-      
-      const encodedPass = encodeURIComponent(pass);
-      connectionString = `${prefix}${user}:${encodedPass}@${hostPart}`;
-      console.log('Fixed DATABASE_URL encoding.');
-    }
-  }
-
-  const client = new Client({
-    connectionString: connectionString,
-    ssl: { rejectUnauthorized: false }
-  });
-
+async function fullClean() {
+  console.log('--- RODEO DEEP CLEAN START ---');
   try {
-    await client.connect();
-    console.log('Connected to Google Cloud SQL.');
-
-    const sqlPath = path.join(__dirname, '..', 'db_clean_for_testing.sql');
-    const sql = fs.readFileSync(sqlPath, 'utf8');
-
-    console.log('Executing cleanup...');
-    const res = await client.query(sql);
+    // 1. Operational data (likely covered by cascade but better be safe)
+    const operationalTables = [
+      'farm_events',
+      'tasks',
+      'field_notes',
+      'notifications',
+      'grazing_plans',
+      'biological_monitoring',
+      'rainfall_logs',
+      'payments'
+    ];
     
-    console.log('--- RESULTS ---');
-    const resultSets = Array.isArray(res) ? res : [res];
-    const lastResult = resultSets[resultSets.length - 1];
-    
-    if (lastResult.rows && lastResult.rows.length > 0) {
-      console.table(lastResult.rows);
+    for (const table of operationalTables) {
+      try {
+        await pool.query(`DELETE FROM ${table} WHERE TRUE`);
+        console.log(`- Cleared ${table}`);
+      } catch (e) {
+        console.log(`- Skipping ${table} (might not exist or already cleared)`);
+      }
     }
-    console.log('--- SUCCESS ---');
 
-  } catch (err) {
-    console.error('ERROR:', err.message);
+    // 2. Core structural data
+    console.log('- Wiping core structure (Profiles, Orgs, Teams) with CASCADE...');
+    await pool.query('TRUNCATE profiles CASCADE;');
+    await pool.query('TRUNCATE organizations CASCADE;');
+    await pool.query('TRUNCATE team_invitations CASCADE;');
+    
+    console.log('✅ DATABASE WIPE COMPLETE');
+  } catch (error) {
+    console.error('❌ Error during cleanup:', error);
   } finally {
-    await client.end();
+    await pool.end();
+    process.exit(0);
   }
 }
 
-run();
+fullClean();

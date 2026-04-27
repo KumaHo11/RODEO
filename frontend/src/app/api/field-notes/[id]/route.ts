@@ -24,21 +24,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
-    const { paddock_id, tags, title, content, lat, lng, photo_url, analysis_result } = body
+    const { paddock_id, tags, title, content, lat, lng, photo_url, analysis_result, status } = body
     const category = Array.isArray(tags) && tags.length > 0 ? tags[0] : undefined
 
     await mutate(
       `UPDATE field_notes SET
-         paddock_id     = COALESCE($1, paddock_id),
-         tags           = COALESCE($2, tags),
-         category       = COALESCE($3, category),
-         title          = COALESCE($4, title),
-         content        = $5,
-         lat            = $6,
-         lng            = $7,
-         photo_url      = COALESCE($8, photo_url),
+         paddock_id      = COALESCE($1, paddock_id),
+         tags            = COALESCE($2, tags),
+         category        = COALESCE($3, category),
+         title           = COALESCE($4, title),
+         content         = $5,
+         lat             = $6,
+         lng             = $7,
+         photo_url       = COALESCE($8, photo_url),
          analysis_result = COALESCE($9, analysis_result),
-         updated_at     = NOW()
+         status          = COALESCE($12, status),
+         updated_at      = NOW()
        WHERE id = $10 AND org_id = $11`,
       [
         paddock_id ?? null,
@@ -52,6 +53,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         analysis_result ? JSON.stringify(analysis_result) : null,
         (await params).id,
         orgId,
+        status ?? null,
       ]
     )
 

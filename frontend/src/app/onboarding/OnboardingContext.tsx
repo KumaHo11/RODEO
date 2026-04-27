@@ -28,10 +28,12 @@ interface OnboardingData {
     name: string
     species: string
     categoria?: string | null
-    breed: string
+    breed: string | null
     headCount: number
     avgWeight: number
     age: number
+    ageMonths?: number | null
+    admissionDate?: string | null
     totalEV: number
   }>
   skippedHerds: boolean         // user skipped step 3

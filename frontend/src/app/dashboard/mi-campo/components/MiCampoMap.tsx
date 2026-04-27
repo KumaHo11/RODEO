@@ -49,20 +49,45 @@ interface Props {
   activeGrazingPlans?: { paddock_id: string; herd_name: string; head_count: number }[]
   drawModeActive?: boolean
   onDrawModeChange?: (active: boolean) => void
+  onDeletePaddock?: (paddockId: string) => void
+  // Field boundary drawing
+  fieldBoundaryDrawMode?: boolean
+  onFieldBoundaryDrawn?: (geojson: any) => void
+  onFieldBoundaryDrawModeChange?: (active: boolean) => void
+  // Initial map center (org location from onboarding step 1)
+  initialCenter?: [number, number]
 }
 
 function MapController({
   paddocks, fieldBoundary, selectedPaddockId,
   onSelectPaddock, onPaddockGeomUpdated, onNewPaddockDrawn, activeGrazingPlans = [],
-  drawModeActive = false, onDrawModeChange
+  drawModeActive = false, onDrawModeChange, onDeletePaddock,
+  fieldBoundaryDrawMode = false, onFieldBoundaryDrawn, onFieldBoundaryDrawModeChange,
+  initialCenter,
 }: Props) {
   const map = useMap()
   const layerGroupRef = useRef<L.LayerGroup | null>(null)
   const fieldLayerRef = useRef<L.Layer | null>(null)
   const badgeGroupRef = useRef<L.LayerGroup | null>(null)
   const hasInitialFitRef = useRef(false)
+  const prevInitialCenter = useRef<[number, number] | undefined>(undefined)
 
-  // ── Geoman init + pm:create handler ──────────────────────────────────────
+  // -- Fly-to when user picks a location (e.g. from setup modal) ───────────────
+  useEffect(() => {
+    if (!initialCenter) return
+    const prev = prevInitialCenter.current
+    // Skip on first mount (prev is undefined) or if same coords
+    if (
+      prev &&
+      Math.abs(prev[0] - initialCenter[0]) < 0.0001 &&
+      Math.abs(prev[1] - initialCenter[1]) < 0.0001
+    ) return
+    prevInitialCenter.current = initialCenter
+    if (!prev) return // first mount — let the normal fit logic handle it
+    map.flyTo(initialCenter, 13, { animate: true, duration: 1.5 })
+  }, [initialCenter, map])
+
+  // -- Geoman init + pm:create handler --------------------------------------
   useEffect(() => {
     map.pm.setLang('es')
     map.pm.addControls({
@@ -74,35 +99,37 @@ function MapController({
       drawMarker: false,
       drawText: false,
       editControls: true,
-      removalMode: false,
+      removalMode: true,
       cutPolygon: false,
     })
 
-    // Handle new polygon creation
+    // Handle new polygon creation — distinguishes paddock vs field boundary mode
     const onCreate = (e: any) => {
       const layer = e.layer
       const geojsonFeature = layer.toGeoJSON()
       const areaHa = area(geojsonFeature) / 10000
 
-      // Remove the temporary layer from map — we'll re-render via paddocks state
       map.removeLayer(layer)
-
-      // Fire callback so parent can open the creation modal
-      onNewPaddockDrawn(
-        geojsonFeature.geometry || geojsonFeature,
-        parseFloat(areaHa.toFixed(2)),
-        layer
-      )
-
-      // Exit draw mode
       map.pm.disableDraw()
+
+      if (fieldBoundaryDrawMode) {
+        // Save as field boundary
+        onFieldBoundaryDrawn?.(geojsonFeature.geometry || geojsonFeature)
+        onFieldBoundaryDrawModeChange?.(false)
+      } else {
+        // Save as new paddock
+        onNewPaddockDrawn(
+          geojsonFeature.geometry || geojsonFeature,
+          parseFloat(areaHa.toFixed(2)),
+          layer
+        )
+      }
     }
 
     map.on('pm:create', onCreate)
 
-    // Handle drawstart/drawend to sync state with parent
-    const onDrawStart = () => onDrawModeChange?.(true)
-    const onDrawEnd   = () => onDrawModeChange?.(false)
+    const onDrawStart = () => { onDrawModeChange?.(true); onFieldBoundaryDrawModeChange?.(fieldBoundaryDrawMode) }
+    const onDrawEnd   = () => { onDrawModeChange?.(false) }
     map.on('pm:drawstart', onDrawStart)
     map.on('pm:drawend',   onDrawEnd)
 
@@ -112,11 +139,11 @@ function MapController({
       map.off('pm:drawend', onDrawEnd)
       map.pm.removeControls()
     }
-  }, [map, onNewPaddockDrawn, onDrawModeChange])
+  }, [map, onNewPaddockDrawn, onDrawModeChange, fieldBoundaryDrawMode, onFieldBoundaryDrawn, onFieldBoundaryDrawModeChange])
 
-  // ── Programmatic draw mode toggle from parent FAB ──────────────────────
+  // -- Programmatic draw mode toggle (paddock or field boundary) -------------------
   useEffect(() => {
-    if (drawModeActive) {
+    if (drawModeActive || fieldBoundaryDrawMode) {
       map.pm.enableDraw('Polygon', {
         snappable: true,
         snapDistance: 15,
@@ -125,9 +152,9 @@ function MapController({
     } else {
       map.pm.disableDraw()
     }
-  }, [drawModeActive, map])
+  }, [drawModeActive, fieldBoundaryDrawMode, map])
 
-  // ── Field boundary ────────────────────────────────────────────────────────
+  // -- Field boundary --------------------------------------------------------
   useEffect(() => {
     if (fieldLayerRef.current) {
       map.removeLayer(fieldLayerRef.current)
@@ -160,7 +187,7 @@ function MapController({
     }
   }, [fieldBoundary, map])
 
-  // ── Paddock polygons ──────────────────────────────────────────────────────
+  // -- Paddock polygons ------------------------------------------------------
   useEffect(() => {
     if (!layerGroupRef.current) {
       layerGroupRef.current = L.layerGroup().addTo(map)
@@ -214,6 +241,10 @@ function MapController({
         onPaddockGeomUpdated(paddock.id, updatedGeoJSON.geometry || updatedGeoJSON, areaHa)
       })
 
+      layer.on('pm:remove', () => {
+        if (onDeletePaddock) onDeletePaddock(paddock.id)
+      })
+
       layerGroupRef.current!.addLayer(layer)
       try {
         const gLayer = L.geoJSON(geojson)
@@ -227,10 +258,14 @@ function MapController({
         map.fitBounds(combined, { padding: [40, 40] })
         hasInitialFitRef.current = true
       }
+    } else if (!hasInitialFitRef.current && validBounds.length === 0 && initialCenter) {
+      // No paddocks drawn yet — fly to the org's saved location from onboarding
+      map.setView(initialCenter, 14, { animate: false })
+      hasInitialFitRef.current = true
     }
   }, [paddocks, selectedPaddockId, map])
 
-  // ── Herd badges on GRAZING paddocks ─────────────────────────────────────────
+  // -- Herd badges on GRAZING paddocks ----------------------------------------─
   useEffect(() => {
     if (!badgeGroupRef.current) {
       badgeGroupRef.current = L.layerGroup().addTo(map)
@@ -286,7 +321,7 @@ function MapController({
     })
   }, [activeGrazingPlans, paddocks, map])
 
-  // ── Fly-to on selection ───────────────────────────────────────────────────
+  // -- Fly-to on selection --------------------------------------------------─
   useEffect(() => {
     if (!selectedPaddockId) return
     const selected = paddocks.find(p => p.id === selectedPaddockId)
@@ -306,10 +341,12 @@ function MapController({
 }
 
 export default function MiCampoMap(props: Props) {
+  // Use org location as initial center, fall back to Pampa argentina
+  const center: [number, number] = props.initialCenter ?? [-34.6, -63.0]
   return (
     <MapContainer
-      center={[-34.6, -58.4]}
-      zoom={12}
+      center={center}
+      zoom={props.initialCenter ? 13 : 5}
       style={{ height: '100%', width: '100%' }}
       zoomControl={true}
     >

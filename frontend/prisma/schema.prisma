@@ -42,6 +42,7 @@ model Organization {
   paddocks             Paddock[]
   herds                Herd[]
   rainfallLogs         RainfallLog[]
+  weatherEvents        WeatherEvent[]
   payments             Payment[]
 
   @@map("organizations")
@@ -62,6 +63,7 @@ model Profile {
   organization    Organization? @relation(fields: [organizationId], references: [id])
   biologicalMonitoring BiologicalMonitoring[]
   rainfallLogs    RainfallLog[]
+  weatherEvents   WeatherEvent[]
 
   @@map("profiles")
 }
@@ -79,6 +81,7 @@ model Paddock {
   organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   grazingPlans    GrazingPlan[]
   biologicalMonitoring BiologicalMonitoring[]
+  weatherEvents   WeatherEventPaddock[]
 
   @@map("paddocks")
 }
@@ -153,6 +156,36 @@ model RainfallLog {
   recorder     Profile?  @relation(fields: [recorderId], references: [id], onDelete: SetNull)
 
   @@map("rainfall_logs")
+}
+
+// ── Nuevo modelo de eventos climáticos con relación M2M a Potreros ────────────
+
+model WeatherEvent {
+  id          String               @id @default(uuid()) @db.Uuid
+  orgId       String               @db.Uuid             @map("org_id")
+  recorderId  String?              @db.Uuid             @map("recorder_id")
+  type        String               @db.VarChar(10)      // "RAIN" | "FROST"
+  value       Decimal              @db.Decimal(10, 2)   // mm para lluvia, °C para helada
+  date        DateTime             @db.Date
+  notes       String?              @db.Text
+  createdAt   DateTime             @default(now())      @map("created_at")
+  updatedAt   DateTime             @updatedAt           @map("updated_at")
+  organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  recorder    Profile?             @relation(fields: [recorderId], references: [id], onDelete: SetNull)
+  paddocks    WeatherEventPaddock[]
+
+  @@map("weather_events")
+}
+
+model WeatherEventPaddock {
+  weatherEventId String       @db.Uuid @map("weather_event_id")
+  paddockId      String       @db.Uuid @map("paddock_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  weatherEvent   WeatherEvent @relation(fields: [weatherEventId], references: [id], onDelete: Cascade)
+  paddock        Paddock      @relation(fields: [paddockId], references: [id], onDelete: Cascade)
+
+  @@id([weatherEventId, paddockId])
+  @@map("weather_event_paddocks")
 }
 
 model Payment {

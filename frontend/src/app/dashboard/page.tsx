@@ -7,7 +7,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
+import { useWeather, CONDITION_EMOJI } from '@/lib/context/WeatherContext'
 import {
   TrendingUp, CloudRain, AlertTriangle, Calendar, ArrowRight,
   Layers, Navigation, Droplets, ChevronRight, CheckSquare, Leaf,
@@ -41,7 +41,7 @@ export default function DashboardOverview() {
   const [herds, setHerds]                 = useState<any[]>([])
   const [paddocks, setPaddocks]           = useState<any[]>([])
   const [org, setOrg]                     = useState<any>(null)
-  const [weather, setWeather]             = useState<WeatherData | null>(null)
+  const { current: weatherCurrent, forecast: weatherForecast, isLoading: weatherLoading } = useWeather()
   const [nextMoves, setNextMoves]         = useState<any[]>([])
   const [upcomingTasks, setUpcomingTasks] = useState<any[]>([])
   const [farmEvents, setFarmEvents]       = useState<any[]>([])
@@ -123,13 +123,7 @@ export default function DashboardOverview() {
             .slice(0, 5)
         )
 
-        // Weather from org location
-        let lat = -34.6, lon = -58.4
-        if (orgData?.location?.coordinates) {
-          lon = orgData.location.coordinates[0]; lat = orgData.location.coordinates[1]
-        }
-        const wData = await getPaddockWeather(lat, lon)
-        setWeather(wData)
+        // Weather is now provided by WeatherContext (WeatherProvider in layout)
       } catch (err) {
         console.error('Dashboard load error:', err)
       }
@@ -353,7 +347,7 @@ export default function DashboardOverview() {
                           )}
                         </div>
                         <p className="text-xs text-gray-500 font-medium truncate">
-                          {e.herd_id ? (herds.find(h => h.id === e.herd_id)?.name || 'Rebaño') : 'Multi-rebaño'}
+                          {e.herd_id ? (herds.find(h => h.id === e.herd_id)?.name || 'Rodeo') : 'Multi-rodeo'}
                           {e.description && <span className="mx-1.5 opacity-30">·</span>}
                           {e.description && <span className="opacity-70">{e.description}</span>}
                         </p>
@@ -372,10 +366,10 @@ export default function DashboardOverview() {
           </div>
         </div>
 
-        {/* DERECHA: 4 cards — Clima · Precio · Disponibilidad · Rebaños */}
+        {/* DERECHA: 4 cards — Clima · Precio · Disponibilidad · Rodeos */}
         <div className="flex-1 flex flex-col gap-4">
 
-          {/* 1. Clima */}
+          {/* 1. Clima — uses shared WeatherContext (same data as /clima page) */}
           <div className="bg-[#f0f9ff] rounded-2xl border border-[#bae6fd] shadow-sm p-4 flex flex-col justify-between relative overflow-hidden">
             <div className="absolute -top-6 -right-6 text-blue-200/40 w-24 h-24">
               <Sun className="w-full h-full" />
@@ -385,25 +379,27 @@ export default function DashboardOverview() {
                 <CloudRain className="w-3 h-3" /> Clima
               </h3>
               <div className="mt-1 flex items-center gap-3">
-                {loading ? <div className="h-8 w-16 bg-blue-100/50 animate-pulse rounded-lg" /> : (
+                {loading || weatherLoading ? <div className="h-8 w-16 bg-blue-100/50 animate-pulse rounded-lg" /> : (
                   <>
-                    <p className="text-3xl font-bold text-blue-900">{weather?.forecastDays[0]?.maxTemp || '—'}°</p>
-                    {weather?.next15DaysRain !== undefined && (
-                      <p className="text-xs font-bold text-blue-800 leading-tight">
-                        {weather.next15DaysRain} mm lluvia<br/><span className="text-[10px] font-medium opacity-80">próximos 15 días</span>
-                      </p>
-                    )}
+                    <p className="text-3xl font-bold text-blue-900">{weatherCurrent?.tempC ?? '—'}°</p>
+                    <p className="text-xs font-bold text-blue-800 leading-tight">
+                      {weatherCurrent?.conditionLabel ?? '—'}
+                    </p>
                   </>
                 )}
               </div>
             </div>
-            {!loading && weather?.forecastDays?.length && (
+            {!loading && !weatherLoading && weatherForecast?.length > 0 && (
               <div className="flex gap-2 mt-3 relative z-10 justify-between">
-                {weather.forecastDays.slice(0,4).map((d, i) => (
+                {weatherForecast.slice(0, 4).map((d, i) => (
                   <div key={i} className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-blue-800/80">{WEEK_DAYS[new Date(d.date + 'T00:00:00').getDay()]}</p>
-                    <p className="text-xs my-0.5">{d.precipitationSum > 0 ? '🌧️' : '☀️'}</p>
-                    <p className="text-[10px] font-bold text-blue-900">{d.precipitationSum}<span className="text-[8px] ml-0.5">mm</span></p>
+                    <p className="text-[9px] font-bold uppercase text-blue-800/80">
+                      {WEEK_DAYS[new Date(d.date + 'T00:00:00').getDay()]}
+                    </p>
+                    <p className="text-xs my-0.5">{CONDITION_EMOJI[d.condition] ?? (d.precipitationMm > 0 ? '🌧️' : '☀️')}</p>
+                    <p className="text-[10px] font-bold text-blue-900">
+                      {d.precipitationMm > 0 ? d.precipitationMm : d.maxTempC}<span className="text-[8px] ml-0.5">{d.precipitationMm > 0 ? 'mm' : '°'}</span>
+                    </p>
                   </div>
                 ))}
               </div>
@@ -446,12 +442,12 @@ export default function DashboardOverview() {
             </div>
           </div>
 
-          {/* 4. Rebaños — Carga animal */}
+          {/* 4. Rodeos — Carga animal */}
           <div className="bg-[#fffbeb] rounded-2xl border border-[#fde68a] shadow-sm flex flex-col p-4">
             <h3 className="text-[10px] font-bold text-amber-700/60 tracking-widest uppercase flex items-center gap-1 mb-1">
               <CowIcon className="w-3.5 h-3.5" /> Carga animal
             </h3>
-            <p className="text-xs font-bold text-amber-900">{herds.length} rebaños · {herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)} animales</p>
+            <p className="text-xs font-bold text-amber-900">{herds.length} rodeos · {herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)} animales</p>
             <div className="mt-3 flex items-end gap-2">
               <p className="text-4xl font-black text-[#92400e] leading-none">{cargaAnimal.toFixed(2)}</p>
               <div className="pb-1 group relative">
@@ -553,7 +549,7 @@ export default function DashboardOverview() {
                     <div>
                       <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">Recomendación</p>
                       <p className="text-[10px] text-gray-700 font-medium leading-relaxed mt-0.5">
-                        {autonomyDays > 0 ? `Mover rebaño en ${Math.min(autonomyDays, 7)} días` : 'Sin datos de forraje'}
+                        {autonomyDays > 0 ? `Mover rodeo en ${Math.min(autonomyDays, 7)} días` : 'Sin datos de forraje'}
                       </p>
                     </div>
                   </div>
@@ -578,25 +574,95 @@ export default function DashboardOverview() {
               nextMoves.map((plan: any, i: number) => {
                 const HERD_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#be185d']
                 const color = HERD_COLORS[i % HERD_COLORS.length]
+                const todayMid = new Date(); todayMid.setHours(0,0,0,0)
                 const today = new Date().toISOString().split('T')[0]
                 const isActive = plan.status === 'ACTIVE' || plan.entry_date <= today
-                const isToday = plan.entry_date === today
-                const d = new Date(plan.entry_date + 'T00:00:00')
-                const daysUntil = Math.round((d.getTime() - new Date().setHours(0,0,0,0)) / 86400000)
+
+                // Exit-date countdown (days until animals must LEAVE)
+                const exitDate = plan.exit_date
+                const daysUntilExit = exitDate
+                  ? Math.round((new Date(exitDate + 'T00:00:00').getTime() - todayMid.getTime()) / 86400000)
+                  : null
+                const isExitToday     = daysUntilExit === 0
+                const isExitTomorrow  = daysUntilExit === 1
+                const isExitOverdue   = daysUntilExit !== null && daysUntilExit < 0
+                const isExitUrgent    = daysUntilExit !== null && daysUntilExit <= 1
+
+                // Entry-date countdown (days until animals ENTER)
+                const entryD = new Date(plan.entry_date + 'T00:00:00')
+                const daysUntilEntry = Math.round((entryD.getTime() - todayMid.getTime()) / 86400000)
+
+                // Animals grazing
+                const planHerds = herds.filter((h: any) => plan.herd_ids?.includes(h.id))
+                const totalHeads = planHerds.reduce((s: number, h: any) =>
+                  s + (Number(h.head_count) || Number(h.animal_count) || 0), 0)
+                const herdLabel = planHerds.length > 0
+                  ? planHerds.map((h: any) => h.name).join(', ')
+                  : (plan.herds?.name || 'Multi-rodeo')
+
                 return (
-                  <div key={plan.id} className={`px-5 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${isActive ? 'bg-amber-50/30' : ''}`}
-                    style={{ borderLeft: `3px solid ${isActive ? '#D4A373' : color}` }}>
+                  <div
+                    key={plan.id}
+                    className={`px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
+                      isExitUrgent ? 'bg-amber-50/40' : isActive ? 'bg-green-50/20' : ''
+                    }`}
+                    style={{ borderLeft: `3px solid ${isExitOverdue ? '#ef4444' : isExitUrgent ? '#f59e0b' : isActive ? '#D4A373' : color}` }}
+                  >
+                    {/* Date block */}
                     <div className="w-12 shrink-0 text-center">
-                      <p className="text-lg font-black text-gray-900 leading-none">{d.getDate()}</p>
-                      <p className="text-[9px] font-bold text-gray-400 uppercase">{d.toLocaleDateString('es', { month: 'short' })}</p>
+                      <p className="text-lg font-black text-gray-900 leading-none">{entryD.getDate()}</p>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase">{entryD.toLocaleDateString('es', { month: 'short' })}</p>
                     </div>
+
+                    {/* Main content */}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-gray-900 truncate">{plan.paddocks?.name || '—'}</p>
-                      <p className="text-[10px] text-gray-400 truncate">{plan.herds?.name || 'Multi-rebaño'}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="text-[10px] text-gray-500 truncate">{herdLabel}</span>
+                        {totalHeads > 0 && (
+                          <>
+                            <span className="text-gray-200 text-[10px]">·</span>
+                            <span className="text-[10px] font-bold text-gray-600 flex items-center gap-0.5">
+                              <CowIcon className="w-2.5 h-2.5" />
+                              {totalHeads} cab.
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    {isActive && <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 uppercase tracking-wider">Activo</span>}
-                    {isToday && !isActive && <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 uppercase">Hoy</span>}
-                    {daysUntil > 0 && <span className="shrink-0 text-[9px] font-bold text-gray-400">{daysUntil}d</span>}
+
+                    {/* Right: countdown badges */}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {/* Exit badge */}
+                      {exitDate && (
+                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                          isExitOverdue  ? 'bg-red-100 text-red-700' :
+                          isExitToday    ? 'bg-red-100 text-red-700' :
+                          isExitTomorrow ? 'bg-amber-100 text-amber-800' :
+                          'bg-gray-100 text-gray-500'
+                        }`}>
+                          {isExitOverdue
+                            ? `Venció hace ${Math.abs(daysUntilExit!)}d`
+                            : isExitToday
+                              ? '¡Sale HOY!'
+                              : isExitTomorrow
+                                ? '¡Sale mañana!'
+                                : `Sale en ${daysUntilExit}d`}
+                        </span>
+                      )}
+
+                      {/* Entry countdown when not yet active */}
+                      {!isActive && daysUntilEntry > 0 && (
+                        <span className="text-[9px] font-bold text-gray-400">
+                          entra en {daysUntilEntry}d
+                        </span>
+                      )}
+                      {isActive && !exitDate && (
+                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 uppercase tracking-wider">
+                          Activo
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })

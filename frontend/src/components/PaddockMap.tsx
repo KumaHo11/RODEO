@@ -9,6 +9,7 @@ import L from 'leaflet'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { area } from '@turf/area'
+import { toast } from 'sonner'
 
 const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png'
 const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png'
@@ -106,7 +107,7 @@ function MapSearch() {
       if (data?.length > 0) {
         map.flyTo([data[0].lat, data[0].lon], 14)
       } else {
-        alert('Lugar no encontrado. Intenta con provincia (ej: Tandil, Buenos Aires).')
+        toast.error('Lugar no encontrado. Intentá con ciudad y provincia (ej: Tandil, Buenos Aires).')
       }
     } catch (e) { console.error(e) }
     setSearching(false)
@@ -216,8 +217,9 @@ export default function PaddockMap() {
     setSaving(false)
     if (!res.ok) {
       const err = await res.json()
-      alert(`Error al guardar el lote: ${err.error || 'Error desconocido'}`)
+      toast.error(`Error al guardar el potrero: ${err.error || 'Error desconocido'}`)
     } else {
+      toast.success('Potrero guardado correctamente')
       fetchPaddocks()
     }
     draft.layer.remove()
@@ -238,8 +240,9 @@ export default function PaddockMap() {
     })
     setSaving(false)
     if (!res.ok) {
-      alert('Error al actualizar')
+      toast.error('Error al actualizar el nombre del potrero')
     } else {
+      toast.success('Nombre actualizado')
       setSelectedPaddock(null)
       fetchPaddocks()
     }
@@ -250,7 +253,7 @@ export default function PaddockMap() {
   const handleEditPaddockPolygon = (paddockId: string) => {
     const layer = paddockLayersRef.current[paddockId]
     if (!layer) {
-      alert('No se pudo obtener la capa. Intentá refrescar el mapa.')
+      toast.error('No se pudo obtener la capa. Intentá refrescar el mapa.')
       return
     }
     setEditingPolygonId(paddockId)
@@ -265,7 +268,7 @@ export default function PaddockMap() {
       method: 'PATCH',
       body: JSON.stringify({ is_active: !currentlyActive }),
     })
-    if (!res.ok) { alert('Error al cambiar estado'); return }
+    if (!res.ok) { toast.error('Error al cambiar estado del potrero'); return }
     fetchPaddocks()
     setSelectedPaddock(null)
     setActiveFromDate('')

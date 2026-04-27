@@ -1,6 +1,7 @@
 /**
  * GET   /api/notifications  — Notificaciones del usuario
  * PATCH /api/notifications  — Marcar como leídas
+ * DELETE /api/notifications — Eliminar notificaciones (todas, por ID o por IDs)
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
@@ -70,6 +71,50 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('PATCH /api/notifications error:', err)
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const profile = await getProfile(req)
+    if (!profile) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+    let body: { ids?: string[]; onlyRead?: boolean } = {}
+    try { body = await req.json() } catch { /* empty body = delete all read */ }
+
+    const { ids, onlyRead } = body
+
+    let result: { rowCount: number; rows: any[] }
+
+    if (ids && ids.length > 0) {
+      // Delete specific notifications by IDs (only if they belong to this user)
+      result = await mutate(
+        `DELETE FROM notifications
+         WHERE (profile_id = $1 OR user_id = $1)
+           AND id = ANY($2::uuid[])`,
+        [profile.id, ids]
+      )
+    } else if (onlyRead !== false) {
+      // Default: delete all READ notifications for this user
+      result = await mutate(
+        `DELETE FROM notifications
+         WHERE (profile_id = $1 OR user_id = $1)
+           AND is_read = true`,
+        [profile.id]
+      )
+    } else {
+      // Delete ALL notifications for this user
+      result = await mutate(
+        `DELETE FROM notifications
+         WHERE profile_id = $1 OR user_id = $1`,
+        [profile.id]
+      )
+    }
+
+    return NextResponse.json({ deleted: result.rowCount })
+  } catch (err: any) {
+    console.error('DELETE /api/notifications error:', err)
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }

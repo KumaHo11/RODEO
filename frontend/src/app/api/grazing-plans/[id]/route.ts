@@ -3,28 +3,16 @@
  * DELETE /api/grazing-plans/[id]  — Elimina un plan de pastoreo
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { requireAuth } from '@/lib/auth'
+import { mutate } from '@/lib/db'
 
-async function getOrgId(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
-  if (!token) return null
-  const decoded = await verifyFirebaseToken(token)
-  if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
-    'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
-    [decoded.uid]
-  )
-  if (!profile?.organization_id) return null
-  return { orgId: profile.organization_id, uid: decoded.uid }
-}
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await getOrgId(req)
+    const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const body = await req.json()
@@ -39,7 +27,7 @@ export async function PATCH(
       'paddock_id', 'herd_id', 'herd_ids', 'entry_date', 'exit_date',
       'actual_entry_date', 'actual_exit_date',
       'planned_recovery_days', 'status', 'temporary_animals', 'notes',
-      'exit_notes', 'exit_dry_matter_kg_ha'
+      'exit_notes', 'exit_dry_matter_kg_ha', 'ai_analysis'
     ]
 
     for (const field of validFields) {
@@ -71,7 +59,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await getOrgId(req)
+    const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     await mutate(
@@ -84,6 +72,6 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('DELETE /api/grazing-plans/[id] error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: err.message || 'Error del servidor' }, { status: 500 })
   }
 }

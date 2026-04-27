@@ -89,9 +89,19 @@ CREATE TABLE IF NOT EXISTS herds (
     species VARCHAR(100) DEFAULT 'Bovine',
     breed VARCHAR(100),
     category VARCHAR(100),
+    categoria VARCHAR(100),
     head_count INT NOT NULL DEFAULT 0,
     avg_weight_kg DECIMAL(10, 2),
     total_ev DECIMAL(10, 2),
+    admission_date DATE,
+    age_months INT,
+    parent_herd_id UUID REFERENCES herds(id) ON DELETE SET NULL,
+    herd_notes JSONB DEFAULT '[]',
+    bcs_score INT,
+    bcs_label VARCHAR(50),
+    bcs_data JSONB,
+    photo_url TEXT,
+    age_years DECIMAL(5,2),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -166,6 +176,21 @@ CREATE INDEX IF NOT EXISTS idx_profiles_firebase ON profiles(firebase_uid);
 CREATE INDEX IF NOT EXISTS idx_profiles_org ON profiles(organization_id);
 CREATE INDEX IF NOT EXISTS idx_bio_monitoring_paddock ON biological_monitoring(paddock_id);
 CREATE INDEX IF NOT EXISTS idx_rainfall_org ON rainfall_logs(org_id);
+
+-- Additive migrations (safe on existing DBs — all columns are nullable)
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS categoria VARCHAR(100);
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS admission_date DATE;
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS age_months INT;
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS parent_herd_id UUID REFERENCES herds(id) ON DELETE SET NULL;
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS herd_notes JSONB DEFAULT '[]';
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS bcs_score INT;
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS bcs_label VARCHAR(50);
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS bcs_data JSONB;
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS photo_url TEXT;
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS age_years DECIMAL(5,2);
+
+-- farm_events: assigned_to for team member tasks
+ALTER TABLE farm_events ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES profiles(id) ON DELETE SET NULL;
 
 -- Default subscription plans
 INSERT INTO subscriptions_plans (name, price, price_ars, price_usd, paddocks_limit, herds_limit, has_ai_analysis, billing_period)

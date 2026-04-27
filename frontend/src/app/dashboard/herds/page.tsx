@@ -1,406 +1,758 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import { Plus, Search, Edit2, Trash2, X, Check, Camera, Sparkles, Loader2, HeartPulse, Paperclip } from 'lucide-react'
+import {
+  Plus, Search, Trash2, LayoutGrid, List, Download,
+  ChevronUp, ChevronDown, Filter, X, Calendar, Edit3, Loader2,
+} from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import HerdModal, { type HerdData } from '@/components/HerdModal'
+import {
+  CATEGORIAS_COMERCIALES, CATEGORIA_LABEL_RAE, CATEGORIA_COLORS,
+  type CategoriaComercial,
+} from '@/lib/categorias'
+import { useConfirm } from '@/components/ui/ConfirmModal'
+import { toast } from 'sonner'
 
-const ANIMAL_TYPES = [
-  { id: 'vacas',       label: 'Vacas',       demandFactor: 1.0 },
-  { id: 'toro',        label: 'Toro',        demandFactor: 1.25 },
-  { id: 'novillo',     label: 'Novillo',     demandFactor: 1.0 },
-  { id: 'vaquillona',  label: 'Vaquillona',  demandFactor: 1.0 },
-  { id: 'ternero',     label: 'Ternero',     demandFactor: 0.6 },
-  { id: 'ternera',     label: 'Ternera',     demandFactor: 0.6 },
-  { id: 'cabras',      label: 'Cabras',      demandFactor: 0.15 },
-  { id: 'caballos',    label: 'Caballos',    demandFactor: 1.25 },
-  { id: 'ovejas',      label: 'Ovejas',      demandFactor: 0.15 },
-  { id: 'otro',        label: 'Otro',        demandFactor: 1.0 },
-]
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const BREED_OPTIONS: Record<string, string[]> = {
-  vacas:       ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
-  vaquillona:  ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
-  ternero:     ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
-  ternera:     ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
-  novillo:     ['Angus', 'Hereford', 'Braford', 'Brangus', 'Holando', 'Jersey', 'Criolla', 'Otra'],
-  toro:        ['Angus', 'Hereford', 'Braford', 'Brangus', 'Otra'],
-  ovejas:      ['Merino', 'Corriedale', 'Texel', 'Hampshire Down', 'Dorper', 'Otra'],
-  cabras:      ['Boer', 'Anglo-Nubian', 'Saanen', 'Criolla', 'Otra'],
-  caballos:    ['Criollo', 'Cuarto de Milla', 'Polo Argentino', 'Árabe', 'Percherón', 'Otra'],
+function calcEV(weight: number, count: number, catKey: string | null): number {
+  const FACTORS: Record<string, number> = {
+    NOVILLOS: 1.0, NOVILLITOS: 0.9, VAQUILLONAS: 0.9,
+    TERNEROS: 0.6, TERNERAS: 0.55, VACAS: 1.0, TOROS: 1.25, MEJ: 0.9, BUBALINOS: 1.1,
+  }
+  const f = catKey ? (FACTORS[catKey] ?? 1.0) : 1.0
+  return parseFloat((Math.pow((weight || 400) / 400, 0.75) * f * count).toFixed(2))
 }
 
-const EMPTY_FORM = {
-  id: '', name: '', species: 'vacas', breed: '', head_count: 0, avg_weight_kg: 0, age_years: 0,
-  photo_url: null as string | null,
+function fmtDate(iso: string | null | undefined) {
+  if (!iso) return '—'
+  try {
+    // Postgres can return full timestamp — take only the date part
+    const datePart = String(iso).slice(0, 10)
+    return new Date(datePart + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' })
+  } catch { return String(iso).slice(0, 10) }
 }
 
-function calculateEV(weight: number, headCount: number, speciesId: string): number {
-  if (!weight || !headCount) return 0
-  const species = ANIMAL_TYPES.find(t => t.id === speciesId)
-  const factor = species?.demandFactor || 1.0
-  return Math.pow(weight / 400, 0.75) * factor * headCount
+type SortKey = 'name' | 'head_count' | 'avg_weight_kg' | 'admission_date' | 'total_ev'
+
+// ── Event type catalogue ─────────────────────────────────────────────────────
+
+const EVENT_TYPES = [
+  { key: 'pesada',        label: 'Pesada',                badge: 'bg-blue-100 text-blue-700',      needsQty: true,  needsWeight: true  },
+  { key: 'paricion',      label: 'Parición',              badge: 'bg-green-100 text-green-700',    needsQty: true,  needsWeight: false },
+  { key: 'destete',       label: 'Destete',               badge: 'bg-teal-100 text-teal-700',      needsQty: true,  needsWeight: true  },
+  { key: 'mortandad',     label: 'Mortandad',             badge: 'bg-red-100 text-red-700',        needsQty: true,  needsWeight: false },
+  { key: 'compra',        label: 'Compra',                badge: 'bg-emerald-100 text-emerald-700',needsQty: true,  needsWeight: true  },
+  { key: 'venta',         label: 'Venta',                 badge: 'bg-orange-100 text-orange-700',  needsQty: true,  needsWeight: true  },
+  { key: 'caravana',      label: 'Caravana / Marcación',  badge: 'bg-violet-100 text-violet-700',  needsQty: true,  needsWeight: false },
+  { key: 'sanidad',       label: 'Sanidad / Vacuna',      badge: 'bg-yellow-100 text-yellow-700',  needsQty: true,  needsWeight: false },
+  { key: 'traslado',      label: 'Traslado de potrero',   badge: 'bg-sky-100 text-sky-700',        needsQty: true,  needsWeight: false },
+  { key: 'stock_inicial', label: 'Stock inicial',         badge: 'bg-gray-100 text-gray-600',      needsQty: true,  needsWeight: true  },
+  { key: 'nota',          label: 'Nota',                  badge: 'bg-gray-100 text-gray-500',      needsQty: false, needsWeight: false },
+] as const
+
+const EVENT_BADGE: Record<string, string> = Object.fromEntries(EVENT_TYPES.map(e => [e.key, e.badge]))
+const EVENT_LABEL: Record<string, string> = Object.fromEntries(EVENT_TYPES.map(e => [e.key, e.label]))
+
+// ── Abbreviated labels for card badge ────────────────────────────────────────
+const CATEGORIA_ABBR: Record<string, string> = {
+  VACAS: 'VAC', VAQUILLONAS: 'VEQ', TERNEROS: 'TER', TERNERAS: 'TRA',
+  NOVILLOS: 'NOV', NOVILLITOS: 'NVT', TOROS: 'TOR', MEJ: 'MEJ',
+  BUBALINOS: 'BUB',
 }
+
+// ── Excel export (client-side SheetJS) ────────────────────────────────────────
+
+async function exportExcel(herds: HerdData[]) {
+  const { utils, writeFile } = await import('xlsx')
+  const rows = herds.map(h => ({
+    'Nombre':                  h.name,
+    'Categoría comercial':     h.categoria ? (CATEGORIA_LABEL_RAE[h.categoria as CategoriaComercial] ?? h.categoria) : h.species,
+    'Stock (cabezas)':         h.head_count,
+    'Peso promedio (kg)':      h.avg_weight_kg ?? '',
+    'Raza':                    h.breed ?? '',
+    'Fecha de ingreso':        h.admission_date ?? '',
+    'Ev total':                h.total_ev != null ? Number(h.total_ev).toFixed(2) : '',
+    'Condición corporal (BCS)': h.bcs_score ?? '',
+  }))
+  const ws = utils.json_to_sheet(rows)
+  const wb = utils.book_new()
+  utils.book_append_sheet(wb, ws, 'Rodeos')
+  writeFile(wb, `rodeos-${new Date().toISOString().split('T')[0]}.xlsx`)
+}
+
+async function exportMovementsExcel(herds: HerdData[]) {
+  const { utils, writeFile } = await import('xlsx')
+  const { apiFetch } = await import('@/lib/apiFetch')
+  const res = await apiFetch('/api/movements?limit=500')
+  let movements: any[] = []
+  if (res.ok) {
+    const data = await res.json()
+    movements = data.movements || []
+  }
+  const herdMap = Object.fromEntries(herds.map(h => [h.id, h.name]))
+  const rows = movements.map(m => ({
+    'Fecha':           m.occurred_at ? new Date(m.occurred_at).toLocaleString('es-AR') : '',
+    'Tipo entidad':    m.entity_type === 'herd' ? 'Rodeo' : 'Potrero',
+    'Nombre':          m.entity_name ?? (herdMap[m.entity_id] ?? m.entity_id),
+    'Tipo evento':     m.event_type,
+    'Cantidad':        m.quantity ?? '',
+    'Peso promedio (kg)': m.weight_kg ?? '',
+    'BCS':             m.bcs_score ?? '',
+    'Categoría':       m.categoria ?? '',
+    'Raza':            m.breed ?? '',
+    'Fecha ingreso':   m.admission_date ?? '',
+    'Notas':           m.notes ?? '',
+  }))
+  const ws = utils.json_to_sheet(rows.length ? rows : [{ Nota: 'Sin movimientos registrados' }])
+  const wb = utils.book_new()
+  utils.book_append_sheet(wb, ws, 'Historial')
+  writeFile(wb, `historial-movimientos-${new Date().toISOString().split('T')[0]}.xlsx`)
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function HerdsPage() {
   const { user } = useAuth()
-  const [herds, setHerds] = useState<any[]>([])
+  const { confirm, ConfirmModal } = useConfirm()
+  const [herds,   setHerds]   = useState<HerdData[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [filterSpecies, setFilterSpecies] = useState('all')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState(EMPTY_FORM)
+
+  // Filters
+  const [search,        setSearch]        = useState('')
+  const [filterCat,     setFilterCat]     = useState('all')
+  const [filterDateFrom,setFilterDateFrom]= useState('')
+  const [filterDateTo,  setFilterDateTo]  = useState('')
+  const [showFilters,   setShowFilters]   = useState(false)
+
+  // View - default to list
+  const [view, setView] = useState<'cards' | 'list' | 'historial'>('list')
+  const [movements, setMovements] = useState<any[]>([])
+  const [loadingMov, setLoadingMov] = useState(false)
+
+  // Sort (list view)
+  const [sortKey,  setSortKey]  = useState<SortKey>('name')
+  const [sortAsc,  setSortAsc]  = useState(true)
+
+  // Modal
+  const [modalOpen,    setModalOpen]    = useState(false)
+  const [editingHerd,  setEditingHerd]  = useState<HerdData | null>(null)
+
+  // Event log
+  const [eventFilter,   setEventFilter]   = useState('all')
+  const [showEventForm, setShowEventForm] = useState(false)
+  const [savingEvent,   setSavingEvent]   = useState(false)
+  const [eventForm, setEventForm] = useState({
+    herd_id: '', event_type: 'pesada',
+    occurred_at: new Date().toISOString().split('T')[0],
+    quantity: '', weight_kg: '', notes: '',
+  })
 
   const loadHerds = async () => {
     if (!user) return
     setLoading(true)
     const res = await apiFetch('/api/herds')
-    if (res.ok) {
-      const { herds: data } = await res.json()
-      setHerds(data || [])
-    }
+    if (res.ok) { const { herds: data } = await res.json(); setHerds(data || []) }
     setLoading(false)
   }
 
-  useEffect(() => { loadHerds() }, [user])
+  const loadMovements = async () => {
+    setLoadingMov(true)
+    const res = await apiFetch('/api/movements?limit=200')
+    if (res.ok) { const d = await res.json(); setMovements(d.movements || []) }
+    setLoadingMov(false)
+  }
 
-  const filtered = useMemo(() =>
-    herds.filter(h => {
-      const matchSearch = h.name.toLowerCase().includes(search.toLowerCase()) ||
-        (h.breed && h.breed.toLowerCase().includes(search.toLowerCase()))
-      const matchFilter = filterSpecies === 'all' || h.species === filterSpecies
-      return matchSearch && matchFilter
-    }), [herds, search, filterSpecies])
+  useEffect(() => { loadHerds() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const totalAnimals = herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)
-  const totalEV      = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
-  const totalDailyMS = herds.reduce((s, h) => s + (Number(h.head_count) || 0) * (Number(h.avg_weight_kg) || 0) * 0.03, 0)
+  // ── Derived data ────────────────────────────────────────────────────────────
 
-  const openCreate = () => { setForm(EMPTY_FORM); setModalOpen(true) }
-  const openEdit = (herd: any) => {
-    setForm({
-      id: herd.id, name: herd.name, species: herd.species, breed: herd.breed || '',
-      head_count: herd.head_count, avg_weight_kg: herd.avg_weight_kg || 0, age_years: herd.age_years || 0,
-      photo_url: null,
+  const totalAnimals = Math.round(herds.reduce((s, h) => s + (h.head_count || 0), 0))
+  const totalEV      = Math.round(herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0))
+  const totalMsDay   = Math.round(totalEV * 11)
+
+  const filtered = useMemo(() => {
+    let list = herds.filter(h => {
+      const q = search.toLowerCase()
+      const matchSearch = !q ||
+        h.name.toLowerCase().includes(q) ||
+        (h.breed ?? '').toLowerCase().includes(q) ||
+        (h.categoria ? (CATEGORIA_LABEL_RAE[h.categoria as CategoriaComercial] ?? '').toLowerCase().includes(q) : false) ||
+        h.species.toLowerCase().includes(q)
+
+      const hCat = h.categoria ?? ''
+      const matchCat = filterCat === 'all' || hCat === filterCat
+
+      const ad = h.admission_date ?? ''
+      const matchFrom = !filterDateFrom || ad >= filterDateFrom
+      const matchTo   = !filterDateTo   || ad <= filterDateTo
+
+      return matchSearch && matchCat && matchFrom && matchTo
     })
-    setModalOpen(true)
-  }
 
-  const handleSave = async () => {
-    if (!form.name || !form.head_count) return
-    setSaving(true)
-
-    const payload = {
-      name: form.name,
-      species: form.species,
-      breed: form.breed,
-      head_count: form.head_count,
-      avg_weight_kg: form.avg_weight_kg,
-      age_years: form.age_years,
-      total_ev: calculateEV(form.avg_weight_kg, form.head_count, form.species),
-      photo_url: null,
+    if (view === 'list') {
+      list = [...list].sort((a, b) => {
+        const av = a[sortKey] ?? ''
+        const bv = b[sortKey] ?? ''
+        const cmp = String(av).localeCompare(String(bv), 'es', { numeric: true })
+        return sortAsc ? cmp : -cmp
+      })
     }
 
-    if (form.id) {
-      await apiFetch(`/api/herds/${form.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-    } else {
-      await apiFetch('/api/herds', { method: 'POST', body: JSON.stringify(payload) })
-    }
+    return list
+  }, [herds, search, filterCat, filterDateFrom, filterDateTo, view, sortKey, sortAsc])
 
-    setSaving(false)
-    setModalOpen(false)
-    loadHerds()
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortAsc(v => !v)
+    else { setSortKey(key); setSortAsc(true) }
   }
+
+  const openCreate = () => { setEditingHerd(null); setModalOpen(true) }
+  const openEdit   = (h: HerdData) => { setEditingHerd(h); setModalOpen(true) }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este rebaño?')) return
-    await apiFetch(`/api/herds/${id}`, { method: 'DELETE' })
-    loadHerds()
+    const ok = await confirm({
+      title: '¿Eliminar este rodeo?',
+      description: 'Esta acción es irreversible. Se borrarán todos los datos asociados al rodeo.',
+      confirmLabel: 'Sí, eliminar',
+      cancelLabel: 'Cancelar',
+      variant: 'danger',
+    })
+    if (!ok) return
+    try {
+      const res = await apiFetch(`/api/herds/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Error desconocido' }))
+        toast.error(`No se pudo eliminar: ${errData.error}`)
+      } else {
+        setHerds(prev => prev.filter(h => h.id !== id))
+        toast.success('Rodeo eliminado correctamente')
+      }
+    } catch (err: any) {
+      toast.error(`No se pudo eliminar: ${err.message}`)
+    }
   }
 
-  const getAnimalType = (id: string) => ANIMAL_TYPES.find(t => t.id === id) || ANIMAL_TYPES[0]
-  const liveEV = calculateEV(form.avg_weight_kg, form.head_count, form.species)
+  const SortIcon = ({ k }: { k: SortKey }) =>
+    sortKey === k ? (sortAsc ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : null
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-950">Rebaños</h1>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Rodeos</h1>
           <p className="text-sm text-gray-500 font-medium mt-1">
-            Gestión de lotes de animales por especie, categoría y carga animal.
+            Gestión de lotes de animales por categoría, stock y carga animal.
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200"
-        >
-          <Plus className="w-4 h-4" /> Nuevo Rebaño
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* View toggle */}
+          <div className="bg-gray-100 rounded-xl p-0.5 flex gap-0.5">
+            <button onClick={() => setView('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              <List className="w-3.5 h-3.5" /> Lista
+            </button>
+            <button onClick={() => setView('cards')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'cards' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              <LayoutGrid className="w-3.5 h-3.5" /> Tarjetas
+            </button>
+            <button onClick={() => { setView('historial'); loadMovements() }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'historial' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              <Calendar className="w-3.5 h-3.5" /> Historial
+            </button>
+          </div>
+          {/* Per-section export */}
+          {view !== 'historial' && (
+            <button onClick={() => exportExcel(filtered)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
+              <Download className="w-3.5 h-3.5" /> Exportar rodeos
+            </button>
+          )}
+          {view === 'historial' && (
+            <button onClick={() => exportMovementsExcel(herds)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
+              <Download className="w-3.5 h-3.5" /> Exportar historial
+            </button>
+          )}
+          <button onClick={openCreate}
+            className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200">
+            <Plus className="w-4 h-4" /> Nuevo rodeo
+          </button>
+        </div>
       </div>
 
-      {/* Summary KPIs */}
+      {/* ── KPIs ── */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Total Rebaños</p>
+          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Total rodeos</p>
           <p className="text-4xl font-black text-gray-950">{herds.length}</p>
-          <p className="text-[9px] text-gray-400 mt-1">{totalAnimals.toLocaleString()} animales</p>
-        </div>
-        <div className="bg-amber-50 rounded-2xl border border-amber-100 shadow-sm p-5">
-          <p className="text-[10px] font-bold text-amber-500 tracking-widest uppercase mb-2">Consumo Diario</p>
-          <p className="text-4xl font-bold text-amber-700">{totalDailyMS >= 1000 ? `${(totalDailyMS/1000).toFixed(1)}k` : Math.round(totalDailyMS).toLocaleString()}</p>
-          <p className="text-[9px] text-amber-500 mt-1 font-medium">kg MS/día · {totalEV.toFixed(1)} EV</p>
+          <p className="text-[9px] text-gray-400 mt-1">{totalAnimals.toLocaleString('es-AR')} animales</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-2">Carga (EV)</p>
-          <p className="text-4xl font-bold text-orange-600">{totalEV.toFixed(1)}</p>
-          <p className="text-[9px] text-gray-400 mt-1 font-medium">Equivalente Vaca total</p>
+          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Consumo diario</p>
+          <p className="text-4xl font-black text-gray-950">{totalMsDay.toLocaleString('es-AR')}</p>
+          <p className="text-[9px] text-gray-400 mt-1 font-medium">kg MS/día totales · {totalEV.toLocaleString('es-AR')} EV</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Carga (EV)</p>
+          <p className="text-4xl font-black text-gray-950">{totalEV.toLocaleString('es-AR')}</p>
+          <p className="text-[9px] text-gray-400 mt-1 font-medium">Equivalente Vaca (EV) total</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 flex-wrap items-center bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar rebaño o raza..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-1 focus:ring-gray-200 outline-none"
-          />
-        </div>
-        <div className="flex items-center gap-2 px-2 border-l border-gray-100">
-          <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Especie</label>
-          <select
-            value={filterSpecies}
-            onChange={e => setFilterSpecies(e.target.value)}
-            className="bg-transparent text-sm font-bold text-gray-700 outline-none cursor-pointer"
-          >
-            <option value="all">Todas</option>
-            {ANIMAL_TYPES.map(t => (
-              <option key={t.id} value={t.id}>{t.label}</option>
+      {/* ── Search + Filters toolbar ── */}
+      {view !== 'historial' && (<div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3">
+        <div className="flex gap-3 flex-wrap items-center">
+          {/* Unified search */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre, categoría o raza..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                <X className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 transition-colors" />
+              </button>
+            )}
+          </div>
+
+          {/* Category filter */}
+          <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+            className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 outline-none cursor-pointer focus:ring-1 focus:ring-green-600 min-w-[130px]">
+            <option value="all">Categoría</option>
+            {CATEGORIAS_COMERCIALES.map(k => (
+              <option key={k} value={k}>{CATEGORIA_LABEL_RAE[k as CategoriaComercial]}</option>
             ))}
           </select>
-        </div>
-      </div>
 
-      {/* Cards Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-52 bg-gray-100 rounded-2xl animate-pulse" />)}
+          {/* Advanced filters toggle */}
+          <button onClick={() => setShowFilters(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+              showFilters || filterDateFrom || filterDateTo
+                ? 'border-green-300 bg-green-50 text-green-700'
+                : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+            }`}>
+            <Filter className="w-3.5 h-3.5" /> Fechas
+          </button>
+
+          {/* Clear filters */}
+          {(search || filterCat !== 'all' || filterDateFrom || filterDateTo) && (
+            <button onClick={() => { setSearch(''); setFilterCat('all'); setFilterDateFrom(''); setFilterDateTo('') }}
+              className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-red-500 transition-colors">
+              <X className="w-3.5 h-3.5" /> Limpiar
+            </button>
+          )}
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-gray-100 mx-auto mb-3 flex items-center justify-center">
-            <span className="text-2xl">🐄</span>
+
+        {/* Date range filter */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden">
+              <div className="flex gap-3 items-center pt-1 border-t border-gray-100">
+                <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase whitespace-nowrap">Fecha de ingreso</p>
+                <div className="flex gap-2 flex-1">
+                  <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                  <span className="text-gray-400 text-sm self-center">—</span>
+                  <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>)}
+
+      {/* ── Results count ── */}
+      {!loading && view !== 'historial' && (
+        <p className="text-[11px] text-gray-400 font-bold tracking-wide">
+          {filtered.length} rodeo{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
+          {filtered.length !== herds.length && ` de ${herds.length}`}
+        </p>
+      )}
+
+      {/* ════ CARDS VIEW ════ */}
+      {view === 'cards' && (
+        loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => <div key={i} className="h-52 bg-gray-100 rounded-2xl animate-pulse" />)}
           </div>
-          <p className="text-sm font-bold text-gray-400">No hay rebaños que mostrar</p>
-          <p className="text-[10px] text-gray-300 mt-1">Crea tu primer rebaño o cambia los filtros</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(herd => {
-            const at = getAnimalType(herd.species)
-            const evPct = totalEV > 0 ? (Number(herd.total_ev) / totalEV) * 100 : 0
+        ) : filtered.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-gray-100 mx-auto mb-3 flex items-center justify-center">
+              <span className="text-2xl">🐄</span>
+            </div>
+            <p className="text-sm font-bold text-gray-400">No hay rodeos que mostrar</p>
+            <p className="text-[10px] text-gray-300 mt-1">Creá tu primer rodeo o cambiá los filtros</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <AnimatePresence>
+              {filtered.map(herd => {
+                const catKey     = herd.categoria as CategoriaComercial | null
+                const colors     = catKey ? CATEGORIA_COLORS[catKey] : null
+                const catDisp    = catKey ? (CATEGORIA_LABEL_RAE[catKey] ?? catKey) : herd.species
+                const ev         = Number(herd.total_ev) || calcEV(Number(herd.avg_weight_kg), herd.head_count, catKey)
+                const msDay      = Math.round(ev * 11)
 
-            return (
-              <div key={herd.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group">
-                <div className="h-1 w-full bg-gray-200" />
-                {/* Card Header */}
-                <div className="px-5 pt-4 pb-3 flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-500">
-                      {at.label.slice(0, 2)}
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-gray-950 tracking-tight leading-tight">{herd.name}</h3>
-                      <p className="text-[10px] font-medium text-gray-500 mt-0.5">{at.label}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                    <button onClick={() => openEdit(herd)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => handleDelete(herd.id)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+                return (
+                  <motion.div
+                    key={herd.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.97 }}
+                    transition={{ duration: 0.2 }}
+                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group cursor-pointer"
+                    onClick={() => openEdit(herd)}
+                  >
+                    {/* Category color top border */}
+                    <div className={`h-1.5 w-full ${colors?.dot ?? 'bg-gray-200'}`} />
 
-                {/* Stats */}
-                <div className="px-5 py-3 border-t border-gray-50">
-                  <div className="mb-3">
-                    <p className="text-[9px] font-bold text-amber-500 tracking-widest uppercase mb-0.5">Consumo Diario</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-3xl font-bold text-gray-950 tracking-tighter">
-                        {Math.round((Number(herd.head_count) || 0) * (Number(herd.avg_weight_kg) || 0) * 0.03).toLocaleString()}
-                      </p>
-                      <span className="text-xs font-bold text-gray-400">kg MS/día</span>
+                    <div className="px-5 pt-4 pb-3 flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border border-gray-100 bg-gray-50`}>
+                          <span className={`text-[10px] font-black text-gray-400`}>
+                            {catKey ? (CATEGORIA_ABBR[catKey] ?? catKey.slice(0,3)) : (herd.species ?? '?').slice(0,3).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-gray-950 leading-tight">{herd.name}</h3>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <div className={`w-1.5 h-1.5 rounded-full ${colors?.dot ?? 'bg-gray-300'}`} />
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">{catDisp}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDelete(herd.id!) }}
+                          className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-[9px] font-bold text-gray-400 tracking-widest uppercase mb-0.5">Cabezas</p>
-                      <p className="text-lg font-bold text-gray-700">{herd.head_count}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-bold text-gray-400 tracking-widest uppercase mb-0.5">EV Total</p>
-                      <p className="text-lg font-bold text-orange-500">{Number(herd.total_ev).toFixed(1)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Raza</p>
-                      <p className="text-xs font-bold text-gray-700">{herd.breed || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Peso / Edad</p>
-                      <p className="text-xs font-bold text-gray-700">
-                        {herd.avg_weight_kg ? `${herd.avg_weight_kg} kg` : '—'} · {herd.age_years ? `${herd.age_years} a` : '—'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
 
-                {/* EV Bar */}
-                <div className="px-5 pb-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-[9px] font-bold text-gray-400">% de la carga total</p>
-                    <p className="text-[9px] font-black text-gray-600">{evPct.toFixed(1)}%</p>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                    <div className="bg-orange-400 h-1.5 rounded-full" style={{ width: `${evPct}%` }} />
-                  </div>
+                    <div className="px-5 py-4 border-t border-gray-50">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">Stock</p>
+                          <p className="text-xl font-black text-gray-950">{Math.round(herd.head_count).toLocaleString('es-AR')}</p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Cabezas</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">EV</p>
+                          <p className="text-xl font-black text-gray-950">{Math.round(ev).toLocaleString('es-AR')}</p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Equiv.</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">Consumo</p>
+                          <p className="text-xl font-black text-gray-950">{Math.round(msDay).toLocaleString('es-AR')}</p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">kg MS/día</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-5 pb-4">
+                      {/* Fecha de alta */}
+                      {herd.admission_date && (
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
+                          <p className="text-[10px] text-gray-400">Alta: {fmtDate(herd.admission_date)}</p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
+          </div>
+        )
+      )}
+
+      {/* ════ LIST VIEW ════ */}
+      {view === 'list' && (
+        loading ? (
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
+            <p className="text-sm font-bold text-gray-400">No hay rodeos que mostrar</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table className="w-full">
+              <thead className="border-b border-gray-100 bg-gray-50/70">
+                <tr>
+                  {(
+                    [
+                      { key: 'name',           label: 'Nombre' },
+                      { key: null,             label: 'Categoría' },
+                      { key: 'head_count',     label: 'Stock' },
+                      { key: 'avg_weight_kg',  label: 'Peso promedio (kg)' },
+                      { key: null,             label: 'Raza' },
+                      { key: 'admission_date', label: 'Fecha de ingreso' },
+                      { key: 'total_ev',       label: 'Ev total' },
+                    ] as { key: SortKey | null; label: string }[]
+                  ).map(({ key, label }) => (
+                    <th
+                      key={label}
+                      onClick={key ? () => handleSort(key) : undefined}
+                      className={`text-left px-4 py-3 text-[10px] font-black text-gray-400 tracking-widest uppercase select-none ${key ? 'cursor-pointer hover:text-gray-600 transition-colors' : ''}`}
+                    >
+                      <span className="flex items-center gap-1">
+                        {label}
+                        {key && <SortIcon k={key} />}
+                      </span>
+                    </th>
+                  ))}
+                  <th className="px-4 py-3 w-20" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map(herd => {
+                  const catKey  = herd.categoria as CategoriaComercial | null
+                  const colors  = catKey ? CATEGORIA_COLORS[catKey] : null
+                  const catDisp = catKey ? (CATEGORIA_LABEL_RAE[catKey] ?? catKey) : herd.species
+                  const ev      = Number(herd.total_ev) || calcEV(Number(herd.avg_weight_kg), herd.head_count, catKey)
+                  return (
+                    <tr key={herd.id}
+                      className="hover:bg-green-50/30 transition-colors cursor-pointer group"
+                      onClick={() => openEdit(herd)}>
+                      <td className="px-4 py-3">
+                        <p className="text-sm font-bold text-gray-900">{herd.name}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${colors?.dot ?? 'bg-gray-300'}`} />
+                          <span className="text-xs font-bold text-gray-600 uppercase tracking-tighter">
+                            {catDisp}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-gray-800">{Math.round(herd.head_count).toLocaleString('es-AR')}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{herd.avg_weight_kg ? `${Math.round(herd.avg_weight_kg)} kg` : '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{herd.breed || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{fmtDate(herd.admission_date)}</td>
+                      <td className="px-4 py-3 text-sm font-black text-gray-950">{Math.round(ev).toLocaleString('es-AR')}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDelete(herd.id!) }}
+                          className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
+      {/* ════ HISTORIAL VIEW ════ */}
+      {view === 'historial' && (
+        <div className="space-y-4">
+
+          {/* Toolbar: filters + new event button */}
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={() => setEventFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  eventFilter === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}>
+                Todos
+              </button>
+              {EVENT_TYPES.map(et => (
+                <button key={et.key} onClick={() => setEventFilter(et.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    eventFilter === et.key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}>
+                  {et.label}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowEventForm(v => !v)}
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 shrink-0">
+              <Plus className="w-4 h-4" /> Nuevo evento
+            </button>
+          </div>
+
+          {/* New event form */}
+          {showEventForm && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h3 className="text-sm font-black text-gray-900 mb-4">Registrar nuevo evento de hacienda</h3>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">RODEO *</label>
+                  <select value={eventForm.herd_id}
+                    onChange={e => setEventForm(f => ({ ...f, herd_id: e.target.value }))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-900 outline-none focus:ring-1 focus:ring-green-600">
+                    <option value="">Seleccioná un rodeo</option>
+                    {herds.map(h => <option key={h.id} value={h.id!}>{h.name}</option>)}
+                  </select>
                 </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">TIPO DE EVENTO *</label>
+                  <select value={eventForm.event_type}
+                    onChange={e => setEventForm(f => ({ ...f, event_type: e.target.value }))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-900 outline-none focus:ring-1 focus:ring-green-600">
+                    {EVENT_TYPES.map(et => <option key={et.key} value={et.key}>{et.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">FECHA *</label>
+                  <input type="date" value={eventForm.occurred_at}
+                    onChange={e => setEventForm(f => ({ ...f, occurred_at: e.target.value }))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                </div>
+                {EVENT_TYPES.find(e => e.key === eventForm.event_type)?.needsQty && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">CANTIDAD (cabezas)</label>
+                    <input type="number" min="0" value={eventForm.quantity}
+                      onChange={e => setEventForm(f => ({ ...f, quantity: e.target.value }))}
+                      placeholder="0"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                  </div>
+                )}
+                {EVENT_TYPES.find(e => e.key === eventForm.event_type)?.needsWeight && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">PESO PROMEDIO (kg)</label>
+                    <input type="number" min="0" value={eventForm.weight_kg}
+                      onChange={e => setEventForm(f => ({ ...f, weight_kg: e.target.value }))}
+                      placeholder="0"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 tracking-widest mb-1.5">NOTAS</label>
+                  <input type="text" value={eventForm.notes}
+                    onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="Detalle adicional..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-green-600" />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100">
+                <button
+                  disabled={!eventForm.herd_id || savingEvent}
+                  onClick={async () => {
+                    if (!eventForm.herd_id) return
+                    setSavingEvent(true)
+                    const herd = herds.find(h => h.id === eventForm.herd_id)
+                    try {
+                      const res = await apiFetch('/api/movements', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          entity_type: 'herd',
+                          entity_id:   eventForm.herd_id,
+                          entity_name: herd?.name,
+                          event_type:  eventForm.event_type,
+                          occurred_at: eventForm.occurred_at || new Date().toISOString(),
+                          quantity:    eventForm.quantity  ? Number(eventForm.quantity)  : null,
+                          weight_kg:   eventForm.weight_kg ? Number(eventForm.weight_kg) : null,
+                          notes:       eventForm.notes || null,
+                        }),
+                      })
+                      if (res.ok) {
+                        toast.success('Evento registrado correctamente')
+                        setEventForm({ herd_id: '', event_type: 'pesada', occurred_at: new Date().toISOString().split('T')[0], quantity: '', weight_kg: '', notes: '' })
+                        setShowEventForm(false)
+                        loadMovements()
+                      } else {
+                        toast.error('Error al guardar el evento')
+                      }
+                    } catch { toast.error('Error de conexión') }
+                    setSavingEvent(false)
+                  }}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all">
+                  {savingEvent ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Guardar evento
+                </button>
+                <button onClick={() => setShowEventForm(false)}
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-sm transition-all">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Table */}
+          {loadingMov ? (
+            <div className="space-y-2">
+              {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
+            </div>
+          ) : (() => {
+            const filteredMov = eventFilter === 'all' ? movements : movements.filter(m => m.event_type === eventFilter)
+            return filteredMov.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
+                <p className="text-sm font-bold text-gray-400">
+                  Sin eventos {eventFilter !== 'all' ? `de tipo "${EVENT_LABEL[eventFilter] ?? eventFilter}"` : 'registrados'}
+                </p>
+                <p className="text-[10px] text-gray-300 mt-1">Usá el botón «Nuevo evento» para registrar el primero</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <table className="w-full">
+                  <thead className="border-b border-gray-100 bg-gray-50/70">
+                    <tr>
+                      {['Fecha', 'Tipo', 'Rodeo', 'Cantidad', 'Peso prom.', 'Notas'].map(h => (
+                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-gray-400 tracking-widest uppercase">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredMov.map((m, i) => {
+                      const herdName = herds.find(h => h.id === m.entity_id)?.name ?? m.entity_name ?? '—'
+                      const badge = EVENT_BADGE[m.event_type] ?? 'bg-gray-100 text-gray-500'
+                      const label = EVENT_LABEL[m.event_type] ?? m.event_type
+                      return (
+                        <tr key={m.id ?? i} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-4 py-3 text-xs font-bold text-gray-600 tabular-nums whitespace-nowrap">
+                            {m.occurred_at ? new Date(m.occurred_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${badge}`}>{label}</span>
+                          </td>
+                          <td className="px-4 py-3 text-sm font-bold text-gray-800">{herdName}</td>
+                          <td className="px-4 py-3 text-sm font-bold text-gray-700">{m.quantity != null ? m.quantity.toLocaleString('es-AR') : '—'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{m.weight_kg ? `${Math.round(m.weight_kg)} kg` : '—'}</td>
+                          <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{m.notes || '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )
-          })}
+          })()}
         </div>
       )}
 
-      {/* Modal */}
+      {/* ── Modal ── */}
+
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-              <div>
-                <h3 className="text-base font-black text-gray-950">{form.id ? 'Editar Rebaño' : 'Nuevo Rebaño'}</h3>
-                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">Datos del lote de animales</p>
-              </div>
-              <button onClick={() => setModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
-              {/* Nombre */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Nombre del Lote *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  placeholder="Ej: Vacas preñadas - Lote A"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all"
-                />
-              </div>
-
-              {/* Especie / Categoria Comercial */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Especie / Categoría *</label>
-                <select
-                  required
-                  value={form.species}
-                  onChange={e => setForm({ ...form, species: e.target.value, breed: '' })}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-800 focus:ring-1 focus:ring-gray-400 outline-none transition-all"
-                >
-                  {ANIMAL_TYPES.map(t => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Raza */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Raza</label>
-                <select
-                  value={form.breed}
-                  onChange={e => setForm({ ...form, breed: e.target.value })}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-800 focus:ring-1 focus:ring-gray-400 outline-none transition-all"
-                >
-                  <option value="">No aplica / Otra</option>
-                  {(BREED_OPTIONS[form.species] || BREED_OPTIONS['vacas']).map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Cabezas + Peso + Edad */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Cabezas *</label>
-                  <input
-                    type="number" min="1"
-                    value={form.head_count || ''}
-                    onChange={e => setForm({ ...form, head_count: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Peso prom. (kg)</label>
-                  <input
-                    type="number" min="0"
-                    value={form.avg_weight_kg || ''}
-                    onChange={e => setForm({ ...form, avg_weight_kg: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Edad (años)</label>
-                  <input
-                    type="number" min="0" step="0.5"
-                    value={form.age_years || ''}
-                    onChange={e => setForm({ ...form, age_years: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
-                  />
-                </div>
-              </div>
-
-
-
-              {/* EV Calculator */}
-              <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[9px] font-black text-orange-500 tracking-widest uppercase mb-0.5">Equivalente Vaca (EV)</p>
-                    <p className="text-3xl font-black text-gray-950 tracking-tighter">{liveEV.toFixed(2)}</p>
-                    <p className="text-[9px] text-orange-400 mt-0.5">
-                      {form.head_count} animales × factor {ANIMAL_TYPES.find(t => t.id === form.species)?.demandFactor.toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="text-right text-[9px] font-medium text-orange-400 max-w-[120px]">
-                    W^0.75 / 400^0.75 × encaje por especie
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !form.name || !form.head_count}
-                className="px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center gap-2"
-              >
-                {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
-                {form.id ? 'Actualizar' : 'Crear Rebaño'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <HerdModal
+          herd={editingHerd}
+          allHerds={herds}
+          onClose={() => { setModalOpen(false); setEditingHerd(null) }}
+          onSaved={loadHerds}
+        />
       )}
+      <ConfirmModal />
     </div>
   )
 }

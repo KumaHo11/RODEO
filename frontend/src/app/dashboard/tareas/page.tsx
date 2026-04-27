@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
+import { FeatureGate } from '@/components/FeatureGate'
 import {
   Plus, CheckSquare, Clock, AlertTriangle, X, Check,
   ChevronDown, Loader2, User, Calendar, MapPin,
@@ -154,6 +155,19 @@ function TaskCard({ task, onStatusChange, isOwner }: {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function TareasPage() {
   const { user } = useAuth()
+  return (
+    <FeatureGate
+      feature="tareas"
+      title="Módulo de Tareas"
+      description="Assigná tareas al equipo, hacelos seguimiento y organizalos en Kanban. Disponible desde el plan Planificador."
+      requiredPlan="Planificador"
+    >
+      <TareasContent user={user} />
+    </FeatureGate>
+  )
+}
+
+function TareasContent({ user }: { user: any }) {
 
   const [tasks, setTasks]         = useState<Task[]>([])
   const [members, setMembers]     = useState<any[]>([])
@@ -401,7 +415,7 @@ export default function TareasPage() {
                 <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Título *</label>
                 <input required value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Ej: Vaccionar rebaño 1" />
+                  placeholder="Ej: Vaccionar rodeo 1" />
               </div>
 
               <div>

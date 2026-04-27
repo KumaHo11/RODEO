@@ -2,11 +2,15 @@
 
 import dynamic from 'next/dynamic'
 import PaddockSidePanel from './components/PaddockSidePanel'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import PaddockModal from './components/PaddockModal'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { getPaddockNDVI, SatelliteData } from '@/lib/services/satellite'
-import { X, Check, MapPin, Plus } from 'lucide-react'
+import { X, Check, Plus, Satellite, Image as ImageIcon, MapPin, Building2, Loader2 as Spin, Search, AlertTriangle } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmModal'
+import { toast } from 'sonner'
 
 const MiCampoMap = dynamic(() => import('./components/MiCampoMap'), {
   ssr: false,
@@ -20,66 +24,94 @@ const MiCampoMap = dynamic(() => import('./components/MiCampoMap'), {
   ),
 })
 
-const STATUS_OPTIONS = [
-  { id: 'RESTING',  label: 'En Descanso', color: 'bg-green-100 text-green-700' },
-  { id: 'GRAZING',  label: 'En Pastoreo', color: 'bg-orange-100 text-orange-700' },
-]
+const DRAFT_PADDOCK = (name = '', area_ha = 0) => ({
+  id: '__NEW__',
+  name,
+  area_ha,
+  current_status: 'RESTING',
+  dry_matter_kg_ha: undefined,
+  technical_data: {},
+  geom: null,
+})
 
 export default function MiCampoPage() {
   const { user } = useAuth()
-  const [paddocks, setPaddocks] = useState<any[]>([])
-  const [org, setOrg] = useState<any>(null)
-  const [fieldBoundary, setFieldBoundary] = useState<any>(null)
+  const { confirm, ConfirmModal } = useConfirm()
+  const searchParams = useSearchParams()
+  const editPaddockId = searchParams.get('editPaddock')
+  const [paddocks, setPaddocks]             = useState<any[]>([])
+  const [org, setOrg]                       = useState<any>(null)
+  const [fieldBoundary, setFieldBoundary]   = useState<any>(null)
   const [selectedPaddockId, setSelectedPaddockId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [ndviData, setNdviData] = useState<Record<string, SatelliteData>>({})
-  const [ndviLoading, setNdviLoading] = useState(false)
+  const [loading, setLoading]               = useState(true)
+  const [ndviData, setNdviData]             = useState<Record<string, SatelliteData>>({})
+  const [ndviLoading, setNdviLoading]       = useState(false)
   const [activeGrazingPlans, setActiveGrazingPlans] = useState<{paddock_id: string; herd_name: string; head_count: number}[]>([])
+  const [herds, setHerds] = useState<any[]>([])
+  const [planningDefaults, setPlanningDefaults] = useState({ dailyAllocationKg: 12, targetRemnantKgHa: 600 })
 
-  // ── New paddock creation state ─────────────────────────────────────────────
-  const [newPaddockModal, setNewPaddockModal] = useState(false)
-  const [newPaddockGeom, setNewPaddockGeom] = useState<any>(null)
-  const [newPaddockAreaHa, setNewPaddockAreaHa] = useState<number>(0)
-  const [newPaddockName, setNewPaddockName] = useState('')
-  const [newPaddockStatus, setNewPaddockStatus] = useState('RESTING')
-  const [savingNewPaddock, setSavingNewPaddock] = useState(false)
-  const [newPaddockError, setNewPaddockError] = useState<string | null>(null)
+  // -- Unified creation modal ─────────────────────────────────────────────────
+  const [creationModal, setCreationModal]   = useState(false)
+  const [creationGeom, setCreationGeom]     = useState<any>(null)
+  const [creationAreaHa, setCreationAreaHa] = useState(0)
 
-  // ── Draw mode trigger for MiCampoMap ─────────────────────────────────────
-  const [drawModeActive, setDrawModeActive] = useState(false)
-  const triggerDrawRef = useRef<(() => void) | null>(null)
+  // -- Map draw modes ─────────────────────────────────────────────────────────
+  const [drawModeActive, setDrawModeActive]           = useState(false)
+  const [fieldBoundaryDrawMode, setFieldBoundaryDrawMode] = useState(false)
 
+  // -- Map view toggle (satellite | image) ────────────────────────────────────
+  const [mapView, setMapView] = useState<'satellite' | 'image'>('satellite')
+  // -- Dynamic map center (updated when user picks a location) ─────────────
+  const [mapCenter, setMapCenter] = useState<[number, number] | undefined>(undefined)
+
+  // -- Field setup modal ──────────────────────────────────────────────────────
+  const [setupFieldModal, setSetupFieldModal] = useState(false)
+  const [setupFieldArea, setSetupFieldArea]   = useState<number | ''>('')
+  const [setupFieldName, setSetupFieldName]   = useState('')
+  const [setupFieldLocation, setSetupFieldLocation] = useState('')
+  const [savingField, setSavingField]         = useState(false)
+  const setupImgRef = useRef<HTMLInputElement>(null)
+  const [setupImgUploading, setSetupImgUploading] = useState(false)
+  const [setupImgUrl, setSetupImgUrl]         = useState<string | null>(null)
+  const [setupImgFile, setSetupImgFile]       = useState<File | null>(null)
+  // URL de imagen "en sesión" — persiste aunque el modal se cierre, hasta que se guarda en DB
+  const [sessionFieldImg, setSessionFieldImg] = useState<string | null>(null)
+  // -- Location autocomplete (Nominatim — same as onboarding) ──────────────
+  const [locationSuggs, setLocationSuggs]     = useState<any[]>([])
+  const [showLocationSuggs, setShowLocationSuggs] = useState(false)
+  const [locationSearching, setLocationSearching] = useState(false)
+
+  // ── Load data ──────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     if (!user) return
     setLoading(true)
-
-    const [paddocksRes, orgRes, plansRes] = await Promise.all([
+    const [paddocksRes, orgRes, plansRes, herdsRes] = await Promise.all([
       apiFetch('/api/paddocks'),
       apiFetch('/api/organizations'),
       apiFetch('/api/grazing-plans'),
+      apiFetch('/api/herds'),
     ])
-
     const paddocksData = paddocksRes.ok ? (await paddocksRes.json()).paddocks || [] : []
     const orgData      = orgRes.ok      ? (await orgRes.json()).organization : null
-    const plansData    = plansRes.ok    ? (await plansRes.json()).plans || [] : []
+    const plansData    = plansRes.ok    ? (await plansRes.json()).plans || []  : []
+    const herdsData    = herdsRes.ok    ? (await herdsRes.json()).herds || []  : []
 
     setOrg(orgData)
-
-    // Set field boundary from org.boundaries (GeoJSON Polygon saved during onboarding)
-    if (orgData?.boundaries) {
-      setFieldBoundary(orgData.boundaries)
+    if (orgData?.boundaries) setFieldBoundary(orgData.boundaries)
+    if (orgData?.default_daily_allocation_kg || orgData?.default_target_remnant_kg_ha) {
+      setPlanningDefaults({
+        dailyAllocationKg:  Number(orgData.default_daily_allocation_kg  ?? 12),
+        targetRemnantKgHa:  Number(orgData.default_target_remnant_kg_ha ?? 600),
+      })
     }
 
-    // Build active grazing badges from plans
-    const activePlans = plansData
-      .filter((p: any) => p.status === 'ACTIVE')
-      .map((p: any) => ({
-        paddock_id: p.paddock_id,
-        herd_name: p.herds?.name || 'Rebaño',
-        head_count: p.herds?.head_count || 0,
-      }))
+    const activePlans = plansData.filter((p: any) => p.status === 'ACTIVE').map((p: any) => ({
+      paddock_id: p.paddock_id,
+      herd_name: p.herds?.name || 'Rodeo',
+      head_count: p.herds?.head_count || 0,
+    }))
     setActiveGrazingPlans(activePlans)
-
+    setHerds(herdsData)
     setPaddocks(paddocksData)
     setLoading(false)
     loadNdviForPaddocks(paddocksData)
@@ -93,11 +125,12 @@ export default function MiCampoPage() {
         try {
           const ndvi = await getPaddockNDVI(p.boundary, p.id, Number(p.area_ha))
           results[p.id] = ndvi
-          // Update paddock dry_matter_kg_ha via API if not already set
-          if (!p.dry_matter_kg_ha) {
+          // Only auto-update NDVI-derived dry matter if paddock has no user-entered value
+          if (!p.dry_matter_kg_ha && ndvi.estimatedAvailableDryMatterHa) {
+            // Store NDVI in paddock but NOT override dry_matter_kg_ha
             await apiFetch(`/api/paddocks/${p.id}`, {
               method: 'PATCH',
-              body: JSON.stringify({ dry_matter_kg_ha: ndvi.estimatedAvailableDryMatterHa }),
+              body: JSON.stringify({ current_ndvi: ndvi.averageNdvi }),
             })
           }
         } catch {}
@@ -116,103 +149,297 @@ export default function MiCampoPage() {
     setPaddocks(prev => prev.map(p => p.id === paddockId ? { ...p, ...updates } : p))
   }
 
-  const handlePaddockGeomUpdated = async () => {
-    await loadData()
-  }
+  const handlePaddockGeomUpdated = async () => { await loadData() }
 
-  // ── Handle new polygon drawn from map ─────────────────────────────────────
+  // ── Creation via map draw ────────────────────────────────────────────────────
   const handleNewPaddockDrawn = useCallback((geojson: any, areaHa: number) => {
     setDrawModeActive(false)
-    setNewPaddockGeom(geojson)
-    setNewPaddockAreaHa(areaHa)
-    setNewPaddockName('')
-    setNewPaddockStatus('RESTING')
-    setNewPaddockModal(true)
+    setCreationGeom(geojson)
+    setCreationAreaHa(areaHa)
+    setCreationModal(true)
   }, [])
 
-  const handleCreatePaddock = async () => {
-    if (!newPaddockName.trim() || !newPaddockGeom) return
-    setSavingNewPaddock(true)
-    setNewPaddockError(null)
-
+  // ── Field boundary drawn from map ────────────────────────────────────────────
+  const handleFieldBoundaryDrawn = useCallback(async (geojson: any) => {
+    setFieldBoundaryDrawMode(false)
     try {
-      const res = await apiFetch('/api/paddocks', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: newPaddockName.trim(),
-          area_ha: newPaddockAreaHa,
-          current_status: newPaddockStatus,
-          geojson: newPaddockGeom,
-        }),
+      const { area: turfArea } = await import('@turf/area')
+      const calc = turfArea({ type: 'Feature', geometry: geojson, properties: {} }) / 10000
+      await apiFetch('/api/organizations', {
+        method: 'PATCH',
+        body: JSON.stringify({ boundaries: geojson, total_area_ha: parseFloat(calc.toFixed(2)) }),
       })
+      await loadData()
+    } catch {}
+  }, [loadData])
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        setNewPaddockError(errData.error || `Error ${res.status}: no se pudo guardar el potrero.`)
-        setSavingNewPaddock(false)
-        return
+  // ── Manual creation from side panel ─────────────────────────────────────────
+  const openManualCreation = () => {
+    setCreationGeom(null)
+    setCreationAreaHa(0)
+    setCreationModal(true)
+  }
+
+  // ── PaddockModal.onSave for creation ─────────────────────────────────────────
+  const handleCreatePaddock = async (
+    _draftId: string,
+    name: string,
+    technicalData: Record<string, any>,
+    dryMatter?: number,
+    areaHa?: number,
+  ) => {
+    const body: Record<string, any> = {
+      name: name.trim(),
+      area_ha: areaHa ?? creationAreaHa,
+      current_status: 'RESTING',
+      technical_data: technicalData,
+    }
+    if (creationGeom)              body.geojson           = creationGeom
+    if (dryMatter !== undefined)   body.dry_matter_kg_ha  = dryMatter
+    const res = await apiFetch('/api/paddocks', { method: 'POST', body: JSON.stringify(body) })
+    if (res.ok) { setCreationModal(false); await loadData() }
+  }
+
+  // ── Field setup (name + location + ha + photo) ───────────────────────────────
+  const handleSetupField = async () => {
+    setSavingField(true)
+    try {
+      const patch: Record<string, any> = {}
+      if (setupFieldArea && Number(setupFieldArea) > 0) patch.total_area_ha = Number(setupFieldArea)
+      if (setupFieldName.trim()) patch.name = setupFieldName.trim()
+      if (setupFieldLocation.trim()) patch.location_label = setupFieldLocation.trim()
+
+      // Always carry the field_image_url forward:
+      // - If a new real server URL was uploaded this session, use it
+      // - Otherwise keep whatever was already in the DB
+      const existingImgUrl = org?.technical_data?.field_image_url as string | null
+      const newServerUrl   = setupImgUrl && !setupImgUrl.startsWith('blob:') ? setupImgUrl : null
+      const finalImgUrl    = newServerUrl || existingImgUrl || null
+
+      // Always write technical_data so we don't accidentally drop field_image_url
+      patch.technical_data = {
+        ...(org?.technical_data || {}),
+        ...(finalImgUrl ? { field_image_url: finalImgUrl } : {}),
       }
 
-      setSavingNewPaddock(false)
-      setNewPaddockModal(false)
-      setNewPaddockError(null)
-      await loadData()
-    } catch (err: any) {
-      setNewPaddockError('Error de red: ' + (err.message || 'Intenta de nuevo'))
-      setSavingNewPaddock(false)
+      const res = await apiFetch('/api/organizations', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      })
+      if (res.ok) {
+        setSetupFieldModal(false)
+        setSetupImgUrl(null)
+        setSetupImgFile(null)
+        await loadData()
+        // Keep image view active after saving if any image exists
+        if (finalImgUrl || sessionFieldImg) setMapView('image')
+      }
+    } catch {}
+    setSavingField(false)
+  }
+
+  const handleSetupImgUpload = async (file: File) => {
+    setSetupImgUploading(true)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      // Use apiFetch to include Firebase auth token (plain fetch returns 401)
+      const res = await apiFetch('/api/upload', { method: 'POST', body: fd })
+      if (res.ok) {
+        const data = await res.json()
+        const url: string = data.url  // GCS URL or /uploads/<filename> local fallback
+
+        setSetupImgUrl(url)
+        setSessionFieldImg(url)
+        setMapView('image')
+
+        // Persist immediately to DB — navigation away won't lose the image
+        await apiFetch('/api/organizations', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            technical_data: {
+              ...(org?.technical_data || {}),
+              field_image_url: url,
+            },
+          }),
+        })
+        // Refresh org state so fieldImg is up-to-date
+        const orgRes = await apiFetch('/api/organizations')
+        if (orgRes.ok) {
+          const { organization } = await orgRes.json()
+          setOrg(organization)
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        console.warn('[upload] Image upload failed:', res.status, errData.error || res.statusText)
+      }
+    } catch (e) {
+      console.warn('[upload] Image upload error', e)
     }
+    setSetupImgUploading(false)
+  }
+
+  // Called from the modal when a file is selected — immediately shows local preview
+  const handleFileSelected = (file: File) => {
+    const blobUrl = URL.createObjectURL(file)
+    setSetupImgFile(file)
+    setSetupImgUrl(blobUrl)           // temp URL visible in the modal preview
+    setSessionFieldImg(blobUrl)       // enables the toggle on the main panel NOW
+    setMapView('image')               // switch to image view immediately
+    handleSetupImgUpload(file)        // upload in background and replace with server URL
+  }
+
+  const openSetupModal = () => {
+    setSetupFieldArea(org?.total_area_ha || '')
+    setSetupFieldName(org?.name || '')
+    setSetupFieldLocation(org?.location_label || '')
+    // Pre-load the existing server URL so the modal shows the current photo
+    const existingImgUrl = org?.technical_data?.field_image_url as string | null
+    setSetupImgUrl(existingImgUrl || null)
+    setSetupImgFile(null)
+    setSetupFieldModal(true)
   }
 
   const avgNdvi = Object.values(ndviData).length > 0
     ? Object.values(ndviData).reduce((sum, d) => sum + d.averageNdvi, 0) / Object.values(ndviData).length
     : null
 
+  // Field image from org — auto-switch to image view when available
+  const fieldImg = org?.technical_data?.field_image_url as string | null
+  const effectiveFieldImg = fieldImg || sessionFieldImg
+
+  useEffect(() => {
+    // Auto-switch to image view whenever a field photo becomes available
+    if ((fieldImg || sessionFieldImg) && mapView === 'satellite') {
+      setMapView('image')
+    }
+  }, [fieldImg, sessionFieldImg]) // react whenever org loads or session image changes
+
   return (
     <div className="flex flex-col md:flex-row h-full overflow-hidden bg-gray-100 p-3 md:p-4 gap-3 md:gap-4">
-      {/* Map — on mobile goes FIRST (top), on desktop goes RIGHT (70%) */}
-      <div className="order-1 md:order-2 flex-1 md:flex-1 h-[45vh] md:h-auto rounded-2xl overflow-hidden shadow-md border border-gray-200 relative min-h-[200px]">
-        <MiCampoMap
-          paddocks={paddocks}
-          org={org}
-          fieldBoundary={fieldBoundary}
-          selectedPaddockId={selectedPaddockId}
-          onSelectPaddock={setSelectedPaddockId}
-          onPaddockGeomUpdated={handlePaddockGeomUpdated}
-          onNewPaddockDrawn={handleNewPaddockDrawn}
-          activeGrazingPlans={activeGrazingPlans}
-          drawModeActive={drawModeActive}
-          onDrawModeChange={setDrawModeActive}
-        />
 
-        {/* ── FAB: Nuevo Potrero ──────────────────────────────────────────── */}
-        <div className="absolute bottom-5 right-5 z-[1000] flex flex-col items-end gap-2">
-          {drawModeActive && (
-            <button
-              onClick={() => setDrawModeActive(false)}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-xs font-black rounded-xl shadow-lg hover:bg-red-600 transition-all animate-pulse"
-            >
-              <X className="w-3.5 h-3.5" /> Cancelar dibujo
-            </button>
-          )}
+      {/* ── Map panel — mobile top, desktop right 65% ──────────────────── */}
+      <div className="order-1 md:order-2 w-full md:w-[65%] flex flex-col h-[50vh] md:h-full rounded-2xl overflow-hidden shadow-md border border-gray-200 relative min-h-[200px]">
+
+        {/* View toggle — always visible when fieldImg exists OR always available as overlay */}
+        <div className="flex border-b border-gray-200 bg-white shrink-0 z-[500] relative">
           <button
-            onClick={() => setDrawModeActive(v => !v)}
-            title={drawModeActive ? 'Cancelar' : 'Nuevo potrero'}
-            className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl transition-all ${
-              drawModeActive
-                ? 'bg-red-500 hover:bg-red-600 rotate-45'
-                : 'bg-green-600 hover:bg-green-700'
-            } text-white`}
+            onClick={() => setMapView('satellite')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all border-b-2 ${
+              mapView === 'satellite'
+                ? 'text-green-700 border-green-600 bg-green-50/50'
+                : 'text-gray-400 border-transparent hover:text-gray-600'
+            }`}
           >
-            <Plus className="w-6 h-6" />
+            <Satellite className="w-3.5 h-3.5" /> Vista satelital
+          </button>
+          <button
+            onClick={() => setMapView('image')}
+            disabled={!effectiveFieldImg}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all border-b-2 ${
+              mapView === 'image' && effectiveFieldImg
+                ? 'text-green-700 border-green-600 bg-green-50/50'
+                : effectiveFieldImg
+                  ? 'text-gray-400 border-transparent hover:text-gray-600'
+                  : 'text-gray-200 border-transparent cursor-not-allowed'
+            }`}
+            title={!effectiveFieldImg ? 'Subí una foto del campo para ver esta vista' : undefined}
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            {effectiveFieldImg ? 'Imagen cargada' : 'Sin imagen'}
           </button>
         </div>
+
+        {/* Content: satellite map or uploaded image */}
+        {mapView === 'image' && effectiveFieldImg ? (
+          <div className="flex-1 flex items-center justify-center bg-gray-900 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={effectiveFieldImg}
+              alt="Imagen del campo"
+              className="max-w-full max-h-full object-contain"
+            />
+          </div>
+        ) : (
+          <MiCampoMap
+            paddocks={paddocks}
+            org={org}
+            fieldBoundary={fieldBoundary}
+            selectedPaddockId={selectedPaddockId}
+            onSelectPaddock={setSelectedPaddockId}
+            onPaddockGeomUpdated={handlePaddockGeomUpdated}
+            onNewPaddockDrawn={handleNewPaddockDrawn}
+            onDeletePaddock={async (id) => {
+              try {
+                const res = await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
+                if (!res.ok) {
+                  const errData = await res.json().catch(() => ({ error: 'Error desconocido' }))
+                  toast.error(`No se pudo eliminar el potrero: ${errData.error}`)
+                } else {
+                  toast.success('Potrero eliminado')
+                  loadData()
+                }
+              } catch (err: any) {
+                toast.error(`No se pudo eliminar: ${err.message}`)
+              }
+            }}
+            activeGrazingPlans={activeGrazingPlans}
+            drawModeActive={drawModeActive}
+            onDrawModeChange={setDrawModeActive}
+            fieldBoundaryDrawMode={fieldBoundaryDrawMode}
+            onFieldBoundaryDrawn={handleFieldBoundaryDrawn}
+            onFieldBoundaryDrawModeChange={setFieldBoundaryDrawMode}
+            initialCenter={
+              mapCenter
+                ?? (org?.location?.coordinates
+                  ? [org.location.coordinates[1], org.location.coordinates[0]] as [number, number]
+                  : undefined)
+            }
+          />
+        )}
+
+        {/* FAB: Nuevo potrero — solo en vista satelital y modo normal */}
+        {mapView === 'satellite' && !fieldBoundaryDrawMode && (
+          <div className="absolute bottom-5 right-5 z-[1000] flex flex-col items-end gap-2">
+            {drawModeActive && (
+              <button
+                onClick={() => setDrawModeActive(false)}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-xs font-black rounded-xl shadow-lg hover:bg-red-600 transition-all animate-pulse"
+              >
+                <X className="w-3.5 h-3.5" /> Cancelar dibujo
+              </button>
+            )}
+            <button
+              onClick={() => setDrawModeActive(v => !v)}
+              title={drawModeActive ? 'Cancelar' : 'Dibujar nuevo potrero'}
+              className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl transition-all ${
+                drawModeActive ? 'bg-red-500 hover:bg-red-600 rotate-45' : 'bg-green-600 hover:bg-green-700'
+              } text-white`}
+            >
+              <Plus className="w-6 h-6" />
+            </button>
+          </div>
+        )}
+
+        {/* Indicator cuando estamos dibujando el límite del campo */}
+        {fieldBoundaryDrawMode && (
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[1000]">
+            <div className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl shadow-lg text-sm font-semibold">
+              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+              Dibujá el límite del campo
+              <button onClick={() => setFieldBoundaryDrawMode(false)} className="ml-2 opacity-70 hover:opacity-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Side Panel — on mobile goes SECOND (bottom), on desktop LEFT (30%) */}
-      <div className="order-2 md:order-1 w-full md:w-[340px] md:shrink-0 flex flex-col overflow-hidden">
+      {/* ── Side Panel — mobile bottom, desktop left 35% ─────────────────── */}
+      <div className="order-2 md:order-1 w-full md:w-[35%] md:shrink-0 flex flex-col overflow-hidden">
         <PaddockSidePanel
           paddocks={paddocks}
           org={org}
+          user={user}
           loading={loading}
           selectedPaddockId={selectedPaddockId}
           onSelectPaddock={setSelectedPaddockId}
@@ -220,99 +447,308 @@ export default function MiCampoPage() {
           ndviData={ndviData}
           ndviLoading={ndviLoading}
           avgNdvi={avgNdvi}
+          onSetupField={openSetupModal}
+          onFieldImageUploaded={(url) => { setMapView('image') }}
+          onManualPaddockCreate={openManualCreation}
+          defaultEditPaddockId={editPaddockId || undefined}
+          onDeletePaddock={async (id) => {
+            try {
+              const res = await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({ error: 'Error desconocido' }))
+                toast.error(`No se pudo eliminar el potrero: ${errData.error}`)
+              } else {
+                toast.success('Potrero eliminado')
+                loadData()
+              }
+            } catch (err: any) {
+              toast.error(`No se pudo eliminar: ${err.message}`)
+            }
+          }}
+          onDeleteField={async () => {
+            const ok = await confirm({
+              title: '¿Eliminar los límites del campo?',
+              description: 'Podés volver a configurarlo cuando quieras desde esta sección.',
+              confirmLabel: 'Sí, eliminar',
+              variant: 'warning',
+            })
+            if (ok) {
+              await apiFetch('/api/organizations', {
+                method: 'PATCH',
+                body: JSON.stringify({ boundaries: null, total_area_ha: null }),
+              })
+              toast.success('Límites del campo eliminados')
+              loadData()
+            }
+          }}
+          onDataRefresh={loadData}
+          herds={herds}
+          planningDefaults={planningDefaults}
         />
       </div>
 
+      {/* ── Unified Creation Modal ───────────────────────────────────────── */}
+      {creationModal && (
+        <PaddockModal
+          isCreating
+          paddock={DRAFT_PADDOCK('', creationAreaHa)}
+          onClose={() => setCreationModal(false)}
+          onSave={handleCreatePaddock}
+        />
+      )}
 
-      {/* ── New Paddock Creation Modal ──────────────────────────────────────── */}
-      {newPaddockModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-              <div>
-                <h3 className="text-base font-black text-gray-950">Nuevo Potrero</h3>
-                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
-                  Polígono dibujado · {newPaddockAreaHa.toFixed(1)} ha
-                </p>
-              </div>
-              <button
-                onClick={() => setNewPaddockModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all"
-              >
-                <X className="w-4 h-4" />
+      {/* ── Field Setup Modal (expandido) ──────────────────────────────────── */}
+      {setupFieldModal && (
+        <FieldSetupModalInline
+          fieldImg={fieldImg}
+          setupFieldName={setupFieldName}
+          setSetupFieldName={setSetupFieldName}
+          setupFieldLocation={setupFieldLocation}
+          setSetupFieldLocation={setSetupFieldLocation}
+          setupFieldArea={setupFieldArea}
+          setSetupFieldArea={setSetupFieldArea}
+          setupImgUrl={setupImgUrl}
+          setupImgFile={setupImgFile}
+          setupImgRef={setupImgRef}
+          setupImgUploading={setupImgUploading}
+          onFileSelected={handleFileSelected}
+          savingField={savingField}
+          onClose={() => setSetupFieldModal(false)}
+          onSave={handleSetupField}
+          onDrawBoundary={() => { setSetupFieldModal(false); setFieldBoundaryDrawMode(true) }}
+          onLocationSelected={(lat, lon) => { setMapCenter([lat, lon]); setMapView('satellite') }}
+        />
+      )}
+      <ConfirmModal />
+    </div>
+  )
+}
+
+// ── FieldSetupModalInline ───────────────────────────────────────────────────────────
+// Extraído para mantener MiCampoPage limpio.
+// Usa Nominatim (igual que onboarding Step1Field) para autocomplete de ubicación.
+function FieldSetupModalInline({
+  fieldImg,
+  setupFieldName, setSetupFieldName,
+  setupFieldLocation, setSetupFieldLocation,
+  setupFieldArea, setSetupFieldArea,
+  setupImgUrl, setupImgFile,
+  setupImgRef, setupImgUploading, onFileSelected,
+  savingField, onClose, onSave, onDrawBoundary,
+  onLocationSelected,
+}: {
+  fieldImg: string | null
+  setupFieldName: string; setSetupFieldName: (v: string) => void
+  setupFieldLocation: string; setSetupFieldLocation: (v: string) => void
+  setupFieldArea: number | ''; setSetupFieldArea: (v: number | '') => void
+  setupImgUrl: string | null; setupImgFile: File | null
+  setupImgRef: React.RefObject<HTMLInputElement | null>
+  setupImgUploading: boolean; onFileSelected: (f: File) => void
+  savingField: boolean; onClose: () => void; onSave: () => void; onDrawBoundary: () => void
+  onLocationSelected?: (lat: number, lon: number) => void
+}) {
+  const [locationSuggs, setLocationSuggs] = useState<any[]>([])
+  const [showSuggs, setShowSuggs]         = useState(false)
+  const [locSearching, setLocSearching]   = useState(false)
+  const [showPhotoWarning, setShowPhotoWarning] = useState(!!(setupImgUrl || fieldImg))
+
+  // Nominatim autocomplete con debounce 500ms — idéntico al onboarding Step1Field
+  useEffect(() => {
+    if (setupFieldLocation.length < 3) { setLocationSuggs([]); setShowSuggs(false); return }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(setupFieldLocation)}&limit=5`
+        )
+        setLocationSuggs(await res.json())
+        setShowSuggs(true)
+      } catch {}
+    }, 500)
+    return () => clearTimeout(t)
+  }, [setupFieldLocation])
+
+  const selectSuggestion = (s: any) => {
+    setSetupFieldLocation(s.display_name)
+    setLocationSuggs([])
+    setShowSuggs(false)
+    // Geolocalize map to selected suggestion
+    const lat = parseFloat(s.lat), lon = parseFloat(s.lon)
+    if (!isNaN(lat) && !isNaN(lon)) onLocationSelected?.(lat, lon)
+  }
+
+  const handleSearchLocation = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!setupFieldLocation) return
+    setLocSearching(true)
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(setupFieldLocation)}&limit=1`
+      )
+      const r = await res.json()
+      if (r?.length > 0) selectSuggestion(r[0])
+    } catch {} finally { setLocSearching(false) }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setShowPhotoWarning(true)
+    onFileSelected(f)   // parent handles blob URL creation, state updates and upload
+    e.target.value = ''
+  }
+
+  const currentImg = setupImgUrl || fieldImg
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <div>
+            <h3 className="text-base font-black text-gray-900">Configurar campo</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Editá el nombre, ubicación, superficie e imagen</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+
+          {/* Nombre del campo */}
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest">
+              <Building2 className="w-3.5 h-3.5" /> Nombre del campo
+            </label>
+            <input type="text" value={setupFieldName}
+              onChange={e => setSetupFieldName(e.target.value)}
+              placeholder="Ej: La Esperanza"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-400 outline-none transition-all placeholder:font-normal placeholder:text-gray-300"
+            />
+          </div>
+
+          {/* Ubicación con Nominatim autocomplete */}
+          <div className="space-y-1.5 relative">
+            <label className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest">
+              <MapPin className="w-3.5 h-3.5" /> Ubicación
+            </label>
+            <form onSubmit={handleSearchLocation} className="relative">
+              <input type="text" value={setupFieldLocation}
+                onChange={e => setSetupFieldLocation(e.target.value)}
+                onFocus={() => locationSuggs.length > 0 && setShowSuggs(true)}
+                placeholder="Ciudad, provincia o país..."
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-4 pr-11 py-2.5 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-400 outline-none transition-all placeholder:font-normal placeholder:text-gray-300"
+              />
+              <button type="submit" disabled={locSearching}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all ${setupFieldLocation ? 'bg-green-600 text-white' : 'text-gray-300'}`}>
+                {locSearching ? <Spin className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
               </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
-              {/* Área info */}
-              <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-100">
-                <MapPin className="w-4 h-4 text-green-600 shrink-0" />
-                <div>
-                  <p className="text-[9px] font-black text-green-600 tracking-widest uppercase">Superficie detectada</p>
-                  <p className="text-lg font-black text-gray-900">{newPaddockAreaHa.toFixed(2)} ha</p>
-                </div>
-              </div>
-
-              {/* Nombre */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
-                  Nombre del Potrero *
-                </label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={newPaddockName}
-                  onChange={e => setNewPaddockName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && newPaddockName.trim()) handleCreatePaddock() }}
-                  placeholder="Ej: Potrero Norte, Lote 3, Cañada..."
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all"
-                />
-              </div>
-
-              {/* Estado */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Estado inicial</label>
-                <div className="flex gap-2">
-                  {STATUS_OPTIONS.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => setNewPaddockStatus(s.id)}
-                      className={`flex-1 py-2.5 rounded-xl text-[10px] font-black tracking-wider transition-all border ${newPaddockStatus === s.id ? `${s.color} border-transparent` : 'border-gray-200 text-gray-500 bg-gray-50 hover:border-gray-300'}`}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {newPaddockError && (
-              <div className="px-6 pb-0 pt-0">
-                <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{newPaddockError}</p>
+            </form>
+            {showSuggs && locationSuggs.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden">
+                {locationSuggs.map((s: any, i: number) => (
+                  <button key={i} onClick={() => selectSuggestion(s)}
+                    className="w-full text-left px-4 py-2.5 text-xs font-normal text-gray-600 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+                    {s.display_name}
+                  </button>
+                ))}
               </div>
             )}
-            <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
-              <button
-                onClick={() => setNewPaddockModal(false)}
-                className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
-              >
-                Descartar
-              </button>
-              <button
-                onClick={handleCreatePaddock}
-                disabled={savingNewPaddock || !newPaddockName.trim()}
-                className="flex-1 px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-              >
-                {savingNewPaddock
-                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Check className="w-4 h-4" />
-                }
-                Guardar Potrero
-              </button>
-            </div>
           </div>
+
+          {/* Hectáreas */}
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest">
+              Hectáreas totales
+            </label>
+            <input type="number" value={setupFieldArea}
+              onChange={e => setSetupFieldArea(e.target.value === '' ? '' : Number(e.target.value))}
+              placeholder="Ej: 1245"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-400 outline-none transition-all placeholder:font-normal placeholder:text-gray-300"
+            />
+          </div>
+
+          {/* Imagen del campo */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest">
+              <ImageIcon className="w-3.5 h-3.5" /> Imagen del campo
+            </label>
+
+            {currentImg && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={currentImg} alt="Vista previa"
+                className="w-full h-36 object-cover rounded-xl border border-gray-200" />
+            )}
+
+            {/* Nombre del archivo seleccionado */}
+            {setupImgFile && !setupImgUploading && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 border border-violet-100 rounded-lg">
+                <ImageIcon className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+                <p className="text-xs font-semibold text-violet-700 truncate">{setupImgFile.name}</p>
+                <span className="text-[10px] text-violet-400 shrink-0 uppercase font-bold">{setupImgFile.name.split('.').pop()}</span>
+              </div>
+            )}
+
+            <button type="button" onClick={() => setupImgRef.current?.click()}
+              disabled={setupImgUploading}
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-violet-700 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50 transition-all">
+              {setupImgUploading
+                ? <><Spin className="w-4 h-4 animate-spin" /> Subiendo...</>
+                : <><ImageIcon className="w-4 h-4" /> {currentImg ? 'Cambiar imagen' : 'Subir foto del campo'}</>
+              }
+            </button>
+            <input ref={setupImgRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+
+            {/* ⚠ Warning de limitaciones al usar foto */}
+            {showPhotoWarning && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-black text-amber-700">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Importante: módulos no disponibles con foto
+                </div>
+                <p className="text-[11px] text-amber-600 leading-snug">
+                  Al usar una imagen propia en lugar del mapa satelital, los siguientes módulos <strong>quedan deshabilitados</strong>:
+                </p>
+                <ul className="text-[11px] text-amber-600 space-y-0.5 pl-3 list-disc">
+                  <li>Índice NDVI satelital (análisis de vegetación)</li>
+                  <li>Datos climáticos en tiempo real</li>
+                  <li>Módulo de Carbono y captura de CO₂</li>
+                </ul>
+                <p className="text-[10px] text-amber-500 mt-1">Podés volver al mapa satelital en cualquier momento usando las pestañas superiores.</p>
+              </div>
+            )}
+
+            {!showPhotoWarning && currentImg && (
+              <p className="text-[10px] text-gray-400 text-center">
+                Imagen actual del campo. Podés cambiarla o volver al mapa satelital con las pestañas.
+              </p>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
+            <div className="relative flex justify-center"><span className="px-2 bg-white text-xs text-gray-400">o dibujá el límite</span></div>
+          </div>
+
+          <button type="button" onClick={onDrawBoundary}
+            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-all">
+            <Plus className="w-4 h-4" /> Dibujar límite del campo en el mapa
+          </button>
         </div>
-      )}
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+            Cancelar
+          </button>
+          <button onClick={onSave} disabled={savingField || setupImgUploading}
+            className="flex-1 px-5 py-2.5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-sm shadow-green-200">
+            {savingField ? <Spin className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            Guardar cambios
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

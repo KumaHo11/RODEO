@@ -4,13 +4,13 @@
  */
 
 export const CATEGORIAS_COMERCIALES = [
-  'NOVILLOS',
-  'NOVILLITOS',
-  'VAQUILLONAS',
   'TERNEROS',
   'TERNERAS',
-  'VACAS',
+  'NOVILLITOS',
+  'NOVILLOS',
   'TOROS',
+  'VAQUILLONAS',
+  'VACAS',
   'MEJ',         // Mestizos / de inferior calidad genética
   'BUBALINOS',   // Búfalos
 ] as const
@@ -38,7 +38,7 @@ export const CATEGORIA_DEMAND_FACTOR: Record<CategoriaComercial, number> = {
   TERNEROS:    0.60,
   TERNERAS:    0.55,
   VACAS:       1.00,
-  TOROS:       1.25,
+  TOROS:       1.60,
   MEJ:         0.90,
   BUBALINOS:   1.10,
 }
@@ -71,4 +71,48 @@ export const CATEGORIA_COLORS: Record<CategoriaComercial, { text: string; bg: st
   TOROS:       { text: 'text-orange-700',  bg: 'bg-orange-50 border-orange-200', dot: 'bg-orange-500' },
   MEJ:         { text: 'text-red-700',     bg: 'bg-red-50 border-red-200',       dot: 'bg-red-400' },
   BUBALINOS:   { text: 'text-purple-700',  bg: 'bg-purple-50 border-purple-200', dot: 'bg-purple-500' },
+}
+
+// ── Etiquetas en formato oración singular (RAE) ───────────────────────────────
+
+/**
+ * Mapa de clave interna → etiqueta visual en formato oración, singular (RAE).
+ * Ej: NOVILLOS → "Novillo"
+ */
+export const CATEGORIA_LABEL_RAE: Record<CategoriaComercial, string> = {
+  TERNEROS:    'Ternero',
+  TERNERAS:    'Ternera',
+  NOVILLITOS:  'Novillito',
+  NOVILLOS:    'Novillo',
+  TOROS:       'Toro',
+  VAQUILLONAS: 'Vaquillona',
+  VACAS:       'Vaca',
+  MEJ:         'Mestizo',
+  BUBALINOS:   'Bubalino',
+}
+
+/**
+ * Mapa inverso: etiqueta RAE → clave interna.
+ * Ej: "Novillo" → "NOVILLOS"
+ */
+export const CATEGORIA_KEY_FROM_LABEL: Record<string, CategoriaComercial> = Object.fromEntries(
+  (Object.entries(CATEGORIA_LABEL_RAE) as [CategoriaComercial, string][])
+    .map(([k, v]) => [v, k])
+) as Record<string, CategoriaComercial>
+
+// ── Rangos de referencia para hints de peso/edad en el formulario ─────────────
+
+export interface CategoriaRef {
+  hintPeso: string   // Ej: "160–200 kg"
+  hintEdad: string   // Ej: "6–12 meses"
+}
+
+export const CATEGORIA_REF: Partial<Record<CategoriaComercial, CategoriaRef>> = {
+  TERNEROS:    { hintPeso: '160–200 kg',      hintEdad: '6–12 meses' },
+  TERNERAS:    { hintPeso: '160–200 kg',      hintEdad: '6–12 meses' },
+  NOVILLITOS:  { hintPeso: '200–390 kg',      hintEdad: '12–24 meses' },
+  NOVILLOS:    { hintPeso: 'desde 400 kg',    hintEdad: 'más de 24 meses' },
+  TOROS:       { hintPeso: '600–800 kg',      hintEdad: 'más de 2 años' },
+  VAQUILLONAS: { hintPeso: 'desde 190 kg',    hintEdad: '12–24 meses' },
+  VACAS:       { hintPeso: '420–550 kg',      hintEdad: 'más de 2 años' },
 }

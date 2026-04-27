@@ -2,6 +2,10 @@
  * POST /api/upload
  * Uploads a file to GCS and returns the public URL.
  * Accepts multipart/form-data with a 'file' field and optional 'folder' field.
+ *
+ * Fallback chain:
+ *  1. GCS (production / staging — needs GOOGLE_APPLICATION_CREDENTIALS_JSON or service account)
+ *  2. Local filesystem → public/uploads/<file> → served at /uploads/<file> by Next.js (dev only)
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
@@ -45,30 +49,49 @@ export async function POST(req: NextRequest) {
     const ext = file.name.split('.').pop() || 'bin'
     const timestamp = Date.now()
     const uid = decoded.uid.slice(0, 8)
-    const filename = `${folder}/${uid}_${timestamp}.${ext}`
+    const filename = `${uid}_${timestamp}.${ext}`
 
+    // ── 1. Try GCS first (production / staging) ─────────────────────────────
     try {
       const storage = getStorage()
       const bucket = storage.bucket(BUCKET_NAME)
-      const gcsFile = bucket.file(filename)
+      const gcsPath = `${folder}/${filename}`
+      const gcsFile = bucket.file(gcsPath)
 
       await gcsFile.save(buffer, {
         metadata: { contentType: file.type || 'application/octet-stream' },
       })
-
-      // Make the file publicly readable
       await gcsFile.makePublic()
 
-      const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${filename}`
-      return NextResponse.json({ url: publicUrl, filename })
+      const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${gcsPath}`
+      console.log('[upload] GCS OK →', publicUrl)
+      return NextResponse.json({ url: publicUrl, filename: gcsPath })
     } catch (gcsErr: any) {
-      console.error('GCS upload error:', gcsErr.message)
-      // Fallback: return a data URL so the UI still works in dev/staging without GCS
-      const base64 = buffer.toString('base64')
-      const mimeType = file.type || 'application/octet-stream'
-      const dataUrl = `data:${mimeType};base64,${base64}`
-      console.warn('GCS unavailable — returning data URL as fallback')
-      return NextResponse.json({ url: dataUrl, filename, fallback: true })
+      console.warn('[upload] GCS unavailable, using local fallback:', gcsErr.message)
+    }
+
+    // ── 2. Local filesystem fallback (dev only) ──────────────────────────────
+    // Saves to /public/uploads/ so Next.js serves it at /uploads/<filename>
+    // This URL *can* be stored in the DB (it's a normal relative path, not a data URL)
+    try {
+      const { writeFile, mkdir } = await import('fs/promises')
+      const { join } = await import('path')
+
+      const uploadsDir = join(process.cwd(), 'public', 'uploads')
+      await mkdir(uploadsDir, { recursive: true })
+
+      const localPath = join(uploadsDir, filename)
+      await writeFile(localPath, buffer)
+
+      const localUrl = `/uploads/${filename}`
+      console.log('[upload] Local fallback OK →', localUrl)
+      return NextResponse.json({ url: localUrl, filename, fallback: 'local' })
+    } catch (fsErr: any) {
+      console.error('[upload] Local fallback failed:', fsErr.message)
+      return NextResponse.json(
+        { error: 'No se pudo guardar el archivo (GCS y filesystem no disponibles)' },
+        { status: 500 }
+      )
     }
   } catch (err: any) {
     console.error('POST /api/upload error:', err)
