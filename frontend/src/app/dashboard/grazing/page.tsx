@@ -1103,7 +1103,11 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [planMenuOpen, setPlanMenuOpen] = useState(false)
   // Modal de cierre/finalización de pastoreo
   const [closePlanModal, setClosePlanModal] = useState<{ plan: any } | null>(null)
-  const [closeForm, setCloseForm] = useState({ actual_exit_date: '', exit_dry_matter_kg_ha: '' })
+  const [closeForm, setCloseForm] = useState<{
+    actual_exit_date: string
+    exit_dry_matter_kg_ha: string
+    closing_stock: { herd_id: string; name: string; initial: number; final: number }[]
+  }>({ actual_exit_date: '', exit_dry_matter_kg_ha: '', closing_stock: [] })
   const [savingClose, setSavingClose] = useState(false)
   // Modal de confirmación de borrado masivo
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -2280,7 +2284,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                         isOverdue ? 'bg-red-50 border-red-200 text-red-700' : 'bg-amber-50 border-amber-200 text-amber-800'
                       }`}
                       onClick={() => {
-                        setCloseForm({ actual_exit_date: new Date().toISOString().split('T')[0], exit_dry_matter_kg_ha: '' })
+                        setCloseForm({
+                          actual_exit_date: new Date().toISOString().split('T')[0],
+                          exit_dry_matter_kg_ha: '',
+                          closing_stock: herds
+                            .filter((h: any) => (p.herd_ids || []).includes(h.id))
+                            .map((h: any) => ({
+                              herd_id: h.id,
+                              name: h.name,
+                              initial: Number(h.animal_count || h.head_count) || 0,
+                              final: Number(h.animal_count || h.head_count) || 0,
+                            })),
+                        })
                         setClosePlanModal({ plan: p })
                       }}
                     >
@@ -2563,6 +2578,15 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                           setCloseForm({
                             actual_exit_date: plan.actual_exit_date || plan.exit_date || new Date().toISOString().split('T')[0],
                             exit_dry_matter_kg_ha: plan.exit_dry_matter_kg_ha?.toString() || '',
+                            closing_stock: herds
+                              .filter((h: any) => (plan.herd_ids || []).includes(h.id))
+                              .map((h: any) => ({
+                                herd_id: h.id,
+                                name: h.name,
+                                initial: Number(h.animal_count || h.head_count) || 0,
+                                final: plan.ai_analysis?.closing_stock?.find((s: any) => s.herd_id === h.id)?.final
+                                  ?? Number(h.animal_count || h.head_count) ?? 0,
+                              })),
                           })
                           setClosePlanModal({ plan })
                         } else {
@@ -2758,6 +2782,14 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                               setCloseForm({
                                 actual_exit_date: new Date().toISOString().split('T')[0],
                                 exit_dry_matter_kg_ha: '',
+                                closing_stock: herds
+                                  .filter((h: any) => (plan.herd_ids || []).includes(h.id))
+                                  .map((h: any) => ({
+                                    herd_id: h.id,
+                                    name: h.name,
+                                    initial: Number(h.animal_count || h.head_count) || 0,
+                                    final: Number(h.animal_count || h.head_count) || 0,
+                                  })),
                               })
                               setClosePlanModal({ plan })
                             }}
@@ -2782,6 +2814,15 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                             setCloseForm({
                               actual_exit_date: plan.actual_exit_date || plan.exit_date || new Date().toISOString().split('T')[0],
                               exit_dry_matter_kg_ha: plan.exit_dry_matter_kg_ha?.toString() || '',
+                              closing_stock: herds
+                                .filter((h: any) => (plan.herd_ids || []).includes(h.id))
+                                .map((h: any) => ({
+                                  herd_id: h.id,
+                                  name: h.name,
+                                  initial: Number(h.animal_count || h.head_count) || 0,
+                                  final: plan.ai_analysis?.closing_stock?.find((s: any) => s.herd_id === h.id)?.final
+                                    ?? Number(h.animal_count || h.head_count) ?? 0,
+                                })),
                             })
                             setClosePlanModal({ plan })
                           }}
@@ -2881,33 +2922,85 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 )}
               </div>
 
-              {/* Form — solo 2 campos */}
-              <div className="px-6 py-5 space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Fecha real de salida *</label>
-                  <input
-                    type="date"
-                    value={closeForm.actual_exit_date}
-                    onChange={e => setCloseForm(prev => ({ ...prev, actual_exit_date: e.target.value }))}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
-                  />
-                  <p className="text-[10px] text-gray-400 font-medium">La fecha en que realmente salieron los animales del potrero.</p>
-                </div>
+                {/* Form */}
+                <div className="px-6 py-5 space-y-4 max-h-[55vh] overflow-y-auto">
+                  {/* Fecha real de salida */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Fecha real de salida *</label>
+                    <input
+                      type="date"
+                      value={closeForm.actual_exit_date}
+                      onChange={e => setCloseForm(prev => ({ ...prev, actual_exit_date: e.target.value }))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                    />
+                    <p className="text-[10px] text-gray-400 font-medium">La fecha en que realmente salieron los animales del potrero.</p>
+                  </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Remanente de pasto (kg MS/ha)</label>
-                  <input
-                    type="number"
-                    step={50}
-                    min={0}
-                    value={closeForm.exit_dry_matter_kg_ha}
-                    onChange={e => setCloseForm(prev => ({ ...prev, exit_dry_matter_kg_ha: e.target.value }))}
-                    placeholder="Ej: 800"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300"
-                  />
-                  <p className="text-[10px] text-gray-400 font-medium">Pasto que quedó en pie al terminar el pastoreo. Dato clave para validar el remanente objetivo.</p>
+                  {/* Remanente MS */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Remanente de pasto (kg MS/ha)</label>
+                    <input
+                      type="number"
+                      step={50}
+                      min={0}
+                      value={closeForm.exit_dry_matter_kg_ha}
+                      onChange={e => setCloseForm(prev => ({ ...prev, exit_dry_matter_kg_ha: e.target.value }))}
+                      placeholder="Ej: 800"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300"
+                    />
+                    <p className="text-[10px] text-gray-400 font-medium">Pasto que quedó en pie al terminar el pastoreo. Dato clave para validar el remanente objetivo.</p>
+                  </div>
+
+                  {/* Stock de cierre */}
+                  {closeForm.closing_stock.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Stock de cierre</label>
+                        <span className="text-[9px] text-gray-400 font-medium">Inicio → Fin</span>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
+                        {closeForm.closing_stock.map((row, idx) => {
+                          const diff = row.final - row.initial
+                          return (
+                            <div key={row.herd_id} className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
+                              {/* Nombre rodeo */}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-gray-800 truncate">{row.name}</p>
+                                <p className="text-[10px] text-gray-400">{row.initial} cab. al inicio</p>
+                              </div>
+                              {/* Flecha */}
+                              <span className="text-gray-300 text-xs">→</span>
+                              {/* Input final */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={row.final}
+                                  onChange={e => setCloseForm(prev => ({
+                                    ...prev,
+                                    closing_stock: prev.closing_stock.map((r, i) =>
+                                      i === idx ? { ...r, final: Number(e.target.value) } : r
+                                    ),
+                                  }))}
+                                  className="w-20 text-sm font-bold text-center bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none"
+                                />
+                                <span className="text-[10px] text-gray-400">cab.</span>
+                                {diff !== 0 && (
+                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                                    diff > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                                  }`}>
+                                    {diff > 0 ? `+${diff}` : diff}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-medium">Ajustá las cabezas de cierre si hubo bajas, nacimientos o compras durante la estadía.</p>
+                    </div>
+                  )}
                 </div>
-              </div>
 
               {/* Footer */}
               <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-3">
@@ -2929,6 +3022,17 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       }
                       if (closeForm.exit_dry_matter_kg_ha) {
                         body.exit_dry_matter_kg_ha = Number(closeForm.exit_dry_matter_kg_ha)
+                      }
+                      if (closeForm.closing_stock.length > 0) {
+                        body.ai_analysis = {
+                          ...(plan.ai_analysis || {}),
+                          closing_stock: closeForm.closing_stock.map(r => ({
+                            herd_id: r.herd_id,
+                            name: r.name,
+                            initial: r.initial,
+                            final: r.final,
+                          })),
+                        }
                       }
                       const res = await apiFetch(`/api/grazing-plans/${plan.id}`, {
                         method: 'PATCH',
