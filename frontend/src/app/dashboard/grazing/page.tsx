@@ -1963,6 +1963,57 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     }
   }
 
+  // Export histórico de pastoreo como CSV (client-side)
+  const handleExportHistory = () => {
+    const headers = [
+      'Potrero', 'Rodeos', 'Estado',
+      'Entrada plan', 'Entrada real', 'Salida plan', 'Salida real',
+      'Días plan', 'Días reales', 'Stock inicio', 'Stock fin',
+      'Remanente (kg MS/ha)', 'Desvío (días)',
+    ]
+    const fmtCsv = (d: string | null | undefined) =>
+      d ? new Date(d + 'T12:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
+
+    const rows = filteredPlans.map(plan => {
+      const pHerds = herds.filter(h => (plan.herd_ids || []).includes(h.id))
+      const herdNames = pHerds.map(h => h.name).join(' / ')
+      const st = STATUS_MAP[plan.status]?.label || plan.status
+      const plannedDays = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : (plan.planned_recovery_days || '')
+      const effectiveEntry = plan.actual_entry_date || (plan.status === 'COMPLETED' ? plan.entry_date : null)
+      const actualDays = (effectiveEntry && plan.actual_exit_date) ? daysBetween(effectiveEntry, plan.actual_exit_date) : ''
+      const stockTotal = pHerds.reduce((s, h) => s + (Number(h.animal_count || h.head_count) || 0), 0)
+      const stockFin = plan.status === 'COMPLETED' && stockTotal > 0 ? stockTotal : ''
+      const desvio = actualDays !== '' && Number(plannedDays) > 0 ? Number(actualDays) - Number(plannedDays) : ''
+      return [
+        plan.paddocks?.name || '',
+        herdNames,
+        st,
+        fmtCsv(plan.entry_date),
+        fmtCsv(plan.actual_entry_date),
+        fmtCsv(plan.exit_date),
+        fmtCsv(plan.actual_exit_date),
+        plannedDays,
+        actualDays,
+        stockTotal || '',
+        stockFin,
+        plan.exit_dry_matter_kg_ha || '',
+        desvio !== '' ? (Number(desvio) > 0 ? `+${desvio}` : desvio) : '',
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    })
+
+    const csv = [headers.map(h => `"${h}"`).join(','), ...rows].join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `historial-pastoreo-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success(`${filteredPlans.length} registros exportados`)
+  }
+
 
   // KPIs
   const activePlans    = plans.filter(p => p.status === 'ACTIVE').length
@@ -2367,15 +2418,50 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         /* List View */
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           {/* Toolbar */}
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-            <p className="text-xs font-black text-gray-500">{filteredPlans.length} planificaciones</p>
-            <button
-              onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 hover:border-green-300 hover:text-green-700 transition-all shadow-sm"
-            >
-              <Download className="w-3 h-3" /> Exportar Excel
-            </button>
-          </div>
+          {(() => {
+            // Derive season info from filteredPlans
+            const allDates = filteredPlans.flatMap(p => [p.entry_date, p.exit_date].filter(Boolean))
+            const seasonStart = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : null
+            const seasonEnd   = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : null
+            const seasonType  = seasonalFilters.length === 2 ? 'Anual'
+              : seasonalFilters.includes('abierta') ? 'Temporada abierta'
+              : 'Temporada cerrada'
+            const seasonColor = seasonalFilters.length === 1 && seasonalFilters.includes('abierta')
+              ? 'text-green-700 bg-green-50 border-green-200'
+              : seasonalFilters.length === 1 && seasonalFilters.includes('cerrada')
+              ? 'text-blue-700 bg-blue-50 border-blue-200'
+              : 'text-gray-600 bg-gray-100 border-gray-200'
+            const fmtShort = (d: string | null) => d
+              ? new Date(d + 'T12:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+              : null
+            return (
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-4 bg-gray-50/50 flex-wrap">
+                {/* Left: count + season */}
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-xs font-black text-gray-700">{filteredPlans.length} planificaciones</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${seasonColor}`}>
+                      {seasonType}
+                    </span>
+                    {seasonStart && seasonEnd && (
+                      <span className="text-[10px] text-gray-400 font-medium tabular-nums">
+                        {fmtShort(seasonStart)} → {fmtShort(seasonEnd)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {/* Right: export buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExportExcel}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 hover:border-green-300 hover:text-green-700 transition-all shadow-sm"
+                  >
+                    <Download className="w-3 h-3" /> Exportar CSV
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -2532,6 +2618,15 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               </div>
               <div className="text-[10px] font-bold text-gray-400 bg-white border border-gray-200 px-2.5 py-1 rounded-lg">
                 {filteredPlans.length} registros
+              </div>
+              {/* Exportar botones */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportHistory}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 hover:border-green-300 hover:text-green-700 transition-all shadow-sm"
+                >
+                  <Download className="w-3 h-3" /> Exportar CSV
+                </button>
               </div>
             </div>
           <div className="overflow-x-auto">
