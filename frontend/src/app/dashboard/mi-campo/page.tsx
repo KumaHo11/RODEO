@@ -242,14 +242,23 @@ export default function MiCampoPage() {
     setSetupImgUploading(true)
     try {
       const fd = new FormData(); fd.append('file', file)
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      // Use apiFetch to include Firebase auth token (plain fetch returns 401)
+      const res = await apiFetch('/api/upload', { method: 'POST', body: fd })
       if (res.ok) {
-        const { url } = await res.json()
+        const data = await res.json()
+        const url: string = data.url
+
+        // If GCS unavailable and server returned a data URL, warn and skip persistence
+        if (url.startsWith('data:')) {
+          console.warn('[upload] GCS unavailable — data URL too large to persist in DB, skipping')
+          setSetupImgUploading(false)
+          return
+        }
+
         setSetupImgUrl(url)           // replace blob URL with real server URL
         setSessionFieldImg(url)       // update session image too
 
         // ── Persist immediately to DB so navigation away doesn't lose the image ──
-        // Merge with existing technical_data to avoid overwriting other fields
         await apiFetch('/api/organizations', {
           method: 'PATCH',
           body: JSON.stringify({
@@ -266,10 +275,10 @@ export default function MiCampoPage() {
           setOrg(organization)
         }
       } else {
-        console.warn('Image upload failed, local blob preview will not persist')
+        console.warn('[upload] Image upload failed:', res.status, res.statusText)
       }
     } catch (e) {
-      console.warn('Image upload error', e)
+      console.warn('[upload] Image upload error', e)
     }
     setSetupImgUploading(false)
   }
@@ -304,13 +313,11 @@ export default function MiCampoPage() {
   const effectiveFieldImg = fieldImg || sessionFieldImg
 
   useEffect(() => {
-    // Only auto-switch to 'image' on first load if org already has a photo
-    // Don't auto-switch every time fieldImg changes (user may want satellite view)
-    if (fieldImg && mapView === 'satellite') {
+    // Auto-switch to image view whenever a field photo becomes available
+    if ((fieldImg || sessionFieldImg) && mapView === 'satellite') {
       setMapView('image')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // run only once on mount
+  }, [fieldImg, sessionFieldImg]) // react whenever org loads or session image changes
 
   return (
     <div className="flex flex-col md:flex-row h-full overflow-hidden bg-gray-100 p-3 md:p-4 gap-3 md:gap-4">
