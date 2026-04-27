@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { AppHeader } from '@/components/AppHeader'
 import { Button, FormField } from '@/design-system'
+import { FeatureGate } from '@/components/FeatureGate'
 
 // ── Role config ────────────────────────────────────────────────────────────────
 const PRESET_ROLES = [
@@ -365,6 +366,12 @@ export default function EquipoPage() {
   ]
 
   return (
+    <FeatureGate
+      feature="equipo"
+      title="Gestión de equipo"
+      description="Invitá a tu capataz, veterinario o ayudante y gestioná sus permisos de acceso. Disponible desde el plan Planificador."
+      requiredPlan="Planificador"
+    >
     <div className="space-y-5">
       <AppHeader title="Equipo" subtitle="Gestión de miembros y permisos" />
 
@@ -968,5 +975,6 @@ export default function EquipoPage() {
         </div>
       )}
     </div>
+    </FeatureGate>
   )
 }

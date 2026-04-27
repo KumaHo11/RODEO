@@ -495,9 +495,9 @@ export default function BitacoraPage() {
                 <p className="text-sm font-black text-gray-700">Grabación de audio</p>
                 <p className="text-xs text-gray-400 mt-1">Disponible desde el plan <span className="font-bold text-gray-600">Planificador</span></p>
               </div>
-              <button onClick={() => window.location.href = '/dashboard/profile'}
+              <button onClick={() => window.location.href = '/dashboard/planes'}
                 className="mt-1 px-5 py-2 text-xs font-black text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-all">
-                Ver planes
+                Ver planes y contratar
               </button>
             </div>
           )}

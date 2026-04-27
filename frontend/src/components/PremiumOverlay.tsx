@@ -4,6 +4,8 @@ import { Lock, ArrowRight, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 
+const UPGRADE_ROUTE = '/dashboard/planes'
+
 interface PremiumOverlayProps {
   title: string
   description: string
@@ -45,16 +47,16 @@ export function PremiumOverlay({ title, description, requiredPlan, children }: P
         </p>
 
         <button
-          onClick={() => router.push('/dashboard/profile')}
+          onClick={() => router.push(UPGRADE_ROUTE)}
           className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition-all shadow-lg shadow-gray-200 active:scale-95"
         >
           <Sparkles className="w-4 h-4 text-green-400" />
-          Ver planes disponibles
+          Ver planes y contratar
           <ArrowRight className="w-4 h-4 ml-1 opacity-70" />
         </button>
 
         <p className="text-xs text-gray-400 mt-3 font-medium">
-          Actualizá tu plan para acceder a este módulo
+          Requiere plan <span className="font-bold text-gray-600">{requiredPlan}</span> o superior
         </p>
       </div>
     </div>

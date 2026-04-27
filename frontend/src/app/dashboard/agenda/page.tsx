@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify } from 'lucide-react'
+import { FeatureGate } from '@/components/FeatureGate'
 
 const EVENT_TYPES = [
   { id: 'servicio',             label: 'Servicio',                 color: '#be185d', bg: 'bg-red-50',     text: 'text-red-700',    dot: 'bg-red-500',    emoji: '🐄' },
@@ -208,6 +209,12 @@ export default function AgendaPage() {
   }
 
   return (
+    <FeatureGate
+      feature="agenda"
+      title="Agenda de eventos"
+      description="Registrá servicios, pariciones, diagnósticos y tratamientos sanitarios. Disponible desde el plan Brote."
+      requiredPlan="Brote"
+    >
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -734,5 +741,6 @@ export default function AgendaPage() {
         </div>
       )}
     </div>
+    </FeatureGate>
   )
 }
