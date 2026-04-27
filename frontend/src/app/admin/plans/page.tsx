@@ -17,17 +17,30 @@ interface Plan {
   created_at: string; updated_at: string
 }
 
+// ── Todos los feature flags reconocidos por el sistema ───────────────────────
+// Agrupados: primero límites numéricos, luego booleans por módulo
 const FLAG_TEMPLATES = [
-  { flag_key: 'max_paddocks',     label: 'Máx. potreros',           flag_type: 'number'  as const, default: 20    },
-  { flag_key: 'max_herds',        label: 'Máx. rodeos',             flag_type: 'number'  as const, default: 1     },
-  { flag_key: 'max_team_members', label: 'Miembros de equipo',      flag_type: 'number'  as const, default: 2     },
-  { flag_key: 'ndvi_access',      label: 'Integración NDVI',        flag_type: 'boolean' as const, default: false },
-  { flag_key: 'ai_insights',      label: 'Insights IA (Gemini)',    flag_type: 'boolean' as const, default: false },
-  { flag_key: 'offline_mode',     label: 'App móvil offline',       flag_type: 'boolean' as const, default: false },
-  { flag_key: 'voice_bitacora',   label: 'Bitácora de voz',         flag_type: 'boolean' as const, default: false },
-  { flag_key: 'advanced_reports', label: 'Reportes avanzados',      flag_type: 'boolean' as const, default: false },
-  { flag_key: 'api_access',       label: 'Acceso API corporativa',  flag_type: 'boolean' as const, default: false },
-  { flag_key: 'carbon_module',    label: 'Módulo Carbono (MRV)',    flag_type: 'boolean' as const, default: false },
+  // ─ Límites numéricos ──────────────────────────────────────────────────────
+  { flag_key: 'max_paddocks',     label: 'Máx. potreros',             flag_type: 'number'  as const, default: 20    },
+  { flag_key: 'max_herds',        label: 'Máx. rodeos',               flag_type: 'number'  as const, default: 1     },
+  { flag_key: 'max_team_members', label: 'Miembros de equipo',        flag_type: 'number'  as const, default: 2     },
+  // ─ Módulos base (incluidos desde Brote) ───────────────────────────────────
+  { flag_key: 'map',              label: 'Mapa de campo + potreros',  flag_type: 'boolean' as const, default: true  },
+  { flag_key: 'clima',            label: 'Módulo clima y alertas',    flag_type: 'boolean' as const, default: true  },
+  { flag_key: 'agenda',           label: 'Agenda / eventos',          flag_type: 'boolean' as const, default: true  },
+  // ─ Módulos intermedios (Planificador+) ────────────────────────────────────
+  { flag_key: 'grazing_planner',  label: 'Planificador de pastoreo',  flag_type: 'boolean' as const, default: false },
+  { flag_key: 'tareas',           label: 'Gestión de tareas',         flag_type: 'boolean' as const, default: false },
+  { flag_key: 'equipo',           label: 'Gestión de equipo',         flag_type: 'boolean' as const, default: false },
+  { flag_key: 'voice_bitacora',   label: 'Bitácora de voz + IA',      flag_type: 'boolean' as const, default: false },
+  // ─ Módulos avanzados (Holístico+) ─────────────────────────────────────────
+  { flag_key: 'ai_insights',      label: 'Insights IA (Gemini)',      flag_type: 'boolean' as const, default: false },
+  { flag_key: 'advanced_reports', label: 'Reportes avanzados',        flag_type: 'boolean' as const, default: false },
+  { flag_key: 'carbon_module',    label: 'Módulo Carbono (MRV)',      flag_type: 'boolean' as const, default: false },
+  { flag_key: 'offline_mode',     label: 'App móvil offline',         flag_type: 'boolean' as const, default: false },
+  // ─ Módulos enterprise (Latifundio) ────────────────────────────────────────
+  { flag_key: 'ndvi_access',      label: 'NDVI satelital (Sentinel)', flag_type: 'boolean' as const, default: false },
+  { flag_key: 'api_access',       label: 'Acceso API corporativa',    flag_type: 'boolean' as const, default: false },
 ]
 
 /** Merge saved flags from DB with all templates, so every flag is always visible */

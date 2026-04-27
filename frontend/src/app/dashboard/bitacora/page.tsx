@@ -6,9 +6,10 @@ import { apiFetch } from '@/lib/apiFetch'
 import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio } from '@/lib/audioOfflineStore'
 import {
   Mic, Camera, Square, Loader2, Image as ImageIcon,
-  CheckCircle2, Mic2, Search, WifiOff, FileAudio, ChevronDown, ChevronUp,
+  CheckCircle2, Mic2, Search, WifiOff, FileAudio, ChevronDown, ChevronUp, Lock,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { usePlan } from '@/hooks/usePlan'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
@@ -119,6 +120,8 @@ function NoteRow({ note }: { note: any }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BitacoraPage() {
   const { user } = useAuth()
+  const { hasFeature } = usePlan()
+  const canVoice = hasFeature('voice_bitacora')
   const [notes, setNotes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -470,7 +473,7 @@ export default function BitacoraPage() {
                 <CheckCircle2 className="w-8 h-8 text-green-500" />
               </div>
             </div>
-          ) : (
+          ) : canVoice ? (
             <div className="flex items-center gap-14">
               <button onClick={() => setShowPhotoMenu(true)}
                 className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all border border-gray-100 active:scale-95">
@@ -481,6 +484,21 @@ export default function BitacoraPage() {
                 <div className="w-16 h-16 rounded-full bg-red-600 shadow-lg shadow-red-200" />
               </button>
               <div className="w-14 h-14 invisible" />
+            </div>
+          ) : (
+            /* Plan no incluye voice — mostrar mensaje de upgrade */
+            <div className="flex flex-col items-center gap-3 py-4">
+              <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
+                <Lock className="w-7 h-7 text-gray-400" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-black text-gray-700">Grabación de audio</p>
+                <p className="text-xs text-gray-400 mt-1">Disponible desde el plan <span className="font-bold text-gray-600">Planificador</span></p>
+              </div>
+              <button onClick={() => window.location.href = '/dashboard/profile'}
+                className="mt-1 px-5 py-2 text-xs font-black text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-all">
+                Ver planes
+              </button>
             </div>
           )}
         </div>

@@ -6,13 +6,14 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip } from 'lucide-react'
+import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ui/ConfirmModal'
+import { usePlan } from '@/hooks/usePlan'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -278,6 +279,9 @@ export default function PaddockModal({
   paddock, ndviData, onClose, onSave, onDelete, isCreating = false, user, paddocks = [], herds = [], planningDefaults,
 }: Props) {
   const { confirm, ConfirmModal } = useConfirm()
+  const { hasFeature } = usePlan()
+  const canVoice     = hasFeature('voice_bitacora') // audio + transcripción IA
+  const canAiInsight = hasFeature('ai_insights')    // análisis biomasa IA
   const [activeTab, setActiveTab] = useState<'operativo' | 'infraestructura' | 'registros'>('operativo')
   const [saving, setSaving]       = useState(false)
 
@@ -921,25 +925,26 @@ export default function PaddockModal({
                   </div>
                   <div className="p-4">
                     {/* Three capture buttons — switching mode resets previous mode state */}
-                    <div className="grid grid-cols-3 gap-2 mb-3">
-                      {/* Mic */}
-                      <button type="button"
-                        onClick={() => {
-                          if (noteMode === 'audio') {
-                            setNoteExpanded(false); setNoteMode(null)
-                          } else {
-                            // Clear previous mode data before switching
-                            setNoteText(''); setNoteImage(null); setNoteImagePreview(null); setNoteResult(null)
-                            setNoteExpanded(true); setNoteMode('audio')
-                          }
-                        }}
-                        className={`relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'}`}>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
-                          {recording ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
-                        </div>
-                        <span className="text-[9px] font-black text-gray-600 tracking-wide">{recording ? 'GRABANDO' : 'AUDIO'}</span>
-                        {recording && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />}
-                      </button>
+                    <div className={`grid gap-2 mb-3 ${canVoice ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                      {/* Mic — solo si voice_bitacora habilitado */}
+                      {canVoice ? (
+                        <button type="button"
+                          onClick={() => {
+                            if (noteMode === 'audio') {
+                              setNoteExpanded(false); setNoteMode(null)
+                            } else {
+                              setNoteText(''); setNoteImage(null); setNoteImagePreview(null); setNoteResult(null)
+                              setNoteExpanded(true); setNoteMode('audio')
+                            }
+                          }}
+                          className={`relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'}`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
+                            {recording ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
+                          </div>
+                          <span className="text-[9px] font-black text-gray-600 tracking-wide">{recording ? 'GRABANDO' : 'AUDIO'}</span>
+                          {recording && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />}
+                        </button>
+                      ) : null}
                       {/* Camera */}
                       <button type="button"
                         onClick={() => {
