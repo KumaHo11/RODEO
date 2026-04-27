@@ -412,9 +412,11 @@ export default function PaddockSidePanel({
                               ) : (
                                 <p className="text-xs text-gray-400 mt-0.5">Sin datos de MS</p>
                               )}
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                NDVI: <span className="font-medium text-gray-500">{ndviVal != null ? Number(ndviVal).toFixed(3) : '—'}</span>
-                              </p>
+                              {canNdvi && ndviVal != null && (
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  NDVI: <span className="font-medium text-gray-500">{Number(ndviVal).toFixed(3)}</span>
+                                </p>
+                              )}
                             </>
                           )}
 

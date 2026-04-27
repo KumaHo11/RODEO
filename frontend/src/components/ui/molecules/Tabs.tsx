@@ -25,7 +25,7 @@ export function Tabs<T extends string>({
           key={item.id}
           onClick={() => onChange(item.id)}
           className={twMerge(
-            'flex-1 py-2 text-sm font-bold rounded-lg transition-all capitalize',
+            'flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-all capitalize whitespace-nowrap',
             activeTab === item.id
               ? 'bg-white text-[var(--color-primary)] shadow-sm'
               : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'

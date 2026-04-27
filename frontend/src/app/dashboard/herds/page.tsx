@@ -418,60 +418,63 @@ export default function HerdsPage() {
                     className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group cursor-pointer"
                     onClick={() => openEdit(herd)}
                   >
-
-
-                    <div className="px-5 pt-4 pb-3 flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border border-gray-100 bg-gray-50`}>
-                          <span className={`text-[10px] font-black text-gray-400`}>
+                    {/* ── Header: abbr badge + nombre + cat ── */}
+                    <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Abbr pill */}
+                        <div className="shrink-0 w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center">
+                          <span className="text-[10px] font-black text-gray-400">
                             {catKey ? (CATEGORIA_ABBR[catKey] ?? catKey.slice(0,3)) : (herd.species ?? '?').slice(0,3).toUpperCase()}
                           </span>
                         </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-gray-950 leading-tight">{herd.name}</h3>
+                        <div className="min-w-0">
+                          {/* Nombre — jerarquía principal */}
+                          <h3 className="text-base font-black text-gray-950 leading-tight truncate">{herd.name}</h3>
+                          {/* Categoría — segundo plano */}
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <div className={`w-1.5 h-1.5 rounded-full ${colors?.dot ?? 'bg-gray-300'}`} />
-                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">{catDisp}</p>
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors?.dot ?? 'bg-gray-300'}`} />
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">{catDisp}</p>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={e => { e.stopPropagation(); handleDelete(herd.id!) }}
-                          className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDelete(herd.id!) }}
+                        className="shrink-0 w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
-                    <div className="px-5 py-4 border-t border-gray-50">
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">Stock</p>
-                          <p className="text-xl font-black text-gray-950">{Math.round(herd.head_count).toLocaleString('es-AR')}</p>
-                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Cabezas</p>
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">EV</p>
-                          <p className="text-xl font-black text-gray-950">{Math.round(ev).toLocaleString('es-AR')}</p>
-                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Equiv.</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">Consumo</p>
-                          <p className="text-xl font-black text-gray-950">{Math.round(msDay).toLocaleString('es-AR')}</p>
-                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">kg MS/día</p>
-                        </div>
-                      </div>
-                    </div>
-
+                    {/* ── Body: Stock destacado + métricas secundarias ── */}
                     <div className="px-5 pb-4">
-                      {/* Fecha de alta */}
-                      {herd.admission_date && (
-                        <div className="flex items-center gap-1.5 mt-2">
-                          <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
-                          <p className="text-[10px] text-gray-400">Alta: {fmtDate(herd.admission_date)}</p>
+                      {/* Cabezas — dato principal */}
+                      <div className="flex items-baseline gap-2 mb-3">
+                        <p className="text-3xl font-black text-gray-950 tabular-nums leading-none">
+                          {Math.round(herd.head_count).toLocaleString('es-AR')}
+                        </p>
+                        <p className="text-sm font-bold text-gray-400">cabezas</p>
+                      </div>
+
+                      {/* EV + Consumo — segundo plano */}
+                      <div className="flex items-center gap-4 pt-3 border-t border-gray-50">
+                        <div>
+                          <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-0.5">EV</p>
+                          <p className="text-sm font-black text-gray-500">{Math.round(ev).toLocaleString('es-AR')}</p>
                         </div>
-                      )}
+                        <div className="w-px h-6 bg-gray-100" />
+                        <div>
+                          <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-0.5">Consumo</p>
+                          <p className="text-sm font-black text-gray-500">{Math.round(msDay).toLocaleString('es-AR')} <span className="font-medium text-gray-400">kg MS/día</span></p>
+                        </div>
+                        {herd.admission_date && (
+                          <>
+                            <div className="w-px h-6 bg-gray-100 ml-auto" />
+                            <div className="flex items-center gap-1 text-gray-300">
+                              <Calendar className="w-3 h-3 shrink-0" />
+                              <p className="text-[9px] font-bold text-gray-400">{fmtDate(herd.admission_date)}</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 )

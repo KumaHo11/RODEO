@@ -106,11 +106,18 @@ export default function MiCampoPage() {
     }
 
     // Construir indicadores de pastoreo activo para el mapa
-    // Un plan puede tener herd_id (singular) o herd_ids (múltiple); resolvémoslos todos.
+    // Acepta status ACTIVE/active, y PLANNED con entry_date ya pasada
+    const today = new Date().toISOString().split('T')[0]
+    console.log('[mapa] all plans statuses:', plansData.map((p: any) => ({ id: p.id, status: p.status, paddock_id: p.paddock_id, entry: p.entry_date, exit: p.exit_date })))
     const activePlans = plansData
-      .filter((p: any) => p.status === 'ACTIVE')
+      .filter((p: any) => {
+        const s = (p.status ?? '').toUpperCase()
+        if (s === 'ACTIVE') return true
+        // Plan programado cuya ventana de pastoreo ya empezó
+        if ((s === 'PLANNED' || s === 'PROGRAMADO') && p.entry_date <= today && (!p.exit_date || p.exit_date >= today)) return true
+        return false
+      })
       .map((p: any) => {
-        // Reunir IDs de todos los rodeos del plan
         let ids: string[] = []
         if (p.herd_id) ids.push(p.herd_id)
         try {
@@ -120,7 +127,6 @@ export default function MiCampoPage() {
           ids = Array.from(new Set([...ids, ...extras]))
         } catch {}
 
-        // Buscar rodeos en herdsData o usar el objeto embebido de la respuesta SQL
         const matchedHerds = ids.length > 0
           ? herdsData.filter((h: any) => ids.includes(h.id))
           : p.herds ? [p.herds] : []
@@ -135,6 +141,7 @@ export default function MiCampoPage() {
           head_count: totalHead || p.herds?.head_count || 0,
         }
       })
+    console.log('[mapa] activePlans calculados:', activePlans)
     setActiveGrazingPlans(activePlans)
     setHerds(herdsData)
     setPaddocks(paddocksData)
