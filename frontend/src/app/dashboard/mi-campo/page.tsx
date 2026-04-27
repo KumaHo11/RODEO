@@ -105,11 +105,36 @@ export default function MiCampoPage() {
       })
     }
 
-    const activePlans = plansData.filter((p: any) => p.status === 'ACTIVE').map((p: any) => ({
-      paddock_id: p.paddock_id,
-      herd_name: p.herds?.name || 'Rodeo',
-      head_count: p.herds?.head_count || 0,
-    }))
+    // Construir indicadores de pastoreo activo para el mapa
+    // Un plan puede tener herd_id (singular) o herd_ids (múltiple); resolvémoslos todos.
+    const activePlans = plansData
+      .filter((p: any) => p.status === 'ACTIVE')
+      .map((p: any) => {
+        // Reunir IDs de todos los rodeos del plan
+        let ids: string[] = []
+        if (p.herd_id) ids.push(p.herd_id)
+        try {
+          const extras: string[] = typeof p.herd_ids === 'string'
+            ? JSON.parse(p.herd_ids)
+            : Array.isArray(p.herd_ids) ? p.herd_ids : []
+          ids = Array.from(new Set([...ids, ...extras]))
+        } catch {}
+
+        // Buscar rodeos en herdsData o usar el objeto embebido de la respuesta SQL
+        const matchedHerds = ids.length > 0
+          ? herdsData.filter((h: any) => ids.includes(h.id))
+          : p.herds ? [p.herds] : []
+
+        const totalHead = matchedHerds.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
+        const names = matchedHerds.map((h: any) => h.name).filter(Boolean)
+        const herdLabel = names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0] || 'Rodeo'
+
+        return {
+          paddock_id: p.paddock_id,
+          herd_name: herdLabel,
+          head_count: totalHead || p.herds?.head_count || 0,
+        }
+      })
     setActiveGrazingPlans(activePlans)
     setHerds(herdsData)
     setPaddocks(paddocksData)

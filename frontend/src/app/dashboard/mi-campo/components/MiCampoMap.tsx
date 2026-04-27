@@ -286,26 +286,35 @@ function MapController({
         if (!bounds.isValid()) return
         const center = bounds.getCenter()
 
+        const headStr = plan.head_count > 0 ? `${plan.head_count} cab.` : ''
         const badgeHtml = `
           <div style="
-            background: #14532d;
+            background: linear-gradient(135deg, #14532d 0%, #166534 100%);
             color: white;
-            border-radius: 8px;
-            padding: 4px 8px;
-            font-family: system-ui, sans-serif;
+            border-radius: 10px;
+            padding: 5px 9px;
+            font-family: system-ui, -apple-system, sans-serif;
             font-size: 10px;
             font-weight: 800;
             white-space: nowrap;
             display: flex;
             align-items: center;
-            gap: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-            border: 2px solid #16a34a;
+            gap: 5px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.1);
+            border: 1.5px solid #16a34a;
             pointer-events: none;
+            letter-spacing: 0.01em;
           ">
-            <span style="font-size:12px">\uD83D\uDC04</span>
-            <span>${plan.herd_name}</span>
-            <span style="background:rgba(255,255,255,0.15);border-radius:4px;padding:1px 4px;">${plan.head_count}</span>
+            <span style="font-size:13px;line-height:1">🐄</span>
+            <span style="max-width:80px;overflow:hidden;text-overflow:ellipsis">${plan.herd_name}</span>
+            ${headStr ? `<span style="
+              background: rgba(255,255,255,0.22);
+              border-radius: 5px;
+              padding: 1px 5px;
+              font-size:10px;
+              font-weight:900;
+              letter-spacing:0.02em;
+            ">${headStr}</span>` : ''}
           </div>
         `
 

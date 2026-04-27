@@ -71,9 +71,11 @@ function PlanCard({
   loading: boolean
 }) {
   const Icon = PLAN_ICONS[plan.slug] || Sparkles
-  const price = billing === 'annual' ? plan.price_yearly : plan.price
-  const annual_saving = plan.price > 0 && plan.price_yearly > 0
-    ? Math.round((1 - (plan.price_yearly / plan.price)) * 100)
+  const price = Number(billing === 'annual' ? plan.price_yearly : plan.price)
+  const basePrice = Number(plan.price)
+  const yearlyPrice = Number(plan.price_yearly)
+  const annual_saving = basePrice > 0 && yearlyPrice > 0
+    ? Math.round((1 - (yearlyPrice / basePrice)) * 100)
     : 0
 
   // Features habilitadas (booleans en true)
