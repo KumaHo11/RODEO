@@ -177,6 +177,55 @@ const templates = {
     `),
   }),
 
+  climate_alert: (p: {
+    ownerName: string
+    paddockName: string
+    alertLevel: 'warning' | 'critical'
+    alertMessage: string
+    adjustedDays: number
+    originalDays: number
+    deltaFromPlan: number
+    dashboardUrl: string
+  }) => ({
+    subject: p.alertLevel === 'critical'
+      ? `🚨 ALERTA CRÍTICA: Sobrepastoreo en ${p.paddockName}`
+      : `⚠️ Ajuste Clima: ${p.paddockName} — estadía reducida ${Math.abs(p.deltaFromPlan)}d`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 12px;color:#111827;font-size:22px;font-weight:900">
+        ${p.alertLevel === 'critical' ? '🚨 Alerta Crítica de Pastoreo' : '⚠️ Ajuste Climático'}
+      </h2>
+      <p style="margin:0 0 20px;color:#6b7280;font-size:15px;line-height:1.6">
+        Hola <strong>${p.ownerName}</strong>, el motor de <strong>Ajuste Clima</strong> detectó
+        un cambio en la estadía del potrero <strong>${p.paddockName}</strong>.
+      </p>
+      <div style="background:${p.alertLevel === 'critical' ? '#fef2f2' : '#fffbeb'};border:1px solid ${p.alertLevel === 'critical' ? '#fecaca' : '#fde68a'};border-radius:12px;padding:20px;margin-bottom:24px">
+        <p style="margin:0 0 12px;color:#111827;font-size:15px;font-weight:800">${p.alertMessage}</p>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+          <div style="text-align:center">
+            <p style="margin:0;font-size:28px;font-weight:900;color:${p.alertLevel === 'critical' ? '#dc2626' : '#d97706'}">${p.adjustedDays}d</p>
+            <p style="margin:2px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af">Días ajustados</p>
+          </div>
+          <div style="text-align:center">
+            <p style="margin:0;font-size:28px;font-weight:900;color:#6b7280">${p.originalDays}d</p>
+            <p style="margin:2px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af">Planificado</p>
+          </div>
+          <div style="text-align:center">
+            <p style="margin:0;font-size:28px;font-weight:900;color:${p.deltaFromPlan < 0 ? '#dc2626' : '#16a34a'}">${p.deltaFromPlan >= 0 ? '+' : ''}${p.deltaFromPlan}d</p>
+            <p style="margin:2px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af">Diferencia</p>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-bottom:20px">
+        <a href="${p.dashboardUrl}" style="display:inline-block;background:#16a34a;color:#fff;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:800;text-decoration:none">
+          Ver potrero en RODEO →
+        </a>
+      </div>
+      <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">
+        Generado automáticamente por el motor de Ajuste Clima · RODEO AgTech
+      </p>
+    `),
+  }),
+
 } satisfies Record<string, (params: any) => { subject: string; html: string }>
 
 // ── Public API ─────────────────────────────────────────────────────────────

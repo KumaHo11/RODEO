@@ -6,19 +6,20 @@ import { useAuth } from '@/components/AuthProvider'
 export type PlanType = 'BROTE' | 'PLANIFICADOR' | 'HOLISTICO' | 'LATIFUNDIO'
 
 export type FeatureKey =
-  | 'ndvi_access'       // NDVI satelital
-  | 'ai_insights'       // Módulo Insights IA (Gemini)
-  | 'offline_mode'      // App offline / caché
-  | 'voice_bitacora'    // Audio en Bitácora
-  | 'advanced_reports'  // Reportes avanzados
-  | 'api_access'        // Acceso API corporativa
-  | 'carbon_module'     // Módulo Carbono (MRV)
-  | 'grazing_planner'   // Planificador de pastoreo
-  | 'tareas'            // Módulo tareas
-  | 'equipo'            // Gestión de equipo
-  | 'agenda'            // Agenda / eventos
-  | 'clima'             // Módulo clima
-  | 'map'               // Mapa de campo
+  | 'ndvi_access'           // NDVI satelital
+  | 'ai_insights'           // Módulo Insights IA (Gemini)
+  | 'offline_mode'          // App offline / caché
+  | 'voice_bitacora'        // Audio en Bitácora
+  | 'advanced_reports'      // Reportes avanzados
+  | 'api_access'            // Acceso API corporativa
+  | 'carbon_module'         // Módulo Carbono (MRV)
+  | 'grazing_planner'       // Planificador de pastoreo
+  | 'tareas'                // Módulo tareas
+  | 'equipo'                // Gestión de equipo
+  | 'agenda'                // Agenda / eventos
+  | 'clima'                 // Módulo clima
+  | 'map'                   // Mapa de campo
+  | 'climate_adjustment'    // Ajuste Clima (NDVI × lluvia × sequía)
 
 // ─── Mapeo plan-slug → PlanType ────────────────────────────────────────────
 const SLUG_TO_PLAN: Record<string, PlanType> = {
@@ -36,64 +37,68 @@ const SLUG_TO_PLAN: Record<string, PlanType> = {
 // Esto actúa como fallback cuando los flags de DB no están cargados aún.
 const PLAN_DEFAULTS: Record<PlanType, Record<FeatureKey, boolean>> = {
   BROTE: {
-    ndvi_access:       false,
-    ai_insights:       false,
-    offline_mode:      false,
-    voice_bitacora:    false,
-    advanced_reports:  false,
-    api_access:        false,
-    carbon_module:     false,
-    grazing_planner:   false,
-    tareas:            false,
-    equipo:            false,
-    agenda:            true,
-    clima:             true,
-    map:               true,
+    ndvi_access:          false,
+    ai_insights:          false,
+    offline_mode:         false,
+    voice_bitacora:       false,
+    advanced_reports:     false,
+    api_access:           false,
+    carbon_module:        false,
+    grazing_planner:      false,
+    tareas:               false,
+    equipo:               false,
+    agenda:               true,
+    clima:                true,
+    map:                  true,
+    climate_adjustment:   false,
   },
   PLANIFICADOR: {
-    ndvi_access:       false,
-    ai_insights:       false,
-    offline_mode:      false,
-    voice_bitacora:    true,
-    advanced_reports:  false,
-    api_access:        false,
-    carbon_module:     false,
-    grazing_planner:   true,
-    tareas:            true,
-    equipo:            true,
-    agenda:            true,
-    clima:             true,
-    map:               true,
+    ndvi_access:          false,
+    ai_insights:          false,
+    offline_mode:         false,
+    voice_bitacora:       true,
+    advanced_reports:     false,
+    api_access:           false,
+    carbon_module:        false,
+    grazing_planner:      true,
+    tareas:               true,
+    equipo:               true,
+    agenda:               true,
+    clima:                true,
+    map:                  true,
+    climate_adjustment:   true,
   },
   HOLISTICO: {
-    ndvi_access:       false,  // requiere Sentinel Hub contratado
-    ai_insights:       true,
-    offline_mode:      true,
-    voice_bitacora:    true,
-    advanced_reports:  true,
-    api_access:        false,
-    carbon_module:     true,
-    grazing_planner:   true,
-    tareas:            true,
-    equipo:            true,
-    agenda:            true,
-    clima:             true,
-    map:               true,
+    ndvi_access:          false,  // requiere Sentinel Hub contratado
+    ai_insights:          true,
+    offline_mode:         true,
+    voice_bitacora:       true,
+    advanced_reports:     true,
+    api_access:           false,
+    carbon_module:        true,
+    grazing_planner:      true,
+    tareas:               true,
+    equipo:               true,
+    agenda:               true,
+    clima:                true,
+    map:                  true,
+    climate_adjustment:   true,
   },
   LATIFUNDIO: {
-    ndvi_access:       true,
-    ai_insights:       true,
-    offline_mode:      true,
-    voice_bitacora:    true,
-    advanced_reports:  true,
-    api_access:        true,
-    carbon_module:     true,
-    grazing_planner:   true,
-    tareas:            true,
-    equipo:            true,
-    agenda:            true,
-    clima:             true,
-    map:               true,
+    ndvi_access:          true,
+    ai_insights:          true,
+    offline_mode:         true,
+    voice_bitacora:       true,
+    advanced_reports:     true,
+    api_access:           true,
+    carbon_module:        true,
+    grazing_planner:      true,
+    tareas:               true,
+    equipo:               true,
+    agenda:               true,
+    clima:                true,
+    map:                  true,
+    climate_adjustment:   true,
   },
 }
 

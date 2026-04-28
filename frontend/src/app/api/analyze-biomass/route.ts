@@ -5,17 +5,24 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
+import { checkFeatureAccess } from '@/lib/plan-limits'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 export async function POST(req: NextRequest) {
   try {
-    // Auth opcional (no bloqueante para facilitar debugging)
+    // Auth Check
     const authHeader = req.headers.get('authorization') || ''
     const token = authHeader.replace('Bearer ', '').trim()
-    if (token) {
-      const decoded = await verifyFirebaseToken(token)
-      if (!decoded) return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
+    if (!token) return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 })
+
+    const decoded = await verifyFirebaseToken(token)
+    if (!decoded) return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
+
+    // Plan check
+    const hasAccess = await checkFeatureAccess(decoded.uid, 'ai_insights')
+    if (!hasAccess) {
+      return NextResponse.json({ success: false, error: 'Tu plan no incluye análisis de biomasa IA' }, { status: 403 })
     }
 
     const { imageBase64, mimeType = 'image/jpeg' } = await req.json()

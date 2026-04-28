@@ -185,6 +185,7 @@ export default function LandingPage() {
     const extras = plan.feature_flags
       .filter(f => f.flag_type === 'boolean' && f.flag_value === true)
       .map(f => FLAG_LABELS[f.flag_key] || f.label)
+      .filter((label): label is string => typeof label === 'string' && label.length > 0)
       .filter(label => !base.some(b => b.toLowerCase().includes(label.toLowerCase().split(' ')[0])))
     return [...base, ...extras]
   }

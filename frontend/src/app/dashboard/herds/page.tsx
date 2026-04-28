@@ -15,6 +15,8 @@ import {
 } from '@/lib/categorias'
 import { useConfirm } from '@/components/ui/ConfirmModal'
 import { toast } from 'sonner'
+import { usePlan } from '@/hooks/usePlan'
+import { Lock } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -151,6 +153,10 @@ export default function HerdsPage() {
     quantity: '', weight_kg: '', notes: '',
   })
 
+  const { getLimit, hasFeature } = usePlan()
+  const maxHerds = getLimit('max_herds')
+  const canCreateMore = herds.length < maxHerds
+
   const loadHerds = async () => {
     if (!user) return
     setLoading(true)
@@ -281,10 +287,17 @@ export default function HerdsPage() {
               <Download className="w-3.5 h-3.5" /> Exportar historial
             </button>
           )}
-          <button onClick={openCreate}
-            className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200">
-            <Plus className="w-4 h-4" /> Nuevo rodeo
-          </button>
+          {canCreateMore ? (
+            <button onClick={openCreate}
+              className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200">
+              <Plus className="w-4 h-4" /> Nuevo rodeo
+            </button>
+          ) : (
+            <button onClick={() => toast.info(`Límite alcanzado: Tu plan permite hasta ${maxHerds} rodeo${maxHerds > 1 ? 's' : ''}.`)}
+              className="flex items-center gap-2 bg-gray-100 text-gray-400 px-5 py-2.5 rounded-xl font-bold text-sm border border-gray-200 cursor-not-allowed">
+              <Lock className="w-3.5 h-3.5" /> Límite {maxHerds}/{maxHerds}
+            </button>
+          )}
         </div>
       </div>
 

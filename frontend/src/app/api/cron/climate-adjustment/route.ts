@@ -1,0 +1,288 @@
+/**
+ * GET /api/cron/climate-adjustment
+ *
+ * Cron job — Recalcula el Ajuste Clima para todos los potreros activos
+ * (con rodeos pastoreando) de todas las organizaciones elegibles.
+ *
+ * Agenda sugerida: "0 6 * * *" — todos los días a las 06:00 ART (09:00 UTC)
+ *
+ * Flujo:
+ *   1. Obtiene todas las orgs con plan PLANIFICADOR+ y feature flag activo
+ *   2. Para cada org: obtiene potreros activos (GRAZING) + clima API
+ *   3. Ejecuta calculateClimateAdjustment para cada potrero
+ *   4. Persiste snapshots y despacha alertas si corresponde
+ *   5. Retorna resumen de ejecución
+ *
+ * Protegido con CRON_SECRET en el header Authorization.
+ */
+import { NextRequest, NextResponse } from 'next/server'
+import { query, queryOne, mutate } from '@/lib/db'
+import {
+  calculateClimateAdjustment,
+  type ClimateAdjustmentInput,
+  type DroughtIndex,
+} from '@/lib/climate-adjustment'
+import { dispatchBatchClimateAlerts, type ClimateAlertPayload } from '@/lib/climate-alert-dispatcher'
+
+export const dynamic  = 'force-dynamic'
+export const runtime  = 'nodejs'
+export const maxDuration = 300 // 5 min timeout para Vercel Pro
+
+const CRON_SECRET  = process.env.CRON_SECRET
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.rodeoagtech.com'
+
+// ─── Eligible plan slugs ─────────────────────────────────────────────────────
+const ELIGIBLE_SLUGS = ['planificador', 'pro_ganadero', 'pro_ganadero+', 'holistico', 'latifundio', 'enterprise']
+
+// ── GET ───────────────────────────────────────────────────────────────────────
+export async function GET(req: NextRequest) {
+  // ── Security ──────────────────────────────────────────────────────────────
+  const authHeader = req.headers.get('authorization')
+  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const startedAt = Date.now()
+  let orgsProcessed = 0
+  let paddocksProcessed = 0
+  let alertsDispatched = 0
+  const errors: string[] = []
+
+  try {
+    // ── 1. Feature flag global: ¿está habilitado climate_adjustment? ──────────
+    const globalFlag = await queryOne<{ flag_value: unknown }>(`
+      SELECT flag_value FROM system_feature_flags
+      WHERE flag_key = 'climate_adjustment' LIMIT 1
+    `, []).catch(() => null)
+
+    if (globalFlag && (globalFlag.flag_value === false || globalFlag.flag_value === 'false')) {
+      return NextResponse.json({
+        skipped: true,
+        reason: 'feature_flag_disabled',
+        durationMs: Date.now() - startedAt,
+      })
+    }
+
+    // ── 2. Obtener orgs elegibles ─────────────────────────────────────────────
+    const eligibleOrgs = await query<{
+      org_id: string
+      org_name: string
+      owner_profile_id: string
+      owner_email: string
+      owner_first_name: string | null
+      latitude: number | null
+      longitude: number | null
+    }>(`
+      SELECT DISTINCT
+        o.id         AS org_id,
+        o.name       AS org_name,
+        pr.id        AS owner_profile_id,
+        pr.email     AS owner_email,
+        pr.first_name AS owner_first_name,
+        o.latitude,
+        o.longitude
+      FROM organizations o
+      JOIN subscriptions_plans sp ON o.subscription_plan_id = sp.id
+      JOIN profiles pr ON pr.organization_id = o.id
+                       AND (pr.team_role IS NULL OR pr.team_role = 'owner')
+      WHERE sp.slug = ANY($1::text[])
+      ORDER BY o.id
+    `, [ELIGIBLE_SLUGS])
+
+    if (eligibleOrgs.length === 0) {
+      return NextResponse.json({
+        orgsProcessed: 0,
+        paddocksProcessed: 0,
+        alertsDispatched: 0,
+        durationMs: Date.now() - startedAt,
+      })
+    }
+
+    const allAlerts: ClimateAlertPayload[] = []
+
+    // ── 3. Procesar cada org ──────────────────────────────────────────────────
+    for (const org of eligibleOrgs) {
+      try {
+        // 3a. Potreros activos (con rodeo pastoreando)
+        const activePaddocks = await query<{
+          paddock_id: string
+          paddock_name: string
+          area_ha: number
+          dry_matter_kg_ha: number | null
+          current_ndvi: number | null
+          previous_ndvi: number | null
+          previous_ndvi_date: string | null
+          herd_ids: string[]
+          planned_days: number | null
+          entry_date: string
+          exit_date: string | null
+        }>(`
+          SELECT
+            p.id            AS paddock_id,
+            p.name          AS paddock_name,
+            p.area_ha,
+            p.dry_matter_kg_ha,
+            p.current_ndvi,
+            p.previous_ndvi,
+            p.previous_ndvi_date,
+            gp.herd_ids,
+            EXTRACT(DAY FROM gp.exit_date - gp.entry_date)::int AS planned_days,
+            gp.entry_date::text,
+            gp.exit_date::text
+          FROM grazing_plans gp
+          JOIN paddocks p ON p.id = gp.paddock_id
+          WHERE gp.org_id = $1
+            AND gp.status IN ('ACTIVE', 'PLANNED')
+            AND gp.entry_date <= CURRENT_DATE
+            AND (gp.exit_date IS NULL OR gp.exit_date >= CURRENT_DATE)
+        `, [org.org_id])
+
+        if (activePaddocks.length === 0) continue
+
+        // 3b. Obtener EV de cada herd (batch)
+        const allHerdIds = [...new Set(activePaddocks.flatMap(p => p.herd_ids || []))]
+        const herdsData = allHerdIds.length > 0
+          ? await query<{ id: string; total_ev: number; head_count: number; avg_weight_kg: number | null }>(`
+              SELECT id, total_ev, head_count, avg_weight_kg
+              FROM herds WHERE id = ANY($1::uuid[]) AND org_id = $2
+            `, [allHerdIds, org.org_id])
+          : []
+        const herdMap = new Map(herdsData.map(h => [h.id, h]))
+
+        // 3c. Clima de la org (API cache o valor por defecto)
+        const weatherCache = await queryOne<{
+          humidity: number | null
+          wind_speed: number | null
+          precipitation_sum: number | null
+          drought_index: string | null
+          forecast_mm_14d: number | null
+        }>(`
+          SELECT humidity, wind_speed, precipitation_sum, drought_index, forecast_mm_14d
+          FROM weather_cache
+          WHERE org_id = $1
+          ORDER BY fetched_at DESC
+          LIMIT 1
+        `, [org.org_id]).catch(() => null)
+
+        // Lluvias declaradas últimos 7 días
+        const rainfall7dRow = await queryOne<{ total_mm: number }>(`
+          SELECT COALESCE(SUM(value), 0) AS total_mm
+          FROM weather_events
+          WHERE org_id = $1
+            AND type = 'RAIN'
+            AND date >= CURRENT_DATE - INTERVAL '7 days'
+        `, [org.org_id]).catch(() => null)
+
+        // 3d. Calcular por potrero
+        for (const paddock of activePaddocks) {
+          try {
+            // Calcular EV del rodeo en este potrero
+            let totalEv = 0
+            for (const herdId of (paddock.herd_ids || [])) {
+              const h = herdMap.get(herdId)
+              if (!h) continue
+              if (h.total_ev > 0) {
+                totalEv += Number(h.total_ev)
+              } else {
+                const avgW = Number(h.avg_weight_kg) || 400
+                totalEv += Number(h.head_count) * (avgW / 450)
+              }
+            }
+
+            if (totalEv <= 0) continue
+
+            const daysSincePrevNdvi = paddock.previous_ndvi_date
+              ? Math.round((Date.now() - new Date(paddock.previous_ndvi_date).getTime()) / 86400000)
+              : undefined
+
+            const input: ClimateAdjustmentInput = {
+              paddockId:             paddock.paddock_id,
+              areaHa:                Number(paddock.area_ha) || 1,
+              currentForageMsHa:     Number(paddock.dry_matter_kg_ha) || 1200,
+              currentNdvi:           Number(paddock.current_ndvi) || 0.50,
+              previousNdvi:          paddock.previous_ndvi ? Number(paddock.previous_ndvi) : undefined,
+              daysSincePreviousNdvi: daysSincePrevNdvi,
+              totalEv,
+              dailyRationKgPerEv:    12,
+              rainfall7dMm:          Number(rainfall7dRow?.total_mm) || Number(weatherCache?.precipitation_sum) || 0,
+              humidityPct:           Number(weatherCache?.humidity) || 65,
+              forecastRainfall14dMm: Number(weatherCache?.forecast_mm_14d) || 0,
+              droughtIndex:          (weatherCache?.drought_index as DroughtIndex) || 'NONE',
+              avgWindKmh:            Number(weatherCache?.wind_speed) || undefined,
+              currentMonth:          new Date().getMonth() + 1,
+            }
+
+            const originalDays = paddock.planned_days ?? 21
+            const result = calculateClimateAdjustment(input, originalDays)
+
+            // Persistir snapshot
+            await mutate(`
+              INSERT INTO climate_adjustment_snapshots (
+                org_id, paddock_id, ndvi, rainfall_7d_mm, humidity_pct,
+                drought_index, forage_ms_ha, total_ev, grass_growth_rate,
+                climate_multiplier, base_remaining_days, adjusted_remaining_days,
+                alert_level, alert_message, delta_from_plan, multiplier_breakdown
+              ) VALUES (
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16
+              )
+            `, [
+              org.org_id, paddock.paddock_id,
+              input.currentNdvi, input.rainfall7dMm, input.humidityPct,
+              input.droughtIndex, input.currentForageMsHa, input.totalEv,
+              result.grassGrowthRateKgHaDay, result.climateMultiplier,
+              result.baseRemainingDays, result.adjustedRemainingDays,
+              result.alertLevel, result.alertMessage, result.deltaFromPlan,
+              JSON.stringify(result.multiplierBreakdown),
+            ]).catch(() => {})
+
+            paddocksProcessed++
+
+            // Acumular alertas para despacho en batch
+            if (result.alertLevel !== 'ok' && result.alertMessage) {
+              allAlerts.push({
+                orgId:        org.org_id,
+                profileId:    org.owner_profile_id,
+                paddockId:    paddock.paddock_id,
+                paddockName:  paddock.paddock_name,
+                alertLevel:   result.alertLevel,
+                alertMessage: result.alertMessage,
+                adjustedDays: result.adjustedRemainingDays,
+                originalDays,
+                deltaFromPlan: result.deltaFromPlan,
+              })
+            }
+          } catch (err: any) {
+            errors.push(`org=${org.org_id} paddock=${paddock.paddock_id}: ${err.message}`)
+          }
+        }
+
+        orgsProcessed++
+      } catch (err: any) {
+        errors.push(`org=${org.org_id}: ${err.message}`)
+        console.error('[climate-cron] org error:', org.org_id, err)
+      }
+    }
+
+    // ── 4. Despachar alertas en batch ─────────────────────────────────────────
+    if (allAlerts.length > 0) {
+      const alertResults = await dispatchBatchClimateAlerts(allAlerts)
+      alertsDispatched = alertResults.filter(r => r.sent).length
+    }
+
+    const durationMs = Date.now() - startedAt
+    console.log(`[climate-cron] ✓ orgs=${orgsProcessed} paddocks=${paddocksProcessed} alerts=${alertsDispatched} ms=${durationMs}`)
+
+    return NextResponse.json({
+      success:           true,
+      orgsProcessed,
+      paddocksProcessed,
+      alertsDispatched,
+      errorsCount:       errors.length,
+      errors:            errors.length > 0 ? errors.slice(0, 10) : undefined,
+      durationMs,
+    })
+  } catch (err: any) {
+    console.error('[climate-cron] fatal error:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}

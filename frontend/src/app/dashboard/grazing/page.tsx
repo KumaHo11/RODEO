@@ -979,28 +979,38 @@ function InteractiveGantt({
                   return (
                     <div
                       key={m.key}
-                      className="absolute inset-y-0 border-r border-violet-100 flex flex-col items-center justify-center gap-1 py-2"
+                      className="absolute inset-y-0 border-r border-violet-100 flex flex-col items-center justify-center gap-0.5 py-1.5 px-1"
                       style={{ left: `${m.leftPct}%`, width: `${m.widthPct}%` }}
                     >
                       {monthPlans.length > 0 ? (
                         <>
-                          {/* Visual bar: carga animal */}
-                          <div className="w-4/5 h-2 rounded-full bg-gray-100 overflow-hidden">
+                          {/* CA bar */}
+                          <div className="w-4/5 h-1.5 rounded-full bg-gray-100 overflow-hidden shrink-0">
                             <div
-                              className="h-full rounded-full transition-all"
+                              className="h-full rounded-full"
                               style={{ width: `${Math.min(100, (ca / 7) * 100)}%`, backgroundColor: caColor }}
                             />
                           </div>
-                          <div className="flex flex-col items-center gap-0.5">
-                            <div className="flex items-center gap-1">
-                              <span className="text-[7px] text-gray-500 font-bold">{haTotal.toFixed(0)}ha</span>
-                              <span className="text-[7px] text-gray-500 font-bold">{cabezas}cab</span>
-                              {completedM > 0 && <span className="text-[7px] text-gray-500 font-bold">{completedM} real</span>}
-                              {plannedM > 0 && <span className="text-[7px] text-violet-500 font-bold">{plannedM} plan</span>}
-                            </div>
+                          {/* ha */}
+                          <div className="flex items-baseline gap-0.5">
+                            <span className="text-[8px] font-black text-gray-700">{haTotal.toFixed(0)}</span>
+                            <span className="text-[7px] text-gray-400 font-bold">ha</span>
+                          </div>
+                          {/* EV / cab */}
+                          <div className="flex items-baseline gap-0.5">
+                            <span className="text-[8px] font-black text-gray-700">{cabezas}</span>
+                            <span className="text-[7px] text-gray-400 font-bold">cab</span>
+                          </div>
+                          {/* planes */}
+                          <div className="flex items-center gap-1">
+                            {completedM > 0 && (
+                              <span className="text-[7px] font-black text-green-700 bg-green-50 px-1 rounded">{completedM}✓</span>
+                            )}
+                            {plannedM > 0 && (
+                              <span className="text-[7px] font-black text-violet-600 bg-violet-50 px-1 rounded">{plannedM}p</span>
+                            )}
                           </div>
                         </>
-
                       ) : (
                         <span className="text-[8px] text-gray-200">—</span>
                       )}

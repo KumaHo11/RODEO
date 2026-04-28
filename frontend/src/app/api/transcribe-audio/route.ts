@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { checkFeatureAccess } from '@/lib/plan-limits'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
@@ -27,6 +28,12 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
     const decoded = await verifyFirebaseToken(token)
     if (!decoded) return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
+
+    // ── Plan Check ────────────────────────────────────────────────────────────
+    const hasAccess = await checkFeatureAccess(decoded.uid, 'voice_bitacora')
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Tu plan no incluye transcripción de audio' }, { status: 403 })
+    }
 
     // ── File ──────────────────────────────────────────────────────────────────
     const formData = await req.formData()

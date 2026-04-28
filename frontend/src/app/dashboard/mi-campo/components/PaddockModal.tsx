@@ -1045,12 +1045,17 @@ export default function PaddockModal({
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={noteImagePreview} alt="preview" className="w-full max-h-36 object-cover rounded-xl" />
                             )}
-                            {noteImage && (
+                            {noteImage && canAiInsight && (
                               <button type="button" onClick={analyzeNoteImage} disabled={noteAnalyzing}
                                 className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50">
                                 {noteAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>✨</span>}
                                 {noteAnalyzing ? 'Analizando con IA…' : 'Analizar biomasa con IA'}
                               </button>
+                            )}
+                            {noteImage && !canAiInsight && (
+                              <div className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-center">
+                                <p className="text-[10px] font-bold text-gray-400">✨ Análisis de biomasa IA disponible en planes Pro</p>
+                              </div>
                             )}
                             {noteResult && (
                               <div className="bg-violet-50 px-3 py-2 rounded-xl border border-violet-200 flex items-center gap-2">

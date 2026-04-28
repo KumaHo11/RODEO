@@ -11,6 +11,17 @@ import {
   Zap, CloudRain, ArrowRight, X, DollarSign
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import dynamic from 'next/dynamic'
+
+// Chart lazy-loaded to avoid SSR issues with Recharts
+const ClimateAdjustmentChart = dynamic(
+  () => import('./ClimateAdjustmentChart').then(m => m.ClimateAdjustmentChart),
+  { ssr: false, loading: () => (
+    <div className="h-48 flex items-center justify-center">
+      <Loader2 className="w-5 h-5 text-green-600 animate-spin" />
+    </div>
+  )}
+)
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface InsightCard {
@@ -653,7 +664,23 @@ function InsightsContent({ user, profile }: { user: any; profile: any }) {
         </div>
       )}
 
+      {/* Ajuste Clima — Historial de crecimiento */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Leaf className="w-4 h-4 text-green-600" />
+          <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Ajuste Clima</h3>
+          <span className="text-[9px] font-black text-green-700 bg-green-50 px-2 py-0.5 rounded-full ml-auto border border-green-100">
+            NDVI × Lluvia × Sequía
+          </span>
+        </div>
+        <p className="text-xs text-gray-400 mb-4">
+          Historial de crecimiento del pasto ajustado por clima · kg MS/ha/día
+        </p>
+        <ClimateAdjustmentChart />
+      </div>
+
       {/* Research section */}
+
       <div className="bg-white rounded-2xl border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
           <Info className="w-4 h-4 text-blue-500" />

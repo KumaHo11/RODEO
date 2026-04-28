@@ -1,10 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
+import { checkFeatureAccess } from '@/lib/plan-limits'
 
 const EARTH_SEARCH_URL = 'https://earth-search.aws.element84.com/v1/search'
 const TITILER_URL = 'https://titiler.xyz'
 
 export async function POST(req: NextRequest) {
   try {
+    // Auth Check
+    const authHeader = req.headers.get('authorization') || ''
+    const token = authHeader.replace('Bearer ', '').trim()
+    if (!token) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+    const decoded = await verifyFirebaseToken(token)
+    if (!decoded) return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
+
+    // Plan check
+    const hasAccess = await checkFeatureAccess(decoded.uid, 'ndvi_access')
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Tu plan no incluye análisis satelital NDVI' }, { status: 403 })
+    }
+
     const { geojson, paddock_id } = await req.json()
 
     if (!geojson) {

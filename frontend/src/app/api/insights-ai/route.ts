@@ -1,9 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
+import { checkFeatureAccess } from '@/lib/plan-limits'
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'Missing GEMINI_API_KEY' }, { status: 500 })
+
+  // 1. Auth check
+  const authHeader = req.headers.get('authorization') || ''
+  const token = authHeader.replace('Bearer ', '').trim()
+  if (!token) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+  const decoded = await verifyFirebaseToken(token)
+  if (!decoded) return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
+
+  // 2. Plan check
+  const hasAccess = await checkFeatureAccess(decoded.uid, 'ai_insights')
+  if (!hasAccess) {
+    return NextResponse.json({ error: 'Tu plan no incluye Insights IA' }, { status: 403 })
+  }
 
   const { context } = await req.json()
   if (!context) return NextResponse.json({ error: 'No context' }, { status: 400 })

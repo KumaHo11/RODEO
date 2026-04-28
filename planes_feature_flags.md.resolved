@@ -1,0 +1,152 @@
+# RODEO — Definición de Planes y Control de Acceso
+
+> **Estado actual:** Arquitectura implementada, cobertura de gates parcial.
+> Este documento es la fuente de verdad para la lógica de acceso por plan.
+
+---
+
+## 1. Planes disponibles
+
+| Slug DB | Tipo interno | Nombre comercial | Perfil de usuario |
+|---|---|---|---|
+| `brote` / `campo_libre` | `BROTE` | **Brote** | Productor chico, manejo básico |
+| `planificador` / `pro_ganadero` | `PLANIFICADOR` | **Planificador** | Productor mediano con rotación |
+| `holistico` / `pro_ganadero+` | `HOLISTICO` | **Holístico** | Técnico / productor avanzado |
+| `latifundio` / `enterprise` | `LATIFUNDIO` | **Latifundio** | Corporativo / multi-campo |
+
+---
+
+## 2. Feature flags por plan (defaults en código)
+
+> Cuando la DB no tiene flags configurados, se usan estos valores.
+> Los flags de DB **siempre tienen precedencia** sobre los defaults.
+
+| Feature key | BROTE | PLANIFICADOR | HOLÍSTICO | LATIFUNDIO |
+|---|:---:|:---:|:---:|:---:|
+| `map` — Mapa de campo + potreros | ✅ | ✅ | ✅ | ✅ |
+| `clima` — Módulo clima / alertas | ✅ | ✅ | ✅ | ✅ |
+| `agenda` — Eventos del campo | ✅ | ✅ | ✅ | ✅ |
+| `tareas` — Gestión de tareas | ❌ | ✅ | ✅ | ✅ |
+| `equipo` — Gestión de equipo | ❌ | ✅ | ✅ | ✅ |
+| `grazing_planner` — Planificador de pastoreo | ❌ | ✅ | ✅ | ✅ |
+| `voice_bitacora` — Audio / transcripción IA en Bitácora | ❌ | ✅ | ✅ | ✅ |
+| `ai_insights` — Insights IA (Gemini) | ❌ | ❌ | ✅ | ✅ |
+| `advanced_reports` — Reportes avanzados | ❌ | ❌ | ✅ | ✅ |
+| `carbon_module` — Módulo Carbono (MRV) | ❌ | ❌ | ✅ | ✅ |
+| `offline_mode` — Modo sin conexión | ❌ | ❌ | ✅ | ✅ |
+| `ndvi_access` — NDVI satelital (Sentinel) | ❌ | ❌ | ❌ | ✅ |
+| `api_access` — API corporativa | ❌ | ❌ | ❌ | ✅ |
+
+---
+
+## 3. Límites numéricos por plan
+
+| Límite | BROTE | PLANIFICADOR | HOLÍSTICO | LATIFUNDIO |
+|---|:---:|:---:|:---:|:---:|
+| `max_paddocks` — Potreros | 5 | 20 | 100 | ∞ |
+| `max_herds` — Rodeos | 1 | 3 | 10 | ∞ |
+| `max_team_members` — Miembros del equipo | 1 | 3 | 10 | ∞ |
+
+---
+
+## 4. Cobertura actual de gates en la UI
+
+### ✅ Módulos con gate implementado
+
+| Sección | Feature protegida | Mecanismo |
+|---|---|---|
+| `/dashboard/grazing` | `grazing_planner` | `<FeatureGate>` envuelve toda la página |
+| `/dashboard/insights` | `ai_insights` | `<FeatureGate>` envuelve toda la página |
+| `/dashboard/carbono` | `carbon_module` | `if (!hasFeature)` redirige a pantalla locked |
+| `/dashboard/tareas` | `tareas` | `<FeatureGate>` (parcial, verificar) |
+| `PaddockModal` tab Registros | `voice_bitacora` | Botón AUDIO oculto si plan no lo incluye |
+| `bitacora/page.tsx` capture bar | `voice_bitacora` | Botón de grabación reemplazado por upgrade prompt |
+
+### ❌ Funcionalidades SIN gate implementado (gaps críticos)
+
+| Sección | Funcionalidad | Feature key necesaria | Prioridad |
+|---|---|---|---|
+| `PaddockSidePanel` → tab Registros | Botón grabar audio + transcripción IA | `voice_bitacora` | 🔴 Alta |
+| `BitacoraModal` | Audio capture + transcripción IA | `voice_bitacora` | 🔴 Alta |
+
+### ⚠️ Pendientes de menor prioridad
+
+| Sección | Funcionalidad | Feature key | Prioridad |
+|---|---|---|---|
+| `mi-campo` tab IA | Widgets Gemini del potrero | `ai_insights` | 🟡 Media |
+| Dashboard NDVI | Widget crecimiento satelital | `ndvi_access` | 🟡 Media |
+| Nav sidebar | Items sin acceso visibles (Grazing, Insights) | varios | 🟢 Baja |
+
+---
+
+## 5. Flujo de resolución de flags
+
+```
+1. useAuth() → profile (de /api/auth/profile)
+2. profile.plan_slug → mapea a PlanType (BROTE/PLANIFICADOR/HOLISTICO/LATIFUNDIO)
+3. profile.plan_feature_flags[] → flags booleanos desde DB (tabla plan_feature_flags)
+4. hasFeature(key):
+   - Si la DB tiene el flag → usa DB (override posible por admin)
+   - Si no hay flags en DB → usa PLAN_DEFAULTS[currentPlan][key]
+```
+
+> **Importante:** Los flags de DB permiten al Super Admin habilitar/deshabilitar
+> funciones individualmente por plan sin redesplegar código.
+
+---
+
+## 6. Cómo agregar un gate nuevo
+
+### Para una página completa:
+```tsx
+// En el return del page.tsx:
+return (
+  <FeatureGate
+    feature="voice_bitacora"
+    title="Bitácora de voz"
+    description="Transcripción automática con IA disponible desde el plan Planificador."
+    requiredPlan="Planificador"
+  >
+    <TuContenido />
+  </FeatureGate>
+)
+```
+
+### Para un componente inline (botón/sección):
+```tsx
+const { hasFeature } = usePlan()
+
+// Ocultar completamente:
+{hasFeature('voice_bitacora') && <BotonGrabar />}
+
+// Mostrar deshabilitado con tooltip:
+<button
+  disabled={!hasFeature('voice_bitacora')}
+  title={!hasFeature('voice_bitacora') ? 'Disponible desde plan Planificador' : undefined}
+>
+  Grabar audio
+</button>
+```
+
+---
+
+## 7. Configuración desde el panel Admin
+
+**Ruta:** `/admin/plans`
+
+El admin puede:
+- Crear/editar planes con su slug, nombre y precio
+- Habilitar/deshabilitar feature flags individuales por plan
+- Los cambios se reflejan en todos los usuarios del plan en el próximo refresh de sesión
+
+**Tabla DB relevante:** `plan_feature_flags (plan_id, flag_key, flag_type, flag_value)`
+
+---
+
+## 8. Próximos pasos recomendados
+
+1. **[CRÍTICO]** Implementar gate `voice_bitacora` en `PaddockSidePanel`, `PaddockModal`, `BitacoraModal` y `bitacora/page.tsx`
+2. **[CRÍTICO]** Verificar que `profile.plan_feature_flags` se popula correctamente desde la API
+3. **[MEDIO]** Gate `ndvi_access` en widgets de NDVI satelital
+4. **[MEDIO]** Gate `ai_insights` en tabs de IA en Mi Campo
+5. **[BAJO]** Filtrar items del sidebar según features del plan activo

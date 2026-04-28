@@ -266,12 +266,17 @@ function MapController({
 
   // -- Herd badges on GRAZING paddocks ─────────────────────────────────────
   useEffect(() => {
-    // Recreate on every render to ensure badges stay above paddock polygons
-    if (badgeGroupRef.current) {
-      badgeGroupRef.current.remove()
-      badgeGroupRef.current = null
+    // Usamos clearLayers() (no .remove()) para no desconectar el layerGroup del mapa
+    if (!badgeGroupRef.current) {
+      badgeGroupRef.current = L.layerGroup().addTo(map)
+    } else {
+      badgeGroupRef.current.clearLayers()
+      // Volver a agregar al mapa para asegurar z-order por encima de polígonos
+      try {
+        badgeGroupRef.current.remove()
+        badgeGroupRef.current.addTo(map)
+      } catch {}
     }
-    badgeGroupRef.current = L.layerGroup().addTo(map)
     if (activeGrazingPlans.length === 0) return
 
     activeGrazingPlans.forEach(plan => {

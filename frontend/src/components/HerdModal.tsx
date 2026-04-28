@@ -23,6 +23,7 @@ import {
   CATEGORIA_REF,
   type CategoriaComercial,
 } from '@/lib/categorias'
+import { usePlan } from '@/hooks/usePlan'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -124,6 +125,8 @@ function useSpeech(onResult: (t: string) => void) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Props) {
+  const { hasFeature } = usePlan()
+  const canVoice     = hasFeature('voice_bitacora')
   const isEditing = !!herd?.id
 
   const [tab, setTab] = useState<'operativo' | 'actividades' | 'registros'>('operativo')
@@ -736,19 +739,21 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
                     </div>
                     <div className="p-4">
                       {/* Three capture buttons */}
-                      <div className="grid grid-cols-3 gap-2 mb-3">
-                        {/* Mic */}
-                        <button type="button"
-                          onClick={() => { if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') } }}
-                          className={`relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
-                            noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'
-                          }`}>
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
-                            {micOn ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
-                          </div>
-                          <span className="text-[9px] font-black text-gray-600 tracking-wide">{micOn ? 'GRABANDO' : 'AUDIO'}</span>
-                          {micOn && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />}
-                        </button>
+                      <div className={`grid gap-2 mb-3 ${canVoice ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                        {/* Mic — solo si voice_bitacora habilitado */}
+                        {canVoice ? (
+                          <button type="button"
+                            onClick={() => { if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') } }}
+                            className={`relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
+                              noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'
+                            }`}>
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
+                              {micOn ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
+                            </div>
+                            <span className="text-[9px] font-black text-gray-600 tracking-wide">{micOn ? 'GRABANDO' : 'AUDIO'}</span>
+                            {micOn && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />}
+                          </button>
+                        ) : null}
                         {/* Camera */}
                         <button type="button"
                           onClick={() => { if (noteExpanded && noteMode === 'text') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('text') } }}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
+import { checkFeatureAccess } from '@/lib/plan-limits'
 
 const PARSER_SERVICE_URL = process.env.PARSER_SERVICE_URL || 'http://localhost:8000'
 
@@ -11,6 +12,12 @@ export async function POST(req: NextRequest) {
 
     const decoded = await verifyFirebaseToken(token)
     if (!decoded) return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
+
+    // Plan check
+    const hasAccess = await checkFeatureAccess(decoded.uid, 'ai_insights')
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Tu plan no incluye modelos predictivos' }, { status: 403 })
+    }
 
     const body = await req.json()
     const { type, ...params } = body
