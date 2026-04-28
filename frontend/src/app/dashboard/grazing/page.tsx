@@ -19,6 +19,7 @@ import ExcelImporter from './ExcelImporter'
 import RawDataModal from './RawDataModal'
 import { HOLISTIC_TOOLTIPS, HoverTooltip } from '@/components/ui/atoms/UsageRing'
 import { calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
+import { detectForageGaps, type ForageGap } from '@/lib/forage-gaps'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ui/ConfirmModal'
 
@@ -195,6 +196,14 @@ function InteractiveGantt({
   const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
   const [editingRainKey, setEditingRainKey] = useState<string | null>(null)
   const [editingThreshold, setEditingThreshold] = useState(false)
+  const [selectedGap, setSelectedGap] = useState<ForageGap | null>(null)
+
+  // Compute forage gaps for the current window
+  const forageGaps = useMemo(() => {
+    const totalEv = herds.reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
+    if (totalEv === 0) return []
+    return detectForageGaps(plans, totalEv, windowDays, windowStart)
+  }, [plans, herds, windowDays, windowStart])
 
   const herdColorMap = useMemo(() => {
     const map: Record<string, string> = {}
@@ -339,7 +348,34 @@ function InteractiveGantt({
     >
       <div className="w-full">
         {/* Header row */}
-        <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10" style={{ height: HEADER_H }}>
+        <div className="flex flex-col border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
+          {/* Gap health bar — 4px strip above time markers */}
+          {forageGaps.length > 0 && (
+            <div className="flex" style={{ height: 4 }}>
+              <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="shrink-0 bg-gray-100" />
+              <div className="flex-1 relative bg-gray-100">
+                {forageGaps.map((gap, i) => {
+                  const startPct = (Math.max(0, daysBetween(windowStart, gap.start_date)) / windowDays) * 100
+                  const endDay   = Math.min(windowDays, daysBetween(windowStart, gap.end_date) + 1)
+                  const widthPct = Math.max(0, (endDay / windowDays) * 100 - startPct)
+                  return (
+                    <div
+                      key={i}
+                      className="absolute top-0 bottom-0 cursor-pointer"
+                      style={{
+                        left: `${startPct}%`,
+                        width: `${widthPct}%`,
+                        backgroundColor: gap.severity === 'critical' ? '#ef4444' : gap.severity === 'medium' ? '#f59e0b' : '#fbbf24',
+                      }}
+                      title={`Déficit ${gap.deficit_days}d — ${gap.severity}`}
+                      onClick={e => { e.stopPropagation(); setSelectedGap(gap) }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          <div className="flex" style={{ height: HEADER_H }}>
           <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="px-4 flex items-center text-[10px] font-black text-gray-400 tracking-widest uppercase border-r border-gray-200 shrink-0">
             Potrero
           </div>
@@ -418,7 +454,8 @@ function InteractiveGantt({
                 )
               })}
           </div>
-        </div>
+          </div>{/* close flex row inside header */}
+        </div>{/* close header col */}
 
         {/* ── Rainfall + Snow Row ── */}
         <div className="flex border-b border-blue-100 bg-blue-50" style={{ height: RAIN_ROW_H }}>
@@ -507,6 +544,21 @@ function InteractiveGantt({
           </div>
         </div>
 
+
+        {/* ── Gap SVG defs (striated pattern) ── */}
+        <svg width="0" height="0" style={{ position: 'absolute' }}>
+          <defs>
+            <pattern id="gap-critical" patternUnits="userSpaceOnUse" width="8" height="8">
+              <path d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4" stroke="#ef4444" strokeWidth="1.2" strokeOpacity="0.28" />
+            </pattern>
+            <pattern id="gap-medium" patternUnits="userSpaceOnUse" width="8" height="8">
+              <path d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4" stroke="#f59e0b" strokeWidth="1.2" strokeOpacity="0.25" />
+            </pattern>
+            <pattern id="gap-low" patternUnits="userSpaceOnUse" width="8" height="8">
+              <path d="M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4" stroke="#fbbf24" strokeWidth="1" strokeOpacity="0.18" />
+            </pattern>
+          </defs>
+        </svg>
 
         {/* Paddock rows */}
         {paddocks.map((paddock, rowIdx) => {
@@ -638,7 +690,47 @@ function InteractiveGantt({
                   return null
                 })()}
 
+                {/* ── Forage Gap overlays (striated) ── */}
+                {forageGaps.map((gap, gi) => {
+                  const startDay = daysBetween(windowStart, gap.start_date)
+                  const endDay   = daysBetween(windowStart, gap.end_date) + 1
+                  const clampedStart = Math.max(0, startDay)
+                  const clampedEnd   = Math.min(windowDays, endDay)
+                  if (clampedStart >= clampedEnd) return null
+                  const leftPct  = (clampedStart / windowDays) * 100
+                  const widthPct = ((clampedEnd - clampedStart) / windowDays) * 100
+                  const patId = gap.severity === 'critical' ? 'gap-critical' : gap.severity === 'medium' ? 'gap-medium' : 'gap-low'
+                  const borderColor = gap.severity === 'critical' ? '#ef444440' : gap.severity === 'medium' ? '#f59e0b40' : '#fbbf2430'
+                  return (
+                    <div
+                      key={`gap-row-${gi}`}
+                      className="absolute top-0 bottom-0 z-[5] cursor-pointer group/gap"
+                      style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                      onClick={e => { e.stopPropagation(); setSelectedGap(gap) }}
+                      title={`Déficit de planificación: ${gap.deficit_days} días sin potrero asignado`}
+                    >
+                      <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                        <rect x="0" y="0" width="100%" height="100%" fill={`url(#${patId})`} />
+                        <rect x="0" y="0" width="100%" height="100%" fill={gap.severity === 'critical' ? 'rgba(239,68,68,0.04)' : 'rgba(245,158,11,0.03)'} />
+                      </svg>
+                      <div className="absolute inset-y-0 left-0 w-[2px]" style={{ backgroundColor: borderColor }} />
+                      <div className="absolute inset-y-0 right-0 w-[2px]" style={{ backgroundColor: borderColor }} />
+                      {/* Label — only on first row */}
+                      {rowIdx === 0 && (
+                        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover/gap:opacity-100 transition-opacity">
+                          <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm ${
+                            gap.severity === 'critical' ? 'bg-red-500 text-white' : 'bg-amber-400 text-white'
+                          }`}>
+                            {gap.deficit_days}d sin forraje
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
                 {/* Agenda Event Lines (visual only in rows) */}
+
                 {farmEvents
                   .filter(evt => {
                     const d = daysBetween(windowStart, evt.event_date)
@@ -1055,6 +1147,95 @@ function InteractiveGantt({
       </div>
     </div>
     {eventPopup}
+
+    {/* ── Gap Detail Panel ── */}
+    {selectedGap && (
+      <>
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 z-[1000]"
+          onClick={() => setSelectedGap(null)}
+        />
+        {/* Panel */}
+        <div className="fixed right-0 top-0 h-full w-80 z-[1001] bg-white border-l border-gray-100 shadow-2xl flex flex-col animate-in slide-in-from-right-4 duration-300">
+          {/* Header */}
+          <div className={`px-6 pt-8 pb-6 border-b ${selectedGap.severity === 'critical' ? 'border-red-100 bg-red-50/60' : selectedGap.severity === 'medium' ? 'border-amber-100 bg-amber-50/60' : 'border-yellow-100 bg-yellow-50/40'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full animate-pulse ${selectedGap.severity === 'critical' ? 'bg-red-500' : 'bg-amber-400'}`} />
+                <p className={`text-[9px] font-black uppercase tracking-[0.2em] ${selectedGap.severity === 'critical' ? 'text-red-600' : 'text-amber-600'}`}>
+                  Déficit de Planificación
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedGap(null)}
+                className="w-6 h-6 rounded-lg bg-white/80 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white transition-all text-xs border border-gray-100"
+              >✕</button>
+            </div>
+            <h3 className="text-2xl font-black text-gray-950 leading-tight">
+              {selectedGap.deficit_days} día{selectedGap.deficit_days !== 1 ? 's' : ''} sin forraje
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              {new Date(selectedGap.start_date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'long' })}
+              {' → '}
+              {new Date(selectedGap.end_date + 'T00:00:00').toLocaleDateString('es', { day: 'numeric', month: 'long' })}
+            </p>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+            {/* Severity badge */}
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+              selectedGap.severity === 'critical' ? 'bg-red-50 text-red-700 border-red-200' :
+              selectedGap.severity === 'medium'   ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                    'bg-yellow-50 text-yellow-700 border-yellow-200'
+            }`}>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: selectedGap.severity === 'critical' ? '#ef4444' : selectedGap.severity === 'medium' ? '#f59e0b' : '#fbbf24' }} />
+              Severidad {selectedGap.severity === 'critical' ? 'Crítica' : selectedGap.severity === 'medium' ? 'Moderada' : 'Baja'}
+            </div>
+
+            {/* Metrics grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
+                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">EV afectados</p>
+                <p className="text-xl font-black text-gray-950">{selectedGap.affected_ev.toLocaleString('es')}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
+                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Días de déficit</p>
+                <p className="text-xl font-black text-gray-950">{selectedGap.deficit_days}</p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
+              <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Déficit estimado de forraje</p>
+              <p className="text-xl font-black text-gray-950">{selectedGap.deficit_kg_ms.toLocaleString('es')}</p>
+              <p className="text-[10px] text-gray-400 font-medium">kg MS ({(selectedGap.deficit_kg_ms / 1000).toFixed(1)} t)</p>
+            </div>
+
+            {/* Alert box */}
+            <div className={`rounded-xl p-4 border ${selectedGap.severity === 'critical' ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
+              <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${selectedGap.severity === 'critical' ? 'text-red-700' : 'text-amber-700'}`}>
+                Atención requerida
+              </p>
+              <p className="text-xs text-gray-700 leading-relaxed">
+                El rodeo no tiene potrero asignado para este período.
+                Revisá tu estrategia de carga o suplementación para estas fechas.
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 pb-6 pt-3 border-t border-gray-100">
+            <button
+              onClick={() => setSelectedGap(null)}
+              className="w-full py-3 text-sm font-black text-gray-900 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </>
+    )}
     </>
   )
 }
