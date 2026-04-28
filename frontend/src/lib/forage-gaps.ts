@@ -1,14 +1,26 @@
 /**
  * lib/forage-gaps.ts
- * Core algorithm: detect forage planning gaps in a given time window.
- * A "gap" = days where NO grazing plan covers ANY paddock simultaneously.
+ * Core algorithm: detect real forage planning gaps in a given time window.
+ *
+ * PHILOSOPHY:
+ *   A "gap" is only real when the herd has NO paddock assigned for an
+ *   extended period — longer than a normal rotational transition (1-3 days).
+ *
+ *   The `planned_recovery_days` field is the PADDOCK REST PERIOD, NOT the
+ *   grazing duration. It must NOT be used to compute coverage here.
+ *
+ *   Normal transitions (≤ MIN_GAP_DAYS) between consecutive plan blocks
+ *   are NOT gaps — they are expected scheduling margins.
  */
+
+/** Minimum consecutive unplanned days before flagging as a real gap. */
+const MIN_GAP_DAYS = 4
 
 export interface ForageGap {
   start_date: string       // ISO
   end_date: string         // ISO — inclusive
   deficit_days: number
-  severity: 'low' | 'medium' | 'critical'  // <3d / 3–7d / >7d
+  severity: 'medium' | 'critical'  // 4–7d / >7d
   affected_ev: number
   deficit_kg_ms: number    // estimated MS deficit (kg)
 }
@@ -28,52 +40,60 @@ function daysBetween(a: string, b: string): number {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export function detectForageGaps(
-  plans: Array<{ entry_date: string; exit_date?: string | null; planned_recovery_days?: number }>,
+  plans: Array<{ entry_date: string; exit_date?: string | null }>,
   totalEv: number,
   horizonDays = 90,
   windowStart?: string,
 ): ForageGap[] {
   const dailyDemandKg = totalEv * 11  // 11 kg MS/EV/día standard Arg
-
   const today = windowStart ?? new Date().toISOString().split('T')[0]
   const gaps: ForageGap[] = []
+
+  // Only consider plans that have an explicit exit_date (committed plans).
+  // Plans without exit_date are drafts or future suggestions — exclude them
+  // from gap analysis to avoid false positives from incomplete planning.
+  const activePlans = plans.filter(p =>
+    p.entry_date && p.exit_date && p.exit_date > p.entry_date
+  )
+
+  if (activePlans.length === 0) return gaps
 
   let d = 0
   while (d < horizonDays) {
     const dateStr = addDays(today, d)
 
-    // Is any plan active on this day?
-    const covered = plans.some(p => {
-      const entry = p.entry_date ?? ''
-      const exit  = p.exit_date ?? addDays(entry, p.planned_recovery_days ?? 14)
-      return entry <= dateStr && exit > dateStr
-    })
+    // Is any committed plan covering this exact day?
+    const covered = activePlans.some(p =>
+      p.entry_date! <= dateStr && p.exit_date! > dateStr
+    )
 
     if (!covered) {
-      // Found gap start — scan forward
+      // Scan forward to measure the full uncovered stretch
       const gapStartDay = d
       while (d < horizonDays) {
         const next = addDays(today, d + 1)
-        const nextCovered = plans.some(p => {
-          const entry = p.entry_date ?? ''
-          const exit  = p.exit_date ?? addDays(entry, p.planned_recovery_days ?? 14)
-          return entry <= next && exit > next
-        })
+        const nextCovered = activePlans.some(p =>
+          p.entry_date! <= next && p.exit_date! > next
+        )
         if (nextCovered) break
         d++
       }
-      const gapEndDay   = d
-      const start_date  = addDays(today, gapStartDay)
-      const end_date    = addDays(today, gapEndDay)
+
+      const gapEndDay    = d
+      const start_date   = addDays(today, gapStartDay)
+      const end_date     = addDays(today, gapEndDay)
       const deficit_days = daysBetween(start_date, end_date) + 1
 
-      // Only report gaps that start in the future or today
-      if (start_date >= today) {
+      // Only report:
+      // 1. Gaps in the future (not already passed)
+      // 2. Gaps longer than the normal rotational transition margin
+      if (start_date >= today && deficit_days >= MIN_GAP_DAYS) {
         gaps.push({
           start_date,
           end_date,
           deficit_days,
-          severity: deficit_days < 3 ? 'low' : deficit_days < 7 ? 'medium' : 'critical',
+          // 4-7d = medium concern, >7d = critical (herd genuinely without paddock)
+          severity: deficit_days < 8 ? 'medium' : 'critical',
           affected_ev: totalEv,
           deficit_kg_ms: dailyDemandKg * deficit_days,
         })
@@ -110,3 +130,5 @@ export function gapToGanttCoords(
     width: (clampedEnd - clampedStart) * ppd,
   }
 }
+
+

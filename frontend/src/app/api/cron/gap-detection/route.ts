@@ -53,9 +53,8 @@ export async function GET(req: NextRequest) {
         // 3. Detect gaps in next 30 days
         const gaps = detectForageGaps(plans, totalEv, 30)
 
-        // 4. Create notifications for critical/medium gaps
+        // 4. Create notifications for all gaps (all are now medium or critical)
         for (const gap of gaps) {
-          if (gap.severity === 'low') continue
 
           const title = gap.severity === 'critical'
             ? `⚠ Déficit crítico de forraje — ${gap.deficit_days} días`
