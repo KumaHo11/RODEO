@@ -5,11 +5,13 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio } from '@/lib/audioOfflineStore'
 import {
-  Mic, Camera, Square, Loader2, Image as ImageIcon,
-  CheckCircle2, Mic2, Search, WifiOff, FileAudio, ChevronDown, ChevronUp, Lock,
+  Mic, Camera, Loader2, Image as ImageIcon,
+  CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp, Lock, MessageCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
@@ -120,6 +122,7 @@ function NoteRow({ note }: { note: any }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BitacoraPage() {
   const { user } = useAuth()
+  const pathname = usePathname()
   const { hasFeature } = usePlan()
   const canVoice = hasFeature('voice_bitacora')
   const [notes, setNotes] = useState<any[]>([])
@@ -410,6 +413,33 @@ export default function BitacoraPage() {
             </div>
           )}
         </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 mt-4 w-fit">
+          <Link
+            href="/dashboard/bitacora"
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
+              pathname === '/dashboard/bitacora'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Mic2 className="w-3.5 h-3.5" />
+            Notas
+          </Link>
+          <Link
+            href="/dashboard/bitacora/bandeja"
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
+              pathname === '/dashboard/bitacora/bandeja'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            Bandeja WA
+          </Link>
+        </div>
+
         <div className="relative mt-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}

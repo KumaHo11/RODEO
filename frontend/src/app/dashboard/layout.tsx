@@ -278,17 +278,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             !sidebarOpen && 'justify-center'
           )}
         >
-          {/* Icon: only in collapsed mode */}
-          {!sidebarOpen && (
-            <div className="relative">
-              <item.icon className={clsx(isActive ? 'text-green-600' : 'text-gray-400 group-hover:text-green-600', 'h-5 w-5 shrink-0')} aria-hidden="true" />
-              {showBadge && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white text-[7px] font-black rounded-full flex items-center justify-center">
-                  {pendingTasks > 9 ? '9+' : pendingTasks}
-                </span>
-              )}
-            </div>
-          )}
+          {/* Icon: always visible */}
+          <div className="relative shrink-0">
+            <item.icon className={clsx(isActive ? 'text-green-600' : 'text-gray-400 group-hover:text-green-600', 'h-5 w-5')} aria-hidden="true" />
+            {showBadge && !sidebarOpen && (
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white text-[7px] font-black rounded-full flex items-center justify-center">
+                {pendingTasks > 9 ? '9+' : pendingTasks}
+              </span>
+            )}
+          </div>
           {sidebarOpen && (
             <span className="flex-1 truncate flex items-center justify-between">
               {item.name}
