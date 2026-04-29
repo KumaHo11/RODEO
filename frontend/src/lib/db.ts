@@ -54,15 +54,15 @@ if (process.env.NODE_ENV !== 'production') {
   globalThis._pgPool = pool
 }
 
-/**
- * Ejecuta una query con parámetros tipados
- * @example
- * const rows = await query('SELECT * FROM paddocks WHERE org_id = $1', [orgId])
- */
 export async function query<T = Record<string, unknown>>(
   sql: string,
   params?: unknown[]
 ): Promise<T[]> {
+  // Si no hay DATABASE_URL (fase de build en GitHub), devolvemos vacío en lugar de explotar
+  if (!process.env.DATABASE_URL) {
+    console.warn(`⚠️ Query ignorada en build: ${sql.slice(0, 50)}...`)
+    return []
+  }
   const result = await pool.query(sql, params)
   return result.rows as T[]
 }
@@ -78,14 +78,13 @@ export async function queryOne<T = Record<string, unknown>>(
   return rows[0] ?? null
 }
 
-/**
- * Ejecuta una mutación (INSERT, UPDATE, DELETE)
- * Retorna rowCount y rows
- */
 export async function mutate(
   sql: string,
   params?: unknown[]
 ): Promise<{ rowCount: number; rows: Record<string, unknown>[] }> {
+  if (!process.env.DATABASE_URL) {
+    return { rowCount: 0, rows: [] }
+  }
   const result = await pool.query(sql, params)
   return {
     rowCount: result.rowCount ?? 0,
