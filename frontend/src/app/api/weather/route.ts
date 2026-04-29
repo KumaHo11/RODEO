@@ -25,8 +25,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
-import { pool } from '@/lib/db'
+import { queryOne, query, mutate, getDbPool } from '@/lib/db'
 import type { CreateWeatherEventPayload } from '@/lib/types/weather'
 
 // ── Auth helper (same pattern as other routes) ────────────────────────────────
@@ -173,7 +172,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Transaction: insert event + M2M links
-    const client = await pool.connect()
+    const client = await getDbPool().connect()
     try {
       await client.query('BEGIN')
 
