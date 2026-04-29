@@ -528,10 +528,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
               {/* Notification panel */}
               {notifOpen && (
-                <div className="absolute right-0 top-11 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                <div className="absolute right-0 top-11 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[9999] overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                     <div className="flex items-center gap-2">
-                      <Bell className="w-4 h-4 text-gray-600" />
                       <h3 className="text-sm font-black text-gray-900">Notificaciones</h3>
                       {unreadCount > 0 && (
                         <span className="w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
@@ -576,9 +575,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                               !notif.is_read && 'bg-green-50/40'
                             )}
                           >
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${colorClass}`}>
-                              <Icon className="w-4 h-4" />
-                            </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-bold text-gray-900 leading-snug">{notif.title}</p>
                               {notif.body && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{notif.body}</p>}
