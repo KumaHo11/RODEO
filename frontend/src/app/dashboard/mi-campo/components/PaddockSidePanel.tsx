@@ -421,7 +421,7 @@ export default function PaddockSidePanel({
 
                     {/* ── Hectáreas — sin línea divisora ── */}
                     {isActive && (
-                      <div className="px-4 pb-2 pt-1">
+                      <div className="px-4 pb-2 pt-0">
                         <div className="flex items-baseline gap-1.5">
                           <p className="text-sm font-black text-gray-700 tabular-nums">
                             {Number(paddock.area_ha || 0).toFixed(1)}
@@ -433,7 +433,7 @@ export default function PaddockSidePanel({
 
                     {/* ── MS + calidad ── */}
                     {isActive && (
-                      <div className="px-4 pb-3 border-t border-gray-100 shadow-[0_-1px_0_0_rgba(0,0,0,0.05)]">
+                      <div className="px-4 pb-3">
                         <div className="flex items-stretch gap-4 pt-3">
                           {ms > 0 ? (
                             <>
@@ -474,7 +474,7 @@ export default function PaddockSidePanel({
 
                     {/* ── Bottom: indicadores técnicos + Detalles ── */}
                     {isActive && (
-                      <div className="px-4 pb-4 pt-3 border-t border-gray-100 shadow-[0_-1px_0_0_rgba(0,0,0,0.05)] flex items-center justify-between">
+                      <div className="px-4 pb-4 pt-2 flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                           {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
                             const active = Boolean(td[key]) || (key === 'hasPests' && (td.weeds || td.weed_types || []).length > 0)
