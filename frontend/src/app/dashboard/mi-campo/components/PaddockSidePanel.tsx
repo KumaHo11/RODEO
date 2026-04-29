@@ -362,42 +362,32 @@ export default function PaddockSidePanel({
                 const td         = (paddock.technical_data || {}) as Record<string, any>
                 // MS: SOLO del dato ingresado por el usuario (no NDVI)
                 const ms         = Number(paddock.dry_matter_kg_ha) || 0
-                const totalMsCard = ms > 0 && paddock.area_ha ? Math.round(ms * Number(paddock.area_ha)) : null
-                const msColor    = ms >= 1500 ? 'text-green-700' : ms >= 800 ? 'text-amber-700' : 'text-red-600'
-                const qualityScore = paddock.technical_data?.quality_score as number | undefined
-                const qColor = qualityScore
-                  ? qualityScore >= 7 ? 'bg-green-100 text-green-800 border-green-200'
-                  : qualityScore >= 4 ? 'bg-amber-100 text-amber-800 border-amber-200'
-                  : 'bg-red-100 text-red-800 border-red-200'
-                  : ''
-
-                return (
-                  <div
+                const t                  <div
                     key={paddock.id}
-                    className={`w-full rounded-2xl border transition-all overflow-hidden cursor-pointer group ${
+                    className={`w-full rounded-2xl border transition-all overflow-hidden cursor-pointer group ${ 
                       !isActive
-                        ? 'bg-gray-50 border-gray-200 opacity-60'
+                        ? 'bg-gray-50 border-gray-200 opacity-60 shadow-sm'
                         : isSelected
-                          ? 'bg-white border-green-300 shadow-md'
-                          : 'bg-white border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200'
+                          ? 'bg-white border-green-300 shadow-lg'
+                          : 'bg-white border-gray-200 shadow-md hover:shadow-lg hover:border-gray-300'
                     }`}
                     onClick={() => isActive && onSelectPaddock(paddock.id)}
                   >
-                    {/* ── Header: nombre + toggle ── */}
+                    {/* ── Header: nombre + estado + toggle ── */}
                     <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className={`text-base font-black leading-tight truncate ${
+                        {/* Nombre — jerarquía principal, tamaño grande */}
+                        <h3 className={`text-2xl font-black leading-tight truncate ${
                           isActive ? 'text-gray-950' : 'text-gray-400'
                         }`}>
                           {paddock.name}
                         </h3>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-center gap-1.5 mt-1">
                           <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                             paddock.current_status === 'GRAZING' ? 'bg-orange-400' : isActive ? 'bg-green-400' : 'bg-gray-300'
                           }`} />
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-                            {Number(paddock.area_ha || 0).toFixed(1)} ha
-                            {paddock.current_status === 'GRAZING' && <span className="ml-1 text-orange-500">· En pastoreo</span>}
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            {paddock.current_status === 'GRAZING' ? 'En pastoreo' : 'Descansando'}
                           </p>
                         </div>
                       </div>
@@ -416,75 +406,94 @@ export default function PaddockSidePanel({
                             isActive ? 'translate-x-4' : 'translate-x-0'
                           }`} />
                         </button>
-                        {isActive && qualityScore != null && (
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${qColor}`}>
-                            {qualityScore}/10
-                          </span>
-                        )}
                       </div>
                     </div>
 
-                    {/* ── Body: MS destacado + métricas secundarias ── */}
+                    {/* ── Hectáreas — tamaño subtítulo (antes era el heading) ── */}
                     {isActive && (
-                      <div className="px-4 pb-3">
-                        {/* MS — dato principal */}
-                        {ms > 0 ? (
-                          <div className="flex items-baseline gap-2 mb-2">
-                            <p className={`text-2xl font-black tabular-nums leading-none ${msColor}`}>
-                              {ms.toLocaleString('es')}
-                            </p>
-                            <p className="text-xs font-bold text-gray-400">kg MS/ha</p>
-                            {totalMsCard != null && (
-                              <p className="text-xs text-gray-300 font-medium ml-auto">
-                                {totalMsCard.toLocaleString('es')} kg tot.
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-300 italic mb-2">Sin datos de MS</p>
-                        )}
-
-                        {/* Fila inferior: indicadores técnicos + NDVI + botón */}
-                        <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-                          <div className="flex items-center gap-1.5">
-                            {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
-                              const active = Boolean(td[key]) || (key === 'hasPests' && (td.weeds || td.weed_types || []).length > 0)
-                              return (
-                                <span key={key} className={`w-5 h-5 rounded-md flex items-center justify-center ${active ? bgOn : bgOff}`}>
-                                  <Icon className={`w-3 h-3 ${active ? color : 'text-gray-300'}`} />
-                                </span>
-                              )
-                            })}
-                            {canNdvi && ndviVal != null && (
-                              <span className="text-[9px] font-bold text-gray-400 ml-1">
-                                NDVI {Number(ndviVal).toFixed(2)}
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all shadow-sm opacity-0 group-hover:opacity-100"
-                          >
-                            Detalles
-                          </button>
+                      <div className="px-4 pb-3 pt-1 border-t border-gray-100 shadow-[0_-1px_0_0_rgba(0,0,0,0.05)]">
+                        <div className="flex items-baseline gap-1.5 pt-2">
+                          <p className="text-sm font-black text-gray-700 tabular-nums">
+                            {Number(paddock.area_ha || 0).toFixed(1)}
+                          </p>
+                          <p className="text-xs font-bold text-gray-400">ha</p>
                         </div>
                       </div>
                     )}
 
-                    {/* Disabled badge */}
-                    {!isActive && (
-                      <div className="px-4 pb-3">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-red-500 bg-red-50 border border-red-200 rounded-md px-2 py-0.5 tracking-widest uppercase">
-                          Inhabilitado
-                        </span>
+                    {/* ── MS + calidad ── */}
+                    {isActive && (
+                      <div className="px-4 pb-3 border-t border-gray-100 shadow-[0_-1px_0_0_rgba(0,0,0,0.05)]">
+                        <div className="flex items-stretch gap-4 pt-3">
+                          {ms > 0 ? (
+                            <>
+                              <div>
+                                <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-1">MS/ha</p>
+                                <p className={`text-2xl font-black tabular-nums leading-none ${msColor}`}>
+                                  {ms.toLocaleString('es')}
+                                </p>
+                              </div>
+                              {totalMsCard != null && (
+                                <>
+                                  <div className="w-px bg-gray-100 self-stretch" />
+                                  <div>
+                                    <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-1">Total MS</p>
+                                    <p className="text-sm font-black text-gray-600 tabular-nums">
+                                      {totalMsCard.toLocaleString('es')} <span className="font-medium text-gray-400">kg</span>
+                                    </p>
+                                  </div>
+                                </>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-xs text-gray-300 italic pt-1">Sin datos de MS</p>
+                          )}
+                          {qualityScore != null && (
+                            <div className="ml-auto self-center">
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${qColor}`}>
+                                {qualityScore}/10
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
+
+                    {/* ── Bottom: indicadores técnicos + Detalles ── */}
+                    {isActive && (
+                      <div className="px-4 pb-4 pt-3 border-t border-gray-100 shadow-[0_-1px_0_0_rgba(0,0,0,0.05)] flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
+                            const active = Boolean(td[key]) || (key === 'hasPests' && (td.weeds || td.weed_types || []).length > 0)
+                            return (
+                              <span key={key} className={`w-6 h-6 rounded-lg flex items-center justify-center ${active ? bgOn : 'bg-gray-50'}`}>
+                                <Icon className={`w-3.5 h-3.5 ${active ? color : 'text-gray-200'}`} />
+                              </span>
+                            )
+                          })}
+                          {canNdvi && ndviVal != null && (
+                            <span className="text-[9px] font-bold text-gray-400 ml-1">
+                              NDVI {Number(ndviVal).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={e => { e.stopPropagation(); openModal(paddock) }}
+                          className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-sm"
+                        >
+                          Detalles
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Disabled badge */}
                   </div>
                 )
               })
             )}
           </div>
         </div>
+
 
         {/* ── Footer — sin botón "Configurar campo" ────────────────────────── */}
         {paddocks.length > 0 && (

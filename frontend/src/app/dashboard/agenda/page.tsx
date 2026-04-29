@@ -67,6 +67,7 @@ export default function AgendaPage() {
     const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }
   })
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [dayModalOpen, setDayModalOpen] = useState(false)
 
   const loadData = async () => {
     if (!user) return
@@ -295,19 +296,19 @@ export default function AgendaPage() {
 
       {/* ── CALENDAR VIEW ── */}
       {agendaView === 'calendario' && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Month navigation */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden">
+          {/* Month navigation — gradient header */}
+          <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-gray-950 to-gray-800">
             <button
               onClick={() => setCalMonth(prev => {
                 const d = new Date(prev.year, prev.month - 1)
                 return { year: d.getFullYear(), month: d.getMonth() }
               })}
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-all"
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-all"
             >
-              <ChevronLeft className="w-4 h-4 text-gray-600" />
+              <ChevronLeft className="w-4 h-4 text-white" />
             </button>
-            <h3 className="text-sm font-black text-gray-900 capitalize">
+            <h3 className="text-base font-black text-white capitalize tracking-tight">
               {new Date(calMonth.year, calMonth.month).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}
             </h3>
             <button
@@ -315,16 +316,16 @@ export default function AgendaPage() {
                 const d = new Date(prev.year, prev.month + 1)
                 return { year: d.getFullYear(), month: d.getMonth() }
               })}
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-all"
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-all"
             >
-              <ChevronRight className="w-4 h-4 text-gray-600" />
+              <ChevronRight className="w-4 h-4 text-white" />
             </button>
           </div>
 
           {/* Day headers */}
-          <div className="grid grid-cols-7 border-b border-gray-100">
+          <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-100">
             {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
-              <div key={d} className="text-center py-2 text-[10px] font-black text-gray-400 uppercase tracking-wider">{d}</div>
+              <div key={d} className="text-center py-2.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">{d}</div>
             ))}
           </div>
 
@@ -333,50 +334,55 @@ export default function AgendaPage() {
             const firstDay = new Date(calMonth.year, calMonth.month, 1).getDay()
             const daysInMonth = new Date(calMonth.year, calMonth.month + 1, 0).getDate()
             const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
-            // Pad to complete last row
             while (cells.length % 7 !== 0) cells.push(null)
             const todayStr = new Date().toISOString().split('T')[0]
 
             return (
-              <div className="grid grid-cols-7 gap-0">
+              <div className="grid grid-cols-7">
                 {cells.map((day, idx) => {
-                  if (!day) return <div key={idx} className="border-b border-r border-gray-50 min-h-[72px]" />
+                  if (!day) return <div key={idx} className="border-b border-r border-gray-50 min-h-[80px] bg-gray-50/30" />
                   const dateStr = `${calMonth.year}-${String(calMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
                   const dayEvents = events.filter(e => {
                     const ed = safeDate(e.event_date)
                     return ed && ed.toISOString().split('T')[0] === dateStr
                   })
                   const isToday = dateStr === todayStr
-                  const isSelected = selectedDay === dateStr
+                  const hasEvents = dayEvents.length > 0
 
                   return (
                     <div
                       key={idx}
-                      onClick={() => setSelectedDay(isSelected ? null : dateStr)}
-                      className={`border-b border-r border-gray-50 min-h-[72px] p-1.5 cursor-pointer transition-all ${
-                        isToday ? 'bg-green-50/60' : isSelected ? 'bg-amber-50/40' : 'hover:bg-gray-50'
-                      }`}
+                      onClick={() => { if (hasEvents || isToday) { setSelectedDay(dateStr); setDayModalOpen(true) } }}
+                      className={`border-b border-r border-gray-100 min-h-[80px] p-2 transition-all ${
+                        hasEvents ? 'cursor-pointer hover:bg-green-50/40' : 'cursor-default'
+                      } ${isToday ? 'bg-green-50/60' : ''}`}
                     >
-                      <div className={`w-6 h-6 flex items-center justify-center rounded-full text-[11px] font-black mb-1 ${
-                        isToday ? 'bg-green-600 text-white' : isSelected ? 'bg-amber-400 text-white' : 'text-gray-700'
+                      <div className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-black mb-1.5 ${
+                        isToday
+                          ? 'bg-green-600 text-white shadow-md shadow-green-200'
+                          : hasEvents
+                            ? 'text-gray-900 font-black'
+                            : 'text-gray-400 font-medium'
                       }`}>
                         {day}
                       </div>
-                      {/* Event dots */}
-                      <div className="flex flex-wrap gap-0.5">
-                        {dayEvents.slice(0, 4).map(e => {
+                      {/* Event pills */}
+                      <div className="flex flex-col gap-0.5">
+                        {dayEvents.slice(0, 2).map(e => {
                           const et = getEventType(e.event_type)
                           return (
                             <div
                               key={e.id}
-                              className="w-1.5 h-1.5 rounded-full"
-                              style={{ backgroundColor: et.color }}
-                              title={e.title}
-                            />
+                              className="flex items-center gap-1 rounded-md px-1 py-0.5"
+                              style={{ backgroundColor: et.color + '18' }}
+                            >
+                              <div className="w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: et.color }} />
+                              <p className="text-[9px] font-bold truncate" style={{ color: et.color }}>{e.title}</p>
+                            </div>
                           )
                         })}
-                        {dayEvents.length > 4 && (
-                          <span className="text-[8px] font-black text-gray-400">+{dayEvents.length - 4}</span>
+                        {dayEvents.length > 2 && (
+                          <p className="text-[8px] font-black text-gray-400 pl-1">+{dayEvents.length - 2} más</p>
                         )}
                       </div>
                     </div>
@@ -385,84 +391,78 @@ export default function AgendaPage() {
               </div>
             )
           })()}
+        </div>
+      )}
 
-          {/* Day detail panel */}
-          {selectedDay && (() => {
-            const dayEvents = events.filter(e => {
-              const ed = safeDate(e.event_date)
-              return ed && ed.toISOString().split('T')[0] === selectedDay
-            })
-            const dayDate = new Date(selectedDay + 'T00:00:00')
-            return (
-              <div className="border-t border-gray-100 px-5 py-4 bg-gray-50/50 animate-in slide-in-from-top-2 duration-200">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-black text-gray-900 capitalize">
+      {/* ── DAY DETAIL MODAL ── */}
+      {dayModalOpen && selectedDay && (() => {
+        const dayEvents = events.filter(e => {
+          const ed = safeDate(e.event_date)
+          return ed && ed.toISOString().split('T')[0] === selectedDay
+        })
+        const dayDate = new Date(selectedDay + 'T00:00:00')
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setDayModalOpen(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-gray-950 to-gray-800">
+                <div>
+                  <p className="text-[10px] font-black text-white/50 uppercase tracking-widest">Eventos</p>
+                  <h4 className="text-base font-black text-white capitalize">
                     {dayDate.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </h4>
-                  <button onClick={() => setSelectedDay(null)} className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-500 text-xs transition-all">×</button>
                 </div>
+                <button onClick={() => setDayModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {/* Event cards */}
+              <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
                 {dayEvents.length === 0 ? (
-                  <div className="text-center py-6">
-                    <p className="text-xs text-gray-300 font-bold">Sin eventos para este día</p>
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-300 font-bold">Sin eventos</p>
                     <button
-                      onClick={() => { setModalOpen(true); setForm(f => ({ ...f, event_date: selectedDay })) }}
-                      className="mt-2 text-[10px] font-black text-green-600 hover:underline"
+                      onClick={() => { setDayModalOpen(false); setModalOpen(true); setForm(f => ({ ...f, event_date: selectedDay })) }}
+                      className="mt-2 text-xs font-black text-green-600 hover:underline"
                     >+ Agregar evento</button>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {dayEvents.map(e => {
-                      const et = getEventType(e.event_type)
-                      const herdNames = e.herd_ids?.length
-                        ? herds.filter((h: any) => e.herd_ids.includes(h.id)).map((h: any) => h.name).join(', ')
-                        : e.herd_id ? (herds.find((h: any) => h.id === e.herd_id)?.name ?? '') : ''
-                      return (
-                        <div key={e.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group">
-                          {/* Header con color accent */}
-                          <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3 min-w-0">
-                              {/* Emoji pill */}
-                              <div className={`shrink-0 w-9 h-9 rounded-xl ${et.bg} flex items-center justify-center text-base`}>
-                                {et.emoji}
-                              </div>
-                              <div className="min-w-0">
-                                <h3 className="text-sm font-black text-gray-950 leading-tight truncate">{e.title}</h3>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: et.color }} />
-                                  <p className={`text-[10px] font-bold uppercase tracking-wide ${et.text}`}>{et.label}</p>
-                                </div>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => openEdit(e)}
-                              className="shrink-0 w-7 h-7 flex items-center justify-center text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          {/* Body */}
-                          {(e.description || herdNames) && (
-                            <div className="px-4 pb-3 flex items-center gap-4 border-t border-gray-50">
+                  dayEvents.map(e => {
+                    const et = getEventType(e.event_type)
+                    return (
+                      <div key={e.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 group">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ backgroundColor: et.color }} />
+                            <div className="min-w-0">
+                              <p className="text-sm font-black text-gray-950 leading-snug">{e.title}</p>
                               {e.description && (
-                                <p className="text-xs text-gray-500 leading-snug flex-1 pt-2">{e.description}</p>
-                              )}
-                              {herdNames && (
-                                <span className="text-[9px] font-black text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 shrink-0 mt-2 uppercase tracking-wide">
-                                  🐄 {herdNames}
-                                </span>
+                                <p className="text-xs text-gray-400 mt-0.5 leading-snug">{e.description}</p>
                               )}
                             </div>
-                          )}
+                          </div>
+                          <button
+                            onClick={() => { setDayModalOpen(false); openEdit(e) }}
+                            className="shrink-0 w-7 h-7 flex items-center justify-center text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      )
-                    })}
-                  </div>
+                      </div>
+                    )
+                  })
                 )}
+                <button
+                  onClick={() => { setDayModalOpen(false); setModalOpen(true); setForm(f => ({ ...f, event_date: selectedDay })) }}
+                  className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-xs font-black text-gray-400 hover:border-green-300 hover:text-green-600 transition-all"
+                >
+                  + Nuevo evento en este día
+                </button>
               </div>
-            )
-          })()}
-        </div>
-      )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── LIST VIEW ── */}
       {agendaView === 'lista' && (
@@ -489,42 +489,30 @@ export default function AgendaPage() {
                     {(groupEvents as any[]).map((event: any) => {
                       const et = getEventType(event.event_type)
                       const d = safeDate(event.event_date)
-                      const today = new Date(); today.setHours(0,0,0,0)
-                      const isActive = d && d <= today
 
                       return (
                         <div
                           key={event.id}
-                          className={`bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-all group ${
-                            isActive ? 'border-l-2 border-[#D4A373] bg-amber-50/20' : ''
-                          }`}
+                          className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-all group"
                         >
                           {/* Date badge */}
-                          <div className="shrink-0 w-14 text-center">
-                            <p className="text-xl font-black text-gray-900 leading-none">
+                          <div className="shrink-0 w-10 text-center">
+                            <p className="text-xl font-black text-gray-900 leading-none tabular-nums">
                               {d ? d.getDate() : '—'}
                             </p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase">
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
                               {d ? MONTH_NAMES[d.getMonth()] : ''}
                             </p>
                           </div>
 
                           {/* Color dot */}
-                          <div className="shrink-0 w-3 h-3 rounded-full" style={{ backgroundColor: et.color }} />
+                          <div className="shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: et.color }} />
 
                           {/* Content */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-bold text-gray-900">{event.title}</p>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${et.bg} ${et.text}`}>
-                                {et.emoji} {et.label}
-                              </span>
-                              {isActive && (
-                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 uppercase tracking-wider">Activo</span>
-                              )}
-                            </div>
+                            <p className="text-sm font-bold text-gray-900 leading-snug">{event.title}</p>
                             {event.description && (
-                              <p className="text-[10px] text-gray-400 mt-0.5">{event.description}</p>
+                              <p className="text-xs text-gray-400 mt-0.5 leading-snug">{event.description}</p>
                             )}
                           </div>
 
