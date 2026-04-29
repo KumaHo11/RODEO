@@ -40,7 +40,7 @@ const templates = {
   verify_email: (p: { firstName: string; verifyUrl: string }) => ({
     subject: '¡Bienvenido a RODEO! Verificá tu cuenta',
     html: baseLayout(`
-      <h2 style="margin:0 0 12px;color:#111827;font-size:22px;font-weight:900">Hola, ${p.firstName} 👋</h2>
+      <h2 style="margin:0 0 12px;color:#111827;font-size:22px;font-weight:900">Hola, ${p.firstName}</h2>
       <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
         Tu cuenta en <strong>RODEO</strong> está casi lista. Solo necesitás verificar tu correo para comenzar.
       </p>
@@ -61,7 +61,7 @@ const templates = {
   }) => ({
     subject: `Te invitaron a unirte a ${p.orgName} en RODEO`,
     html: baseLayout(`
-      <h2 style="margin:0 0 12px;color:#111827;font-size:22px;font-weight:900">Fuiste invitado al equipo 🎉</h2>
+      <h2 style="margin:0 0 12px;color:#111827;font-size:22px;font-weight:900">Fuiste invitado al equipo</h2>
       <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
         <strong>${p.inviterName}</strong> te invitó a unirte a <strong>${p.orgName}</strong>
         en RODEO como <strong>${p.roleLabel}</strong>.
@@ -105,7 +105,7 @@ const templates = {
         <div style="display:flex;gap:12px;flex-wrap:wrap">
           ${p.dueDate ? `<span style="background:#fff;border:1px solid #d1fae5;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:#059669">📅 Vence: ${p.dueDate}</span>` : ''}
           <span style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:#374151">
-            ${p.priority === 'ALTA' ? '🔴' : p.priority === 'MEDIA' ? '🟡' : '🟢'} Prioridad ${p.priority}
+            Prioridad ${p.priority}
           </span>
         </div>
       </div>
@@ -132,9 +132,9 @@ const templates = {
     }>
     dashboardUrl: string
   }) => ({
-    subject: `🐄 Recordatorio: ${p.moves.length > 1 ? `${p.moves.length} movimientos` : 'movimiento de animales'} mañana — ${p.orgName}`,
+    subject: `Recordatorio: ${p.moves.length > 1 ? `${p.moves.length} movimientos` : 'movimiento de animales'} mañana — ${p.orgName}`,
     html: baseLayout(`
-      <h2 style="margin:0 0 6px;color:#111827;font-size:22px;font-weight:900">Mañana hay movimientos programados 🐄</h2>
+      <h2 style="margin:0 0 6px;color:#111827;font-size:22px;font-weight:900">Mañana hay movimientos programados</h2>
       <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
         Hola <strong>${p.ownerName}</strong>, te recordamos que mañana tenés
         <strong>${p.moves.length} movimiento${p.moves.length !== 1 ? 's' : ''}</strong>
@@ -188,11 +188,11 @@ const templates = {
     dashboardUrl: string
   }) => ({
     subject: p.alertLevel === 'critical'
-      ? `🚨 ALERTA CRÍTICA: Sobrepastoreo en ${p.paddockName}`
-      : `⚠️ Ajuste Clima: ${p.paddockName} — estadía reducida ${Math.abs(p.deltaFromPlan)}d`,
+      ? `ALERTA CRÍTICA: Sobrepastoreo en ${p.paddockName}`
+      : `Ajuste Clima: ${p.paddockName} — estadía reducida ${Math.abs(p.deltaFromPlan)}d`,
     html: baseLayout(`
       <h2 style="margin:0 0 12px;color:#111827;font-size:22px;font-weight:900">
-        ${p.alertLevel === 'critical' ? '🚨 Alerta Crítica de Pastoreo' : '⚠️ Ajuste Climático'}
+        ${p.alertLevel === 'critical' ? 'Alerta Crítica de Pastoreo' : 'Ajuste Climático'}
       </h2>
       <p style="margin:0 0 20px;color:#6b7280;font-size:15px;line-height:1.6">
         Hola <strong>${p.ownerName}</strong>, el motor de <strong>Ajuste Clima</strong> detectó
