@@ -12,6 +12,12 @@ declare global {
 function createPool(): Pool {
   const connectionString = process.env.DATABASE_URL || ''
   
+  // Durante el build de Next.js, DATABASE_URL puede estar vacía.
+  // Evitamos que explote el build devolviendo un pool que no se usará.
+  if (!connectionString) {
+    return new Pool()
+  }
+
   // Extraer partes de la URL para evitar errores de encoding con caracteres especiales como #
   const url = new URL(connectionString.replace('postgresql://', 'http://')) // URL() no soporta postgresql:// a veces
   
