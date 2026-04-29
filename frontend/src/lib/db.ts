@@ -11,34 +11,28 @@ declare global {
 
 function createPool(): Pool {
   const connectionString = process.env.DATABASE_URL || ''
-  
-  // Durante el build de Next.js, DATABASE_URL puede estar vacía.
-  // Evitamos que explote el build devolviendo un pool que no se usará.
+
   if (!connectionString) {
+    // Dummy pool durante el build de Next.js (DATABASE_URL no disponible en build time)
     return new Pool()
   }
 
-  // Extraer partes de la URL para evitar errores de encoding con caracteres especiales como #
-  const url = new URL(connectionString.replace('postgresql://', 'http://')) // URL() no soporta postgresql:// a veces
-  
+  // Extraer partes de la URL para evitar errores de encoding con caracteres especiales
+  const url = new URL(connectionString.replace('postgresql://', 'http://'))
+
   const pool = new Pool({
     host: url.hostname,
     port: parseInt(url.port || '5432'),
     user: url.username,
-    password: decodeURIComponent(url.password), // Decodificamos el %23 para que llegue como #
+    password: decodeURIComponent(url.password),
     database: url.pathname.slice(1).split('?')[0],
     ssl: { rejectUnauthorized: false },
-    // Scale: 20 max connections per Next.js instance (Cloud Run scales horizontally)
-    // Min 2 keeps connections warm to avoid cold-start latency on first requests
     max: parseInt(process.env.DB_POOL_MAX || '20'),
     min: parseInt(process.env.DB_POOL_MIN || '2'),
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
-    // Prevent runaway queries from blocking the pool under stress
-    statement_timeout: 30000, // 30s hard limit per query
+    statement_timeout: 30000,
   })
-
-  console.log(`🔌 Intentando conectar a DB: user=${url.username} host=${url.hostname} pass_length=${url.password.length}`)
 
   pool.on('error', (err) => {
     console.error('DB Pool error:', err)
@@ -47,28 +41,44 @@ function createPool(): Pool {
   return pool
 }
 
-// Singleton para evitar múltiples pools en desarrollo (hot reload)
-export const pool = globalThis._pgPool ?? createPool()
-
-if (process.env.NODE_ENV !== 'production') {
-  globalThis._pgPool = pool
+/**
+ * Lazy singleton — el pool NO se crea al importar el módulo.
+ * Se crea la primera vez que se ejecuta una query real.
+ * Esto evita que `new URL('')` explote durante el build de Next.js.
+ */
+function getPool(): Pool {
+  if (process.env.NODE_ENV !== 'production') {
+    // En desarrollo, usar singleton global para sobrevivir hot-reloads
+    if (!globalThis._pgPool) {
+      globalThis._pgPool = createPool()
+    }
+    return globalThis._pgPool
+  }
+  // En producción, crear una sola vez por instancia
+  if (!globalThis._pgPool) {
+    globalThis._pgPool = createPool()
+  }
+  return globalThis._pgPool
 }
 
+/**
+ * Ejecuta una query con parámetros tipados
+ * @example
+ * const rows = await query('SELECT * FROM paddocks WHERE org_id = $1', [orgId])
+ */
 export async function query<T = Record<string, unknown>>(
   sql: string,
   params?: unknown[]
 ): Promise<T[]> {
-  // Si no hay DATABASE_URL (fase de build en GitHub), devolvemos vacío en lugar de explotar
   if (!process.env.DATABASE_URL) {
-    console.warn(`⚠️ Query ignorada en build: ${sql.slice(0, 50)}...`)
     return []
   }
-  const result = await pool.query(sql, params)
+  const result = await getPool().query(sql, params)
   return result.rows as T[]
 }
 
 /**
- * Obtiene una sola fila — lanza error si no existe
+ * Obtiene una sola fila — devuelve null si no existe
  */
 export async function queryOne<T = Record<string, unknown>>(
   sql: string,
@@ -78,6 +88,10 @@ export async function queryOne<T = Record<string, unknown>>(
   return rows[0] ?? null
 }
 
+/**
+ * Ejecuta una mutación (INSERT, UPDATE, DELETE)
+ * Retorna rowCount y rows
+ */
 export async function mutate(
   sql: string,
   params?: unknown[]
@@ -85,11 +99,13 @@ export async function mutate(
   if (!process.env.DATABASE_URL) {
     return { rowCount: 0, rows: [] }
   }
-  const result = await pool.query(sql, params)
+  const result = await getPool().query(sql, params)
   return {
     rowCount: result.rowCount ?? 0,
     rows: result.rows,
   }
 }
 
-export default pool
+/** Acceso directo al pool para casos que requieren transacciones */
+export const getDbPool = getPool
+export default getPool()

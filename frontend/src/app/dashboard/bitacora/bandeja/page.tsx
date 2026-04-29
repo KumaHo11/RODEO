@@ -9,9 +9,11 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import {
   MessageSquare, Mic, Image as ImageIcon, Check, ChevronDown,
-  ChevronUp, Loader2, Phone, Clock, MapPin, Edit3, X,
+  ChevronUp, Loader2, Phone, Clock, MapPin, Edit3, X, Mic2, MessageCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface FieldNote {
@@ -211,6 +213,7 @@ function NoteCard({
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function BandejaWhatsAppPage() {
   const { user } = useAuth()
+  const pathname = usePathname()
   const [notes, setNotes]       = useState<FieldNote[]>([])
   const [paddocks, setPaddocks] = useState<Paddock[]>([])
   const [loading, setLoading]   = useState(true)
@@ -265,6 +268,32 @@ export default function BandejaWhatsAppPage() {
               <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Pendiente{pending > 1 ? 's' : ''}</p>
             </div>
           )}
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 mt-5 w-fit">
+          <Link
+            href="/dashboard/bitacora"
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
+              pathname === '/dashboard/bitacora'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Mic2 className="w-3.5 h-3.5" />
+            Notas
+          </Link>
+          <Link
+            href="/dashboard/bitacora/bandeja"
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
+              pathname === '/dashboard/bitacora/bandeja'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            Bandeja WA
+          </Link>
         </div>
 
         {/* Filter tabs */}
