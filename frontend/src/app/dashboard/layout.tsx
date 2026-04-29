@@ -486,7 +486,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
 
         {/* ── Top header ──────────────────────────────────────────────────── */}
-        <header className="h-14 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 z-30">
+        <header className="h-14 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 z-[2000]">
           {/* Left: mobile hamburger */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
@@ -568,6 +568,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         const Icon = NOTIF_ICONS[notif.type] || Bell
                         const colorClass = NOTIF_COLORS[notif.type] || NOTIF_COLORS.SISTEMA
                         const date = new Date(notif.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                        const cleanText = (text: string) => text.replace(/[🚨⚠️🐄⛔]/g, '').trim()
                         return (
                           <div
                             key={notif.id}
@@ -580,8 +581,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                               <Bell className="w-4 h-4 text-gray-400" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-bold text-gray-900 leading-snug">{notif.title}</p>
-                              {notif.body && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{notif.body}</p>}
+                              <p className="text-xs font-bold text-gray-900 leading-snug">{cleanText(notif.title)}</p>
+                              {notif.body && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{cleanText(notif.body)}</p>}
                               <p className="text-[9px] text-gray-400 mt-1">{date}</p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0 mt-0.5">

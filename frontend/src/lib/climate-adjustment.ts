@@ -299,7 +299,7 @@ export function calculateClimateAdjustment(
 
   if (adjustedRemainingDays <= 3) {
     alertLevel = 'critical'
-    alertMessage = `⛔ Sobrepastoreo inminente: quedan solo ${adjustedRemainingDays} día${adjustedRemainingDays !== 1 ? 's' : ''} de estadía. Mover el rodeo inmediatamente.`
+    alertMessage = `Sobrepastoreo inminente: quedan solo ${adjustedRemainingDays} día${adjustedRemainingDays !== 1 ? 's' : ''} de estadía. Mover el rodeo inmediatamente.`
   } else if (adjustedRemainingDays <= 7 || deltaFromPlan <= -5) {
     alertLevel = 'warning'
     if (input.droughtIndex !== 'NONE') {
