@@ -261,13 +261,13 @@ export default function HerdsPage() {
         <div className="flex items-center gap-2 shrink-0">
           {/* View toggle */}
           <div className="bg-gray-100 rounded-xl p-0.5 flex gap-0.5">
-            <button onClick={() => setView('list')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              <List className="w-3.5 h-3.5" /> Lista
-            </button>
             <button onClick={() => setView('cards')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'cards' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               <LayoutGrid className="w-3.5 h-3.5" /> Tarjetas
+            </button>
+            <button onClick={() => setView('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              <List className="w-3.5 h-3.5" /> Lista
             </button>
             <button onClick={() => { setView('historial'); loadMovements() }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'historial' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
