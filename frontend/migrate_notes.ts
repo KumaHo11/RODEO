@@ -1,7 +1,13 @@
-
 import { Pool } from 'pg';
+import * as dotenv from 'dotenv';
 
-const DATABASE_URL="postgresql://postgres:Rodeo2026%21Secure%23@35.247.199.183:5432/rodeo";
+dotenv.config();
+
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  throw new Error('DATABASE_URL is not defined in the environment variables');
+}
 
 async function migrate() {
   const pool = new Pool({ connectionString: DATABASE_URL });
