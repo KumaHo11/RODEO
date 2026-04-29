@@ -62,7 +62,7 @@ export default function AgendaPage() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
-  const [agendaView, setAgendaView] = useState<'lista' | 'calendario'>('lista')
+  const [agendaView, setAgendaView] = useState<'lista' | 'calendario'>('calendario')
   const [calMonth, setCalMonth] = useState(() => {
     const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }
   })
@@ -396,27 +396,63 @@ export default function AgendaPage() {
             return (
               <div className="border-t border-gray-100 px-5 py-4 bg-gray-50/50 animate-in slide-in-from-top-2 duration-200">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-black text-gray-900">
+                  <h4 className="text-sm font-black text-gray-900 capitalize">
                     {dayDate.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </h4>
-                  <button onClick={() => setSelectedDay(null)} className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-200 text-gray-500 text-xs">×</button>
+                  <button onClick={() => setSelectedDay(null)} className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-500 text-xs transition-all">×</button>
                 </div>
                 {dayEvents.length === 0 ? (
-                  <p className="text-xs text-gray-400 font-medium">Sin eventos para este día</p>
+                  <div className="text-center py-6">
+                    <p className="text-xs text-gray-300 font-bold">Sin eventos para este día</p>
+                    <button
+                      onClick={() => { setModalOpen(true); setForm(f => ({ ...f, event_date: selectedDay })) }}
+                      className="mt-2 text-[10px] font-black text-green-600 hover:underline"
+                    >+ Agregar evento</button>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     {dayEvents.map(e => {
                       const et = getEventType(e.event_type)
+                      const herdNames = e.herd_ids?.length
+                        ? herds.filter((h: any) => e.herd_ids.includes(h.id)).map((h: any) => h.name).join(', ')
+                        : e.herd_id ? (herds.find((h: any) => h.id === e.herd_id)?.name ?? '') : ''
                       return (
-                        <div key={e.id} className="bg-white rounded-xl border border-gray-100 p-3 flex items-center gap-3 shadow-sm">
-                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: et.color }} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-gray-900 truncate">{e.title}</p>
-                            <p className="text-[10px] text-gray-500">{et.emoji} {et.label}{e.description ? ` · ${e.description}` : ''}</p>
+                        <div key={e.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group">
+                          {/* Header con color accent */}
+                          <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              {/* Emoji pill */}
+                              <div className={`shrink-0 w-9 h-9 rounded-xl ${et.bg} flex items-center justify-center text-base`}>
+                                {et.emoji}
+                              </div>
+                              <div className="min-w-0">
+                                <h3 className="text-sm font-black text-gray-950 leading-tight truncate">{e.title}</h3>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: et.color }} />
+                                  <p className={`text-[10px] font-bold uppercase tracking-wide ${et.text}`}>{et.label}</p>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => openEdit(e)}
+                              className="shrink-0 w-7 h-7 flex items-center justify-center text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                          <button onClick={() => openEdit(e)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Body */}
+                          {(e.description || herdNames) && (
+                            <div className="px-4 pb-3 flex items-center gap-4 border-t border-gray-50">
+                              {e.description && (
+                                <p className="text-xs text-gray-500 leading-snug flex-1 pt-2">{e.description}</p>
+                              )}
+                              {herdNames && (
+                                <span className="text-[9px] font-black text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 shrink-0 mt-2 uppercase tracking-wide">
+                                  🐄 {herdNames}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
