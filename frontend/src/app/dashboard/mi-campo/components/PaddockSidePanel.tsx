@@ -228,7 +228,7 @@ export default function PaddockSidePanel({
             )}
 
             <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-black text-green-600 uppercase tracking-widest mb-0.5">Mi Campo</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Mi Campo</p>
               <div className="flex items-center gap-2 mb-0.5">
                 <h2 className="text-xl font-black text-gray-950 tracking-tight truncate">{org?.name || 'Mi Campo'}</h2>
                 {ndviLoading && <Loader2 className="w-3.5 h-3.5 text-green-500 animate-spin" />}
@@ -419,10 +419,10 @@ export default function PaddockSidePanel({
                       </div>
                     </div>
 
-                    {/* ── Hectáreas — tamaño subtítulo (antes era el heading) ── */}
+                    {/* ── Hectáreas — sin línea divisora ── */}
                     {isActive && (
-                      <div className="px-4 pb-3 pt-1 border-t border-gray-100 shadow-[0_-1px_0_0_rgba(0,0,0,0.05)]">
-                        <div className="flex items-baseline gap-1.5 pt-2">
+                      <div className="px-4 pb-2 pt-1">
+                        <div className="flex items-baseline gap-1.5">
                           <p className="text-sm font-black text-gray-700 tabular-nums">
                             {Number(paddock.area_ha || 0).toFixed(1)}
                           </p>
@@ -438,16 +438,19 @@ export default function PaddockSidePanel({
                           {ms > 0 ? (
                             <>
                               <div>
-                                <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-1">MS/ha</p>
-                                <p className={`text-2xl font-black tabular-nums leading-none ${msColor}`}>
-                                  {ms.toLocaleString('es')}
-                                </p>
+                                <p className="text-[9px] font-black text-gray-500 tracking-widest uppercase mb-1">MS/ha</p>
+                                <div className="flex items-baseline gap-1">
+                                  <p className={`text-2xl font-black tabular-nums leading-none ${msColor}`}>
+                                    {ms.toLocaleString('es')}
+                                  </p>
+                                  <span className="text-xs font-bold text-gray-400">kg</span>
+                                </div>
                               </div>
                               {totalMsCard != null && (
                                 <>
                                   <div className="w-px bg-gray-100 self-stretch" />
                                   <div>
-                                    <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-1">Total MS</p>
+                                    <p className="text-[9px] font-black text-gray-500 tracking-widest uppercase mb-1">Total MS</p>
                                     <p className="text-sm font-black text-gray-600 tabular-nums">
                                       {totalMsCard.toLocaleString('es')} <span className="font-medium text-gray-400">kg</span>
                                     </p>
@@ -482,7 +485,7 @@ export default function PaddockSidePanel({
                             )
                           })}
                           {canNdvi && ndviVal != null && (
-                            <span className="text-[9px] font-bold text-gray-400 ml-1">
+                            <span className="text-[9px] font-bold text-gray-600 ml-1">
                               NDVI {Number(ndviVal).toFixed(2)}
                             </span>
                           )}

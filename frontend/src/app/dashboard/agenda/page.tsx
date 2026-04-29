@@ -62,7 +62,7 @@ export default function AgendaPage() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
-  const [agendaView, setAgendaView] = useState<'lista' | 'calendario'>('calendario')
+  const [agendaView, setAgendaView] = useState<'lista' | 'calendario'>('lista')
   const [calMonth, setCalMonth] = useState(() => {
     const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }
   })
@@ -297,18 +297,18 @@ export default function AgendaPage() {
       {/* ── CALENDAR VIEW ── */}
       {agendaView === 'calendario' && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden">
-          {/* Month navigation — gradient header */}
-          <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-gray-950 to-gray-800">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <button
               onClick={() => setCalMonth(prev => {
                 const d = new Date(prev.year, prev.month - 1)
                 return { year: d.getFullYear(), month: d.getMonth() }
               })}
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-all"
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-all"
             >
-              <ChevronLeft className="w-4 h-4 text-white" />
+              <ChevronLeft className="w-4 h-4 text-gray-600" />
             </button>
-            <h3 className="text-base font-black text-white capitalize tracking-tight">
+            <h3 className="text-sm font-black text-gray-900 capitalize tracking-tight">
               {new Date(calMonth.year, calMonth.month).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}
             </h3>
             <button
@@ -316,9 +316,9 @@ export default function AgendaPage() {
                 const d = new Date(prev.year, prev.month + 1)
                 return { year: d.getFullYear(), month: d.getMonth() }
               })}
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-all"
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-all"
             >
-              <ChevronRight className="w-4 h-4 text-white" />
+              <ChevronRight className="w-4 h-4 text-gray-600" />
             </button>
           </div>
 
@@ -405,14 +405,14 @@ export default function AgendaPage() {
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setDayModalOpen(false)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
               {/* Modal header */}
-              <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-gray-950 to-gray-800">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
                 <div>
-                  <p className="text-[10px] font-black text-white/50 uppercase tracking-widest">Eventos</p>
-                  <h4 className="text-base font-black text-white capitalize">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Eventos</p>
+                  <h4 className="text-base font-black text-gray-950 capitalize">
                     {dayDate.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </h4>
                 </div>
-                <button onClick={() => setDayModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
+                <button onClick={() => setDayModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
                   <X className="w-4 h-4" />
                 </button>
               </div>
