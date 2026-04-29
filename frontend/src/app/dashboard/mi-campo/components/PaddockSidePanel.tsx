@@ -362,7 +362,17 @@ export default function PaddockSidePanel({
                 const td         = (paddock.technical_data || {}) as Record<string, any>
                 // MS: SOLO del dato ingresado por el usuario (no NDVI)
                 const ms         = Number(paddock.dry_matter_kg_ha) || 0
-                const t                  <div
+                const totalMsCard = ms > 0 && paddock.area_ha ? Math.round(ms * Number(paddock.area_ha)) : null
+                const msColor    = ms >= 1500 ? 'text-green-700' : ms >= 800 ? 'text-amber-700' : 'text-red-600'
+                const qualityScore = (paddock.technical_data as any)?.quality_score as number | undefined
+                const qColor = qualityScore != null
+                  ? qualityScore >= 7 ? 'bg-green-100 text-green-800 border-green-200'
+                  : qualityScore >= 4 ? 'bg-amber-100 text-amber-800 border-amber-200'
+                  : 'bg-red-100 text-red-800 border-red-200'
+                  : ''
+
+                return (
+                  <div
                     key={paddock.id}
                     className={`w-full rounded-2xl border transition-all overflow-hidden cursor-pointer group ${ 
                       !isActive
