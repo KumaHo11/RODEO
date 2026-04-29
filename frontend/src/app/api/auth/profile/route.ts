@@ -60,14 +60,18 @@ export async function GET(req: NextRequest) {
         [(profile as any).organization_id]
       )
     }
-
+    console.log('✅ Profile found for UID:', firebaseUid)
     return NextResponse.json({ profile: { ...profile, plan_feature_flags } })
   } catch (err: any) {
-    console.error('GET /api/auth/profile error:', err)
+    console.error('❌ GET /api/auth/profile full error:', err)
     if (err.code === 'auth/id-token-expired' || err.code === 'auth/argument-error') {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Server error', 
+      details: err.message,
+      source: err.stack?.includes('db.ts') ? 'database' : 'firebase/other'
+    }, { status: 500 })
   }
 }
 
@@ -101,7 +105,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (err: any) {
-    console.error('PATCH /api/auth/profile error:', err)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    console.error('❌ PATCH /api/auth/profile error:', err)
+    return NextResponse.json({ error: 'Server error', details: err.message }, { status: 500 })
   }
 }

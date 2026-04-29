@@ -10,11 +10,18 @@ declare global {
 }
 
 function createPool(): Pool {
+  const connectionString = process.env.DATABASE_URL || ''
+  
+  // Extraer partes de la URL para evitar errores de encoding con caracteres especiales como #
+  const url = new URL(connectionString.replace('postgresql://', 'http://')) // URL() no soporta postgresql:// a veces
+  
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production'
-      ? { rejectUnauthorized: false }
-      : false,
+    host: url.hostname,
+    port: parseInt(url.port || '5432'),
+    user: url.username,
+    password: decodeURIComponent(url.password), // Decodificamos el %23 para que llegue como #
+    database: url.pathname.slice(1).split('?')[0],
+    ssl: { rejectUnauthorized: false },
     // Scale: 20 max connections per Next.js instance (Cloud Run scales horizontally)
     // Min 2 keeps connections warm to avoid cold-start latency on first requests
     max: parseInt(process.env.DB_POOL_MAX || '20'),
@@ -24,6 +31,8 @@ function createPool(): Pool {
     // Prevent runaway queries from blocking the pool under stress
     statement_timeout: 30000, // 30s hard limit per query
   })
+
+  console.log(`🔌 Intentando conectar a DB: user=${url.username} host=${url.hostname} pass_length=${url.password.length}`)
 
   pool.on('error', (err) => {
     console.error('DB Pool error:', err)
