@@ -64,7 +64,7 @@ export async function PATCH(
     // ── Step 2: Update optional new columns (silently skip if not migrated) ──
     const OPTIONAL: Record<string, string> = {
       age_years: 'age_years', age_months: 'age_months',
-      admission_date: 'admission_date',
+      admission_date: 'admission_date', exit_date: 'exit_date',
       bcs_score: 'bcs_score', bcs_label: 'bcs_label',
       bcs_data: 'bcs_data', photo_url: 'photo_url',
       parent_herd_id: 'parent_herd_id', herd_notes: 'herd_notes',

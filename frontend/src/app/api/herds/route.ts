@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
                 avg_weight_kg, total_ev,
                 age_years, age_months, admission_date,
                 bcs_score, bcs_label, bcs_data, photo_url,
-                parent_herd_id, herd_notes,
+                parent_herd_id, herd_notes, exit_date,
                 created_at, updated_at
          FROM herds
          WHERE org_id = $1
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       name, species, breed,
       head_count, avg_weight_kg, total_ev, categoria,
       // Optional new columns
-      age_months, age_years, admission_date, parent_herd_id,
+      age_months, age_years, admission_date, parent_herd_id, exit_date,
     } = body
 
     if (!name || !head_count) {
@@ -106,14 +106,15 @@ export async function POST(req: NextRequest) {
       try {
         await mutate(
           `UPDATE herds
-           SET age_months = $1, age_years = $2, admission_date = $3, parent_herd_id = $4,
+           SET age_months = $1, age_years = $2, admission_date = $3, parent_herd_id = $4, exit_date = $5,
                updated_at = NOW()
-           WHERE id = $5`,
+           WHERE id = $6`,
           [
             age_months     || null,
             age_years      || null,
             admission_date || null,
             parent_herd_id || null,
+            exit_date      || null,
             id,
           ]
         )

@@ -188,6 +188,7 @@ ALTER TABLE herds ADD COLUMN IF NOT EXISTS bcs_label VARCHAR(50);
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS bcs_data JSONB;
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS photo_url TEXT;
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS age_years DECIMAL(5,2);
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS exit_date DATE;
 
 -- farm_events: assigned_to for team member tasks
 ALTER TABLE farm_events ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES profiles(id) ON DELETE SET NULL;

@@ -120,10 +120,14 @@ const EVT_CONFIG: Record<string, { label: string; emoji: string; color: string }
   servicio:              { label: 'Servicio',              emoji: '●', color: '#ef4444' },
   paricion:              { label: 'Parición',              emoji: '●', color: '#3b82f6' },
   destete:               { label: 'Destete',               emoji: '●', color: '#eab308' },
-  diagnostico_prenez:   { label: 'Diagnóstico preñez',   emoji: '●', color: '#f97316' },
+  diagnostico_prenez:    { label: 'Diagnóstico preñez',    emoji: '●', color: '#f97316' },
   tratamiento_sanitario: { label: 'Sanitario',             emoji: '●', color: '#78350f' },
   esquila:               { label: 'Esquila',               emoji: '●', color: '#8b5cf6' },
   vacaciones:            { label: 'Vacaciones',            emoji: '●', color: '#ec4899' },
+  compra:                { label: 'Compra',                emoji: '●', color: '#10b981' },
+  venta:                 { label: 'Venta',                 emoji: '●', color: '#ef4444' },
+  mortandad:             { label: 'Mortandad',             emoji: '●', color: '#000000' },
+  stock_inicial:         { label: 'Stock Inicial',         emoji: '●', color: '#6366f1' },
 }
 
 // ─── Multiplicadores estacionales de crecimiento de MS (Hemisferio Sur) ────────
@@ -164,7 +168,7 @@ interface GanttBlock {
 }
 
 function InteractiveGantt({
-  plans, paddocks, herds, farmEvents, windowStart, windowDays, onBlockClick, onBlockMove,
+  plans, paddocks, herds, farmEvents, movements = [], windowStart, windowDays, onBlockClick, onBlockMove,
   rainfallData, onRainfallChange, weatherEvents = [], onPaddockClick,
   droughtThresholdMm, onDroughtThresholdChange,
   targetRemnant, dailyAllocationKg,
@@ -175,6 +179,7 @@ function InteractiveGantt({
   paddocks: any[]
   herds: any[]
   farmEvents: any[]
+  movements?: any[]
   windowStart: string
   windowDays: number
   onBlockClick: (plan: any, evt?: React.MouseEvent) => void
@@ -226,6 +231,47 @@ function InteractiveGantt({
     return map
   }, [herds])
 
+  // Virtual events from movements combined with farmEvents
+  const unifiedEvents = useMemo(() => {
+    const vEvents = (movements || []).map(m => ({
+      id: m.id,
+      title: `${m.event_type.toUpperCase()}: ${m.quantity || 0} cabezas`,
+      event_type: m.event_type,
+      event_date: m.occurred_at.split('T')[0],
+      end_date: m.occurred_at.split('T')[0],
+      isMovement: true,
+      description: m.notes,
+    }))
+    return [...farmEvents, ...vEvents]
+  }, [farmEvents, movements])
+
+  // Calculate dynamic headcount for a herd at a specific date
+  const getDynamicHeadcount = useCallback((herdId: string, baseCount: number, dateStr: string) => {
+    const today = new Date().toISOString().split('T')[0]
+    let count = baseCount
+    
+    const relEvents = unifiedEvents.filter(e => e.herd_id === herdId || (e.herd_ids && e.herd_ids.includes(herdId)))
+    
+    if (dateStr < today) {
+      // Past: reverse-apply movements that happened between dateStr and today
+      const eventsBetween = relEvents.filter(e => e.event_date >= dateStr && e.event_date <= today && e.isMovement)
+      eventsBetween.forEach(e => {
+        const q = Number(e.quantity || 0)
+        if (['venta', 'mortandad'].includes(e.event_type)) count += q
+        if (['compra', 'paricion'].includes(e.event_type)) count -= q
+      })
+    } else if (dateStr > today) {
+      // Future: forward-apply scheduled movements
+      const eventsBetween = relEvents.filter(e => e.event_date > today && e.event_date <= dateStr)
+      eventsBetween.forEach(e => {
+        const q = Number(e.quantity || 0)
+        if (['venta', 'mortandad'].includes(e.event_type)) count -= q
+        if (['compra', 'paricion'].includes(e.event_type)) count += q
+      })
+    }
+    return Math.max(0, count)
+  }, [unifiedEvents])
+
 
   // Adaptive time markers: calendar-aligned (1st/15th/etc.)
   const timeMarkers = useMemo(() => {
@@ -274,6 +320,24 @@ function InteractiveGantt({
     return marks
   }, [windowStart, windowDays])
 
+  // Daily markers for vertical grid lines (every day, highlighting weekends and "today")
+  const dayMarkers = useMemo(() => {
+    const marks: { day: number; isWeekend: boolean; isToday: boolean }[] = []
+    const startDt = new Date(windowStart + 'T00:00:00')
+    const todayStr = new Date().toISOString().split('T')[0]
+    
+    for (let d = 0; d < windowDays; d++) {
+      const currentDt = new Date(startDt)
+      currentDt.setDate(startDt.getDate() + d)
+      const dayOfWeek = currentDt.getDay()
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+      const currentStr = currentDt.toISOString().split('T')[0]
+      const isToday = currentStr === todayStr
+      marks.push({ day: d, isWeekend, isToday })
+    }
+    return marks
+  }, [windowStart, windowDays])
+
   // Monthly breakdown for footer
   const MONTHS_FOOTER = useMemo(() => {
     const months: { key: string; leftPct: number; widthPct: number; startDate: string; endDate: string; month: number }[] = []
@@ -300,17 +364,18 @@ function InteractiveGantt({
     return months
   }, [windowStart, windowDays])
 
-  // Active herds in the current window (for footer and modal)
+  // Active herds in the current window based on lifecycle (admission/exit dates)
   const activeHerdsInWindow = useMemo(() => {
     if (!MONTHS_FOOTER || MONTHS_FOOTER.length === 0) return []
-    const allHerdIds = [...new Set(
-      plans
-        .filter(p => p.entry_date <= MONTHS_FOOTER[MONTHS_FOOTER.length - 1]?.endDate
-                  && (p.exit_date || p.entry_date) >= MONTHS_FOOTER[0]?.startDate)
-        .flatMap(p => p.herd_ids || [])
-    )]
-    return herds.filter(h => allHerdIds.includes(h.id))
-  }, [plans, herds, MONTHS_FOOTER])
+    const wStart = MONTHS_FOOTER[0]?.startDate
+    const wEnd = MONTHS_FOOTER[MONTHS_FOOTER.length - 1]?.endDate
+    
+    return herds.filter(h => {
+      const entry = h.admission_date || h.created_at?.split('T')[0] || '2000-01-01'
+      const exit = h.exit_date || '2100-01-01'
+      return entry <= wEnd && exit >= wStart
+    })
+  }, [herds, MONTHS_FOOTER])
 
   // Map grid lines to exactly match time markers
   const weekMarkers = useMemo(() => {
@@ -677,25 +742,23 @@ function InteractiveGantt({
                     }}
                   />
                 )}
-                {/* Grid lines */}
-                {weekMarkers.map(m => (
+                {/* Grid lines and Weekends */}
+                {dayMarkers.map(m => (
                   <div
                     key={m.day}
-                    className="absolute top-0 bottom-0 border-l border-dashed border-gray-100 pointer-events-none"
-                    style={{ left: `${(m.day / windowDays) * 100}%` }}
+                    className={`absolute top-0 bottom-0 border-l border-dashed border-gray-100/70 pointer-events-none ${m.isWeekend ? 'bg-gray-100/40' : ''}`}
+                    style={{ left: `${(m.day / windowDays) * 100}%`, width: `${(1 / windowDays) * 100}%` }}
                   />
                 ))}
-                {/* Today line — subtle dashed soft-green line across row */}
+                {/* Today line — distinct blue line across row */}
                 {(() => {
                   const todayDiff = daysBetween(windowStart, new Date().toISOString().split('T')[0])
                   if (todayDiff >= 0 && todayDiff <= windowDays) {
                     return (
                       <div
-                        className="absolute top-0 bottom-0 pointer-events-none z-10"
+                        className="absolute top-0 bottom-0 border-l-2 border-blue-500 z-20 pointer-events-none shadow-[0_0_8px_rgba(59,130,246,0.5)]"
                         style={{ left: `${(todayDiff / windowDays) * 100}%` }}
-                      >
-                        <div className="h-full w-px" style={{ borderLeft: '1.5px dashed rgba(134,239,172,0.65)' }} />
-                      </div>
+                      />
                     )
                   }
                   return null
@@ -704,7 +767,7 @@ function InteractiveGantt({
 
 
                 {/* Agenda Event outlines — full-height outline spanning all paddock rows */}
-                {rowIdx === 0 && farmEvents
+                {rowIdx === 0 && unifiedEvents
                   .filter(evt => {
                     const d = daysBetween(windowStart, evt.event_date)
                     const de = evt.end_date ? daysBetween(windowStart, evt.end_date) : d
@@ -723,7 +786,7 @@ function InteractiveGantt({
                     return (
                       <div
                         key={`evt-outline-${evt.id}`}
-                        className="pointer-events-none z-[6]"
+                        className="pointer-events-none z-30"
                         style={{
                           position: 'absolute',
                           top: 0,
@@ -747,7 +810,7 @@ function InteractiveGantt({
                             setPopupPos({ x: rect.left + rect.width / 2, y: rect.top + rect.height })
                             setSelectedEvent({ ...evt, cfg })
                           }}
-                          className={`absolute top-2 pointer-events-auto ${isMultiDay ? 'left-1/2 -translate-x-1/2' : '-translate-x-[4px]'} w-3 h-3 rounded-full border-2 border-white shadow-sm transition-all hover:scale-125 focus:outline-none z-10`}
+                          className={`absolute top-2 pointer-events-auto ${isMultiDay ? 'left-1/2 -translate-x-1/2' : '-translate-x-[4px]'} w-3 h-3 rounded-full border-2 border-white shadow-sm transition-all hover:scale-125 focus:outline-none z-40`}
                           style={{ backgroundColor: cfg.color }}
                           title={`${cfg.emoji} ${evt.title}`}
                         />
@@ -815,6 +878,13 @@ function InteractiveGantt({
                     const PLAN_TOP = 4
                     const REAL_TOP = 36
                     const BAR_H    = 28
+                    
+                    // ── Visual Snapping (Empalme Perfecto) ──
+                    const connectsLeft = sorted.some(p => {
+                      const pExit = p.exit_date || addDays(p.entry_date, p.planned_recovery_days || 14)
+                      return pExit === plan.entry_date
+                    })
+                    const connectsRight = sorted.some(p => p.entry_date === exitDate)
 
                     // ── Season detection (Hemisferio Sur) ──
                     // Cerrada: otoño+invierno (meses 3-8)
@@ -886,7 +956,10 @@ function InteractiveGantt({
                           top: PLAN_TOP,
                           height: BAR_H,
                           minWidth: 8,
-                          borderRadius: 3,
+                          borderTopLeftRadius: connectsLeft ? 0 : 4,
+                          borderBottomLeftRadius: connectsLeft ? 0 : 4,
+                          borderTopRightRadius: connectsRight ? 0 : 4,
+                          borderBottomRightRadius: connectsRight ? 0 : 4,
                           border: `1.5px solid ${climateViewEnabled && deltaClimate !== 0 ? (deltaClimate > 0 ? 'rgba(16,185,129,0.7)' : 'rgba(239,68,68,0.6)') : borderColor}`,
                           backgroundColor: climateViewEnabled && deltaClimate !== 0
                             ? (deltaClimate > 0 ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)')
@@ -1158,9 +1231,11 @@ function InteractiveGantt({
                               p.entry_date <= m.endDate
                             )
                             const active = monthPlansForHerd.length > 0
-                            const headCount = Number(herd.head_count) || 0
+                            const currentHeadCount = Number(herd.head_count) || 0
+                            const headCount = getDynamicHeadcount(herd.id, currentHeadCount, m.startDate)
                             const peso = Number(herd.avg_weight_kg) || 0
-                            const ev = Number(herd.total_ev) || 0
+                            const baseEv = Number(herd.total_ev) || 0
+                            const ev = currentHeadCount > 0 ? (baseEv / currentHeadCount) * headCount : baseEv
                             return (
                               <div
                                 key={m.key}
@@ -1398,9 +1473,11 @@ function InteractiveGantt({
                 </thead>
                 <tbody>
                     {activeHerdsInWindow.map((herd, i) => {
-                      const headCount = Number(herd.head_count) || 0
+                      const currentHeadCount = Number(herd.head_count) || 0
+                      const headCount = getDynamicHeadcount(herd.id, currentHeadCount, m.startDate)
                       const peso = Number(herd.avg_weight_kg) || 0
-                      const ev = Number(herd.total_ev) || 0
+                      const baseEv = Number(herd.total_ev) || 0
+                      const ev = currentHeadCount > 0 ? (baseEv / currentHeadCount) * headCount : baseEv
                       
                       return (
                         <tr key={herd.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
@@ -1475,6 +1552,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [paddocks, setPaddocks] = useState<any[]>([])
   const [herds, setHerds] = useState<any[]>([])
   const [farmEvents, setFarmEvents] = useState<any[]>([])
+  const [movements, setMovements] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [mercado, setMercado] = useState<any>(null)
@@ -2062,26 +2140,29 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     if (!user) return
     setLoading(true)
     try {
-      const [paddocksRes, herdsRes, plansRes, eventsRes, mercadoRes, orgRes] = await Promise.all([
+      const [paddocksRes, herdsRes, plansRes, eventsRes, movementsRes, mercadoRes, orgRes] = await Promise.all([
         apiFetch('/api/paddocks').catch(() => null),
         apiFetch('/api/herds').catch(() => null),
         apiFetch('/api/grazing-plans').catch(() => null),
         apiFetch('/api/farm-events').catch(() => null),
+        apiFetch('/api/movements?entity_type=herd').catch(() => null),
         fetch('/api/mercado').catch(() => null),
         apiFetch('/api/organizations').catch(() => null),
       ])
 
-      const [paddocksResJson, herdsResJson, plansResJson, eventsResJson, orgResJson] = await Promise.all([
+      const [paddocksResJson, herdsResJson, plansResJson, eventsResJson, movementsResJson, orgResJson] = await Promise.all([
         paddocksRes?.ok ? paddocksRes.json() : Promise.resolve({ paddocks: [] }),
         herdsRes?.ok    ? herdsRes.json()    : Promise.resolve({ herds: [] }),
         plansRes?.ok    ? plansRes.json()    : Promise.resolve({ plans: [] }),
         eventsRes?.ok   ? eventsRes.json()   : Promise.resolve({ events: [] }),
+        movementsRes?.ok? movementsRes.json(): Promise.resolve({ movements: [] }),
         orgRes?.ok      ? orgRes.json()      : Promise.resolve({ organization: null }),
       ])
       setPaddocks(paddocksResJson.paddocks ?? [])
       setHerds(herdsResJson.herds ?? [])
       setPlans(plansResJson.plans ?? [])
       setFarmEvents(eventsResJson.events ?? [])
+      setMovements(movementsResJson.movements ?? [])
       setMercado(mercadoRes?.ok ? (await mercadoRes.json()) : null)
 
       if (orgResJson.organization) {
@@ -2933,6 +3014,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             paddocks={paddocks}
             herds={herds}
             farmEvents={farmEvents}
+            movements={movements}
             windowStart={ganttWindow}
             windowDays={WINDOW_DAYS}
             onBlockClick={(plan, evt) => {
@@ -2956,6 +3038,20 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             dailyAllocationKg={dailyAllocationKg}
             climateViewEnabled={climateViewEnabled}
             paddockCAdj={paddockCAdj}
+            isDrawingMode={drawingMode}
+            onDrawEnd={(paddockId, startDate, endDate) => {
+              setFormData({
+                paddock_id: paddockId,
+                herd_ids: [],
+                entry_date: new Date(startDate).toISOString().split('T')[0],
+                exit_date: new Date(endDate).toISOString().split('T')[0],
+                planned_recovery_days: '',
+                status: 'PLANNED',
+                actual_adh_consumed: '',
+              })
+              setDrawingMode(false)
+              setIsModalOpen(true)
+            }}
           />
 
 
