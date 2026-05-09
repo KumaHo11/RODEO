@@ -5244,7 +5244,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           onSaved={(seasonPlan) => {
             setShowSeasonPlan(false)
             setSeasonPlans(prev => [seasonPlan, ...prev])
-            setActiveSeasonPlanId(seasonPlan.id)
+            setActiveSeasonPlanId(seasonPlan.id ?? null)
             setGanttWindow(seasonPlan.start_date || new Date().toISOString().split('T')[0])
             if (seasonPlan.source === 'suggested') {
               setActiveGanttTab('suggested')
