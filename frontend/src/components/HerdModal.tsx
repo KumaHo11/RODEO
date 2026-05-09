@@ -38,6 +38,7 @@ export interface HerdData {
   age_years: number | null
   age_months: number | null
   admission_date: string | null
+  exit_date?: string | null
   total_ev: number | null
   bcs_score: number | null
   parent_herd_id: string | null
@@ -48,6 +49,7 @@ export interface HerdData {
 interface Props {
   herd?: HerdData | null
   allHerds?: HerdData[]
+  isTemporary?: boolean
   onClose: () => void
   onSaved: () => void
 }
@@ -124,7 +126,7 @@ function useSpeech(onResult: (t: string) => void) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Props) {
+export default function HerdModal({ herd, allHerds = [], isTemporary = false, onClose, onSaved }: Props) {
   const { hasFeature } = usePlan()
   const canVoice     = hasFeature('voice_bitacora')
   const isEditing = !!herd?.id
@@ -150,6 +152,9 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
   const [ageValue,      setAgeValue]      = useState<number | ''>('')
   const [ageUnit,       setAgeUnit]       = useState<'months' | 'years'>('months')
   const [breed,         setBreed]         = useState(herd?.breed ?? '')
+  const [exitDate,      setExitDate]      = useState<string>(
+    herd?.exit_date ? String(herd.exit_date).slice(0, 10) : ''
+  )
 
   useEffect(() => {
     if (herd?.age_months) { setAgeValue(herd.age_months); setAgeUnit('months') }
@@ -167,7 +172,7 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
 
   const [saving,    setSaving]    = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const canSave = !!name.trim() && Number(count) > 0
+  const canSave = !!name.trim() && Number(count) > 0 && (!isTemporary || !!exitDate)
 
   const handleSave = async () => {
     if (!canSave) return
@@ -181,6 +186,7 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
       age_years: ageUnit === 'years' && ageValue !== '' ? Number(ageValue) : null,
       // Only send date if it's a valid YYYY-MM-DD string
       admission_date: admissionDate && admissionDate.length === 10 ? admissionDate : null,
+      exit_date: exitDate && exitDate.length === 10 ? exitDate : null,
       total_ev: liveEV || null,
     }
     try {
@@ -512,13 +518,21 @@ export default function HerdModal({ herd, allHerds = [], onClose, onSaved }: Pro
                   placeholder="Ej: Recría Norte, Vientres 2024..." className={INPUT} autoFocus={!isEditing} />
               </div>
 
-              <div className="space-y-1.5">
-                <label className={`${LABEL} flex items-center gap-1.5`}>
-                  <Calendar className="w-3 h-3 text-gray-400" /> Fecha de ingreso
-                </label>
-                <input type="date" value={admissionDate} onChange={e => setAdmissionDate(e.target.value)} className={INPUT} />
-                <p className="text-[10px] text-gray-400 italic">Fecha oficial de alta del rodeo</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={`${LABEL} flex items-center gap-1.5`}>
+                    <Calendar className="w-3 h-3 text-gray-400" /> Fecha de ingreso
+                  </label>
+                  <input type="date" value={admissionDate} onChange={e => setAdmissionDate(e.target.value)} className={INPUT} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={`${LABEL} flex items-center gap-1.5`}>
+                    <Calendar className="w-3 h-3 text-gray-400" /> Fecha de salida {isTemporary && <span className="text-red-500 font-black">*</span>}
+                  </label>
+                  <input type="date" value={exitDate} onChange={e => setExitDate(e.target.value)} className={INPUT} />
+                </div>
               </div>
+              <p className="text-[10px] text-gray-400 italic">Cronograma del rodeo en el establecimiento</p>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">

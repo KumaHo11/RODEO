@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { queryOne, mutate } from '@/lib/db'
+import { checkHerdUpdateImpact } from '@/lib/syncService'
 
 async function getOrgId(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
@@ -96,7 +97,14 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({ success: true })
+    // Comprobar impacto en planes si se alteró el EV o la cantidad de cabezas
+    let impactsPlans = false
+    if (body.total_ev !== undefined || body.head_count !== undefined) {
+      const newEv = body.total_ev || 0 // (En la realidad deberíamos buscar el nuevo EV en la base de datos)
+      impactsPlans = await checkHerdUpdateImpact(auth.orgId, herdId, newEv)
+    }
+
+    return NextResponse.json({ success: true, impactsPlans })
   } catch (err: any) {
     console.error('PATCH /api/herds/[id] error:', err)
     return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })

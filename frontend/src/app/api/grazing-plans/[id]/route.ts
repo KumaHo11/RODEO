@@ -21,13 +21,15 @@ export async function PATCH(
     const vals: any[] = []
     let i = 1
 
-    const jsonFields = new Set(['herd_ids', 'temporary_animals', 'ai_analysis'])
+    const jsonFields = new Set(['herd_ids', 'temporary_animals', 'ai_analysis', 'closing_stock'])
 
     const validFields = [
       'paddock_id', 'herd_id', 'herd_ids', 'entry_date', 'exit_date',
       'actual_entry_date', 'actual_exit_date',
+      'adjusted_entry_date', 'adjusted_exit_date', 'is_locked', 'closing_stock',
       'planned_recovery_days', 'status', 'temporary_animals', 'notes',
-      'exit_notes', 'exit_dry_matter_kg_ha', 'ai_analysis'
+      'exit_notes', 'exit_dry_matter_kg_ha', 'ai_analysis',
+      'plan_type', 'source_origin', 'cycle_id'
     ]
 
     for (const field of validFields) {

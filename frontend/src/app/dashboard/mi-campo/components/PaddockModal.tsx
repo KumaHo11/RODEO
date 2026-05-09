@@ -704,20 +704,20 @@ export default function PaddockModal({
                 if (_dah === null && _coef === null) return null
 
                 return (
-                  <div className="rounded-xl bg-violet-50 border border-violet-100 p-3.5 space-y-3">
+                  <div className="rounded-xl bg-green-50 border border-green-100 p-3.5 space-y-3">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-[10px] font-black text-violet-700 uppercase tracking-widest">Métricas Holísticas</p>
+                      <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">Métricas Holísticas</p>
                       <Tooltip text="Indicadores del Manejo Holístico calculados con los datos actuales de materia seca, superficie y rodeo." />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {_dah !== null && (
-                        <div className="bg-white rounded-xl border border-violet-100 p-3 text-center">
+                        <div className="bg-white rounded-xl border border-green-100 p-3 text-center">
                           <div className="flex items-center justify-center gap-1 mb-0.5">
-                            <p className="text-[9px] font-black text-violet-500 uppercase tracking-widest">DAH Estimado</p>
+                            <p className="text-[9px] font-black text-green-500 uppercase tracking-widest">DAH Estimado</p>
                             <Tooltip text="Días Animal por Hectárea: cuántos días puede este potrero alimentar a 1 Equivalente Vaca según el pasto actual. Fórmula: (MS − remanente) × ha / (EV × kg MS/día)." />
                           </div>
-                          <p className="text-2xl font-black text-violet-800 leading-none">{_dah}</p>
-                          <p className="text-[9px] text-violet-500 font-bold mt-0.5">días</p>
+                          <p className="text-2xl font-black text-green-800 leading-none">{_dah}</p>
+                          <p className="text-[9px] text-green-500 font-bold mt-0.5">días</p>
                         </div>
                       )}
                       {_coef !== null && (

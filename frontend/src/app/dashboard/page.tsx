@@ -17,6 +17,7 @@ import {
 import CowIcon from '@/components/CowIcon'
 import { AppHeader } from '@/components/AppHeader'
 import { MarketWidget } from '@/components/MarketWidget'
+import ForageVigorMonitor from '@/components/ForageVigorMonitor'
 
 const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 51: '🌦️', 61: '🌧️', 80: '🌩️', 95: '⛈️' }
 const getWeatherIcon = (code: number) => {
@@ -45,6 +46,8 @@ export default function DashboardOverview() {
   const [nextMoves, setNextMoves]         = useState<any[]>([])
   const [upcomingTasks, setUpcomingTasks] = useState<any[]>([])
   const [farmEvents, setFarmEvents]       = useState<any[]>([])
+  const [climateSnapshots, setClimateSnapshots] = useState<any[]>([])
+  const [activePaddockIds, setActivePaddockIds] = useState<string[]>([])
 
   // NDVI Growth widget state
   const [ndviLoading, setNdviLoading]     = useState(false)
@@ -81,13 +84,14 @@ export default function DashboardOverview() {
       setLoading(true)
 
       try {
-        const [orgRes, paddocksRes, herdsRes, plansRes, tasksRes, farmEventsRes] = await Promise.all([
+        const [orgRes, paddocksRes, herdsRes, plansRes, tasksRes, farmEventsRes, climateRes] = await Promise.all([
           apiFetch('/api/organizations'),
           apiFetch('/api/paddocks'),
           apiFetch('/api/herds'),
           apiFetch('/api/grazing-plans'),
           apiFetch(`/api/tasks?from_date=${new Date().toISOString().split('T')[0]}&limit=4`),
           apiFetch('/api/farm-events'),
+          apiFetch('/api/climate-adjustment').catch(() => ({ ok: false } as Response)),
         ])
 
         const orgData = orgRes.ok ? (await orgRes.json()).organization : null
@@ -96,8 +100,10 @@ export default function DashboardOverview() {
         const plansData = plansRes.ok ? (await plansRes.json()).plans : []
         const tasksData = tasksRes.ok ? (await tasksRes.json()).tasks : []
         const eventsData = farmEventsRes.ok ? (await farmEventsRes.json()).events : []
+        const climateData = climateRes.ok ? (await climateRes.json()).snapshots : []
 
         setOrg(orgData)
+        setClimateSnapshots(climateData || [])
 
         const sorted = (paddocksData || []).sort((a: any, b: any) =>
           (Number(b.dry_matter_kg_ha) || 0) - (Number(a.dry_matter_kg_ha) || 0)
@@ -110,12 +116,25 @@ export default function DashboardOverview() {
             .filter((t: any) => t.status !== 'COMPLETADA' && t.status !== 'completada')
             .slice(0, 4)
         )
-        setNextMoves(
-          (plansData || [])
-            .filter((p: any) => p.status === 'PLANNED' || p.status === 'ACTIVE')
-            .sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date))
-            .slice(0, 5)
-        )
+        const today = new Date().toISOString().split('T')[0]
+        const allActivePlans = (plansData || []).filter((p: any) => {
+          const isActiveStatus = p.status === 'ACTIVE' || p.status === 'active'
+          const coversToday = p.entry_date <= today && (!p.exit_date || p.exit_date >= today)
+          return isActiveStatus || coversToday
+        })
+        const futurePlans    = (plansData || []).filter((p: any) => p.status === 'PLANNED' && p.entry_date > today)
+
+        // Sort actives by exit date (soonest first — most urgent), then future by entry date
+        allActivePlans.sort((a: any, b: any) => {
+          if (a.exit_date && b.exit_date) return a.exit_date.localeCompare(b.exit_date)
+          if (a.exit_date) return -1
+          if (b.exit_date) return 1
+          return a.entry_date.localeCompare(b.entry_date)
+        })
+        futurePlans.sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date))
+
+        setActivePaddockIds(allActivePlans.map((p: any) => p.paddock_id).filter(Boolean))
+        setNextMoves([...allActivePlans, ...futurePlans].slice(0, 6))
         setFarmEvents(
           (eventsData || [])
             .filter((e: any) => e.status === 'pendiente')
@@ -169,9 +188,8 @@ export default function DashboardOverview() {
             return
           }
 
-          const resp = await fetch('/api/ndvi', {
+          const resp = await apiFetch('/api/ndvi', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ geojson: p.boundary, paddock_id: p.id }),
           })
           if (!resp.ok) { processed++; return }
@@ -445,7 +463,7 @@ export default function DashboardOverview() {
           {/* 4. Rodeos — Carga animal */}
           <div className="bg-[#fffbeb] rounded-2xl border border-[#fde68a] shadow-sm flex flex-col p-4">
             <h3 className="text-[10px] font-bold text-amber-700/60 tracking-widest uppercase flex items-center gap-1 mb-1">
-              <CowIcon className="w-3.5 h-3.5" /> Carga animal
+              <Layers className="w-3.5 h-3.5" /> Carga animal
             </h3>
             <p className="text-xs font-bold text-amber-900">{herds.length} rodeos · {herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)} animales</p>
             <div className="mt-3 flex items-end gap-2">
@@ -492,7 +510,7 @@ export default function DashboardOverview() {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-gray-900 truncate">{t.title}</p>
                   {t.paddocks?.name && <p className="text-[10px] items-center gap-1 text-gray-500 truncate flex"><MapPin className="w-3 h-3"/> {t.paddocks.name}</p>}
-                  {t.herds?.name && <p className="text-[10px] items-center gap-1 text-gray-500 truncate flex"><CowIcon className="w-3 h-3"/> {t.herds.name}</p>}
+                  {t.herds?.name && <p className="text-[10px] items-center gap-1 text-gray-500 truncate flex"><Layers className="w-3 h-3"/> {t.herds.name}</p>}
                   <span className={`inline-block mt-1 text-[8px] font-black px-1.5 py-0.5 rounded-full ${TASK_PRIORITY_COLORS[t.priority?.toLowerCase()] || TASK_PRIORITY_COLORS.baja}`}>{t.priority || 'Normal'}</span>
                 </div>
               </div>
@@ -514,49 +532,99 @@ export default function DashboardOverview() {
             </Link>
           </div>
 
-          {/* KPI Strip compacta */}
-          <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
-            {(() => {
-              const resting = paddocks.filter(p => p.current_status !== 'GRAZING').length
-              const rotPct = paddocks.length > 0 ? Math.round((resting / paddocks.length) * 100) : 0
-              const deficit = dailyDemand > 0 && totalMSOffer < dailyDemand
-              return (
-                <>
-                  <div className="px-4 py-3 flex items-center gap-3">
-                    <div className="relative w-10 h-10 shrink-0">
-                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                        <path className="text-gray-100" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                        <path className="text-green-500" strokeWidth="4" strokeDasharray={`${rotPct}, 100`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-[9px] font-black text-gray-700">{rotPct}%</span>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rotación</p>
-                      <p className="text-xs font-black text-gray-900">{resting}/{paddocks.length} <span className="text-[9px] font-normal text-gray-500">en descanso</span></p>
+          {/* KPI Strip — derived 100% from real grazing plans */}
+          {(() => {
+            const today = new Date(); today.setHours(0,0,0,0)
+            const todayStr = new Date().toISOString().split('T')[0]
+
+            // Active plans (currently grazing)
+            const activePlans = nextMoves.filter((p: any) => {
+              if (p.status === 'ACTIVE') return true
+              if (p.entry_date <= todayStr && (!p.exit_date || p.exit_date >= todayStr)) return true
+              return false
+            })
+
+            // Plans with imminent exit (next 7 days)
+            const urgentExits = nextMoves.filter((p: any) => {
+              if (!p.exit_date) return false
+              const d = Math.round((new Date(p.exit_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)
+              return d >= 0 && d <= 7
+            })
+
+            // Next planned entry
+            const nextEntry = nextMoves.find((p: any) => {
+              const d = Math.round((new Date(p.entry_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)
+              return d > 0
+            })
+            const daysToNextEntry = nextEntry
+              ? Math.round((new Date(nextEntry.entry_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)
+              : null
+
+            const restingCount = paddocks.length - activePaddockIds.length
+            const rotPct = paddocks.length > 0 ? Math.round((restingCount / paddocks.length) * 100) : 0
+
+            return (
+              <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
+                {/* Rotación */}
+                <div className="px-4 py-3 flex items-center gap-3">
+                  <div className="relative w-10 h-10 shrink-0">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                      <path className="text-gray-100" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                      <path className="text-green-500" strokeWidth="4" strokeDasharray={`${rotPct}, 100`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-[9px] font-black text-gray-700">{rotPct}%</span>
                     </div>
                   </div>
-                  <div className="px-4 py-3 flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Balance forrajero</p>
-                    <p className={`text-sm font-black mt-0.5 ${deficit ? 'text-red-600' : 'text-green-600'}`}>{deficit ? 'Déficit' : 'Superávit'}</p>
-                    <p className="text-[9px] text-gray-500 font-medium">{Math.abs(totalMSOffer - dailyDemand).toLocaleString()} kg MS/día</p>
+                  <div>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rotación</p>
+                    <p className="text-xs font-black text-gray-900">{restingCount}/{paddocks.length} <span className="text-[9px] font-normal text-gray-500">en descanso</span></p>
                   </div>
-                  <div className="px-4 py-3 flex items-start gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 shrink-0 mt-0.5">
-                      <Lightbulb className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">Recomendación</p>
-                      <p className="text-[10px] text-gray-700 font-medium leading-relaxed mt-0.5">
-                        {autonomyDays > 0 ? `Mover rodeo en ${Math.min(autonomyDays, 7)} días` : 'Sin datos de forraje'}
+                </div>
+
+                {/* Pastoreando ahora */}
+                <div className="px-4 py-3 flex flex-col justify-center">
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">En pastoreo</p>
+                  {activePlans.length > 0 ? (
+                    <>
+                      <p className="text-sm font-black mt-0.5 text-green-600">{activePlans.length} potrero{activePlans.length !== 1 ? 's' : ''}</p>
+                      <p className="text-[9px] text-gray-500 font-medium">
+                        {urgentExits.length > 0
+                          ? `${urgentExits.length} salida${urgentExits.length !== 1 ? 's' : ''} próxima${urgentExits.length !== 1 ? 's' : ''}`
+                          : 'Sin salidas urgentes'}
                       </p>
-                    </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-black mt-0.5 text-gray-400">—</p>
+                      <p className="text-[9px] text-gray-400 font-medium">Sin planes activos</p>
+                    </>
+                  )}
+                </div>
+
+                {/* Próximo movimiento */}
+                <div className="px-4 py-3 flex items-start gap-2">
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${activePlans.length === 0 ? 'bg-amber-100 text-amber-600' : urgentExits.length > 0 ? 'bg-indigo-100 text-indigo-600' : daysToNextEntry !== null ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                    <Target className="w-3.5 h-3.5" />
                   </div>
-                </>
-              )
-            })()}
-          </div>
+                  <div>
+                    <p className={`text-[9px] font-black uppercase tracking-widest ${activePlans.length === 0 ? 'text-amber-600' : urgentExits.length > 0 ? 'text-indigo-700' : 'text-blue-700'}`}>
+                      {activePlans.length === 0 ? 'Días sin pastoreo' : urgentExits.length > 0 ? 'Mover pronto' : 'Próx. entrada'}
+                    </p>
+                    <p className="text-[10px] text-gray-700 font-medium leading-relaxed mt-0.5">
+                      {activePlans.length === 0
+                        ? '⚠️ No hay animales en el campo'
+                        : urgentExits.length > 0
+                          ? `${urgentExits[0].paddocks?.name || 'Potrero'} en ${Math.round((new Date(urgentExits[0].exit_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)}d`
+                          : daysToNextEntry !== null
+                            ? `${nextEntry?.paddocks?.name || 'Potrero'} en ${daysToNextEntry}d`
+                            : nextMoves.length === 0 ? 'Sin planificación' : 'Sin mov. próximos'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Timeline de movimientos */}
           <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
@@ -623,7 +691,6 @@ export default function DashboardOverview() {
                           <>
                             <span className="text-gray-200 text-[10px]">·</span>
                             <span className="text-[10px] font-bold text-gray-600 flex items-center gap-0.5">
-                              <CowIcon className="w-2.5 h-2.5" />
                               {totalHeads} cab.
                             </span>
                           </>
@@ -670,27 +737,21 @@ export default function DashboardOverview() {
           </div>
         </div>
 
-        {/* Crecimiento (NDVI) */}
-        <div className="bg-[#ecfdf5] rounded-2xl border border-[#6ee7b7] shadow-sm flex flex-col overflow-hidden flex-1">
-          <div className="px-5 py-3 border-b border-emerald-200/50 flex justify-between items-center">
-            <h3 className="text-xs font-black text-emerald-900 flex items-center gap-1.5"><Satellite className="w-3.5 h-3.5" /> Crecimiento NDVI</h3>
-            <button onClick={refreshAllNdvi} className="text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-1">
-              <RefreshCw className={`w-3 h-3 ${ndviLoading ? 'animate-spin' : ''}`} />
-            </button>
+        {/* Vigor Forrajero y Ajuste Climático */}
+        <div className="flex-[2] bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden min-h-[400px]">
+          <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/30">
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <Satellite className="w-4 h-4 text-green-600" /> Monitoreo de Vigor y Clima (CDP)
+            </h3>
+            <div className="flex items-center gap-4">
+               <button onClick={refreshAllNdvi} className="text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-1">
+                <RefreshCw className={`w-3 h-3 ${ndviLoading ? 'animate-spin' : ''}`} /> Actualizar NDVI
+              </button>
+              <Link href="/dashboard/grazing" className="text-[10px] font-bold text-green-600 hover:underline">Ver Planificador →</Link>
+            </div>
           </div>
-          <div className="p-5 flex-1 flex flex-col justify-center relative">
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700/60 mb-2">Velocidad promedio</p>
-            <div className="flex items-baseline gap-2">
-              <p className="text-4xl font-black text-emerald-700 leading-none">
-                {avgGrowthRate !== null ? `${avgGrowthRate >= 0 ? '+' : ''}${avgGrowthRate.toFixed(1)}` : '—'}
-              </p>
-              {avgGrowthRate !== null && <TrendingUp className="w-6 h-6 text-emerald-600" />}
-            </div>
-            <p className="text-xs font-bold text-emerald-800/80 mt-1 pb-4">kg de materia seca · por hectárea · por día</p>
-            
-            <div className="mt-auto border-t border-emerald-200/50 pt-3">
-              <p className="text-[9px] text-emerald-700/70 font-medium">Satélite Sentinel-2</p>
-            </div>
+          <div className="p-4 flex-1">
+            <ForageVigorMonitor />
           </div>
         </div>
       </div>

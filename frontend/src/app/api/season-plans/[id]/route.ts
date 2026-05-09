@@ -74,9 +74,11 @@ export async function PATCH(
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     console.error('PATCH /api/season-plans/[id] error:', err)
+    require('fs').appendFileSync('/tmp/rodeo_api_error.log', new Date().toISOString() + ' PATCH ' + err.message + '\n' + err.stack + '\n')
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
+
 
 export async function DELETE(
   req: NextRequest,

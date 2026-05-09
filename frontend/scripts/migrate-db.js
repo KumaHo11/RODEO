@@ -193,6 +193,20 @@ ALTER TABLE herds ADD COLUMN IF NOT EXISTS exit_date DATE;
 -- farm_events: assigned_to for team member tasks
 ALTER TABLE farm_events ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES profiles(id) ON DELETE SET NULL;
 
+-- grazing_plans: The Triple Track & Modals additions
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS actual_entry_date DATE;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS actual_exit_date DATE;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS exit_notes TEXT;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS exit_dry_matter_kg_ha DECIMAL(10,2);
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS ai_analysis JSONB;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS temporary_animals JSONB;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS herd_ids JSONB;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS adjusted_entry_date DATE;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS adjusted_exit_date DATE;
+ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS closing_stock INT;
+
 -- Default subscription plans
 INSERT INTO subscriptions_plans (name, price, price_ars, price_usd, paddocks_limit, herds_limit, has_ai_analysis, billing_period)
 VALUES 

@@ -311,7 +311,6 @@ function MapController({
             pointer-events: none;
             letter-spacing: 0.01em;
           ">
-            <span style="font-size:13px;line-height:1">🐄</span>
             <span style="max-width:80px;overflow:hidden;text-overflow:ellipsis">${plan.herd_name}</span>
             ${headStr ? `<span style="
               background: rgba(255,255,255,0.22);

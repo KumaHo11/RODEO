@@ -11,13 +11,13 @@ import {
 import { motion } from 'framer-motion'
 
 const SPECIES_LABELS: Record<string, { label: string; emoji: string }> = {
-  vacas:       { label: 'Vacas',       emoji: '🐄' },
-  vaquillonas: { label: 'Vaquillonas', emoji: '🐄' },
-  terneros:    { label: 'Terneros',    emoji: '🐄' },
-  ovejas:      { label: 'Ovejas',      emoji: '🐑' },
-  cabras:      { label: 'Cabras',      emoji: '🐐' },
-  caballos:    { label: 'Caballos',   emoji: '🐴' },
-  toros:       { label: 'Toros',       emoji: '🐂' },
+  vacas:       { label: 'Vacas',       emoji: '' },
+  vaquillonas: { label: 'Vaquillonas', emoji: '' },
+  terneros:    { label: 'Terneros',    emoji: '' },
+  ovejas:      { label: 'Ovejas',      emoji: '' },
+  cabras:      { label: 'Cabras',      emoji: '' },
+  caballos:    { label: 'Caballos',   emoji: '' },
+  toros:       { label: 'Toros',       emoji: '' },
 }
 
 const MS_PER_EV_DAY = 11
@@ -235,7 +235,9 @@ export default function Step4Confirm() {
                 return (
                   <div key={idx} className="flex items-center justify-between px-3 py-2.5 bg-white rounded-xl border border-gray-100">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-base">{sp?.emoji || '🐄'}</span>
+                      <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center border border-gray-100">
+                        <Users className="w-4 h-4 text-gray-400" />
+                      </div>
                       <div>
                         <p className="text-xs font-black text-gray-900">{h.name}</p>
                         <p className="text-[9px] text-gray-400">{sp?.label || h.species} · {h.headCount} cab.</p>

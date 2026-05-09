@@ -7,13 +7,13 @@ import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, Ali
 import { FeatureGate } from '@/components/FeatureGate'
 
 const EVENT_TYPES = [
-  { id: 'servicio',             label: 'Servicio',                 color: '#be185d', bg: 'bg-red-50',     text: 'text-red-700',    dot: 'bg-red-500',    emoji: '🐄' },
-  { id: 'paricion',             label: 'Parición',                 color: '#be185d', bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500',   emoji: '🍼' },
-  { id: 'destete',              label: 'Destete',                  color: '#d97706', bg: 'bg-yellow-50',  text: 'text-yellow-700', dot: 'bg-yellow-500', emoji: '🧶' },
-  { id: 'diagnostico_prenez',   label: 'Diagnóstico de Preñez',    color: '#be185d', bg: 'bg-orange-50',  text: 'text-orange-700', dot: 'bg-orange-500', emoji: '🔍' },
-  { id: 'tratamiento_sanitario',label: 'Tratamiento Sanitario',    color: '#7c3aed', bg: 'bg-amber-50',   text: 'text-amber-900',  dot: 'bg-amber-800',  emoji: '💉' },
-  { id: 'esquila',              label: 'Esquila',                  color: '#7c3aed', bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-500', emoji: '✂️' },
-  { id: 'vacaciones',           label: 'Vacaciones',               color: '#ec4899', bg: 'bg-pink-50',    text: 'text-pink-700',   dot: 'bg-pink-500',   emoji: '🏖️' },
+  { id: 'servicio',             label: 'Servicio',                 color: '#be185d', bg: 'bg-red-50',     text: 'text-red-700',    dot: 'bg-red-500',    emoji: '' },
+  { id: 'paricion',             label: 'Parición',                 color: '#be185d', bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500',   emoji: '' },
+  { id: 'destete',              label: 'Destete',                  color: '#d97706', bg: 'bg-yellow-50',  text: 'text-yellow-700', dot: 'bg-yellow-500', emoji: '' },
+  { id: 'diagnostico_prenez',   label: 'Diagnóstico de Preñez',    color: '#be185d', bg: 'bg-orange-50',  text: 'text-orange-700', dot: 'bg-orange-500', emoji: '' },
+  { id: 'tratamiento_sanitario',label: 'Tratamiento Sanitario',    color: '#7c3aed', bg: 'bg-amber-50',   text: 'text-amber-900',  dot: 'bg-amber-800',  emoji: '' },
+  { id: 'esquila',              label: 'Esquila',                  color: '#7c3aed', bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-500', emoji: '' },
+  { id: 'vacaciones',           label: 'Vacaciones',               color: '#ec4899', bg: 'bg-pink-50',    text: 'text-pink-700',   dot: 'bg-pink-500',   emoji: '' },
 ]
 
 const getEventType = (id: string) => EVENT_TYPES.find(e => e.id === id) || EVENT_TYPES[0]

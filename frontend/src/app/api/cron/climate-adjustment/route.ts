@@ -156,8 +156,11 @@ export async function GET(req: NextRequest) {
           precipitation_sum: number | null
           drought_index: string | null
           forecast_mm_14d: number | null
+          temperatura_c: number | null
+          radiacion_solar: number | null
         }>(`
-          SELECT humidity, wind_speed, precipitation_sum, drought_index, forecast_mm_14d
+          SELECT humidity, wind_speed, precipitation_sum, drought_index, forecast_mm_14d,
+                 temperatura_c, radiacion_solar
           FROM weather_cache
           WHERE org_id = $1
           ORDER BY fetched_at DESC
@@ -195,20 +198,45 @@ export async function GET(req: NextRequest) {
               ? Math.round((Date.now() - new Date(paddock.previous_ndvi_date).getTime()) / 86400000)
               : undefined
 
+            // Lluvia usuario de los últimos 7 días (prioridad sobre API)
+            const userRainRow = await queryOne<{ total_mm: number }>(`
+              SELECT COALESCE(SUM(precipitacion_usuario_mm), 0) AS total_mm
+              FROM historial_potrero
+              WHERE paddock_id = $1
+                AND fecha >= CURRENT_DATE - INTERVAL '7 days'
+                AND precipitacion_usuario_mm IS NOT NULL
+            `, [paddock.paddock_id]).catch(() => null)
+
+            // NDVI previo desde historial_potrero
+            const prevNdviRow = await queryOne<{ ndvi: number; fecha: string }>(`
+              SELECT ndvi, fecha::text FROM historial_potrero
+              WHERE paddock_id = $1 AND ndvi IS NOT NULL AND fecha < CURRENT_DATE
+              ORDER BY fecha DESC LIMIT 1
+            `, [paddock.paddock_id]).catch(() => null)
+
+            const rainfallManual = (userRainRow?.total_mm ?? 0) > 0
+              ? Number(userRainRow!.total_mm)
+              : undefined
+
             const input: ClimateAdjustmentInput = {
               paddockId:             paddock.paddock_id,
               areaHa:                Number(paddock.area_ha) || 1,
               currentForageMsHa:     Number(paddock.dry_matter_kg_ha) || 1200,
               currentNdvi:           Number(paddock.current_ndvi) || 0.50,
-              previousNdvi:          paddock.previous_ndvi ? Number(paddock.previous_ndvi) : undefined,
+              previousNdvi:          prevNdviRow?.ndvi ? Number(prevNdviRow.ndvi)
+                                       : (paddock.previous_ndvi ? Number(paddock.previous_ndvi) : undefined),
               daysSincePreviousNdvi: daysSincePrevNdvi,
               totalEv,
               dailyRationKgPerEv:    12,
               rainfall7dMm:          Number(rainfall7dRow?.total_mm) || Number(weatherCache?.precipitation_sum) || 0,
+              rainfallManualMm:      rainfallManual,
               humidityPct:           Number(weatherCache?.humidity) || 65,
               forecastRainfall14dMm: Number(weatherCache?.forecast_mm_14d) || 0,
               droughtIndex:          (weatherCache?.drought_index as DroughtIndex) || 'NONE',
               avgWindKmh:            Number(weatherCache?.wind_speed) || undefined,
+              temperaturaC:          weatherCache?.temperatura_c != null ? Number(weatherCache.temperatura_c) : undefined,
+              radiacionSolar:        weatherCache?.radiacion_solar != null ? Number(weatherCache.radiacion_solar) : undefined,
+              latitudCampo:          org.latitude ?? undefined,
               currentMonth:          new Date().getMonth() + 1,
             }
 
@@ -233,6 +261,49 @@ export async function GET(req: NextRequest) {
               result.baseRemainingDays, result.adjustedRemainingDays,
               result.alertLevel, result.alertMessage, result.deltaFromPlan,
               JSON.stringify(result.multiplierBreakdown),
+            ]).catch(() => {})
+
+            // Upsert en historial_potrero con datos del día
+            const wb = result.waterBalance
+            const flags = result.dataSourceFlags
+            await mutate(`
+              INSERT INTO historial_potrero (
+                org_id, paddock_id, fecha,
+                ndvi, precipitacion_api_mm,
+                humedad_pct, velocidad_viento_kmh, temperatura_c, radiacion_solar,
+                et_calculada_mm, balance_hidrico_mm, c_adj,
+                lluvia_fuente, rs_fuente, temp_fuente
+              ) VALUES (
+                $1,$2,CURRENT_DATE,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
+              )
+              ON CONFLICT (paddock_id, fecha) DO UPDATE SET
+                ndvi                 = COALESCE(EXCLUDED.ndvi, historial_potrero.ndvi),
+                precipitacion_api_mm = EXCLUDED.precipitacion_api_mm,
+                humedad_pct          = EXCLUDED.humedad_pct,
+                velocidad_viento_kmh = EXCLUDED.velocidad_viento_kmh,
+                temperatura_c        = EXCLUDED.temperatura_c,
+                radiacion_solar      = EXCLUDED.radiacion_solar,
+                et_calculada_mm      = EXCLUDED.et_calculada_mm,
+                balance_hidrico_mm   = EXCLUDED.balance_hidrico_mm,
+                c_adj                = EXCLUDED.c_adj,
+                rs_fuente            = EXCLUDED.rs_fuente,
+                temp_fuente          = EXCLUDED.temp_fuente,
+                updated_at           = NOW()
+            `, [
+              org.org_id,
+              paddock.paddock_id,
+              input.currentNdvi,
+              input.rainfall7dMm,
+              input.humidityPct,
+              input.avgWindKmh ?? null,
+              input.temperaturaC ?? null,
+              input.radiacionSolar ?? null,
+              wb.etCalculadaMm,
+              wb.balanceHidricoMm,
+              result.climateMultiplier,
+              flags.rainfallSource,
+              flags.rsSource,
+              flags.tempSource,
             ]).catch(() => {})
 
             paddocksProcessed++

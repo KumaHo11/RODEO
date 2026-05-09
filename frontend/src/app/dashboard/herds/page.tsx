@@ -5,7 +5,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import {
   Plus, Search, Trash2, LayoutGrid, List, Download,
-  ChevronUp, ChevronDown, Filter, X, Calendar, Edit3, Loader2,
+  ChevronUp, ChevronDown, Filter, X, Calendar, Edit3, Loader2, Layers,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import HerdModal, { type HerdData } from '@/components/HerdModal'
@@ -400,19 +400,19 @@ export default function HerdsPage() {
       {/* ════ CARDS VIEW ════ */}
       {view === 'cards' && (
         loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-24 sm:pb-10">
             {[...Array(6)].map((_, i) => <div key={i} className="h-52 bg-gray-100 rounded-2xl animate-pulse" />)}
           </div>
         ) : filtered.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
-            <div className="w-12 h-12 rounded-2xl bg-gray-100 mx-auto mb-3 flex items-center justify-center">
-              <span className="text-2xl">🐄</span>
+            <div className="w-12 h-12 rounded-2xl bg-gray-100 mx-auto mb-3 flex items-center justify-center text-gray-300">
+              <Layers className="w-6 h-6" />
             </div>
             <p className="text-sm font-bold text-gray-400">No hay rodeos que mostrar</p>
             <p className="text-[10px] text-gray-300 mt-1">Creá tu primer rodeo o cambiá los filtros</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-24 sm:pb-10">
             <AnimatePresence>
               {filtered.map(herd => {
                 const catKey     = herd.categoria as CategoriaComercial | null
@@ -447,6 +447,9 @@ export default function HerdsPage() {
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors?.dot ?? 'bg-gray-300'}`} />
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">{catDisp}</p>
+                            {herd.exit_date && (
+                              <span className="ml-1 text-[8px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md tracking-wider">TEMP</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -461,7 +464,7 @@ export default function HerdsPage() {
                     <div className="px-5 pb-4">
                       {/* Cabezas — dato principal */}
                       <div className="flex items-baseline gap-2 mb-3">
-                        <p className="text-3xl font-black text-gray-950 tabular-nums leading-none">
+                        <p className="text-3xl font-semibold text-gray-950 tabular-nums leading-none">
                           {Math.round(herd.head_count).toLocaleString('es-AR')}
                         </p>
                         <p className="text-sm font-bold text-gray-400">cabezas</p>
@@ -548,7 +551,12 @@ export default function HerdsPage() {
                       className="hover:bg-green-50/30 transition-colors cursor-pointer group"
                       onClick={() => openEdit(herd)}>
                       <td className="px-4 py-3">
-                        <p className="text-sm font-bold text-gray-900">{herd.name}</p>
+                        <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                          {herd.name}
+                          {herd.exit_date && (
+                            <span className="text-[8px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md tracking-wider">TEMP</span>
+                          )}
+                        </p>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

@@ -179,7 +179,7 @@ Combina `Label` + `Input` + mensaje de error con `id` automático para accesibil
 #### `EmptyState`
 ```tsx
 <EmptyState
-  emoji="🐄"
+  emoji="📊"
   title="No hay rebaños que mostrar"
   description="Creá tu primer rebaño o cambiá los filtros."
   action={<Button onClick={openCreate}>Nuevo Rebaño</Button>}

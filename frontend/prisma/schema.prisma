@@ -8,152 +8,158 @@ datasource db {
 }
 
 model SubscriptionPlan {
-  id             String         @id @default(uuid()) @db.Uuid
-  name           String         @db.VarChar(255)
-  price          Decimal        @db.Decimal(10, 2)
-  priceArs       Decimal?       @db.Decimal(10, 2)  @map("price_ars")
-  priceUsd       Decimal?       @db.Decimal(10, 2)  @map("price_usd")
-  paddocksLimit  Int?           @default(5)          @map("paddocks_limit")
-  herdsLimit     Int?           @default(1)          @map("herds_limit")
-  hasAiAnalysis  Boolean        @default(false)      @map("has_ai_analysis")
-  billingPeriod  String?        @default("monthly")  @map("billing_period")
-  stripePriceId  String?        @db.VarChar(255)     @map("stripe_price_id")
-  mpPlanId       String?        @db.VarChar(255)     @map("mp_plan_id")
-  isActive       Boolean        @default(true)       @map("is_active")
-  createdAt      DateTime       @default(now())      @map("created_at")
-  organizations  Organization[]
-  payments       Payment[]
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String         @db.VarChar(255)
+  price         Decimal        @db.Decimal(10, 2)
+  priceArs      Decimal?       @map("price_ars") @db.Decimal(10, 2)
+  priceUsd      Decimal?       @map("price_usd") @db.Decimal(10, 2)
+  paddocksLimit Int?           @default(5) @map("paddocks_limit")
+  herdsLimit    Int?           @default(1) @map("herds_limit")
+  hasAiAnalysis Boolean        @default(false) @map("has_ai_analysis")
+  billingPeriod String?        @default("monthly") @map("billing_period")
+  stripePriceId String?        @map("stripe_price_id") @db.VarChar(255)
+  mpPlanId      String?        @map("mp_plan_id") @db.VarChar(255)
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  organizations Organization[]
+  payments      Payment[]
 
   @@map("subscriptions_plans")
 }
 
 model Organization {
-  id                   String            @id @default(uuid()) @db.Uuid
-  ownerId              String            @db.Uuid              @map("owner_id")
-  name                 String            @db.VarChar(255)
-  totalAreaHa          Decimal?          @db.Decimal(10, 2)   @map("total_area_ha")
-  regionId             String?           @db.VarChar(50)      @map("region_id")
-  droughtPlanBuffer    Int?              @default(20)         @map("drought_plan_buffer")
-  subscriptionPlanId   String?           @db.Uuid             @map("subscription_plan_id")
-  createdAt            DateTime          @default(now())      @map("created_at")
-  updatedAt            DateTime          @updatedAt           @map("updated_at")
-  subscriptionPlan     SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
-  profiles             Profile[]
-  paddocks             Paddock[]
-  herds                Herd[]
-  rainfallLogs         RainfallLog[]
-  weatherEvents        WeatherEvent[]
-  payments             Payment[]
+  id                 String            @id @default(uuid()) @db.Uuid
+  ownerId            String            @map("owner_id") @db.Uuid
+  name               String            @db.VarChar(255)
+  totalAreaHa        Decimal?          @map("total_area_ha") @db.Decimal(10, 2)
+  regionId           String?           @map("region_id") @db.VarChar(50)
+  droughtPlanBuffer  Int?              @default(20) @map("drought_plan_buffer")
+  subscriptionPlanId String?           @map("subscription_plan_id") @db.Uuid
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+  profiles           Profile[]
+  paddocks           Paddock[]
+  herds              Herd[]
+  rainfallLogs       RainfallLog[]
+  weatherEvents      WeatherEvent[]
+  payments           Payment[]
+  farmEvents         FarmEvent[]
+  tasks              Task[]
 
   @@map("organizations")
 }
 
 model Profile {
-  id              String        @id @db.Uuid
-  organizationId  String?       @db.Uuid              @map("organization_id")
-  firebaseUid     String?       @unique               @map("firebase_uid")
-  role            String?       @db.VarChar(50)
-  isActive        Boolean?      @default(true)        @map("is_active")
-  firstName       String?       @db.VarChar(255)      @map("first_name")
-  lastName        String?       @db.VarChar(255)      @map("last_name")
-  onboardingStep  Int?          @default(0)           @map("onboarding_step")
-  countryCode     String?       @db.VarChar(2)        @map("country_code")
-  createdAt       DateTime      @default(now())       @map("created_at")
-  updatedAt       DateTime      @updatedAt            @map("updated_at")
-  organization    Organization? @relation(fields: [organizationId], references: [id])
+  id                   String                 @id @db.Uuid
+  organizationId       String?                @map("organization_id") @db.Uuid
+  firebaseUid          String?                @unique @map("firebase_uid")
+  role                 String?                @db.VarChar(50)
+  isActive             Boolean?               @default(true) @map("is_active")
+  firstName            String?                @map("first_name") @db.VarChar(255)
+  lastName             String?                @map("last_name") @db.VarChar(255)
+  onboardingStep       Int?                   @default(0) @map("onboarding_step")
+  countryCode          String?                @map("country_code") @db.VarChar(2)
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+  organization         Organization?          @relation(fields: [organizationId], references: [id])
   biologicalMonitoring BiologicalMonitoring[]
-  rainfallLogs    RainfallLog[]
-  weatherEvents   WeatherEvent[]
+  rainfallLogs         RainfallLog[]
+  weatherEvents        WeatherEvent[]
+  tasks                Task[]
 
   @@map("profiles")
 }
 
 model Paddock {
-  id              String       @id @default(uuid()) @db.Uuid
-  orgId           String       @db.Uuid              @map("org_id")
-  name            String       @db.VarChar(255)
-  areaHa          Decimal?     @db.Decimal(10, 2)   @map("area_ha")
-  isGrazable      Boolean?     @default(true)        @map("is_grazable")
-  currentStatus   String?      @default("RESTING")   @map("current_status")
-  estimatedAdh    Decimal?     @default(0) @db.Decimal(10, 2) @map("estimated_adh")
-  createdAt       DateTime     @default(now())       @map("created_at")
-  updatedAt       DateTime     @updatedAt            @map("updated_at")
-  organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  grazingPlans    GrazingPlan[]
+  id                   String                 @id @default(uuid()) @db.Uuid
+  orgId                String                 @map("org_id") @db.Uuid
+  name                 String                 @db.VarChar(255)
+  areaHa               Decimal?               @map("area_ha") @db.Decimal(10, 2)
+  isGrazable           Boolean?               @default(true) @map("is_grazable")
+  currentStatus        String?                @default("RESTING") @map("current_status")
+  estimatedAdh         Decimal?               @default(0) @map("estimated_adh") @db.Decimal(10, 2)
+  version              Int                    @default(1)
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+  organization         Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  grazingPlans         GrazingPlan[]
   biologicalMonitoring BiologicalMonitoring[]
-  weatherEvents   WeatherEventPaddock[]
+  weatherEvents        WeatherEventPaddock[]
 
   @@map("paddocks")
 }
 
 model Herd {
-  id            String       @id @default(uuid()) @db.Uuid
-  orgId         String       @db.Uuid              @map("org_id")
-  name          String       @db.VarChar(255)
-  species       String?      @default("Bovine")    @db.VarChar(100)
-  breed         String?      @db.VarChar(100)
-  category      String?      @db.VarChar(100)
-  headCount     Int          @default(0)           @map("head_count")
-  avgWeightKg   Decimal?     @db.Decimal(10, 2)   @map("avg_weight_kg")
-  totalEv       Decimal?     @db.Decimal(10, 2)   @map("total_ev")
-  createdAt     DateTime     @default(now())       @map("created_at")
-  updatedAt     DateTime     @updatedAt            @map("updated_at")
-  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  grazingPlans  GrazingPlan[]
+  id           String        @id @default(uuid()) @db.Uuid
+  orgId        String        @map("org_id") @db.Uuid
+  name         String        @db.VarChar(255)
+  species      String?       @default("Bovine") @db.VarChar(100)
+  breed        String?       @db.VarChar(100)
+  category     String?       @db.VarChar(100)
+  headCount    Int           @default(0) @map("head_count")
+  avgWeightKg  Decimal?      @map("avg_weight_kg") @db.Decimal(10, 2)
+  totalEv      Decimal?      @map("total_ev") @db.Decimal(10, 2)
+  version      Int           @default(1)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  grazingPlans GrazingPlan[]
 
   @@map("herds")
 }
 
 model GrazingPlan {
-  id                   String    @id @default(uuid()) @db.Uuid
-  paddockId            String    @db.Uuid              @map("paddock_id")
-  herdId               String    @db.Uuid              @map("herd_id")
-  herdIds              Json?                           @map("herd_ids")
-  entryDate            DateTime  @db.Date              @map("entry_date")
-  exitDate             DateTime? @db.Date              @map("exit_date")
-  actualEntryDate      DateTime? @db.Date              @map("actual_entry_date")
-  actualExitDate       DateTime? @db.Date              @map("actual_exit_date")
-  plannedRecoveryDays  Int?                            @map("planned_recovery_days")
-  status               String?   @default("PLANNED")
-  actualAdhConsumed    Decimal?  @default(0) @db.Decimal(10, 2) @map("actual_adh_consumed")
-  temporaryAnimals     Json?                           @map("temporary_animals")
-  notes                String?                         @db.Text
-  exitNotes            String?                         @db.Text             @map("exit_notes")
-  exitDryMatterKgHa    Decimal?  @db.Decimal(10, 2)    @map("exit_dry_matter_kg_ha")
-  aiAnalysis           Json?                           @map("ai_analysis")
-  createdAt            DateTime  @default(now())       @map("created_at")
-  updatedAt            DateTime  @updatedAt            @map("updated_at")
-  paddock              Paddock   @relation(fields: [paddockId], references: [id], onDelete: Cascade)
-  herd                 Herd      @relation(fields: [herdId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(uuid()) @db.Uuid
+  paddockId           String    @map("paddock_id") @db.Uuid
+  herdId              String    @map("herd_id") @db.Uuid
+  herdIds             Json?     @map("herd_ids")
+  entryDate           DateTime  @map("entry_date") @db.Date
+  exitDate            DateTime? @map("exit_date") @db.Date
+  actualEntryDate     DateTime? @map("actual_entry_date") @db.Date
+  actualExitDate      DateTime? @map("actual_exit_date") @db.Date
+  plannedRecoveryDays Int?      @map("planned_recovery_days")
+  status              String?   @default("PLANNED")
+  actualAdhConsumed   Decimal?  @default(0) @map("actual_adh_consumed") @db.Decimal(10, 2)
+  temporaryAnimals    Json?     @map("temporary_animals")
+  notes               String?   @db.Text
+  exitNotes           String?   @map("exit_notes") @db.Text
+  exitDryMatterKgHa   Decimal?  @map("exit_dry_matter_kg_ha") @db.Decimal(10, 2)
+  aiAnalysis          Json?     @map("ai_analysis")
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  paddock             Paddock   @relation(fields: [paddockId], references: [id], onDelete: Cascade)
+  herd                Herd      @relation(fields: [herdId], references: [id], onDelete: Cascade)
 
   @@map("grazing_plans")
 }
 
 model BiologicalMonitoring {
-  id                    String    @id @default(uuid()) @db.Uuid
-  paddockId             String    @db.Uuid              @map("paddock_id")
-  observerId            String?   @db.Uuid              @map("observer_id")
-  photoUrl              String?                         @map("photo_url")
-  groundCoverPct        Decimal?  @db.Decimal(5, 2)    @map("ground_cover_pct")
-  grassHeightCm         Decimal?  @db.Decimal(10, 2)   @map("grass_height_cm")
-  dryMatterEstimateKg   Decimal?  @db.Decimal(10, 2)   @map("dry_matter_estimate_kg")
-  recordedAt            DateTime  @default(now())       @map("recorded_at")
-  createdAt             DateTime  @default(now())       @map("created_at")
-  paddock               Paddock   @relation(fields: [paddockId], references: [id], onDelete: Cascade)
-  observer              Profile?  @relation(fields: [observerId], references: [id], onDelete: SetNull)
+  id                  String   @id @default(uuid()) @db.Uuid
+  paddockId           String   @map("paddock_id") @db.Uuid
+  observerId          String?  @map("observer_id") @db.Uuid
+  photoUrl            String?  @map("photo_url")
+  groundCoverPct      Decimal? @map("ground_cover_pct") @db.Decimal(5, 2)
+  grassHeightCm       Decimal? @map("grass_height_cm") @db.Decimal(10, 2)
+  dryMatterEstimateKg Decimal? @map("dry_matter_estimate_kg") @db.Decimal(10, 2)
+  recordedAt          DateTime @default(now()) @map("recorded_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  paddock             Paddock  @relation(fields: [paddockId], references: [id], onDelete: Cascade)
+  observer            Profile? @relation(fields: [observerId], references: [id], onDelete: SetNull)
 
   @@map("biological_monitoring")
 }
 
 model RainfallLog {
-  id          String    @id @default(uuid()) @db.Uuid
-  orgId       String    @db.Uuid              @map("org_id")
-  recorderId  String?   @db.Uuid              @map("recorder_id")
-  date        DateTime  @db.Date
-  mmCount     Decimal   @db.Decimal(10, 2)   @map("mm_count")
-  createdAt   DateTime  @default(now())       @map("created_at")
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  recorderId   String?      @map("recorder_id") @db.Uuid
+  date         DateTime     @db.Date
+  mmCount      Decimal      @map("mm_count") @db.Decimal(10, 2)
+  createdAt    DateTime     @default(now()) @map("created_at")
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  recorder     Profile?  @relation(fields: [recorderId], references: [id], onDelete: SetNull)
+  recorder     Profile?     @relation(fields: [recorderId], references: [id], onDelete: SetNull)
 
   @@map("rainfall_logs")
 }
@@ -161,25 +167,25 @@ model RainfallLog {
 // ── Nuevo modelo de eventos climáticos con relación M2M a Potreros ────────────
 
 model WeatherEvent {
-  id          String               @id @default(uuid()) @db.Uuid
-  orgId       String               @db.Uuid             @map("org_id")
-  recorderId  String?              @db.Uuid             @map("recorder_id")
-  type        String               @db.VarChar(10)      // "RAIN" | "FROST"
-  value       Decimal              @db.Decimal(10, 2)   // mm para lluvia, °C para helada
-  date        DateTime             @db.Date
-  notes       String?              @db.Text
-  createdAt   DateTime             @default(now())      @map("created_at")
-  updatedAt   DateTime             @updatedAt           @map("updated_at")
-  organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  recorder    Profile?             @relation(fields: [recorderId], references: [id], onDelete: SetNull)
-  paddocks    WeatherEventPaddock[]
+  id           String                @id @default(uuid()) @db.Uuid
+  orgId        String                @map("org_id") @db.Uuid
+  recorderId   String?               @map("recorder_id") @db.Uuid
+  type         String                @db.VarChar(10) // "RAIN" | "FROST"
+  value        Decimal               @db.Decimal(10, 2) // mm para lluvia, °C para helada
+  date         DateTime              @db.Date
+  notes        String?               @db.Text
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  organization Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  recorder     Profile?              @relation(fields: [recorderId], references: [id], onDelete: SetNull)
+  paddocks     WeatherEventPaddock[]
 
   @@map("weather_events")
 }
 
 model WeatherEventPaddock {
-  weatherEventId String       @db.Uuid @map("weather_event_id")
-  paddockId      String       @db.Uuid @map("paddock_id")
+  weatherEventId String       @map("weather_event_id") @db.Uuid
+  paddockId      String       @map("paddock_id") @db.Uuid
   createdAt      DateTime     @default(now()) @map("created_at")
   weatherEvent   WeatherEvent @relation(fields: [weatherEventId], references: [id], onDelete: Cascade)
   paddock        Paddock      @relation(fields: [paddockId], references: [id], onDelete: Cascade)
@@ -189,26 +195,62 @@ model WeatherEventPaddock {
 }
 
 model Payment {
-  id                  String    @id @default(uuid()) @db.Uuid
-  orgId               String    @db.Uuid              @map("org_id")
-  ownerId             String    @db.Uuid              @map("owner_id")
-  provider            String    @db.VarChar(20)
-  providerCustomerId  String?   @db.VarChar(255)      @map("provider_customer_id")
-  providerSubId       String?   @db.VarChar(255)      @map("provider_sub_id")
-  providerPaymentId   String?   @db.VarChar(255)      @map("provider_payment_id")
-  planId              String?   @db.Uuid              @map("plan_id")
-  status              String?   @default("pending")
-  amount              Decimal   @db.Decimal(10, 2)
-  currency            String    @default("USD")       @db.VarChar(3)
-  billingPeriodStart  DateTime?                       @map("billing_period_start")
-  billingPeriodEnd    DateTime?                       @map("billing_period_end")
-  nextBillingDate     DateTime?                       @map("next_billing_date")
-  cardBrand           String?   @db.VarChar(20)       @map("card_brand")
-  cardLastFour        String?   @db.VarChar(4)        @map("card_last_four")
-  createdAt           DateTime  @default(now())       @map("created_at")
-  updatedAt           DateTime  @updatedAt            @map("updated_at")
-  organization        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  plan                SubscriptionPlan? @relation(fields: [planId], references: [id])
+  id                 String            @id @default(uuid()) @db.Uuid
+  orgId              String            @map("org_id") @db.Uuid
+  ownerId            String            @map("owner_id") @db.Uuid
+  provider           String            @db.VarChar(20)
+  providerCustomerId String?           @map("provider_customer_id") @db.VarChar(255)
+  providerSubId      String?           @map("provider_sub_id") @db.VarChar(255)
+  providerPaymentId  String?           @map("provider_payment_id") @db.VarChar(255)
+  planId             String?           @map("plan_id") @db.Uuid
+  status             String?           @default("pending")
+  amount             Decimal           @db.Decimal(10, 2)
+  currency           String            @default("USD") @db.VarChar(3)
+  billingPeriodStart DateTime?         @map("billing_period_start")
+  billingPeriodEnd   DateTime?         @map("billing_period_end")
+  nextBillingDate    DateTime?         @map("next_billing_date")
+  cardBrand          String?           @map("card_brand") @db.VarChar(20)
+  cardLastFour       String?           @map("card_last_four") @db.VarChar(4)
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  organization       Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  plan               SubscriptionPlan? @relation(fields: [planId], references: [id])
 
   @@map("payments")
+}
+
+model FarmEvent {
+  id               String       @id @default(uuid()) @db.Uuid
+  orgId            String       @map("org_id") @db.Uuid
+  title            String       @db.VarChar(255)
+  eventType        String       @map("event_type") @db.VarChar(50)
+  description      String?      @db.Text
+  eventDate        DateTime     @map("event_date") @db.Date
+  endDate          DateTime?    @map("end_date") @db.Date
+  status           String       @default("pending") @db.VarChar(50)
+  relatedHerdId    String?      @map("related_herd_id") @db.Uuid
+  relatedPaddockId String?      @map("related_paddock_id") @db.Uuid
+  impacts          Json?
+  version          Int          @default(1)
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  organization     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("farm_events")
+}
+
+model Task {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  assigneeId   String?      @map("assignee_id") @db.Uuid
+  title        String       @db.VarChar(255)
+  description  String?      @db.Text
+  status       String       @default("pending") @db.VarChar(50)
+  dueDate      DateTime?    @map("due_date")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assignee     Profile?     @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@map("tasks")
 }

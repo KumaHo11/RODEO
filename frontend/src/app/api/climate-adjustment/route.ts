@@ -244,7 +244,7 @@ export async function GET(req: NextRequest) {
       JOIN paddocks p ON p.id = ca.paddock_id
       WHERE ca.org_id = $1
       ORDER BY ca.calculated_at DESC
-      LIMIT 200
+      LIMIT 500
     `, [auth.orgId]).catch(() => [])
 
     return NextResponse.json({ snapshots })

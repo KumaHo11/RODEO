@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { usePlan } from '@/hooks/usePlan'
 import BitacoraModal from '../../bitacora/components/BitacoraModal'
 import PaddockModal from './PaddockModal'
+import PaddockClimateStatus, { type ClimateSnapshot } from '@/components/PaddockClimateStatus'
 import { kml as kmlToGeo } from '@tmcw/togeojson'
 import { area as turfArea } from '@turf/area'
 
@@ -53,6 +54,8 @@ interface Props {
   onFieldImageUploaded?: (url: string) => void
   defaultEditPaddockId?: string
   planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
+  /** Snapshots de ajuste climático indexados por paddock_id */
+  climateSnapshots?: Record<string, ClimateSnapshot>
 }
 
 const TECH_ICONS = [
@@ -73,7 +76,7 @@ export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0,
   onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField, onDataRefresh,
-  onFieldImageUploaded, defaultEditPaddockId, planningDefaults,
+  onFieldImageUploaded, defaultEditPaddockId, planningDefaults, climateSnapshots = {},
 }: Props) {
   const [search, setSearch]     = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -228,9 +231,9 @@ export default function PaddockSidePanel({
             )}
 
             <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Mi Campo</p>
+              <p className="text-xs font-black text-gray-600 uppercase tracking-widest mb-1">Mi Campo</p>
               <div className="flex items-center gap-2 mb-0.5">
-                <h2 className="text-xl font-black text-gray-950 tracking-tight truncate">{org?.name || 'Mi Campo'}</h2>
+                <h2 className="text-2xl font-black text-gray-950 tracking-tight truncate">{org?.name || 'Mi Campo'}</h2>
                 {ndviLoading && <Loader2 className="w-3.5 h-3.5 text-green-500 animate-spin" />}
               </div>
               
@@ -311,7 +314,7 @@ export default function PaddockSidePanel({
         {/* ── Paddock list ─────────────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto">
           <div className="px-5 py-2.5 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-50 z-10">
-            <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Potreros ({paddocks.length})</p>
+            <p className="text-xs font-black text-gray-600 tracking-widest uppercase">Potreros ({paddocks.length})</p>
             <div className="flex items-center gap-1.5">
               <button onClick={() => onManualPaddockCreate?.()} className="flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-green-700 bg-green-50 rounded-lg border border-green-200 hover:bg-green-100 transition-all">
                 <Plus className="w-3 h-3" /> Manual
@@ -387,7 +390,7 @@ export default function PaddockSidePanel({
                     <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         {/* Nombre — jerarquía principal, tamaño grande */}
-                        <h3 className={`text-2xl font-black leading-tight truncate ${
+                        <h3 className={`text-xl font-black leading-tight truncate ${
                           isActive ? 'text-gray-950' : 'text-gray-400'
                         }`}>
                           {paddock.name}
@@ -472,27 +475,37 @@ export default function PaddockSidePanel({
                       </div>
                     )}
 
-                    {/* ── Bottom: indicadores técnicos + Detalles ── */}
+                    {/* ── Bottom: semáforo climático + indicadores técnicos + Detalles ── */}
                     {isActive && (
-                      <div className="px-4 pb-4 pt-2 flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
-                            const active = Boolean(td[key]) || (key === 'hasPests' && (td.weeds || td.weed_types || []).length > 0)
-                            return (
-                              <span key={key} className={`w-6 h-6 rounded-lg flex items-center justify-center ${active ? bgOn : 'bg-gray-50'}`}>
-                                <Icon className={`w-3.5 h-3.5 ${active ? color : 'text-gray-200'}`} />
+                      <div className="px-4 pb-4 pt-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {/* Semáforo de carga climática */}
+                          <PaddockClimateStatus
+                            paddockId={paddock.id}
+                            paddockName={paddock.name}
+                            snapshot={climateSnapshots[paddock.id]}
+                            hasPlanAccess={canNdvi}
+                          />
+                          {/* Iconos técnicos */}
+                          <div className="flex items-center gap-1">
+                            {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
+                              const active = Boolean(td[key]) || (key === 'hasPests' && (td.weeds || td.weed_types || []).length > 0)
+                              return (
+                                <span key={key} className={`w-6 h-6 rounded-lg flex items-center justify-center ${active ? bgOn : 'bg-gray-50'}`}>
+                                  <Icon className={`w-3.5 h-3.5 ${active ? color : 'text-gray-200'}`} />
+                                </span>
+                              )
+                            })}
+                            {canNdvi && ndviVal != null && (
+                              <span className="text-[9px] font-bold text-gray-600 ml-1">
+                                NDVI {Number(ndviVal).toFixed(2)}
                               </span>
-                            )
-                          })}
-                          {canNdvi && ndviVal != null && (
-                            <span className="text-[9px] font-bold text-gray-600 ml-1">
-                              NDVI {Number(ndviVal).toFixed(2)}
-                            </span>
-                          )}
+                            )}
+                          </div>
                         </div>
                         <button
                           onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                          className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-sm"
+                          className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-sm shrink-0"
                         >
                           Detalles
                         </button>

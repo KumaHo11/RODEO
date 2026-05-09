@@ -43,6 +43,7 @@ export interface WeatherContextValue {
   lat: number | null
   lon: number | null
   locationName: string | null
+  locationSource: 'org' | 'fallback' | null  // 'org' = coordenadas del campo, 'fallback' = Buenos Aires
   isLoading: boolean
   error: string | null
   refetch: () => void
@@ -57,6 +58,7 @@ const WeatherContext = createContext<WeatherContextValue>({
   lat: null,
   lon: null,
   locationName: null,
+  locationSource: null,
   isLoading: true,
   error: null,
   refetch: () => {},
@@ -72,6 +74,7 @@ export function WeatherProvider({ children }: { children: React.ReactNode }) {
   const [lat, setLat]                 = useState<number | null>(null)
   const [lon, setLon]                 = useState<number | null>(null)
   const [locationName, setLocationName] = useState<string | null>(null)
+  const [locationSource, setLocationSource] = useState<'org' | 'fallback' | null>(null)
   const [isLoading, setIsLoading]     = useState(true)
   const [error, setError]             = useState<string | null>(null)
 
@@ -92,6 +95,7 @@ export function WeatherProvider({ children }: { children: React.ReactNode }) {
       setLat(data.lat)
       setLon(data.lon)
       setLocationName(data.locationName)
+      setLocationSource(data.locationSource ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
@@ -106,7 +110,7 @@ export function WeatherProvider({ children }: { children: React.ReactNode }) {
   return (
     <WeatherContext.Provider value={{
       current, history, forecast,
-      lat, lon, locationName,
+      lat, lon, locationName, locationSource,
       isLoading, error, refetch: fetchWeather,
     }}>
       {children}

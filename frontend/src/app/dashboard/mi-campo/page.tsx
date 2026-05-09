@@ -49,6 +49,7 @@ export default function MiCampoPage() {
   const [activeGrazingPlans, setActiveGrazingPlans] = useState<{paddock_id: string; herd_name: string; head_count: number}[]>([])
   const [herds, setHerds] = useState<any[]>([])
   const [planningDefaults, setPlanningDefaults] = useState({ dailyAllocationKg: 12, targetRemnantKgHa: 600 })
+  const [climateSnapshots, setClimateSnapshots] = useState<Record<string, any>>({})
 
   // -- Unified creation modal ─────────────────────────────────────────────────
   const [creationModal, setCreationModal]   = useState(false)
@@ -85,16 +86,27 @@ export default function MiCampoPage() {
   const loadData = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    const [paddocksRes, orgRes, plansRes, herdsRes] = await Promise.all([
+    const [paddocksRes, orgRes, plansRes, herdsRes, climateRes] = await Promise.all([
       apiFetch('/api/paddocks'),
       apiFetch('/api/organizations'),
       apiFetch('/api/grazing-plans'),
       apiFetch('/api/herds'),
+      apiFetch('/api/climate-adjustment').catch(() => ({ ok: false } as Response)),
     ])
     const paddocksData = paddocksRes.ok ? (await paddocksRes.json()).paddocks || [] : []
     const orgData      = orgRes.ok      ? (await orgRes.json()).organization : null
     const plansData    = plansRes.ok    ? (await plansRes.json()).plans || []  : []
     const herdsData    = herdsRes.ok    ? (await herdsRes.json()).herds || []  : []
+    const climateData  = climateRes.ok  ? (await climateRes.json()).snapshots || [] : []
+
+    // Indexar snapshots climáticos por paddock_id (el más reciente primero)
+    const snapMap: Record<string, any> = {}
+    climateData.forEach((s: any) => {
+      if (!snapMap[s.paddock_id]) {
+        snapMap[s.paddock_id] = s
+      }
+    })
+    setClimateSnapshots(snapMap)
 
     setOrg(orgData)
     if (orgData?.boundaries) setFieldBoundary(orgData.boundaries)
@@ -320,6 +332,31 @@ export default function MiCampoPage() {
     handleSetupImgUpload(file)        // upload in background and replace with server URL
   }
 
+  const handleDeleteFieldImage = async () => {
+    try {
+      await apiFetch('/api/organizations', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          technical_data: {
+            ...(org?.technical_data || {}),
+            field_image_url: null,
+          },
+        }),
+      })
+      setSessionFieldImg(null)
+      setSetupImgUrl(null)
+      setSetupImgFile(null)
+      setMapView('satellite')
+      const orgRes = await apiFetch('/api/organizations')
+      if (orgRes.ok) {
+        const { organization } = await orgRes.json()
+        setOrg(organization)
+      }
+    } catch (e) {
+      console.warn('[delete-image]', e)
+    }
+  }
+
   const openSetupModal = () => {
     setSetupFieldArea(org?.total_area_ha || '')
     setSetupFieldName(org?.name || '')
@@ -383,13 +420,22 @@ export default function MiCampoPage() {
 
         {/* Content: satellite map or uploaded image */}
         {mapView === 'image' && effectiveFieldImg ? (
-          <div className="flex-1 flex items-center justify-center bg-gray-900 overflow-hidden">
+        <div className="flex-1 flex items-center justify-center bg-gray-900 overflow-hidden relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={effectiveFieldImg}
               alt="Imagen del campo"
               className="max-w-full max-h-full object-contain"
             />
+            {/* Delete image button */}
+            <button
+              onClick={handleDeleteFieldImage}
+              className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 hover:bg-red-600/80 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all backdrop-blur-sm"
+              title="Eliminar imagen del campo"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              Eliminar imagen
+            </button>
           </div>
         ) : (
           <MiCampoMap
@@ -516,6 +562,7 @@ export default function MiCampoPage() {
           onDataRefresh={loadData}
           herds={herds}
           planningDefaults={planningDefaults}
+          climateSnapshots={climateSnapshots}
         />
       </div>
 

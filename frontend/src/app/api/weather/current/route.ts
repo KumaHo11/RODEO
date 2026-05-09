@@ -70,44 +70,67 @@ export async function GET(req: NextRequest) {
     let lat = parseFloat(searchParams.get('lat') ?? '')
     let lon = parseFloat(searchParams.get('lon') ?? '')
 
+    // Flag to indicate whether coordinates came from org or fallback
+    let locationSource: 'org' | 'fallback' = 'fallback'
+    let locationName = `${lat.toFixed ? lat.toFixed(2) : '?'}°, ${lon.toFixed ? lon.toFixed(2) : '?'}°`
+
     if (isNaN(lat) || isNaN(lon)) {
-      const org = await queryOne<{ location: unknown; name: string }>(
-        'SELECT location, name FROM organizations WHERE id = $1',
+      // Try location point first, then centroid of boundaries polygon
+      const org = await queryOne<{ location: unknown; boundaries_centroid: unknown; name: string; location_label: string | null }>(
+        `SELECT location, name, location_label,
+         ST_AsGeoJSON(ST_Centroid(boundaries))::json AS boundaries_centroid
+         FROM organizations WHERE id = $1`,
         [auth.orgId]
       )
       const orgLoc = org?.location as { coordinates?: [number, number] } | null
+      const orgBounds = (org as any)?.boundaries_centroid as { coordinates?: [number, number] } | null
+      // Store label for use as locationName later (user-defined, most precise)
+      const orgLabel = org?.location_label || org?.name || null
+
       if (orgLoc?.coordinates) {
         lon = orgLoc.coordinates[0]
         lat = orgLoc.coordinates[1]
+        locationSource = 'org'
+      } else if (orgBounds?.coordinates) {
+        lon = orgBounds.coordinates[0]
+        lat = orgBounds.coordinates[1]
+        locationSource = 'org'
       } else {
-        // Default: Buenos Aires area
         lat = -34.6; lon = -58.4
+        locationSource = 'fallback'
       }
+
+      // Use org label as primary location name — it's the user-configured name (e.g. 'Antonio Carboni')
+      // Nominatim will only be used if no label is set
+      if (orgLabel) locationName = orgLabel
+    } else {
+      locationSource = 'org'
     }
 
-    // Reverse geocoding via Nominatim (OpenStreetMap, free, no key required)
-    let locationName = `${lat.toFixed(2)}°, ${lon.toFixed(2)}°`
-    try {
-      const geoRes = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`,
-        { headers: { 'User-Agent': 'RodeoAgTech/1.0' }, signal: AbortSignal.timeout(3000) }
-      )
-      if (geoRes.ok) {
-        const geo = await geoRes.json()
-        const addr = geo.address ?? {}
-        // Priority: village > town > city > county > state
-        const place = addr.village ?? addr.town ?? addr.city ?? addr.county ?? addr.municipality ?? null
-        const province = addr.state ?? addr.region ?? null
-        if (place && province) {
-          locationName = `${place}, ${province}`
-        } else if (place) {
-          locationName = place
-        } else if (province) {
-          locationName = province
+    // Reverse geocoding via Nominatim — only if locationName is still a coordinate fallback
+    // (i.e. org.location_label was not set)
+    if (locationName.includes('°')) {
+      try {
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`,
+          { headers: { 'User-Agent': 'RodeoAgTech/1.0' }, signal: AbortSignal.timeout(3000) }
+        )
+        if (geoRes.ok) {
+          const geo = await geoRes.json()
+          const addr = geo.address ?? {}
+          const place = addr.village ?? addr.town ?? addr.city ?? addr.county ?? addr.municipality ?? null
+          const province = addr.state ?? addr.region ?? null
+          if (place && province) {
+            locationName = `${place}, ${province}`
+          } else if (place) {
+            locationName = place
+          } else if (province) {
+            locationName = province
+          }
         }
+      } catch {
+        // Geocoding failed — keep coordinate fallback
       }
-    } catch {
-      // Geocoding failed — keep coordinate fallback
     }
 
     // Fetch from Open-Meteo: past 10 days + 7 day forecast
@@ -126,7 +149,7 @@ export async function GET(req: NextRequest) {
     ].join(','))
     url.searchParams.set('current_weather', 'true')
     url.searchParams.set('past_days', '10')
-    url.searchParams.set('forecast_days', '7')
+    url.searchParams.set('forecast_days', '14')
     url.searchParams.set('timezone', 'auto')
     url.searchParams.set('windspeed_unit', 'kmh')
 
@@ -193,6 +216,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       lat,
       lon,
+      locationSource,
       locationName,
       current,
       history,   // últimos 10 días

@@ -147,7 +147,16 @@ export async function POST(req: NextRequest) {
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20
-      ) RETURNING id, created_at`,
+      ) RETURNING
+        id, created_at,
+        org_id, name, season_type, year,
+        TO_CHAR(start_date,     'YYYY-MM-DD') AS start_date,
+        TO_CHAR(end_date,       'YYYY-MM-DD') AS end_date,
+        TO_CHAR(no_growth_from, 'YYYY-MM-DD') AS no_growth_from,
+        TO_CHAR(no_growth_to,   'YYYY-MM-DD') AS no_growth_to,
+        drought_reserve_days, daily_allocation_kg,
+        cell_name, total_ha, source, source_filename, status,
+        demand_snapshot, supply_snapshot, metrics, notes`,
       [
         auth.orgId, name, season_type, year,
         start_date || null, end_date || null,
@@ -163,12 +172,15 @@ export async function POST(req: NextRequest) {
       ]
     )
 
+    // Return the full row so the frontend can use metrics.suggested_sequence immediately
     return NextResponse.json(
-      { id: result.rows[0]?.id, created_at: result.rows[0]?.created_at },
+      result.rows[0] ?? { error: 'No se pudo crear el plan' },
       { status: 201 }
     )
   } catch (err: any) {
     console.error('POST /api/season-plans error:', err)
+    require('fs').appendFileSync('/tmp/rodeo_api_error.log', new Date().toISOString() + ' ' + err.message + '\n' + err.stack + '\n')
     return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }
+
