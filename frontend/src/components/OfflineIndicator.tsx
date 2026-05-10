@@ -128,12 +128,12 @@ export default function OfflineIndicator() {
   return (
     <div
       className={`
-        fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999]
+        fixed top-4 left-1/2 -translate-x-1/2 z-[9999]
         ${cfg.bg} border ${cfg.border}
         rounded-2xl px-4 py-2.5 shadow-2xl
         flex items-center gap-3
         transition-all duration-500
-        animate-in slide-in-from-bottom-4
+        animate-in slide-in-from-top-4
       `}
       role="status"
       aria-live="polite"
