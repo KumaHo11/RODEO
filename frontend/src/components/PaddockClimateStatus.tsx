@@ -82,23 +82,8 @@ function ClimateModal({
       .finally(() => setLoading(false))
   }, [paddockId])
 
-  // Hardcoded demo data — flat/declining to be honest about the state
-  const MOCK_HISTORIAL: HistorialRow[] = [
-    { fecha: '2026-04-12', ndvi: 0.44, precipitacion_api_mm: 0,  precipitacion_usuario_mm: null, humedad_pct: 62, temperatura_c: 22, radiacion_solar: null, et_calculada_mm: 3.8, balance_hidrico_mm: -3.8, c_adj: 0.88, lluvia_fuente: 'api' },
-    { fecha: '2026-04-15', ndvi: 0.43, precipitacion_api_mm: 0,  precipitacion_usuario_mm: null, humedad_pct: 58, temperatura_c: 24, radiacion_solar: null, et_calculada_mm: 4.2, balance_hidrico_mm: -4.2, c_adj: 0.85, lluvia_fuente: 'api' },
-    { fecha: '2026-04-18', ndvi: 0.43, precipitacion_api_mm: 4,  precipitacion_usuario_mm: null, humedad_pct: 66, temperatura_c: 21, radiacion_solar: null, et_calculada_mm: 2.9, balance_hidrico_mm: 1.1,  c_adj: 0.90, lluvia_fuente: 'api' },
-    { fecha: '2026-04-21', ndvi: 0.42, precipitacion_api_mm: 0,  precipitacion_usuario_mm: null, humedad_pct: 55, temperatura_c: 26, radiacion_solar: null, et_calculada_mm: 5.1, balance_hidrico_mm: -5.1, c_adj: 0.82, lluvia_fuente: 'api' },
-    { fecha: '2026-04-24', ndvi: 0.41, precipitacion_api_mm: 0,  precipitacion_usuario_mm: null, humedad_pct: 52, temperatura_c: 27, radiacion_solar: null, et_calculada_mm: 5.6, balance_hidrico_mm: -5.6, c_adj: 0.80, lluvia_fuente: 'api' },
-    { fecha: '2026-04-27', ndvi: 0.40, precipitacion_api_mm: 0,  precipitacion_usuario_mm: null, humedad_pct: 50, temperatura_c: 28, radiacion_solar: null, et_calculada_mm: 5.9, balance_hidrico_mm: -5.9, c_adj: 0.78, lluvia_fuente: 'api' },
-    { fecha: '2026-04-30', ndvi: 0.39, precipitacion_api_mm: 0,  precipitacion_usuario_mm: null, humedad_pct: 48, temperatura_c: 29, radiacion_solar: null, et_calculada_mm: 6.2, balance_hidrico_mm: -6.2, c_adj: 0.76, lluvia_fuente: 'api' },
-  ]
-  // Start date of mock measurement window
-  const MOCK_START_DATE = '12/04/26'
-
-  const isDemo = !loading && historial.length === 0
-  const displayHistorial = isDemo ? MOCK_HISTORIAL : historial
-  const measureStartDate = isDemo ? MOCK_START_DATE
-    : displayHistorial.length > 0
+  const displayHistorial = historial
+  const measureStartDate = displayHistorial.length > 0
       ? new Date(displayHistorial[0].fecha).toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: '2-digit' })
       : null
 
@@ -118,20 +103,21 @@ function ClimateModal({
   const diffPct = prevGrowth > 0 ? ((diff / prevGrowth) * 100).toFixed(1) : '0.0'
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4">
-      <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-3xl bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden">
+    <div className="fixed inset-0 z-[9999] bg-white sm:bg-gray-900/40 sm:backdrop-blur-sm flex flex-col sm:items-center sm:justify-center sm:p-4">
+      {/* Overlay to close when clicking outside on desktop */}
+      <div className="hidden sm:block absolute inset-0" onClick={onClose} />
+      
+      <div className="relative z-10 bg-white w-full h-full sm:rounded-2xl sm:shadow-2xl sm:w-full sm:max-w-3xl sm:max-h-[92vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-white">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
               <p className="text-[10px] font-black text-emerald-600 tracking-widest uppercase mb-0.5">Crecimiento de Pasto · Ajuste Climático</p>
               <h2 className="text-xl font-black text-gray-900 leading-none">
                 {paddockName ?? 'Potrero'}
-                {isDemo && <span className="ml-2 text-[9px] px-1.5 py-0.5 align-middle rounded bg-amber-100 text-amber-700 font-bold uppercase">Datos estimados</span>}
               </h2>
               {measureStartDate && (
                 <p className="text-[10px] text-gray-400 font-medium mt-0.5">Medición desde {measureStartDate}</p>
@@ -143,8 +129,7 @@ function ClimateModal({
           </button>
         </div>
 
-        {/* Body */}
-        <div className="px-5 py-5 space-y-5 max-h-[75vh] overflow-y-auto bg-gray-50/30">
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 bg-gray-50/30">
           
           {/* Gráfico de Crecimiento (Bolsa Style - White Theme) */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm relative">
@@ -174,6 +159,8 @@ function ClimateModal({
             <div className="h-44 w-full mt-2">
               {loading ? (
                 <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm font-bold">Cargando gráfico...</div>
+              ) : displayHistorial.length === 0 ? (
+                <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm font-bold">Aún no hay registros de crecimiento para mostrar</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 6, right: 4, left: -20, bottom: 0 }}>
