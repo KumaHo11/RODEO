@@ -42,6 +42,7 @@ const EMPTY_FORM = {
   herd_ids: [] as string[],
   body_condition: '',
   bulls_count: '',
+  bulls_weight: '',
 }
 
 export default function AgendaPage() {
@@ -57,7 +58,7 @@ export default function AgendaPage() {
   const [form, setForm] = useState<{
     title: string; event_type: string; event_date: string; end_date: string;
     description: string; status: string; herd_id: string; herd_ids: string[];
-    body_condition: string; bulls_count: string;
+    body_condition: string; bulls_count: string; bulls_weight: string;
   }>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
@@ -114,6 +115,7 @@ export default function AgendaPage() {
       herd_ids: parsedHerdIds,
       body_condition: event.body_condition || '',
       bulls_count: event.bulls_count ? String(event.bulls_count) : '',
+      bulls_weight: event.bulls_weight ? String(event.bulls_weight) : '',
     })
     setModalOpen(true)
   }
@@ -132,6 +134,7 @@ export default function AgendaPage() {
       herd_ids: form.herd_ids,
       body_condition: form.body_condition || null,
       bulls_count: form.event_type === 'servicio' && form.bulls_count ? Number(form.bulls_count) : null,
+      bulls_weight: form.event_type === 'servicio' && form.bulls_weight ? Number(form.bulls_weight) : null,
     }
 
     if (!skipConflictCheck) {
@@ -180,6 +183,7 @@ export default function AgendaPage() {
               name: herdName,
               categoria: 'TORO',
               head_count: payload.bulls_count,
+              weight: payload.bulls_weight || 600,
               is_temporary: true,
               admission_date: startDate,
               exit_date: endDate,
@@ -642,17 +646,33 @@ export default function AgendaPage() {
 
               {/* Solo si es Servicio: agregar toros como temporales */}
               {form.event_type === 'servicio' && (
-                <div className="space-y-2 bg-amber-50 border border-amber-100 rounded-xl p-4">
-                  <label className="text-[10px] font-black text-amber-700 tracking-widest uppercase">Toros (servicio)</label>
-                  <p className="text-[11px] text-amber-600">Agregados como rodeo temporal en el planificador durante las fechas configuradas.</p>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.bulls_count}
-                    onChange={e => setForm({ ...form, bulls_count: e.target.value })}
-                    placeholder="Cantidad de toros"
-                    className="w-full bg-white border border-amber-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
-                  />
+                <div className="space-y-3 bg-amber-50/50 border border-amber-100 rounded-xl p-4">
+                  <div>
+                    <label className="text-[10px] font-black text-amber-800 tracking-widest uppercase">Toros (servicio)</label>
+                    <p className="text-[10px] text-amber-700/70 font-medium">Agregados como rodeo temporal en el planificador durante las fechas configuradas.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        min="0"
+                        value={form.bulls_count}
+                        onChange={e => setForm({ ...form, bulls_count: e.target.value })}
+                        placeholder="Cantidad"
+                        className="w-full bg-white border border-amber-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        min="0"
+                        value={form.bulls_weight}
+                        onChange={e => setForm({ ...form, bulls_weight: e.target.value })}
+                        placeholder="Peso (kg) ej: 600"
+                        className="w-full bg-white border border-amber-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 

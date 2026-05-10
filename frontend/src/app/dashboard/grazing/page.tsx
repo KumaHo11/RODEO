@@ -2129,6 +2129,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     }
 
     setSaving(true)
+    setSuggesting(true)
     try {
       const dailyDemandMultiplier = Number(seasonPlan.daily_allocation_kg) || dailyAllocationKg
       const remnant = Number(seasonPlan.target_remnant_kg_ha) > 0
@@ -2309,6 +2310,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       toast.error('Se guardó el plan, pero hubo un error al renderizar el Gantt. Intentá refrescar la página.')
     } finally {
       setSaving(false)
+      setSuggesting(false)
     }
   }
 
@@ -5282,6 +5284,17 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           plan={rawTablePlan}
           onClose={() => setRawTablePlan(null)}
         />
+      )}
+
+      {/* ── Global Loading Overlay (Para generación de planes) ── */}
+      {suggesting && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center animate-in fade-in duration-200">
+          <Loader2 className="w-12 h-12 text-green-600 animate-spin mb-4" />
+          <h2 className="text-xl font-black text-gray-900 tracking-tight">Procesando Planificación...</h2>
+          <p className="text-sm font-medium text-gray-500 mt-2 text-center max-w-sm">
+            Generando secuencias de pastoreo y calculando períodos de descanso regenerativo. Por favor, esperá.
+          </p>
+        </div>
       )}
     </div>
     </>
