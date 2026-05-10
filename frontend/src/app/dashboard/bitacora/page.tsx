@@ -501,7 +501,7 @@ export default function BitacoraPage() {
       </div>
 
       {/* Capture area — pinned to bottom of viewport */}
-      <div className="fixed bottom-0 left-0 right-0 pb-8 sm:pb-6 px-8 pt-8 bg-gradient-to-t from-white via-white to-transparent pointer-events-none">
+      <div className="sticky bottom-0 left-0 right-0 mt-auto pb-8 sm:pb-6 px-8 pt-8 bg-gradient-to-t from-white via-white to-transparent pointer-events-none z-50">
         <div className="max-w-md mx-auto flex flex-col items-center gap-8 pointer-events-auto">
 
           {isRecording ? (
