@@ -4,6 +4,7 @@
  * Al hacer clic abre un modal con la evolución del Crecimiento (AreaChart).
  */
 import React, { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { TrendingUp, TrendingDown, Minus, X, Droplets, ExternalLink, Info, Lock } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { LineChart, Line, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
@@ -253,6 +254,11 @@ function ClimateModal({
 // ── Componente principal exportado (Botón de la Card) ────────────────────────
 export default function PaddockClimateStatus({ snapshot, paddockId, paddockName, hasPlanAccess = true }: Props) {
   const [showModal, setShowModal] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   if (!hasPlanAccess) {
     return (
@@ -304,13 +310,14 @@ export default function PaddockClimateStatus({ snapshot, paddockId, paddockName,
         </div>
       </button>
 
-      {showModal && (
+      {showModal && mounted && createPortal(
         <ClimateModal
           paddockId={paddockId}
           paddockName={paddockName}
           snapshot={snapshot}
           onClose={() => setShowModal(false)}
-        />
+        />,
+        document.body
       )}
     </>
   )
