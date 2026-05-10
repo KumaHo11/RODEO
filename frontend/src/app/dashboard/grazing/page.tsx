@@ -88,11 +88,43 @@ const addDays = (iso: any, n: number): string => {
   return d.toISOString().split('T')[0]
 }
 
+// Calculate dynamic headcount based on events timeline
+export const calculateDynamicHeadcount = (herdId: string, baseCount: number, dateStr: string, unifiedEvents: any[]) => {
+  const today = new Date().toISOString().split('T')[0]
+  let count = baseCount
+  
+  const relEvents = unifiedEvents.filter(e => e.herd_id === herdId || (e.herd_ids && e.herd_ids.includes(herdId)))
+  
+  if (dateStr < today) {
+    // Past: reverse-apply movements that happened between dateStr and today
+    const eventsBetween = relEvents.filter(e => e.event_date > dateStr && e.event_date <= today)
+    eventsBetween.forEach(e => {
+      const q = Number(e.quantity || 0)
+      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count += q
+      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count -= q
+    })
+  } else if (dateStr > today) {
+    // Future: forward-apply scheduled movements
+    const eventsBetween = relEvents.filter(e => e.event_date > today && e.event_date <= dateStr)
+    eventsBetween.forEach(e => {
+      const q = Number(e.quantity || 0)
+      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count -= q
+      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count += q
+    })
+  }
+  return Math.max(0, count)
+}
+
 // Biological Demand Evolution
-export const getDynamicHerdEV = (herd: any, dateISO: string, farmEvents: any[]): number => {
-  const baseEV = Number(herd?.total_ev) || 0
-  if (baseEV === 0) return 0
-  const headCount = Number(herd?.head_count || herd?.animal_count) || baseEV 
+export const getDynamicHerdEV = (herd: any, dateISO: string, farmEvents: any[], headCountOverride?: number): number => {
+  const currentEV = Number(herd?.total_ev) || 0
+  if (currentEV === 0) return 0
+  const currentHeadCount = Number(herd?.head_count || herd?.animal_count) || currentEV 
+
+  const headCount = headCountOverride !== undefined ? headCountOverride : currentHeadCount
+  if (headCount === 0) return 0
+
+  const evPerHead = currentHeadCount > 0 ? currentEV / currentHeadCount : (currentEV > 0 ? currentEV : 1)
 
   const sorted = farmEvents
     .filter(e => (e.herd_id === herd.id || !e.herd_id) && e.event_date <= dateISO)
@@ -117,7 +149,7 @@ export const getDynamicHerdEV = (herd: any, dateISO: string, farmEvents: any[]):
 
   if (currentState === 'lactating') return headCount * 1.5
   if (currentState === 'lactating_with_calf') return headCount * 1.8
-  return baseEV
+  return evPerHead * headCount
 }
 
 
@@ -287,31 +319,9 @@ function InteractiveGantt({
     return [...farmEvents, ...vEvents]
   }, [farmEvents, movements])
 
-  // Calculate dynamic headcount for a herd at a specific date
+  // Use the global calculateDynamicHeadcount
   const getDynamicHeadcount = useCallback((herdId: string, baseCount: number, dateStr: string) => {
-    const today = new Date().toISOString().split('T')[0]
-    let count = baseCount
-    
-    const relEvents = unifiedEvents.filter(e => e.herd_id === herdId || (e.herd_ids && e.herd_ids.includes(herdId)))
-    
-    if (dateStr < today) {
-      // Past: reverse-apply movements that happened between dateStr and today
-      const eventsBetween = relEvents.filter(e => e.event_date > dateStr && e.event_date <= today)
-      eventsBetween.forEach(e => {
-        const q = Number(e.quantity || 0)
-        if (['venta', 'mortandad'].includes(e.event_type)) count += q
-        if (['compra', 'paricion'].includes(e.event_type)) count -= q
-      })
-    } else if (dateStr > today) {
-      // Future: forward-apply scheduled movements
-      const eventsBetween = relEvents.filter(e => e.event_date > today && e.event_date <= dateStr)
-      eventsBetween.forEach(e => {
-        const q = Number(e.quantity || 0)
-        if (['venta', 'mortandad'].includes(e.event_type)) count -= q
-        if (['compra', 'paricion'].includes(e.event_type)) count += q
-      })
-    }
-    return Math.max(0, count)
+    return calculateDynamicHeadcount(herdId, baseCount, dateStr, unifiedEvents)
   }, [unifiedEvents])
 
 
@@ -2057,10 +2067,23 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       const ms = Number(p.dry_matter_kg_ha) || Number(p.estimated_adh) * 66 || 0
       return sum + (ms * Number(p.area_ha || 0))
     }, 0)
-    const dailyDemand = herds.reduce((sum, h) => sum + (getDynamicHerdEV(h, suggestStartDate, farmEvents) * 12), 0)
+    const uEvents = [
+      ...farmEvents,
+      ...movements.filter(m => m.occurred_at && m.entity_type === 'herd').map(m => ({
+        ...m,
+        event_date: m.occurred_at.split('T')[0],
+        end_date: m.occurred_at.split('T')[0],
+        isMovement: true,
+        herd_id: m.entity_id,
+      }))
+    ]
+    const dailyDemand = herds.reduce((sum, h) => {
+      const hc = calculateDynamicHeadcount(h.id, Number(h.head_count) || 0, suggestStartDate, uEvents)
+      return sum + (getDynamicHerdEV(h, suggestStartDate, farmEvents, hc) * 12)
+    }, 0)
     const days = dailyDemand > 0 ? Math.floor(totalSupply / dailyDemand) : 0
     return { days, isCritical: days < 10 && days > 0 }
-  }, [paddocks, herds, suggestStartDate, farmEvents])
+  }, [paddocks, herds, suggestStartDate, farmEvents, movements])
 
   const isForageLimiting = suggestion.paddockMaxEV > 0 && totalPlanEV > suggestion.paddockMaxEV
 
@@ -2232,16 +2255,34 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         
         // --- Cálculo dinámico de carga animal (EV) para la fecha actual del bloque ---
         const currentEntryIso = currentEntry.toISOString().split('T')[0]
+        
+        // Preparar unifiedEvents para el ciclo (combina farmEvents y movements)
+        const localUnifiedEvents = [
+          ...farmEvents,
+          ...movements.filter(m => m.occurred_at && m.entity_type === 'herd').map(m => ({
+            ...m,
+            event_date: m.occurred_at.split('T')[0],
+            end_date: m.occurred_at.split('T')[0],
+            isMovement: true,
+            herd_id: m.entity_id,
+          }))
+        ]
+
         const currentActiveHerds = activeHerds.filter(h => {
           if (h.is_temporary) {
             if (h.admission_date && currentEntryIso < h.admission_date) return false
             if (h.exit_date && currentEntryIso > h.exit_date) return false
+            return true
           }
-          return true
+          // Para rodeos normales, si el headcount es 0 en esta fecha, no están activos.
+          const hc = calculateDynamicHeadcount(h.id, Number(h.head_count) || 0, currentEntryIso, localUnifiedEvents)
+          return hc > 0
         })
+
         const currentHerdIds = currentActiveHerds.map(h => h.id)
         const currentTotalEV = currentActiveHerds.reduce((sum, h) => {
-          return sum + getDynamicHerdEV(h, currentEntryIso, farmEvents)
+          const hc = calculateDynamicHeadcount(h.id, Number(h.head_count) || 0, currentEntryIso, localUnifiedEvents)
+          return sum + getDynamicHerdEV(h, currentEntryIso, farmEvents, hc)
         }, 0)
         
         if (precomputedDays[chosenPaddock.id] > 0) {
