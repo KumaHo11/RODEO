@@ -39,7 +39,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es">
+    <html lang="es" data-scroll-behavior="smooth">
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <link rel="icon" type="image/svg+xml" href="/icons/icon-512.svg" />
