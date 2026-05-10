@@ -2154,11 +2154,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       const newPlans: any[] = []
       const cycleId = crypto.randomUUID()
 
-      const totalEV = activeHerds.reduce((sum, h) => {
-        return sum + getDynamicHerdEV(h, startDate, farmEvents)
-      }, 0)
-      const allHerdIds = activeHerds.map(h => h.id)
-
       const availabilityMap = new Map<string, number>()
       activePaddocks.forEach(p => {
         // Only carry over existing plans that fall within the new season's timeframe
@@ -2234,15 +2229,29 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         }
 
         let stayDays: number
+        
+        // --- Cálculo dinámico de carga animal (EV) para la fecha actual del bloque ---
+        const currentEntryIso = currentEntry.toISOString().split('T')[0]
+        const currentActiveHerds = activeHerds.filter(h => {
+          if (h.is_temporary) {
+            if (h.admission_date && currentEntryIso < h.admission_date) return false
+            if (h.exit_date && currentEntryIso > h.exit_date) return false
+          }
+          return true
+        })
+        const currentHerdIds = currentActiveHerds.map(h => h.id)
+        const currentTotalEV = currentActiveHerds.reduce((sum, h) => {
+          return sum + getDynamicHerdEV(h, currentEntryIso, farmEvents)
+        }, 0)
+        
         if (precomputedDays[chosenPaddock.id] > 0) {
           stayDays = precomputedDays[chosenPaddock.id]
         } else {
           const ms   = Number(chosenPaddock.dry_matter_kg_ha) > 0 ? Number(chosenPaddock.dry_matter_kg_ha) : 1200
           const area = Number(chosenPaddock.area_ha) || 10
-          const evForCalc = totalEV > 0 ? totalEV
-            : activeHerds.reduce((s, h) => s + getDynamicHerdEV(h, currentEntry.toISOString().split('T')[0], farmEvents), 0)
+          const evForCalc = currentTotalEV > 0 ? currentTotalEV : 1
           const usableMs = calculateUsableForage(ms, remnant, area)
-          const dailyDemand = (evForCalc > 0 ? evForCalc : 1) * dailyDemandMultiplier
+          const dailyDemand = evForCalc * dailyDemandMultiplier
           const rawDays = calculateGrazingDays(usableMs, dailyDemand) || 3
           stayDays = Math.max(1, rawDays)
         }
@@ -2257,8 +2266,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
         newPlans.push({
           paddock_id: chosenPaddock.id,
-          herd_id:    activeHerds[0]?.id,
-          herd_ids:   allHerdIds,
+          herd_id:    currentActiveHerds[0]?.id || null,
+          herd_ids:   currentHerdIds,
           entry_date: currentEntry.toISOString().split('T')[0],
           exit_date:  exitDate.toISOString().split('T')[0],
           planned_recovery_days: recDays,
