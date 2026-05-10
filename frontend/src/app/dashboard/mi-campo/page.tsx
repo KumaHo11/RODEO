@@ -384,10 +384,10 @@ export default function MiCampoPage() {
   }, [fieldImg, sessionFieldImg]) // react whenever org loads or session image changes
 
   return (
-    <div className="flex flex-col md:flex-row h-full overflow-hidden bg-gray-100 p-3 md:p-4 gap-3 md:gap-4">
+    <div className="flex flex-col md:flex-row md:h-full md:overflow-hidden bg-gray-100 md:p-4 md:gap-4">
 
-      {/* ── Map panel — mobile top, desktop right 65% ──────────────────── */}
-      <div className="order-1 md:order-2 w-full md:w-[65%] flex flex-col h-[50vh] md:h-full rounded-2xl overflow-hidden shadow-md border border-gray-200 relative min-h-[200px]">
+      {/* ── Map panel — mobile sticky top, desktop right 65% ────────────────── */}
+      <div className="order-1 md:order-2 w-full md:w-[65%] flex flex-col h-[55vw] max-h-[320px] md:h-full md:max-h-none rounded-none md:rounded-2xl overflow-hidden shadow-none md:shadow-md border-0 md:border md:border-gray-200 relative min-h-[220px] sticky top-0 z-[400] md:static md:z-auto">
 
         {/* View toggle — always visible when fieldImg exists OR always available as overlay */}
         <div className="flex border-b border-gray-200 bg-white shrink-0 z-[500] relative">
@@ -512,8 +512,8 @@ export default function MiCampoPage() {
         )}
       </div>
 
-      {/* ── Side Panel — mobile bottom, desktop left 35% ─────────────────── */}
-      <div className="order-2 md:order-1 w-full md:w-[35%] md:shrink-0 flex flex-col overflow-hidden">
+      {/* ── Side Panel — mobile scrolls below map, desktop left 35% ─────────── */}
+      <div className="order-2 md:order-1 w-full md:w-[35%] md:shrink-0 flex flex-col md:overflow-hidden px-3 pb-4 pt-3 md:p-0 gap-3">
         <PaddockSidePanel
           paddocks={paddocks}
           org={org}

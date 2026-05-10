@@ -726,8 +726,8 @@ export default function EquipoPage() {
 
       {/* ── Invite Modal ──────────────────────────────────────────────────────── */}
       {modalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 flex flex-col max-h-[92vh]">
 
             {/* Header */}
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
@@ -802,7 +802,7 @@ export default function EquipoPage() {
                         <BadgePlus className="w-3 h-3" /> Crear rol personalizado
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {allRoles.map(role => {
                         const Icon = role.icon
                         const isSelected = inviteRole === role.id
@@ -811,21 +811,21 @@ export default function EquipoPage() {
                             key={role.id}
                             type="button"
                             onClick={() => handleRoleChange(role.id)}
-                            className={`flex items-center gap-3 px-3.5 py-3 rounded-2xl border-2 text-left transition-all ${
+                            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl border-2 text-left transition-all min-w-0 ${
                               isSelected
                                 ? `${role.bg} border-current`
                                 : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'
                             }`}
                           >
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isSelected ? role.bg : 'bg-gray-100'}`}>
-                              <Icon className={`w-4 h-4 ${isSelected ? role.color : 'text-gray-400'}`} />
+                            <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${isSelected ? role.bg : 'bg-gray-100'}`}>
+                              <Icon className={`w-3.5 h-3.5 ${isSelected ? role.color : 'text-gray-400'}`} />
                             </div>
-                            <div className="min-w-0">
-                              <p className={`text-xs font-black leading-tight ${isSelected ? role.color : 'text-gray-800'}`}>{role.label}</p>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-xs font-black leading-tight truncate ${isSelected ? role.color : 'text-gray-800'}`}>{role.label}</p>
                               {role.isCustom && <p className="text-[9px] text-indigo-400 mt-0.5">Personalizado</p>}
                             </div>
                             {isSelected && (
-                              <div className={`ml-auto w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${role.bg}`}>
+                              <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${role.bg}`}>
                                 <Check className={`w-2.5 h-2.5 ${role.color}`} />
                               </div>
                             )}
@@ -891,8 +891,8 @@ export default function EquipoPage() {
 
       {/* ── New Custom Role Modal ─────────────────────────────────────────────── */}
       {newRoleModalOpen && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-300">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
                 <h2 className="text-lg font-black text-gray-950 tracking-tight">Rol personalizado</h2>

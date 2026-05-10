@@ -145,6 +145,7 @@ export default function HerdsPage() {
 
   // Event log
   const [eventFilter,   setEventFilter]   = useState('all')
+  const [movSearch,     setMovSearch]     = useState('')
   const [showEventForm, setShowEventForm] = useState(false)
   const [savingEvent,   setSavingEvent]   = useState(false)
   const [eventForm, setEventForm] = useState({
@@ -251,51 +252,57 @@ export default function HerdsPage() {
     <div className="space-y-6">
 
       {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-black tracking-tight text-gray-950">Rodeos</h1>
-          <p className="text-sm text-gray-500 font-medium mt-1">
+          <p className="text-sm text-gray-500 font-medium mt-1 line-clamp-1 sm:line-clamp-none">
             Gestión de lotes de animales por categoría, stock y carga animal.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Action buttons — scrollable on mobile so they never overflow */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 shrink-0 sm:overflow-visible sm:pb-0">
           {/* View toggle */}
-          <div className="bg-gray-100 rounded-xl p-0.5 flex gap-0.5">
+          <div className="bg-gray-100 rounded-xl p-0.5 flex gap-0.5 shrink-0">
             <button onClick={() => setView('cards')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'cards' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              <LayoutGrid className="w-3.5 h-3.5" /> Tarjetas
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${view === 'cards' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Tarjetas</span>
             </button>
             <button onClick={() => setView('list')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              <List className="w-3.5 h-3.5" /> Lista
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              <List className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Lista</span>
             </button>
             <button onClick={() => { setView('historial'); loadMovements() }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'historial' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              <Calendar className="w-3.5 h-3.5" /> Historial
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${view === 'historial' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              <Calendar className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Historial</span>
             </button>
           </div>
           {/* Per-section export */}
           {view !== 'historial' && (
             <button onClick={() => exportExcel(filtered)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
-              <Download className="w-3.5 h-3.5" /> Exportar rodeos
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all whitespace-nowrap shrink-0">
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Exportar</span>
             </button>
           )}
           {view === 'historial' && (
             <button onClick={() => exportMovementsExcel(herds)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all">
-              <Download className="w-3.5 h-3.5" /> Exportar historial
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all whitespace-nowrap shrink-0">
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Exportar</span>
             </button>
           )}
           {canCreateMore ? (
             <button onClick={openCreate}
-              className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200">
-              <Plus className="w-4 h-4" /> Nuevo rodeo
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 whitespace-nowrap shrink-0">
+              <Plus className="w-4 h-4 shrink-0" /> Nuevo rodeo
             </button>
           ) : (
             <button onClick={() => toast.info(`Límite alcanzado: Tu plan permite hasta ${maxHerds} rodeo${maxHerds > 1 ? 's' : ''}.`)}
-              className="flex items-center gap-2 bg-gray-100 text-gray-400 px-5 py-2.5 rounded-xl font-bold text-sm border border-gray-200 cursor-not-allowed">
-              <Lock className="w-3.5 h-3.5" /> Límite {maxHerds}/{maxHerds}
+              className="flex items-center gap-2 bg-gray-100 text-gray-400 px-4 py-2.5 rounded-xl font-bold text-sm border border-gray-200 cursor-not-allowed whitespace-nowrap shrink-0">
+              <Lock className="w-3.5 h-3.5 shrink-0" /> Límite {maxHerds}/{maxHerds}
             </button>
           )}
         </div>
@@ -591,26 +598,38 @@ export default function HerdsPage() {
       {view === 'historial' && (
         <div className="space-y-4">
 
-          {/* Toolbar: filters + new event button */}
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <button onClick={() => setEventFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  eventFilter === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}>
-                Todos
-              </button>
-              {EVENT_TYPES.map(et => (
-                <button key={et.key} onClick={() => setEventFilter(et.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    eventFilter === et.key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}>
-                  {et.label}
-                </button>
-              ))}
+          {/* Toolbar: search + category dropdown + new event */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col sm:flex-row gap-2 flex-1">
+              {/* Search */}
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={movSearch}
+                  onChange={e => setMovSearch(e.target.value)}
+                  placeholder="Buscar por rodeo o notas..."
+                  className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-500 transition-all"
+                />
+              </div>
+              {/* Category dropdown */}
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <select
+                  value={eventFilter}
+                  onChange={e => setEventFilter(e.target.value)}
+                  className="bg-white border border-gray-200 rounded-xl pl-9 pr-8 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-1 focus:ring-green-500 appearance-none cursor-pointer transition-all"
+                >
+                  <option value="all">Todas las categorías</option>
+                  {EVENT_TYPES.map(et => (
+                    <option key={et.key} value={et.key}>{et.label}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+              </div>
             </div>
             <button onClick={() => setShowEventForm(v => !v)}
-              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 shrink-0">
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 shrink-0 whitespace-nowrap">
               <Plus className="w-4 h-4" /> Nuevo evento
             </button>
           </div>
@@ -719,11 +738,22 @@ export default function HerdsPage() {
               {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
             </div>
           ) : (() => {
-            const filteredMov = eventFilter === 'all' ? movements : movements.filter(m => m.event_type === eventFilter)
+            const filteredMov = movements
+              .filter(m => eventFilter === 'all' || m.event_type === eventFilter)
+              .filter(m => {
+                if (!movSearch.trim()) return true
+                const q = movSearch.toLowerCase()
+                const herd = herds.find(h => h.id === m.herd_id)
+                return (
+                  (herd?.name || '').toLowerCase().includes(q) ||
+                  (m.notes || '').toLowerCase().includes(q) ||
+                  (EVENT_LABEL[m.event_type] || '').toLowerCase().includes(q)
+                )
+              })
             return filteredMov.length === 0 ? (
               <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
                 <p className="text-sm font-bold text-gray-400">
-                  Sin eventos {eventFilter !== 'all' ? `de tipo "${EVENT_LABEL[eventFilter] ?? eventFilter}"` : 'registrados'}
+                  Sin eventos {eventFilter !== 'all' ? `de tipo "${EVENT_LABEL[eventFilter] ?? eventFilter}"` : movSearch ? `para "${movSearch}"` : 'registrados'}
                 </p>
                 <p className="text-[10px] text-gray-300 mt-1">Usá el botón «Nuevo evento» para registrar el primero</p>
               </div>

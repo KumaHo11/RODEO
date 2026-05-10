@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
       head_count, avg_weight_kg, total_ev, categoria,
       // Optional new columns
       age_months, age_years, admission_date, parent_herd_id, exit_date,
+      // Temporary herd fields
+      is_temporary, notes,
     } = body
 
     if (!name || !head_count) {
@@ -102,7 +104,7 @@ export async function POST(req: NextRequest) {
     const id: string | null = (result.rows[0]?.id as string) ?? null
 
     // Step 2: UPDATE with new optional columns — silently skip if columns don't exist yet
-    if (id && (age_months || age_years || admission_date || parent_herd_id)) {
+    if (id && (age_months || age_years || admission_date || parent_herd_id || exit_date || is_temporary != null || notes)) {
       try {
         await mutate(
           `UPDATE herds
@@ -119,8 +121,16 @@ export async function POST(req: NextRequest) {
           ]
         )
       } catch (optErr: any) {
-        // Columns not yet migrated — non-critical, main record already saved
         console.warn('POST /api/herds optional columns skipped:', optErr.message)
+      }
+      // is_temporary and notes — separate update with fallback
+      try {
+        await mutate(
+          `UPDATE herds SET is_temporary = $1, herd_notes = $2 WHERE id = $3`,
+          [is_temporary ?? false, notes || null, id]
+        )
+      } catch {
+        // Column may not exist in older schema — non-critical
       }
     }
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio } from '@/lib/audioOfflineStore'
+import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio, savePendingPhoto, getAllPendingPhotos, deletePendingPhoto, countPendingItems } from '@/lib/audioOfflineStore'
 import {
   Mic, Camera, Loader2, Image as ImageIcon,
   CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp, Lock, MessageCircle,
@@ -169,8 +169,8 @@ export default function BitacoraPage() {
 
   // ── Count pending offline audios ────────────────────────────────────────────
   const refreshPending = useCallback(async () => {
-    const all = await getAllPendingAudios()
-    setPendingOffline(all.length)
+    const count = await countPendingItems()
+    setPendingOffline(count)
   }, [])
 
   useEffect(() => { refreshPending() }, [refreshPending])
@@ -179,11 +179,11 @@ export default function BitacoraPage() {
   const syncOfflineAudios = useCallback(async () => {
     if (!navigator.onLine) return
     const pending = await getAllPendingAudios()
-    if (pending.length === 0) return
+    const pendingPhotos = await getAllPendingPhotos()
+    if (pending.length === 0 && pendingPhotos.length === 0) return
 
     for (const pa of pending) {
       try {
-        // 1. Upload audio blob
         const fd = new FormData()
         fd.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
         fd.append('folder', 'bitacora-audio')
@@ -191,7 +191,6 @@ export default function BitacoraPage() {
         if (!uploadRes.ok) continue
         const { url: audio_url } = await uploadRes.json()
 
-        // 2. Transcribe if no local transcript
         let transcript = pa.transcript || ''
         if (!transcript) {
           try {
@@ -202,7 +201,6 @@ export default function BitacoraPage() {
           } catch { /* transcription optional */ }
         }
 
-        // 3. Save note
         await apiFetch('/api/field-notes', {
           method: 'POST',
           body: JSON.stringify({
@@ -211,10 +209,31 @@ export default function BitacoraPage() {
             audio_url, audio_duration_secs: pa.durationSecs,
           }),
         })
-
         await deletePendingAudio(pa.id)
       } catch (e) {
         console.warn('Failed to sync offline audio:', e)
+      }
+    }
+
+    // Sync pending photos
+    for (const pp of pendingPhotos) {
+      try {
+        const fd = new FormData()
+        fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
+        fd.append('folder', 'bitacora-photos')
+        const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd })
+        if (!uploadRes.ok) continue
+        const { url: photo_url } = await uploadRes.json()
+        await apiFetch('/api/field-notes', {
+          method: 'POST',
+          body: JSON.stringify({
+            paddock_id: null, tags: ['GENERAL'], title: pp.title,
+            content: null, lat: pp.lat, lng: pp.lng, photo_url,
+          }),
+        })
+        await deletePendingPhoto(pp.id)
+      } catch (e) {
+        console.warn('Failed to sync offline photo:', e)
       }
     }
 
@@ -316,7 +335,7 @@ export default function BitacoraPage() {
     const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
     const title = audioBlob ? `Audio · ${timestamp}` : photoFile ? `Foto · ${timestamp}` : 'Nota'
 
-    // ── OFFLINE path ──
+    // ── OFFLINE path: audio
     if (!navigator.onLine && audioBlob) {
       setSavingMsg('Guardando sin conexión...')
       const id = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -326,6 +345,16 @@ export default function BitacoraPage() {
         transcript: liveTranscript,
       }
       await savePendingAudio(pa)
+      await refreshPending()
+      flashSaved(); resetCapture(); return
+    }
+
+    // ── OFFLINE path: photo
+    if (!navigator.onLine && photoFile) {
+      setSavingMsg('Guardando foto sin conexión...')
+      const id = `local-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const blob = new Blob([await photoFile.arrayBuffer()], { type: photoFile.type })
+      await savePendingPhoto({ id, blob, lat, lng, createdAt: new Date().toISOString(), title })
       await refreshPending()
       flashSaved(); resetCapture(); return
     }
@@ -449,7 +478,7 @@ export default function BitacoraPage() {
       </div>
 
       {/* Notes list */}
-      <div className="flex-1 pb-48 px-6">
+      <div className="flex-1 pb-56 px-4 sm:px-6">
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 text-gray-300 animate-spin" /></div>
         ) : filtered.length === 0 ? (
@@ -471,8 +500,8 @@ export default function BitacoraPage() {
         )}
       </div>
 
-      {/* Capture area */}
-      <div className="fixed bottom-0 left-0 right-0 p-8 pb-12 bg-gradient-to-t from-white via-white to-transparent pointer-events-none">
+      {/* Capture area — pinned to bottom of viewport */}
+      <div className="fixed bottom-0 left-0 right-0 pb-8 sm:pb-6 px-8 pt-8 bg-gradient-to-t from-white via-white to-transparent pointer-events-none">
         <div className="max-w-md mx-auto flex flex-col items-center gap-8 pointer-events-auto">
 
           {isRecording ? (

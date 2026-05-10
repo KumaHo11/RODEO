@@ -208,7 +208,7 @@ export default function PaddockSidePanel({
 
   return (
     <>
-      <div className="flex flex-col h-full bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+      <div className="flex flex-col md:h-full bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
@@ -312,7 +312,7 @@ export default function PaddockSidePanel({
         </div>
 
         {/* ── Paddock list ─────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="md:flex-1 md:overflow-y-auto">
           <div className="px-5 py-2.5 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-50 z-10">
             <p className="text-xs font-black text-gray-600 tracking-widest uppercase">Potreros ({paddocks.length})</p>
             <div className="flex items-center gap-1.5">

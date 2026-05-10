@@ -596,6 +596,7 @@ function InteractiveGantt({
     <>
     <div
       ref={containerRef}
+      data-gantt-scroll=""
       className="select-none overflow-x-auto overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-sm"
       style={{ cursor: isDrawingMode ? 'crosshair' : 'default', maxHeight: 'calc(100vh - 220px)' }}
       onClick={() => { setSelectedEvent(null); setPopupPos(null) }}
@@ -3061,7 +3062,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       <div className="space-y-5 pb-10">
 
       {/* ─── Header simplificado ─── */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 
         {/* Left: Título modo Gantt — Dropdown Custom (neutral) */}
         <div className="flex items-center gap-3 min-w-0">
@@ -3071,8 +3072,13 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               className="group flex flex-col items-start text-left transition-all duration-200"
             >
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black tracking-tight leading-tight text-gray-950">
-                  {activeGanttTab === 'suggested' ? 'Planificación sugerida' : 'Plan de pastoreo y planilla de control'}
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-tight text-gray-950 max-w-[200px] sm:max-w-none line-clamp-2 sm:line-clamp-none">
+                  {activeGanttTab === 'suggested' ? 'Planificación sugerida' : (
+                    <>
+                      <span className="sm:hidden">Plan de pastoreo</span>
+                      <span className="hidden sm:inline">Plan de pastoreo y planilla de control</span>
+                    </>
+                  )}
                 </h1>
                 <svg
                   width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -3203,20 +3209,19 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
       {/* DRAWING MODE BANNER — only relevant in manual tab */}
       {drawingMode && activeGanttTab === 'manual' && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-gray-900/90 backdrop-blur-md text-white px-6 py-3 rounded-2xl shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center animate-pulse">
-              <Plus className="w-4 h-4 text-white" />
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 bg-gray-900/90 backdrop-blur-md text-white px-4 py-2.5 rounded-2xl shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-[calc(100vw-2rem)] w-auto">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center animate-pulse shrink-0">
+              <Plus className="w-3 h-3 text-white" />
             </div>
-            <div>
-              <p className="text-sm font-black">Modo Dibujo Activo</p>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Haz click y arrastra en el calendario para planificar</p>
+            <div className="min-w-0">
+              <p className="text-xs font-black whitespace-nowrap">Modo Dibujo Activo</p>
+              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider hidden sm:block">Hacé click y arrastrá en el calendario</p>
             </div>
           </div>
-          <div className="w-px h-8 bg-white/10 mx-2" />
           <button 
             onClick={() => setDrawingMode(false)}
-            className="px-4 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-black transition-colors"
+            className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-black transition-colors whitespace-nowrap shrink-0"
           >
             CANCELAR
           </button>

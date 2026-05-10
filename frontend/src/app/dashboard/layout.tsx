@@ -104,15 +104,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     })).filter(g => g.items.length > 0)
   }, [isOwner, can])
 
-  // Mobile bottom nav: up to 5 most-used items from filtered nav
-  const mobileNav = useMemo<NavItem[]>(() => {
-    const priority = ['Panel', 'Potreros', 'Bitácora', 'Planificador', 'Tareas', 'Insights']
-    const sorted = filteredNav
-      .filter(i => priority.includes(i.name))
-      .sort((a, b) => priority.indexOf(a.name) - priority.indexOf(b.name))
-    return sorted.slice(0, 5)
-  }, [filteredNav])
-
   // ── Online/Offline detection ─────────────────────────────────────────────
   useEffect(() => {
     setIsOnline(navigator.onLine)
@@ -635,40 +626,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {isMiCampo ? (
             <div className="flex-1 overflow-hidden h-full">{children}</div>
           ) : (
-            <div className="flex flex-col min-h-full px-3 sm:px-6 lg:px-8 py-4 max-w-[1800px] w-full mx-auto">
+            <div className="flex flex-col min-h-full px-3 sm:px-6 lg:px-8 py-4 pb-6 max-w-[1800px] w-full mx-auto">
               {children}
             </div>
           )}
         </main>
 
-        {/* ── Mobile bottom nav ─────────────────────────────────────────────── */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 z-40 safe-area-pb">
-          <div className="flex items-center justify-around px-2 py-2">
-            {mobileNav.map(item => {
-              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={clsx(
-                    'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative',
-                    isActive ? 'text-green-700' : 'text-gray-400'
-                  )}
-                >
-                  <div className="relative">
-                    <item.icon className={clsx('h-5 w-5', isActive ? 'text-green-600' : 'text-gray-400')} />
-                    {item.href === '/dashboard/tareas' && pendingTasks > 0 && (
-                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" />
-                    )}
-                  </div>
-                  <span className={clsx('text-[9px] font-bold', isActive ? 'text-green-700' : 'text-gray-400')}>
-                    {item.name}
-                  </span>
-                </Link>
-              )
-            })}
-          </div>
-        </nav>
+
       </div>
     </div>
     </WeatherProvider>

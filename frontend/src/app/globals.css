@@ -89,3 +89,94 @@ button {
 .text-\[10px\] { font-size: 10px; }
 .text-\[11px\] { font-size: 11px; }
 
+/* ── Mobile: Smooth scroll + iOS momentum ───────────────────────────────────*/
+html {
+  scroll-behavior: smooth;
+}
+
+/* All overflowing scroll containers get momentum scrolling on iOS */
+.overflow-y-auto,
+.overflow-y-scroll,
+[data-scroll],
+main {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* GPU-accelerate the main scroll container to eliminate lag on mobile */
+main {
+  will-change: scroll-position;
+  transform: translateZ(0);
+}
+
+/* ── Safe area: bottom padding for notched devices ──────────────────────────*/
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Ensure the quick-access FAB stays above all cards/content */
+[data-fab] {
+  z-index: 900;
+}
+
+/* ── Cards: prevent overflow and title wrapping issues ──────────────────────*/
+.card-title {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+  max-width: 100%;
+}
+
+/* Prevent horizontal scroll on mobile */
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* ── Responsive heading scale for mobile/tablet ─────────────────────────────*/
+@media (max-width: 640px) {
+  h1.text-3xl, .text-3xl.font-black {
+    font-size: clamp(1.25rem, 5vw, 1.875rem) !important;
+    line-height: 1.2 !important;
+  }
+  h1.text-4xl, .text-4xl {
+    font-size: clamp(1.5rem, 6vw, 2.25rem) !important;
+    line-height: 1.15 !important;
+  }
+  /* Planificador: prevent Gantt header from wrapping badly */
+  .gantt-header-title {
+    font-size: clamp(1rem, 4vw, 1.5rem) !important;
+    line-height: 1.2 !important;
+  }
+}
+
+/* ── Planificador: scroll performance ───────────────────────────────────────*/
+/* Virtual-scroll hints to reduce paint during fast swipes */
+[data-gantt-scroll] {
+  contain: layout style;
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Reduce repaints in sticky table headers */
+[data-sticky-header] {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  will-change: transform;
+}
+
+/* ── Z-index stacking layer reference ───────────────────────────────────────
+   1      - Base content / cards
+   10     - Sticky table headers
+   20     - Dropdowns / popovers within content
+   100    - Modals backdrop
+   200    - Modals
+   500    - Toast notifications
+   900    - Mobile FAB quick access bar
+   1000   - Notification panel
+   2000   - Top header bar
+   9999   - Critical overlays (map, drawer)
+*/
+

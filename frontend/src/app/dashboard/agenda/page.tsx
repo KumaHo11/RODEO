@@ -41,6 +41,7 @@ const EMPTY_FORM = {
   herd_id: '',
   herd_ids: [] as string[],
   body_condition: '',
+  bulls_count: '',
 }
 
 export default function AgendaPage() {
@@ -52,12 +53,11 @@ export default function AgendaPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [conflictModalOpen, setConflictModalOpen] = useState(false)
   const [pendingPayload, setPendingPayload] = useState<any>(null)
-  const [activeTab, setActiveTab] = useState<'info'>('info')
   const [editingEvent, setEditingEvent] = useState<any | null>(null)
   const [form, setForm] = useState<{
     title: string; event_type: string; event_date: string; end_date: string;
     description: string; status: string; herd_id: string; herd_ids: string[];
-    body_condition: string;
+    body_condition: string; bulls_count: string;
   }>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
@@ -113,9 +113,9 @@ export default function AgendaPage() {
       herd_id: event.herd_id || '',
       herd_ids: parsedHerdIds,
       body_condition: event.body_condition || '',
+      bulls_count: event.bulls_count ? String(event.bulls_count) : '',
     })
     setModalOpen(true)
-    setActiveTab('info')
   }
 
   const handleSave = async (skipConflictCheck = false) => {
@@ -131,6 +131,7 @@ export default function AgendaPage() {
       herd_id: form.herd_ids.length > 0 ? form.herd_ids[0] : null,
       herd_ids: form.herd_ids,
       body_condition: form.body_condition || null,
+      bulls_count: form.event_type === 'servicio' && form.bulls_count ? Number(form.bulls_count) : null,
     }
 
     if (!skipConflictCheck) {
@@ -158,11 +159,38 @@ export default function AgendaPage() {
         await apiFetch(`/api/farm-events/${editingEvent.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
       } else {
         await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify(payload) })
+
+        // Auto-create temporary toro herd in the Gantt when it's a servicio with bulls
+        if (payload.event_type === 'servicio' && payload.bulls_count && payload.bulls_count > 0) {
+          const startDate = payload.event_date
+          const endDate   = payload.end_date || payload.event_date
+
+          // Build a descriptive name: "Toros Servicio mes/año"
+          const startD = new Date(startDate + 'T00:00:00')
+          const endD   = new Date(endDate   + 'T00:00:00')
+          const startLabel = startD.toLocaleDateString('es', { month: 'short', year: '2-digit' })
+          const endLabel   = endD.toLocaleDateString(  'es', { month: 'short', year: '2-digit' })
+          const herdName = startLabel === endLabel
+            ? `Toros servicio ${startLabel}`
+            : `Toros servicio ${startLabel}–${endLabel}`
+
+          await apiFetch('/api/herds', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: herdName,
+              categoria: 'TORO',
+              head_count: payload.bulls_count,
+              is_temporary: true,
+              admission_date: startDate,
+              exit_date: endDate,
+              notes: `Creado automáticamente desde Agenda — Servicio`,
+            }),
+          }).catch(e => console.warn('No se pudo crear rodeo temporal:', e))
+        }
       }
       
       if (adjustPlans) {
         // En un caso real, aquí iría la lógica para ajustar las planificaciones automáticamente
-        // por ejemplo, dividirlas o cambiarles la fecha.
       }
     } catch(e) {
       console.error(e)
@@ -199,15 +227,6 @@ export default function AgendaPage() {
 
   const upcoming = events.filter(e => { const d = safeDate(e.event_date); return d && d >= new Date() }).length
 
-  const handleToggleHerd = (id: string) => {
-    setForm(prev => {
-      const isSelected = prev.herd_ids.includes(id)
-      return {
-        ...prev,
-        herd_ids: isSelected ? prev.herd_ids.filter(hid => hid !== id) : [...prev.herd_ids, id]
-      }
-    })
-  }
 
   return (
     <FeatureGate
@@ -218,38 +237,40 @@ export default function AgendaPage() {
     >
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-black tracking-tight text-gray-950">Agenda</h1>
-          <p className="text-sm text-gray-500 font-medium mt-1">
+          <p className="text-sm text-gray-500 font-medium mt-1 line-clamp-1 sm:line-clamp-none">
             Gestión de eventos ganaderos: servicios, pariciones, sanidad y más
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* View toggle */}
           <div className="bg-gray-100 rounded-xl p-0.5 flex gap-0.5">
             <button
               onClick={() => setAgendaView('lista')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                 agendaView === 'lista' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <AlignJustify className="w-3.5 h-3.5" /> Lista
+              <AlignJustify className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Lista</span>
             </button>
             <button
               onClick={() => setAgendaView('calendario')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                 agendaView === 'calendario' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5" /> Calendario
+              <Calendar className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Calendario</span>
             </button>
           </div>
           <button
             onClick={openCreate}
-            className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200"
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 whitespace-nowrap shrink-0"
           >
-            <Plus className="w-4 h-4" /> Nuevo evento
+            <Plus className="w-4 h-4 shrink-0" /> Nuevo evento
           </button>
         </div>
       </div>
@@ -544,21 +565,13 @@ export default function AgendaPage() {
 
       {/* Create / Edit Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <div>
                 <h3 className="text-lg font-black text-gray-950">
                   {editingEvent ? 'Editar Evento' : 'Nuevo Evento'}
                 </h3>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <p className="text-xs text-gray-500 font-medium">Completá los detalles de la agenda ganadera</p>
-                  {form.body_condition && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-900 text-white tracking-wide">
-                      CC: {form.body_condition}
-                    </span>
-                  )}
-                </div>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
@@ -568,19 +581,7 @@ export default function AgendaPage() {
               </button>
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-gray-100 px-6 bg-gray-50/20">
-              <button
-                className={`py-3 text-sm font-bold border-b-2 px-2 transition-all ${
-                  activeTab === 'info' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-800'
-                }`}
-                onClick={() => setActiveTab('info')}
-              >
-                Información del Evento
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
+            <div className="px-6 py-5 space-y-4 max-h-[75vh] overflow-y-auto">
               {/* Title */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Título del Evento *</label>
@@ -593,7 +594,7 @@ export default function AgendaPage() {
                 />
               </div>
 
-              {/* Event Type — Dropdown */}
+              {/* Event Type */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Tipo de Evento *</label>
                 <select
@@ -602,12 +603,9 @@ export default function AgendaPage() {
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-800 focus:ring-1 focus:ring-green-600 outline-none cursor-pointer appearance-none"
                 >
                   {EVENT_TYPES.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
+                    <option key={t.id} value={t.id}>{t.label}</option>
                   ))}
                 </select>
-                {/* Visual badge for selected type */}
                 {(() => {
                   const sel = EVENT_TYPES.find(t => t.id === form.event_type)
                   if (!sel) return null
@@ -642,50 +640,21 @@ export default function AgendaPage() {
                 </div>
               </div>
 
-              {/* Rodeos Multiple Selection */}
-      {herds.length > 0 && (
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
-            Rodeos (Selección Múltiple)
-          </label>
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2">
-            {herds.map((h) => {
-              const isSelected = form.herd_ids.includes(h.id);
-              return (
-                <label key={h.id} onClick={(e) => { e.preventDefault(); handleToggleHerd(h.id); }} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors group">
-                  <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 transition-colors border ${isSelected ? 'bg-green-600 border-transparent text-white' : 'bg-white border-gray-300'}`}>
-                    {isSelected && <Check className="w-3.5 h-3.5" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-800 group-hover:text-green-700 transition-colors">{h.name}</p>
-                    <p className="text-[10px] font-medium text-gray-500">{h.head_count} cabezas</p>
-                  </div>
-                </label>
-              );
-            })}
-            {form.herd_ids.length === 0 && (
-              <p className="text-xs text-gray-400 italic px-2">Sin rodeo seleccionado.</p>
-            )}
-          </div>
-        </div>
-      )}
-
-
-
-              {/* Body Condition */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Condición Corporal (OPCIONAL)</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="1"
-                  max="5"
-                  value={form.body_condition}
-                  onChange={e => setForm({ ...form, body_condition: e.target.value })}
-                  placeholder="Ej: 3.5"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
-                />
-              </div>
+              {/* Solo si es Servicio: agregar toros como temporales */}
+              {form.event_type === 'servicio' && (
+                <div className="space-y-2 bg-amber-50 border border-amber-100 rounded-xl p-4">
+                  <label className="text-[10px] font-black text-amber-700 tracking-widest uppercase">Toros (servicio)</label>
+                  <p className="text-[11px] text-amber-600">Agregados como rodeo temporal en el planificador durante las fechas configuradas.</p>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.bulls_count}
+                    onChange={e => setForm({ ...form, bulls_count: e.target.value })}
+                    placeholder="Cantidad de toros"
+                    className="w-full bg-white border border-amber-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
+                  />
+                </div>
+              )}
 
               {/* Description */}
               <div className="space-y-1.5">
