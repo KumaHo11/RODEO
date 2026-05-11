@@ -936,6 +936,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         <p className="text-[10px] text-green-600 font-bold mt-2 text-center animate-in fade-in zoom-in duration-300">✓ Guardado en historial de evidencias</p>
                       )}
                     </div>
+                  </div>
                 </>
               )}
             </div>
