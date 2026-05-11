@@ -6,12 +6,13 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, Check, Loader2, Plus, Minus, ChevronDown, ChevronUp,
   Calendar, Hash, Scale, Clock, ClipboardList,
   TrendingDown, TrendingUp, Baby, ShoppingCart,
   AlertTriangle, BookOpen, CalendarDays, Info, Edit3,
-  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users,
+  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users, Trash2,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '@/lib/apiFetch'
@@ -131,7 +132,12 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const canVoice     = hasFeature('voice_bitacora')
   const isEditing = !!herd?.id
 
-  const [tab, setTab] = useState<'operativo' | 'actividades' | 'registros'>('operativo')
+  const [tab, setTab] = useState<'operativo' | 'actividades' | 'registros' | 'historial'>('operativo')
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
 
   // ── Tab 1: Datos operativos ───────────────────────────────────────────────
   const initCatKey = useMemo<CategoriaComercial | null>(() => {
@@ -212,6 +218,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   // ── Tab 2: Actividades ────────────────────────────────────────────────────
   const [actId,      setActId]      = useState<ActivityId | null>(null)
   const [actCount,   setActCount]   = useState<number | ''>(1)
+  const [actDate,    setActDate]    = useState<string>(todayISO())
   const [actNote,    setActNote]    = useState('')
   const [actSaving,  setActSaving]  = useState(false)
   const [actSuccess, setActSuccess] = useState<string | null>(null)
@@ -242,8 +249,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         method: 'POST',
         body: JSON.stringify({
           title: `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${herd.name}`,
-          event_type: actId === 'paricion' ? 'paricion' : actId === 'destete' ? 'destete' : 'servicio',
-          event_date: todayISO(),
+          event_type: actId,
+          event_date: actDate,
           herd_id: herd.id, herd_ids: [herd.id],
           description: actNote || null, status: 'pendiente',
         }),
@@ -435,9 +442,40 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     loadData()
   }
 
-  // Visible events
-  const visibleEvents = showAllEvents ? agendaEvents.slice(0, 10) : agendaEvents.slice(0, 2)
-  const hiddenCount   = agendaEvents.length - 2
+  const [eventToDelete, setEventToDelete] = useState<any>(null)
+  const [isDeletingEvent, setIsDeletingEvent] = useState(false)
+
+  const handleDeleteEvent = async () => {
+    if (!eventToDelete || !herd?.id) return
+    setIsDeletingEvent(true)
+    try {
+      const type = eventToDelete.event_type
+      if (['paricion', 'compra', 'mortandad', 'venta', 'destete'].includes(type)) {
+        const match = eventToDelete.title.match(/: (\d+) cab/)
+        if (match) {
+          const n = Number(match[1])
+          const isAdd = ['paricion', 'compra'].includes(type)
+          // If the event added animals, deleting it subtracts them. If it subtracted animals, deleting it adds them back.
+          const newCount = isAdd ? Math.max((herd.head_count || 0) - n, 0) : (herd.head_count || 0) + n
+          const newEV = calcEV(catKey, Number(herd.avg_weight_kg || weight || 400), newCount)
+          await apiFetch(`/api/herds/${herd.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ head_count: newCount, total_ev: newEV }),
+          })
+          // Local update to avoid waiting for parent reload
+          setCount(newCount)
+        }
+      }
+      await apiFetch(`/api/farm-events/${eventToDelete.id}`, { method: 'DELETE' })
+      loadData()
+      onSaved()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIsDeletingEvent(false)
+      setEventToDelete(null)
+    }
+  }
 
   const catColors  = catKey ? CATEGORIA_COLORS[catKey] : null
   const displayCat = catKey ? (CATEGORIA_LABEL_RAE[catKey] ?? catKey) : catLabel
@@ -446,9 +484,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     { id: 'operativo',   label: 'Datos operativos' },
     { id: 'actividades', label: 'Actividades' },
     { id: 'registros',   label: 'Registros' },
+    { id: 'historial',   label: 'Historial' },
   ] as const
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-[9999] bg-white sm:bg-black/40 sm:backdrop-blur-sm flex flex-col sm:items-center sm:justify-center sm:p-4">
       <div className="bg-white w-full h-full sm:rounded-2xl sm:shadow-2xl sm:w-full sm:max-w-2xl sm:max-h-[92vh] flex flex-col">
 
@@ -694,10 +733,16 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                             </p>
                           </div>
                         )}
-                        <div className="space-y-1.5">
-                          <label className={LABEL}>Cantidad de cabezas</label>
-                          <input type="number" min="1" value={actCount}
-                            onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className={LABEL}>Cantidad de cabezas</label>
+                            <input type="number" min="1" value={actCount}
+                              onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className={LABEL}>Fecha</label>
+                            <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
+                          </div>
                         </div>
                         <div className="space-y-1.5">
                           <label className={LABEL}>Nota (opcional)</label>
@@ -719,7 +764,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
           {/* ════ TAB 3 — REGISTROS ════ */}
           {tab === 'registros' && (
-            <div className="flex flex-col" style={{ minHeight: 0 }}>
+            <div className="px-6 py-5 space-y-4">
 
               {!isEditing ? (
                 <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
@@ -730,7 +775,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                   <p className="text-[10px] text-gray-300 mt-1">Los registros estarán disponibles una vez creado</p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                <>
 
                   {/* ── CARD 1: Notas de rodeo ── */}
                   <div className="rounded-2xl border border-gray-200 overflow-hidden">
@@ -891,106 +936,56 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         <p className="text-[10px] text-green-600 font-bold mt-2 text-center animate-in fade-in zoom-in duration-300">✓ Guardado en historial de evidencias</p>
                       )}
                     </div>
-                  </div>
+                </>
+              )}
+            </div>
+          )}
 
-                  {/* ── CARD 3: Tareas y Eventos de Agenda ── */}
-                  <div className="rounded-2xl border border-gray-200 overflow-hidden">
-                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
-                          <CalendarDays className="w-3.5 h-3.5 text-gray-500" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Tareas y Eventos</p>
-                          <p className="text-[9px] text-gray-400 font-medium">Agenda del equipo · Sanitario · Reproductivo</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4 space-y-3">
-                      {/* Type pills */}
-                      <div className="flex flex-wrap gap-1.5">
-                        {EVENT_TYPES_QUICK.map(t => (
-                          <button key={t.id} type="button" onClick={() => setNewEvType(t.id)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all ${
-                              newEvType === t.id ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500 hover:border-gray-300 bg-white'
-                            }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${t.color}`} /> {t.label}
-                          </button>
-                        ))}
-                      </div>
-                      {/* Title + mic */}
-                      <div className="relative">
-                        <input type="text" value={newEvTitle} onChange={e => setNewEvTitle(e.target.value)}
-                          placeholder="Título del evento o tarea…" className={`${INPUT} pr-10`} />
-                        <button type="button" onClick={toggleMic}
-                          className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-lg transition-all ${micOn ? 'bg-red-100 text-red-600 animate-pulse' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
-                          {micOn ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
-                        </button>
-                      </div>
-                      {/* Dates */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <p className={LABEL}>Fecha</p>
-                          <input type="date" value={newEvDate} onChange={e => setNewEvDate(e.target.value)} className={INPUT} />
-                        </div>
-                        <div className="space-y-1">
-                          <p className={LABEL}>Fin (opcional)</p>
-                          <input type="date" value={newEvEndDate} onChange={e => setNewEvEndDate(e.target.value)} className={INPUT} />
-                        </div>
-                      </div>
-                      {/* Assignee */}
-                      {teamMembers.length > 0 && (
-                        <div className="space-y-1">
-                          <p className={LABEL}><Users className="w-2.5 h-2.5 inline mr-1" />Asignar a</p>
-                          <select value={newEvAssignee} onChange={e => setNewEvAssignee(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-green-500">
-                            <option value="">Sin asignar</option>
-                            {teamMembers.map(m => <option key={m.id} value={m.id}>{m.first_name ?? ''} {m.last_name ?? ''} ({m.email})</option>)}
-                          </select>
-                        </div>
-                      )}
-                      <button type="button" onClick={() => { saveEvent(); setSessionNoteCount(c => c + 1) }} disabled={evSaving || !newEvTitle.trim()}
-                        className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-black border-2 border-green-600 text-green-700 rounded-xl hover:bg-green-50 disabled:opacity-40 transition-all">
-                        {evSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : evSaved ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                        {evSaved ? 'Evento creado' : 'Agregar a la Agenda'}
-                      </button>
-                    </div>
+          {/* ════ TAB 4 — HISTORIAL ════ */}
+          {tab === 'historial' && (
+            <div className="px-6 py-5 space-y-4">
+              {!isEditing ? (
+                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+                    <BookOpen className="w-6 h-6 text-gray-300" />
                   </div>
-
-                  {/* ── Events Timeline ── */}
-                  {agendaEvents.length > 0 && (
+                  <p className="text-sm font-bold text-gray-400">Guardá primero el rodeo</p>
+                  <p className="text-[10px] text-gray-300 mt-1">El historial estará disponible una vez creado</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className={LABEL}>Historial de eventos y actividades</p>
+                    {evLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
+                  </div>
+                  <div className="relative">
+                    <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className={LABEL}>Historial de eventos</p>
-                        {evLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
-                      </div>
-                      <div className="relative">
-                        <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
-                        <div className="space-y-2">
-                          {visibleEvents.map(ev => {
-                            const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
-                            return (
-                              <div key={ev.id} className="flex gap-2.5">
-                                <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0 z-10">
-                                  <span className={`w-2 h-2 rounded-full ${dot}`} />
-                                </div>
-                                <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2 hover:shadow-sm transition-all">
-                                  <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
-                                  <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
-                                </div>
+                      {agendaEvents.map(ev => {
+                        const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
+                        return (
+                          <div key={ev.id} className="flex gap-2.5 group">
+                            <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0 z-10">
+                              <span className={`w-2 h-2 rounded-full ${dot}`} />
+                            </div>
+                            <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2 hover:shadow-sm transition-all flex items-start justify-between">
+                              <div>
+                                <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
+                                <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
                               </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                      {hiddenCount > 0 && !showAllEvents && (
-                        <button type="button" onClick={() => setShowAllEvents(true)}
-                          className="w-full flex items-center justify-center gap-1.5 text-[10px] font-bold text-gray-400 hover:text-green-700 py-2 rounded-xl hover:bg-green-50 border border-dashed border-gray-200 transition-all">
-                          <ChevronRight className="w-3 h-3" /> Ver {hiddenCount} más
-                        </button>
+                              <button type="button" onClick={() => setEventToDelete(ev)}
+                                className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {agendaEvents.length === 0 && !evLoading && (
+                        <p className="text-xs text-gray-400 text-center py-4">No hay eventos registrados</p>
                       )}
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1021,7 +1016,36 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           </div>
         )}
 
+        {/* Event Deletion Modal */}
+        {eventToDelete && (
+          <div className="absolute inset-0 z-[10000] bg-white/80 backdrop-blur-sm flex items-center justify-center p-6">
+            <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 max-w-sm w-full text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-base font-black text-gray-900">¿Eliminar registro?</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Vas a eliminar el evento <span className="font-bold text-gray-700">"{eventToDelete.title}"</span>. 
+                Si este evento modificó el stock (ej. Parición, Mortandad, Compra, Venta), el stock general del rodeo se revertirá automáticamente.
+              </p>
+              <div className="flex items-center gap-2 pt-2">
+                <button type="button" onClick={() => setEventToDelete(null)} disabled={isDeletingEvent}
+                  className="flex-1 py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleDeleteEvent} disabled={isDeletingEvent}
+                  className="flex-1 py-2.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-all flex items-center justify-center gap-2">
+                  {isDeletingEvent ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Eliminar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }
