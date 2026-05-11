@@ -3225,8 +3225,23 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   // Suggested mode: open the holistic season plan modal
                   setShowSeasonPlan(true)
                 } else {
-                  // Manual mode: activate drawing mode to drag-create plan blocks
-                  setDrawingMode(true)
+                  if (plans.length === 0) {
+                    setFormData({
+                      id: '',
+                      paddock_id: '',
+                      herd_ids: [] as string[],
+                      entry_date: new Date().toISOString().split('T')[0],
+                      exit_date: '',
+                      actual_entry_date: '',
+                      actual_exit_date: '',
+                      planned_recovery_days: 0,
+                      status: 'PLANNED',
+                    })
+                    setIsModalOpen(true)
+                  } else {
+                    // Manual mode: activate drawing mode to drag-create plan blocks
+                    setDrawingMode(true)
+                  }
                 }
               }}
               disabled={loading}
@@ -3302,7 +3317,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 if (activeGanttTab === 'suggested') {
                   setShowSeasonPlan(true)
                 } else {
-                  setDrawingMode(true)
+                  setFormData({
+                    id: '',
+                    paddock_id: '',
+                    herd_ids: [] as string[],
+                    entry_date: new Date().toISOString().split('T')[0],
+                    exit_date: '',
+                    actual_entry_date: '',
+                    actual_exit_date: '',
+                    planned_recovery_days: 0,
+                    status: 'PLANNED',
+                  })
+                  setIsModalOpen(true)
                 }
               }}
               disabled={loading}
