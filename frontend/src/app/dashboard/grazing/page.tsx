@@ -1450,7 +1450,7 @@ function InteractiveGantt({
           </div>
           <div className="w-px h-4 bg-gray-200" />
           <span className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Agenda:</span>
-          {Object.entries(EVT_CONFIG).map(([key, cfg]) => (
+          {Object.entries(EVT_CONFIG).filter(([key]) => !['mortandad', 'compra', 'venta', 'stock_inicial', 'ajuste_entrada', 'ajuste_salida', 'ajuste'].includes(key)).map(([key, cfg]) => (
             <div key={key} className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
               <span className="text-[9px] font-bold text-gray-500">{cfg.label}</span>
@@ -5230,7 +5230,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   onChange={e => setNewEventForm(p => ({ ...p, event_type: e.target.value }))}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                 >
-                  {Object.entries(EVT_CONFIG).map(([key, cfg]) => (
+                  {Object.entries(EVT_CONFIG).filter(([key]) => !['mortandad', 'compra', 'venta', 'stock_inicial', 'ajuste_entrada', 'ajuste_salida', 'ajuste'].includes(key)).map(([key, cfg]) => (
                     <option key={key} value={key}>{cfg.label}</option>
                   ))}
                 </select>
