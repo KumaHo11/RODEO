@@ -364,10 +364,15 @@ export default function SeasonPlanModal({
   // Para mostrar en detalle también mantenemos el stock estático
   const totalOfertaEstaticaKgMs = supplyData.filter(d => d.isSelected).reduce((s, d) => s + d.usableMs, 0)
   const currentTotalEV   = projectedEVByMonth.length > 0 ? projectedEVByMonth[0].totalEV : 0
-  // Demanda = consumo de toda la temporada (descontada reserva sequía)
-  const demandaTotalKgMs = currentTotalEV * dailyAllocationKg * Math.max(1, seasonDays - droughtReserveDays)
+  // Demanda = consumo base de toda la temporada
+  const demandaTotalKgMs = currentTotalEV * dailyAllocationKg * Math.max(1, seasonDays)
+  
+  // Oferta Efectiva = Oferta total - Reserva de sequía
+  const reservaSequiaKgMs = currentTotalEV * dailyAllocationKg * droughtReserveDays
+  const ofertaEfectivaKgMs = Math.max(0, totalOfertaKgMs - reservaSequiaKgMs)
+
   const balancePct = demandaTotalKgMs > 0
-    ? Math.round((totalOfertaKgMs / demandaTotalKgMs) * 100)
+    ? Math.round((ofertaEfectivaKgMs / demandaTotalKgMs) * 100)
     : 0
   const balance = balanceColor(balancePct)
 
@@ -409,7 +414,9 @@ export default function SeasonPlanModal({
 
     const metrics: any = {
       balance_pct: balancePct,
-      oferta_kg_ms: totalOfertaKgMs,
+      oferta_kg_ms: ofertaEfectivaKgMs,
+      oferta_bruta_kg_ms: totalOfertaKgMs,
+      reserva_kg_ms: reservaSequiaKgMs,
       demanda_kg_ms: demandaTotalKgMs,
       season_days: seasonDays,
       balance_label: balance.label,
@@ -524,14 +531,14 @@ export default function SeasonPlanModal({
     notes,
     isEditing, existingPlan, onSaved, onClose,
     currentTotalEV, projectedEVByMonth, supplyData,
-    totalOfertaKgMs, demandaTotalKgMs, balancePct, seasonDays, balance,
+    totalOfertaKgMs, ofertaEfectivaKgMs, reservaSequiaKgMs, demandaTotalKgMs, balancePct, seasonDays, balance,
     droughtReserveMode, dismissedPaddockIds, startPaddockId, isSuggestedMode,
   ])
 
   // computed balance color
   const bc = balanceColor(balancePct)
   const dailyDemandGlobal = currentTotalEV * dailyAllocationKg
-  const totalAvailableDays = dailyDemandGlobal > 0 ? Math.floor(totalOfertaKgMs / dailyDemandGlobal) : 0
+  const totalAvailableDays = dailyDemandGlobal > 0 ? Math.floor(ofertaEfectivaKgMs / dailyDemandGlobal) : 0
   const daysWithoutForage = Math.max(0, seasonDays - totalAvailableDays)
 
   // ─── Render ──────────────────────────────────────────────────────────────
@@ -827,9 +834,13 @@ export default function SeasonPlanModal({
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
-                  <p className={`text-sm font-black ${bc.text}`}>{Math.round(totalOfertaKgMs).toLocaleString('es')}</p>
-                  <p className="text-[9px] text-gray-500 font-bold">kg MS oferta</p>
-                  <p className="text-[9px] text-gray-400">(stock + crecimiento {seasonDays}d)</p>
+                  <p className={`text-sm font-black ${bc.text}`}>{Math.round(ofertaEfectivaKgMs).toLocaleString('es')}</p>
+                  <p className="text-[9px] text-gray-500 font-bold">kg MS oferta efectiva</p>
+                  {droughtReserveDays > 0 ? (
+                    <p className="text-[9px] text-gray-400">({Math.round(totalOfertaKgMs).toLocaleString('es')} - reserva)</p>
+                  ) : (
+                    <p className="text-[9px] text-gray-400">(stock + crecimiento {seasonDays}d)</p>
+                  )}
                 </div>
                 <div>
                   <p className={`text-sm font-black ${bc.text}`}>{Math.round(demandaTotalKgMs).toLocaleString('es')}</p>
