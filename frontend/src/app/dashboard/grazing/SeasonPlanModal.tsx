@@ -489,6 +489,8 @@ export default function SeasonPlanModal({
       source: isSuggestedMode ? 'suggested' : 'manual', status: 'draft',
       notes: notes.trim() || null,
       demand_snapshot, supply_snapshot, metrics,
+      // Herds seleccionados para esta planificación — filtra los bloques generados
+      herd_ids: selectedHerdIds,
     }
 
     try {

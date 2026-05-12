@@ -49,6 +49,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard/equipo':       'Equipo',
   '/dashboard/tareas':       'Tareas',
   '/dashboard/guest-setup':  'Configuración de cuenta',
+  '/dashboard/calculadora':  'Calculadora',
 }
 
 // ── Layout ─────────────────────────────────────────────────────────────────────

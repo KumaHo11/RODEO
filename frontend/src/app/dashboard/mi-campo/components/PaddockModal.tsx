@@ -902,8 +902,7 @@ export default function PaddockModal({
 
           {/* ════ TAB 3 — REGISTROS ════ */}
           {activeTab === 'registros' && (
-            <div className="flex flex-col" style={{ minHeight: 0 }}>
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            <div className="px-6 py-4 space-y-4">
 
                 {/* ══ CARD 1: NOTAS DE CAMPO ══ */}
                 <div className="rounded-2xl border border-gray-200 overflow-hidden">
@@ -1283,7 +1282,6 @@ export default function PaddockModal({
                   )}
                 </div>
               </div>
-            </div>
           )}
         </div>
 

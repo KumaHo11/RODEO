@@ -10,7 +10,8 @@ import {
   Calendar, Plus, CheckCircle2, Clock, MapPin, Search, Filter,
   AlignJustify, CalendarDays, Lightbulb, CloudRain, Sun, ChevronLeft, ChevronRight,
   X, Check, Loader2, Droplets, AlertTriangle, Camera, Leaf, Users, Sparkles, HistoryIcon, Download,
-  Zap, TrendingUp, BarChart3, Target, ArrowDown, Share, Trash2, BookOpen, Upload, Lock, HelpCircle
+  Zap, TrendingUp, BarChart3, Target, ArrowDown, Share, Trash2, BookOpen, Upload, Lock, HelpCircle,
+  Eye, EyeOff, Layers, MessageSquare, ToggleLeft, ToggleRight, Send
 } from 'lucide-react'
 import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
 import { DashboardMetricsBar, DashboardMetricsData } from '@/design-system/molecules/DashboardMetricsBar'
@@ -33,6 +34,16 @@ import HerdModal, { type HerdData } from '@/components/HerdModal'
 const HERD_COLORS = [
   '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed',
   '#0891b2', '#be185d', '#65a30d', '#ea580c', '#4338ca'
+]
+
+// ─── Gradientes monocromáticos de púrpura para planificaciones sugeridas ───
+// 5 niveles de intensidad creciente; se ciclan cuando hay > 5 season plans.
+const PURPLE_LEVELS = [
+  { bg: 'rgba(139,92,246,0.13)',  border: 'rgba(139,92,246,0.42)', textColor: '#6d28d9' }, // nivel 1 — 20%
+  { bg: 'rgba(109,40,217,0.22)', border: 'rgba(109,40,217,0.58)', textColor: '#5b21b6' }, // nivel 2 — 40%
+  { bg: 'rgba(91,33,182,0.32)',  border: 'rgba(91,33,182,0.70)',  textColor: '#4c1d95' }, // nivel 3 — 60%
+  { bg: 'rgba(76,29,149,0.42)',  border: 'rgba(76,29,149,0.82)',  textColor: '#3730a3' }, // nivel 4 — 80%
+  { bg: 'rgba(46,16,101,0.54)',  border: 'rgba(46,16,101,0.92)',  textColor: '#1e1b4b' }, // nivel 5 — 100%
 ]
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
@@ -208,7 +219,85 @@ interface GanttBlock {
   herdIdx: number
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Componente separado para evitar violar las Rules of Hooks
+// (useState NO puede usarse dentro de IIFEs en render)
+// ─────────────────────────────────────────────────────────────────────────────
+function PlanCommentsSection({
+  plan,
+  userEmail,
+  onAddComment,
+}: {
+  plan: any
+  userEmail: string
+  onAddComment: (planId: string, text: string, author: string) => Promise<void>
+}) {
+  const comments: any[] = Array.isArray(plan.ai_analysis?.comments) ? plan.ai_analysis.comments : []
+  const [showComments, setShowComments] = useState(false)
+  const [commentText, setCommentText] = useState('')
+
+  return (
+    <div className="mt-1">
+      <button
+        onClick={() => setShowComments(s => !s)}
+        className="w-full flex items-center justify-between gap-2 py-1.5 px-3 bg-gray-50 rounded-lg text-[10px] font-bold text-gray-600 hover:bg-gray-100 transition-colors border border-gray-200"
+      >
+        <span className="flex items-center gap-1.5">
+          <MessageSquare className="w-3.5 h-3.5" />
+          Comentarios
+          {comments.length > 0 && (
+            <span className="bg-purple-100 text-purple-700 rounded-full px-1.5 text-[9px] font-black">{comments.length}</span>
+          )}
+        </span>
+        <span className="text-gray-400">{showComments ? '▲' : '▼'}</span>
+      </button>
+      {showComments && (
+        <div className="mt-2 space-y-2">
+          {comments.length === 0 && (
+            <p className="text-[10px] text-gray-400 text-center py-2">Sin comentarios aún.</p>
+          )}
+          {comments.map((c: any) => (
+            <div key={c.id} className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+              <p className="text-[10px] text-gray-800 leading-relaxed">{c.text}</p>
+              <p className="text-[8px] text-gray-400 mt-1 font-medium">
+                {c.author_email?.split('@')[0]} · {new Date(c.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5 mt-2">
+            <input
+              type="text"
+              value={commentText}
+              onChange={e => setCommentText(e.target.value)}
+              onKeyDown={async e => {
+                if (e.key === 'Enter' && commentText.trim()) {
+                  await onAddComment(plan.id, commentText, userEmail)
+                  setCommentText('')
+                }
+              }}
+              placeholder="Escribir comentario..."
+              className="flex-1 text-[10px] border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-400 bg-white"
+            />
+            <button
+              onClick={async () => {
+                if (!commentText.trim()) return
+                await onAddComment(plan.id, commentText, userEmail)
+                setCommentText('')
+              }}
+              disabled={!commentText.trim()}
+              className="p-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-40 transition-all"
+            >
+              <Send className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function InteractiveGantt({
+
   plans, paddocks, herds, farmEvents, movements = [], windowStart, windowDays, onBlockClick, onBlockMove,
   rainfallData, onRainfallChange, weatherEvents = [], onPaddockClick,
   droughtThresholdMm, onDroughtThresholdChange,
@@ -216,6 +305,10 @@ function InteractiveGantt({
   climateViewEnabled = false, paddockCAdj = {},
   isDrawingMode = false, onDrawEnd, onHerdUpdate, onEditEvent, onAddHerd, onHerdClick,
   paddockOrder = [],
+  seasonPlanColorMap = {},
+  seasonPlanNames = {},
+  ganttLayers = { showOriginal: true, showPlanned: true, showReal: true, showEvents: true, showAgenda: true, showRemnant: true, showAnimals: true },
+  onPaddockToggle,
 }: {
   plans: any[]
   paddocks: any[]
@@ -246,6 +339,22 @@ function InteractiveGantt({
   onHerdClick?: (herd: any) => void
   /** Optional ordered paddock IDs — when provided, rows are rendered in this sequence */
   paddockOrder?: string[]
+  /** Mapa season_plan_id → índice de nivel de púrpura (solo planificaciones sugeridas) */
+  seasonPlanColorMap?: Record<string, number>
+  /** Mapa season_plan_id → nombre del plan */
+  seasonPlanNames?: Record<string, string>
+  /** Control de capas visibles en el Gantt */
+  ganttLayers?: {
+    showOriginal: boolean
+    showPlanned: boolean
+    showReal: boolean
+    showEvents: boolean
+    showAgenda: boolean
+    showRemnant: boolean
+    showAnimals: boolean
+  }
+  /** Callback para habilitar/deshabilitar potrero desde el Gantt */
+  onPaddockToggle?: (paddockId: string, isActive: boolean) => void
 }) {
   // Sort paddocks by suggested order when paddockOrder is provided
   const orderedPaddocks = paddockOrder.length > 0
@@ -269,6 +378,16 @@ function InteractiveGantt({
   const [selectedGap, setSelectedGap] = useState<ForageGap | null>(null)
   const [showAnnualHerdModal, setShowAnnualHerdModal] = useState(false)
   const [showHerdDecisionModal, setShowHerdDecisionModal] = useState(false)
+  // ── Visibilidad de filas de animales ──
+  const [hiddenHerdIds, setHiddenHerdIds] = useState<Set<string>>(new Set())
+  const [herdSectionCollapsed, setHerdSectionCollapsed] = useState(false)
+  const toggleHerdVisibility = (herdId: string) => {
+    setHiddenHerdIds(prev => {
+      const next = new Set(prev)
+      next.has(herdId) ? next.delete(herdId) : next.add(herdId)
+      return next
+    })
+  }
   
   // Drawing state
   const [drawingState, setDrawingState] = useState<{
@@ -421,13 +540,30 @@ function InteractiveGantt({
     if (!MONTHS_FOOTER || MONTHS_FOOTER.length === 0) return []
     const wStart = MONTHS_FOOTER[0]?.startDate
     const wEnd = MONTHS_FOOTER[MONTHS_FOOTER.length - 1]?.endDate
-    
-    return herds.filter(h => {
+
+    // Herds que están activos en la ventana temporal
+    const herdsInWindow = herds.filter(h => {
       const entry = h.admission_date || h.created_at?.split('T')[0] || '2000-01-01'
       const exit = h.exit_date || '2100-01-01'
       return entry <= wEnd && exit >= wStart
     })
-  }, [herds, MONTHS_FOOTER])
+
+    // Si hay planes sugeridos, filtrar el footer para mostrar solo los herds planificados
+    const suggestedHerdIds = new Set<string>()
+    plans.forEach(p => {
+      if (p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested') {
+        ;(p.herd_ids || []).forEach((id: string) => suggestedHerdIds.add(id))
+      }
+    })
+
+    if (suggestedHerdIds.size > 0) {
+      // Solo mostrar herds que pertenecen a algún plan sugerido visible
+      return herdsInWindow.filter(h => suggestedHerdIds.has(h.id))
+    }
+
+    return herdsInWindow
+  }, [herds, plans, MONTHS_FOOTER])
+
 
   // Map grid lines to exactly match time markers
   const weekMarkers = useMemo(() => {
@@ -615,7 +751,7 @@ function InteractiveGantt({
         {/* Header row */}
         <div className="flex flex-col border-b border-gray-200 bg-gray-50 sticky top-0 z-30">
           {/* Gap health bar — 4px strip above time markers */}
-          {forageGaps.length > 0 && (
+          {ganttLayers.showRemnant && forageGaps.length > 0 && (
             <div className="flex" style={{ height: 4 }}>
               <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="shrink-0 bg-gray-50 border-r border-gray-200 sticky left-0 z-20" />
               <div className="flex-1 relative bg-gray-100">
@@ -671,7 +807,7 @@ function InteractiveGantt({
             })()}
 
             {/* Month labels — clickable to create event */}
-            {MONTHS_FOOTER.map(m => (
+            {ganttLayers.showAgenda && MONTHS_FOOTER.map(m => (
               <button
                 key={m.key}
                 className="absolute top-0 bottom-0 flex items-end pb-1 px-1 hover:bg-sky-50/50 transition-colors group border-r border-gray-100/50"
@@ -744,8 +880,16 @@ function InteractiveGantt({
             >
               {/* Label — datos del potrero */}
               <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`px-3 py-2 flex items-center gap-2 border-r border-gray-100 shrink-0 overflow-hidden sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${!isEnabled ? 'bg-gray-100' : rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}>
-                {/* Status dot */}
-                <div className={`w-2 h-2 rounded-full shrink-0 self-start mt-2 ${isEnabled ? 'bg-green-500' : 'bg-gray-300'}`} />
+                {/* Paddock toggle — habilitar/deshabilitar directo en el Gantt */}
+                <button
+                  onClick={() => onPaddockToggle?.(paddock.id, !isEnabled)}
+                  title={isEnabled ? 'Inhabilitar potrero' : 'Habilitar potrero'}
+                  className={`shrink-0 self-start mt-2 transition-colors rounded ${
+                    isEnabled ? 'text-green-500 hover:text-red-400' : 'text-gray-300 hover:text-green-500'
+                  }`}
+                >
+                  {isEnabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                </button>
                 <div className="min-w-0 flex-1 flex flex-col justify-center gap-1">
                   {/* Row 1: Nombre + badge calidad */}
                   <div className="flex items-center justify-between gap-1">
@@ -854,7 +998,7 @@ function InteractiveGantt({
 
 
                 {/* Agenda Event outlines — line in every row, dot only on first */}
-                {unifiedEvents
+                {ganttLayers.showEvents && unifiedEvents
                   .filter(evt => {
                     const d = daysBetween(windowStart, evt.event_date)
                     const de = evt.end_date ? daysBetween(windowStart, evt.end_date) : d
@@ -1005,7 +1149,8 @@ function InteractiveGantt({
                     const createBlock = (
                       key: string, top: number, startPct: number, widthPctArg: number,
                       bg: string, border: string, pattern: string | null, isGrabbable: boolean,
-                      opacity: number = 1, zIndex: number = 20, extraTitle: string = '', showLock: boolean = false
+                      opacity: number = 1, zIndex: number = 20, extraTitle: string = '', showLock: boolean = false,
+                      innerLabel: string = '', innerLabelColor: string = '#4c1d95'
                     ) => (
                       <div
                         key={key}
@@ -1031,7 +1176,8 @@ function InteractiveGantt({
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'flex-start',
-                          paddingLeft: 3,
+                          paddingLeft: 4,
+                          gap: 3,
                         }}
                         className="transition-all hover:brightness-90 relative"
                         onMouseDown={e => isGrabbable && !isCompleted && !hasRealEntry && handleMouseDown(e, plan)}
@@ -1039,18 +1185,45 @@ function InteractiveGantt({
                         title={`${extraTitle} — ${herdLabel} · ${isCompleted ? ' ✔ Completado' : ''}`}
                       >
                         {showLock && <Lock className="w-3 h-3 text-gray-800 opacity-70 shrink-0" />}
+                        {innerLabel && (
+                          <span
+                            className="text-[8px] font-black truncate leading-none select-none"
+                            style={{ color: innerLabelColor, maxWidth: '90%' }}
+                          >
+                            {innerLabel}
+                          </span>
+                        )}
                       </div>
                     )
 
-                    if (plan.is_locked) {
+                    if (plan.is_locked && ganttLayers.showOriginal) {
                       renderBlocks.push(createBlock(`t1-${plan.id}`, 4, leftPct, widthPct, T1_BG, T1_BORDER, T1_PAT, false, 1, 5, '🔒 PLAN ORIGINAL — Solo lectura', true))
                     }
 
+                    if (ganttLayers.showPlanned) {
                     if (isSuggested) {
-                      const T_SUG_BG = 'rgba(139,92,246,0.18)'
-                      const T_SUG_BORDER = 'rgba(139,92,246,0.55)'
-                      const T_SUG_PAT = 'rgba(139,92,246,0.35)'
-                      renderBlocks.push(createBlock(`t2-${plan.id}`, 30, leftPct, widthPct, T_SUG_BG, T_SUG_BORDER, T_SUG_PAT, false, 1, 10, '⚡ SUGERIDA (Solo lectura)'))
+                      // ── Color dinámico por season_plan_id (gradiente púrpura) ──
+                      const spId = plan.ai_analysis?.season_plan_id as string | undefined
+                      const spIdx = spId !== undefined ? (seasonPlanColorMap[spId] ?? 0) : 0
+                      const pl = PURPLE_LEVELS[spIdx % PURPLE_LEVELS.length]
+                      // ── Etiqueta interna: conteo de animales de esta planificación ──
+                      const blockHerdIds: string[] = Array.isArray(plan.herd_ids) && plan.herd_ids.length > 0
+                        ? plan.herd_ids
+                        : plan.herd_id ? [plan.herd_id] : []
+                      const blockHerds = herds.filter((h: any) => blockHerdIds.includes(h.id))
+                      const blockHeadCount = blockHerds.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
+                      const primaryBlockHerd = blockHerds[0]
+                      const blockLabel = blockHeadCount > 0
+                        ? `${blockHeadCount} ${primaryBlockHerd?.categoria || primaryBlockHerd?.name || 'cab.'}`
+                        : (spId ? (seasonPlanNames[spId] || '') : '')
+                      const planSourceName = spId ? (seasonPlanNames[spId] || 'Planificación sugerida') : 'Planificación sugerida'
+                      // Rayas diagonales con el color de intensidad — sin etiqueta de texto
+                      renderBlocks.push(createBlock(
+                        `t2-${plan.id}`, TRACK2_TOP, leftPct, widthPct,
+                        pl.bg, pl.border, pl.border, false, 1, 10,
+                        `⚡ SUGERIDA — ${planSourceName}`,
+                        false, '', ''
+                      ))
                     } else {
                        const t2Entry = (plan.is_locked && plan.adjusted_entry_date) ? plan.adjusted_entry_date : plan.entry_date
                        const t2Exit  = (plan.is_locked && plan.adjusted_exit_date)  ? plan.adjusted_exit_date  : plan.exit_date
@@ -1071,10 +1244,11 @@ function InteractiveGantt({
                          )
                        )
                      }
+                    } // end ganttLayers.showPlanned
 
                     // ── TRACK 3: Plan Real (solo cuando completado o tiene entrada real) ──
                     const effectiveRealEntry = plan.actual_entry_date || (isCompleted ? plan.entry_date : null)
-                    if (effectiveRealEntry && isCompleted) {
+                    if (effectiveRealEntry && isCompleted && ganttLayers.showReal) {
                       const realExit      = plan.actual_exit_date || exitDate
                       const realEntryDiff = daysBetween(windowStart, effectiveRealEntry)
                       const realDuration  = daysBetween(effectiveRealEntry, realExit)
@@ -1198,7 +1372,7 @@ function InteractiveGantt({
 
 
               {/* Row 3+ — Tipo de Animal (planilla de control por rodeo) — sticky al fondo */}
-              {(() => {
+              {ganttLayers.showAnimals && (() => {
                 if (activeHerdsInWindow.length === 0) return null
 
                 // Column header row
@@ -1213,6 +1387,14 @@ function InteractiveGantt({
                       <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="pl-4 pr-2.5 flex items-center justify-between border-r border-gray-300 shrink-0 sticky left-0 z-20 bg-gray-100 shadow-[4px_0_12px_rgba(0,0,0,0.05)]">
                         <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest text-left">Tipo de Animal</span>
                         <div className="flex items-center gap-1">
+                          {/* Eye icon — colapsa/expande toda la sección */}
+                          <button
+                            onClick={() => setHerdSectionCollapsed(s => !s)}
+                            title={herdSectionCollapsed ? 'Mostrar animales' : 'Ocultar animales'}
+                            className="text-gray-400 hover:text-gray-700 transition-colors"
+                          >
+                            {herdSectionCollapsed ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                          </button>
                           <button
                             onClick={() => setShowAnnualHerdModal(true)}
                             className="flex items-center gap-1 text-[8px] font-bold text-gray-400 hover:text-green-600 transition-colors bg-white px-2 py-0.5 rounded shadow-sm border border-gray-200"
@@ -1240,23 +1422,52 @@ function InteractiveGantt({
                       </div>
                     </div>
 
-                    {/* One row per herd */}
-                    {activeHerdsInWindow.map((herd, hi) => (
+                    {/* Chip row para animales ocultos */}
+                    {hiddenHerdIds.size > 0 && (
+                      <div className="flex items-center px-4 py-1 bg-amber-50 border-t border-amber-100 gap-2">
+                        <span className="text-[8px] font-bold text-amber-700 uppercase">Ocultos:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {Array.from(hiddenHerdIds).map(id => {
+                            const h = activeHerdsInWindow.find(x => x.id === id)
+                            return h && (
+                              <button key={id} onClick={() => toggleHerdVisibility(id)} className="text-[8px] px-1.5 py-0.5 bg-white border border-amber-200 rounded text-amber-700 hover:bg-amber-100 transition-colors">
+                                {h.name} ×
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* One row per herd — respeta visibilidad */}
+                    {!herdSectionCollapsed && activeHerdsInWindow.map((herd, hi) => {
+                      if (hiddenHerdIds.has(herd.id)) return null
+                      return (
                       <div key={herd.id} className={`flex border-t border-gray-200 ${hi % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`} style={{ minHeight: 28 }}>
                         {/* Herd name — sticky left */}
-                        <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`pl-4 pr-2.5 flex items-center border-r border-gray-200 shrink-0 gap-1 justify-start sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${hi % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                        <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`pl-4 pr-2.5 flex items-center border-r border-gray-200 shrink-0 gap-1 justify-between sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${hi % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <button
+                              className="text-[8px] font-black text-gray-700 truncate hover:text-green-700 hover:underline transition-colors text-left"
+                              onClick={() => onHerdClick?.(herd)}
+                            >
+                              {hi + 1}. {herd.name}
+                            </button>
+                            {herd.exit_date && (
+                              <span className="text-[7px] font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded-md tracking-wider shrink-0">TEMP</span>
+                            )}
+                            {herd.category && !herd.exit_date && (
+                              <span className="text-[7px] text-gray-400 font-medium shrink-0">({herd.category})</span>
+                            )}
+                          </div>
+                          {/* Eye icon individual por rodeo */}
                           <button
-                            className="text-[8px] font-black text-gray-700 truncate hover:text-green-700 hover:underline transition-colors text-left"
-                            onClick={() => onHerdClick?.(herd)}
+                            onClick={() => toggleHerdVisibility(herd.id)}
+                            title="Ocultar este rodeo"
+                            className="text-gray-300 hover:text-gray-600 transition-colors shrink-0 ml-1"
                           >
-                            {hi + 1}. {herd.name}
+                            <EyeOff className="w-2.5 h-2.5" />
                           </button>
-                          {herd.exit_date && (
-                            <span className="text-[7px] font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded-md tracking-wider shrink-0">TEMP</span>
-                          )}
-                          {herd.category && !herd.exit_date && (
-                            <span className="text-[7px] text-gray-400 font-medium shrink-0">({herd.category})</span>
-                          )}
                         </div>
                         {/* Monthly data — fixed width columns */}
                         <div className="flex flex-1">
@@ -1298,7 +1509,6 @@ function InteractiveGantt({
                                       const diff = newVal - headCount
                                       const isAdd = diff > 0
                                       try {
-                                        // Construir log interno del rodeo (sin crear evento en el calendario)
                                         const currentHerd = herds.find((h: any) => h.id === herd.id)
                                         const existingLog: any[] = Array.isArray(currentHerd?.technical_data?.stock_log)
                                           ? currentHerd.technical_data.stock_log
@@ -1318,7 +1528,6 @@ function InteractiveGantt({
                                             },
                                           ],
                                         }
-                                        // Solo actualizar stock base — sin movimiento en el calendario
                                         const res = await apiFetch(`/api/herds/${herd.id}`, {
                                           method: 'PATCH',
                                           headers: { 'Content-Type': 'application/json' },
@@ -1352,7 +1561,10 @@ function InteractiveGantt({
                           })}
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
+
+
 
                     {/* Total row */}
                     <div className="flex border-t border-gray-300 bg-gray-100" style={{ minHeight: 24 }}>
@@ -1448,14 +1660,18 @@ function InteractiveGantt({
               <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan real</span>
             </div>
           </div>
-          <div className="w-px h-4 bg-gray-200" />
-          <span className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Agenda:</span>
-          {Object.entries(EVT_CONFIG).filter(([key]) => !['mortandad', 'compra', 'venta', 'stock_inicial', 'ajuste_entrada', 'ajuste_salida', 'ajuste'].includes(key)).map(([key, cfg]) => (
-            <div key={key} className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
-              <span className="text-[9px] font-bold text-gray-500">{cfg.label}</span>
-            </div>
-          ))}
+          {ganttLayers.showAgenda && (
+            <>
+              <div className="w-px h-4 bg-gray-200" />
+              <span className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Agenda:</span>
+              {Object.entries(EVT_CONFIG).filter(([key]) => !['mortandad', 'compra', 'venta', 'stock_inicial', 'ajuste_entrada', 'ajuste_salida', 'ajuste'].includes(key)).map(([key, cfg]) => (
+                <div key={key} className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
+                  <span className="text-[9px] font-bold text-gray-500">{cfg.label}</span>
+                </div>
+              ))}
+            </>
+          )}
           <div className="flex items-center gap-1.5 ml-auto">
             <div className="w-px h-3" style={{ borderLeft: '1.5px dashed rgba(34,197,94,0.8)' }} />
             <span className="text-[9px] font-bold text-green-600 uppercase tracking-wider">Hoy</span>
@@ -1915,6 +2131,32 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   })
   const [paddockCAdj, setPaddockCAdj] = useState<Record<string, number>>({})
 
+  // ── Layer visibility: controla qué capas se muestran en el Gantt ──
+  const [ganttLayers, setGanttLayers] = useState<{
+    showOriginal: boolean    // Track 1: plan original (bloques locked)
+    showPlanned: boolean     // Track 2: plan planificado
+    showReal: boolean        // Track 3: plan real (completado)
+    showEvents: boolean      // Pines de farm events
+    showAgenda: boolean      // Barra de clima/agenda
+    showRemnant: boolean     // Banda roja/naranja de días sin remanente
+    showAnimals: boolean     // Footer "Tipo de Animal"
+  }>(() => {
+    try {
+      const stored = localStorage.getItem('rodeo_gantt_layers')
+      if (stored) return JSON.parse(stored)
+    } catch {}
+    return { showOriginal: true, showPlanned: true, showReal: true, showEvents: true, showAgenda: true, showRemnant: true, showAnimals: true }
+  })
+  const [showLayersPanel, setShowLayersPanel] = useState(false)
+
+  const toggleGanttLayer = (key: keyof typeof ganttLayers) => {
+    setGanttLayers(prev => {
+      const next = { ...prev, [key]: !prev[key] }
+      try { localStorage.setItem('rodeo_gantt_layers', JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
   useEffect(() => {
     if (!climateViewEnabled || !user) return
     apiFetch('/api/climate-adjustment')
@@ -2126,15 +2368,27 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const handleGeneratePlanCycle = async (seasonPlan: any) => {
     const allActivePaddocks = paddocks.filter(p => p.is_active !== false)
     const activePaddocks = allActivePaddocks.length > 0 ? allActivePaddocks : paddocks
-    const activeHerds = herds.filter(h => Number(h.total_ev) > 0).length > 0
+
+    // ── Filtrar solo los rodeos seleccionados para ESTE plan ──
+    // Si seasonPlan.herd_ids está definido (planes nuevos), usar solo esos.
+    // Si no (planes legacy), caer al comportamiento anterior: todos con EV > 0.
+    const planHerdIds: string[] | null = Array.isArray(seasonPlan.herd_ids) && seasonPlan.herd_ids.length > 0
+      ? seasonPlan.herd_ids
+      : null
+    const allHerdsWithEV = herds.filter(h => Number(h.total_ev) > 0).length > 0
       ? herds.filter(h => Number(h.total_ev) > 0)
       : herds
+    const activeHerds = planHerdIds
+      ? herds.filter(h => planHerdIds.includes(h.id))
+      : allHerdsWithEV
+
     const startDate = seasonPlan.start_date || new Date().toISOString().split('T')[0]
 
     if (activeHerds.length === 0 || activePaddocks.length === 0 || !startDate) {
       toast.error('Faltá configurar potreros y rodeos. Verificá que existan en "Potreros" y "Rodeos".')
       return
     }
+
 
     const paddocksWithMs = activePaddocks.filter(p => Number(p.dry_matter_kg_ha) > 0)
     if (paddocksWithMs.length === 0) {
@@ -2886,13 +3140,11 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           matchTab = (p.plan_type !== 'suggested' && p.ai_analysis?.plan_source !== 'suggested')
         }
       }
-      // ── Season plan isolation: only apply when in suggested tab with an active plan ──
-      const matchSeasonPlan = (activeGanttTab !== 'suggested' || !activeSeasonPlanId)
-        ? true
-        : p.ai_analysis?.season_plan_id === activeSeasonPlanId
-      return matchSearch && matchStatus && matchTab && matchSeasonPlan
+      // Todas las planificaciones sugeridas son visibles simultáneamente en el mismo Gantt.
+      // El color de intensidad púrpura diferencia cada season plan.
+      return matchSearch && matchStatus && matchTab
     }),
-    [plans, search, filterStatus, viewMode, activeGanttTab, activeSeasonPlanId]
+    [plans, search, filterStatus, viewMode, activeGanttTab]
   )
 
 
@@ -2977,9 +3229,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const handleDrawEnd = useCallback((paddockId: string, entryDate: string, exitDate: string) => {
     setDrawingMode(false)
     // Chequeo de solapamiento: solo contra planes del mismo track (manual vs suggested)
+    // Colisión física: un potrero no puede estar ocupado por dos rodeos en la misma fecha,
+    // independientemente del plan_type o planificación de temporada.
     const hasOverlap = plans.some(p =>
       p.paddock_id === paddockId &&
-      (p.plan_type || 'manual') === activeGanttTab &&
       p.entry_date < exitDate &&
       (p.exit_date || addDays(p.entry_date, 14)) > entryDate
     )
@@ -3021,16 +3274,90 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     return map
   }, [herds])
 
+  // ── Mapas de color e identidad para planificaciones sugeridas (gradiente púrpura) ──
+  const seasonPlanColorMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    // Ordenar por start_date para asignación estable de índices
+    const sorted = [...seasonPlans].sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''))
+    sorted.forEach((sp, i) => { map[sp.id] = i })
+    return map
+  }, [seasonPlans])
+
+  const seasonPlanNames = useMemo(() => {
+    const map: Record<string, string> = {}
+    seasonPlans.forEach(sp => { map[sp.id] = sp.name || 'Plan sugerido' })
+    return map
+  }, [seasonPlans])
+
   // ── Season Plan Modal state ────────────────────────────────────────────────
   const [showSeasonPlan, setShowSeasonPlan] = useState(false)
   const [showExcelImporter, setShowExcelImporter] = useState(false)
+
+  // ── Paddock toggle (enable/disable) desde el Gantt ──
+  const handlePaddockToggle = useCallback(async (paddockId: string, isActive: boolean) => {
+    // Optimistic update
+    setPaddocks((prev: any[]) => prev.map(p => p.id === paddockId ? { ...p, is_active: isActive } : p))
+    try {
+      await apiFetch(`/api/paddocks/${paddockId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: isActive })
+      })
+    } catch {
+      // Revert on failure
+      setPaddocks((prev: any[]) => prev.map(p => p.id === paddockId ? { ...p, is_active: !isActive } : p))
+      toast.error('No se pudo actualizar el estado del potrero')
+    }
+  }, [])
+
+  // ── Comentarios en bloques de planificación ──
+  const handleAddComment = useCallback(async (planId: string, text: string, authorEmail: string) => {
+    const plan = plans.find((p: any) => p.id === planId)
+    if (!plan) return
+    const newComment = {
+      id: crypto.randomUUID(),
+      text: text.trim(),
+      author_email: authorEmail,
+      created_at: new Date().toISOString()
+    }
+    const existingComments = Array.isArray(plan.ai_analysis?.comments) ? plan.ai_analysis.comments : []
+    const updatedAnalysis = { ...(plan.ai_analysis || {}), comments: [...existingComments, newComment] }
+    // Optimistic update
+    setPlans((prev: any[]) => prev.map(p => p.id === planId ? { ...p, ai_analysis: updatedAnalysis } : p))
+    try {
+      // 1. Guardar en el bloque de planificación
+      await apiFetch(`/api/grazing-plans/${planId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ai_analysis: updatedAnalysis })
+      })
+      // 2. Guardar también en el historial de Registros del potrero (field-notes)
+      if (plan.paddock_id) {
+        const paddock = paddocks.find((p: any) => p.id === plan.paddock_id)
+        const noteTitle = `Comentario Gantt — ${plan.entry_date ? new Date(plan.entry_date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : 'Plan'}`
+        await apiFetch('/api/field-notes', {
+          method: 'POST',
+          body: JSON.stringify({
+            paddock_id: plan.paddock_id,
+            title: noteTitle,
+            content: text.trim(),
+            note_type: 'TEXT',
+            tags: ['comentario_gantt'],
+          })
+        })
+      }
+    } catch {
+      // Revert on failure
+      setPlans((prev: any[]) => prev.map(p => p.id === planId ? { ...p, ai_analysis: plan.ai_analysis } : p))
+      toast.error('No se pudo guardar el comentario')
+    }
+  }, [plans, paddocks])
+
 
   // ── History Tab Actions ───────────────────────────────────────────────────
   const handleDeleteSeasonPlan = async (id: string, name: string) => {
     const ok = await confirm({
       title: `¿Eliminar el plan "${name}"?`,
-      description: 'Se borrarán todos los movimientos del Gantt asociados a esta importación en modo cascada. Esta acción no se puede deshacer.',
-      confirmLabel: 'Sí, eliminar en cascada',
+      description: 'Se borrarán todos los movimientos del Gantt asociados a esta planificación. Esta acción no se puede deshacer.',
+      confirmLabel: 'Sí, eliminar',
       variant: 'danger',
     })
     if (!ok) return
@@ -3220,9 +3547,30 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
           <div className="relative">
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (activeGanttTab === 'suggested') {
-                  // Suggested mode: open the holistic season plan modal
+                  // Si ya hay planes sugeridos, preguntar si misma hoja o nueva
+                  const existingSuggested = plans.filter(p =>
+                    p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested'
+                  )
+                  if (existingSuggested.length > 0) {
+                    const sameSheet = await confirm({
+                      title: '¿Agregar a la planificación actual?',
+                      description: `Ya tenés ${existingSuggested.length} bloques de planificación sugerida en el Gantt. ¿Querés agregar la nueva planificación en la misma hoja (conviven visualmente) o limpiar y empezar de cero?`,
+                      confirmLabel: 'Misma hoja',
+                      cancelLabel: 'Nueva hoja',
+                      variant: 'primary',
+                    })
+                    if (!sameSheet) {
+                      // Nueva hoja: eliminar bloques sugeridos PLANNED existentes
+                      setSaving(true)
+                      try {
+                        await apiFetch('/api/grazing-plans/bulk-delete?status=PLANNED&plan_type=suggested', { method: 'DELETE' })
+                        setPlans(prev => prev.filter(p => !(p.status === 'PLANNED' && (p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested'))))
+                      } catch { /* continua aunque falle */ }
+                      setSaving(false)
+                    }
+                  }
                   setShowSeasonPlan(true)
                 } else {
                   if (plans.length === 0) {
@@ -3404,6 +3752,48 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 </button>
               )
             })()}
+            {/* Toggles de Capas Visuales */}
+            <div className="relative">
+              <button
+                onClick={() => setShowLayersPanel(p => !p)}
+                title="Configurar visibilidad del Gantt"
+                className={`p-2 rounded-xl border transition-all ${
+                  showLayersPanel ? 'bg-green-50 text-green-700 border-green-200' : 'text-gray-400 hover:text-green-600 hover:bg-green-50 border-transparent hover:border-green-100'
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+              </button>
+              {showLayersPanel && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 shadow-xl rounded-2xl p-4 z-[50]">
+                  <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
+                    <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Capas Visuales</span>
+                    <button onClick={() => setShowLayersPanel(false)} className="text-gray-400 hover:text-gray-700">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {[
+                      { key: 'showOriginal', label: 'Plan Original (Cerrado)' },
+                      { key: 'showPlanned', label: 'Plan Modificado/Sugerido' },
+                      { key: 'showReal', label: 'Plan Real (Completado)' },
+                      { key: 'showEvents', label: 'Eventos del Campo' },
+                      { key: 'showAgenda', label: 'Agenda Climática' },
+                      { key: 'showRemnant', label: 'Alerta Sin Remanente' },
+                      { key: 'showAnimals', label: 'Panel de Animales' },
+                    ].map(layer => (
+                      <label key={layer.key} className="flex items-center justify-between cursor-pointer group">
+                        <span className="text-xs font-bold text-gray-600 group-hover:text-gray-900 transition-colors">{layer.label}</span>
+                        <div className={`w-8 h-4 rounded-full transition-colors relative ${ganttLayers[layer.key as keyof typeof ganttLayers] ? 'bg-green-500' : 'bg-gray-200'}`}>
+                          <div className={`absolute top-0.5 bottom-0.5 w-3 bg-white rounded-full transition-all shadow-sm ${ganttLayers[layer.key as keyof typeof ganttLayers] ? 'left-[18px]' : 'left-0.5'}`} />
+                        </div>
+                        <input type="checkbox" className="sr-only" checked={ganttLayers[layer.key as keyof typeof ganttLayers]} onChange={() => toggleGanttLayer(layer.key as keyof typeof ganttLayers)} />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Exportar CSV */}
             <button
               onClick={handleExportHistory}
@@ -3533,6 +3923,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             }}
             onHerdClick={(herd) => setEditingGanttHerd(herd as HerdData)}
             paddockOrder={activeGanttTab === 'suggested' ? suggestedPaddockOrder : []}
+            seasonPlanColorMap={seasonPlanColorMap}
+            seasonPlanNames={seasonPlanNames}
+            ganttLayers={ganttLayers}
+            onPaddockToggle={handlePaddockToggle}
           />
 
 
@@ -3942,8 +4336,19 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       {planPopover && (() => {
         const plan = planPopover.plan
         const paddock = paddocks.find((p: any) => p.id === plan.paddock_id) || plan.paddocks
+        // Season plan padre (solo para planificaciones sugeridas con season_plan_id)
+        const parentSeasonPlan = plan.ai_analysis?.season_plan_id
+          ? seasonPlans.find((sp: any) => sp.id === plan.ai_analysis.season_plan_id)
+          : null
+        const isSuggestedPlanPopover = plan.ai_analysis?.plan_source === 'suggested' || plan.plan_type === 'suggested'
         const cycleHerdIds = plan.ai_analysis?.cycle_all_herd_ids
-        const displayHerdIds = cycleHerdIds?.length > 0 ? cycleHerdIds : (plan.herd_ids || [plan.herd_id])
+        // Para planes sugeridos: mostrar ÚNICAMENTE los rodeos de este bloque específico,
+        // no todos los rodeos del ciclo (cycle_all_herd_ids).
+        const displayHerdIds = isSuggestedPlanPopover
+          ? (Array.isArray(plan.herd_ids) && plan.herd_ids.length > 0
+              ? plan.herd_ids
+              : plan.herd_id ? [plan.herd_id] : [])
+          : (cycleHerdIds?.length > 0 ? cycleHerdIds : (plan.herd_ids || [plan.herd_id]))
         const planHerds = herds.filter((h: any) => displayHerdIds.includes(h.id))
         const planDays = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : null
         const st = STATUS_MAP[plan.status] || STATUS_MAP.PLANNED
@@ -3960,7 +4365,13 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             >
               {/* Header */}
               <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-2">
-                <div>
+                <div className="min-w-0 flex-1">
+                  {/* Nombre del plan de temporada padre (solo sugeridas) */}
+                  {parentSeasonPlan && isSuggestedPlanPopover && (
+                    <p className="text-[9px] font-black text-purple-600 uppercase tracking-widest mb-0.5 truncate">
+                      {parentSeasonPlan.name}
+                    </p>
+                  )}
                   <p className="text-xl font-black text-gray-950 leading-tight">{paddock?.name || '—'}</p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{Number(paddock?.area_ha || 0).toFixed(1)} ha</p>
@@ -4006,9 +4417,9 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 const adjExit  = hasAdjusted ? plan.adjusted_exit_date  : plan.exit_date
                 const adjDays  = adjEntry && adjExit ? daysBetween(adjEntry, adjExit) : planDays
                 return (
-                  <div className="px-5 py-3 border-b border-gray-50 bg-sky-50/20">
-                    <p className="text-[9px] font-black text-sky-700 uppercase tracking-widest mb-1.5">
-                      {hasAdjusted ? 'Plan Modificado' : plan.is_locked ? 'Plan Ajustado' : 'Plan Planificado'}
+                  <div className={`px-5 py-3 border-b border-gray-50 ${isSuggestedPlanPopover && parentSeasonPlan ? 'bg-purple-50/20' : 'bg-sky-50/20'}`}>
+                    <p className="text-[9px] font-black uppercase tracking-widest mb-1.5" style={{ color: isSuggestedPlanPopover && parentSeasonPlan ? '#7c3aed' : '#0369a1' }}>
+                      {hasAdjusted ? 'Plan Modificado' : plan.is_locked ? 'Plan Ajustado' : (isSuggestedPlanPopover && parentSeasonPlan ? parentSeasonPlan.name : 'Plan Planificado')}
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       <div><p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Entrada</p><p className="text-xs font-bold text-gray-900">{fmt(adjEntry)}</p></div>
@@ -4219,7 +4630,13 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                         🔒 Fijar como planificación original
                       </button>
                     )}
-                    {/* Botón + Evento en el Gantt */}
+
+                    {/* ── Sección de Comentarios ── */}
+                    <PlanCommentsSection
+                      plan={plan}
+                      userEmail={user?.email || 'usuario'}
+                      onAddComment={handleAddComment}
+                    />
 
                   </div>
                 )
@@ -5326,14 +5743,17 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           onClose={() => setShowSeasonPlan(false)}
           onSaved={(seasonPlan) => {
             setShowSeasonPlan(false)
-            setSeasonPlans(prev => [seasonPlan, ...prev])
-            setActiveSeasonPlanId(seasonPlan.id ?? null)
+            setSeasonPlans(prev => {
+              // Evitar duplicados si el plan ya existe
+              const exists = prev.some(sp => sp.id === seasonPlan.id)
+              return exists ? prev.map(sp => sp.id === seasonPlan.id ? seasonPlan : sp) : [seasonPlan, ...prev]
+            })
+            // NO filtrar por activeSeasonPlanId — todos los planes conviven en el mismo Gantt
+            setActiveSeasonPlanId(null)
             setGanttWindow(seasonPlan.start_date || new Date().toISOString().split('T')[0])
-            if ((seasonPlan.source as string) === 'suggested') {
-              setActiveGanttTab('suggested')
-            }
+            setActiveGanttTab('suggested')
             setViewMode('gantt')
-            // Cuando se guarda el plan maestro, pintamos el Gantt matemáticamente
+            // Generar los bloques del ciclo para este plan
             handleGeneratePlanCycle(seasonPlan)
           }}
         />

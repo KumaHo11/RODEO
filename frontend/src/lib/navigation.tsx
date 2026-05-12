@@ -2,7 +2,8 @@
 
 import {
   LayoutDashboard, CalendarDays, Lightbulb, NotebookPen,
-  Users, CheckSquare, Fence, Layers, Calendar, Cloud, BookOpen, Leaf, MessageCircle, CreditCard
+  Users, CheckSquare, Fence, Layers, Calendar, Cloud, BookOpen, Leaf, MessageCircle, CreditCard,
+  Calculator
 } from 'lucide-react'
 
 export type NavItem = {
@@ -49,8 +50,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'INTELIGENCIA',
     items: [
-      { name: 'Insights', href: '/dashboard/insights', icon: Lightbulb, permissionKey: 'insights' },
-      { name: 'Carbono', href: '/dashboard/carbono', icon: Leaf, permissionKey: 'carbono' },
+      { name: 'Insights',      href: '/dashboard/insights',    icon: Lightbulb,  permissionKey: 'insights'     },
+      { name: 'Carbono',       href: '/dashboard/carbono',     icon: Leaf,        permissionKey: 'carbono'      },
+      { name: 'Calculadora',   href: '/dashboard/calculadora', icon: Calculator,  permissionKey: null           },
     ],
   },
 ]

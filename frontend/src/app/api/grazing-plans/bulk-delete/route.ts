@@ -1,7 +1,7 @@
 /**
  * DELETE /api/grazing-plans/bulk-delete
- * Elimina todas las planificaciones con status PLANNED de la organización.
- * Opcionalmente acepta ?status=PLANNED,ACTIVE para filtrar.
+ * Elimina planificaciones según status y opcionalmente plan_type.
+ * Acepta ?status=PLANNED&plan_type=suggested para "nueva hoja" de planificación.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
@@ -23,14 +23,26 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Estado no permitido para borrado masivo' }, { status: 400 })
     }
 
+    // Optional plan_type filter (e.g. 'suggested') — si se pasa, solo borra esos bloques
+    const planType = url.searchParams.get('plan_type') || null
+
     // Build parameterized query
     const placeholders = toDelete.map((_, i) => `$${i + 2}`).join(', ')
+    const params: any[] = [auth.orgId, ...toDelete]
+
+    let planTypeClause = ''
+    if (planType) {
+      params.push(planType)
+      planTypeClause = `AND plan_type = $${params.length}`
+    }
+
     const result = await mutate(
       `DELETE FROM grazing_plans
        WHERE paddock_id IN (SELECT id FROM paddocks WHERE org_id = $1)
          AND status IN (${placeholders})
+         ${planTypeClause}
        RETURNING id`,
-      [auth.orgId, ...toDelete]
+      params
     )
 
     return NextResponse.json({ deleted: result.rowCount ?? 0 })
