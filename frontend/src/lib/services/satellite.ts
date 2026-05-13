@@ -1,3 +1,5 @@
+import { apiFetch } from '@/lib/apiFetch'
+
 /**
  * Satellite Service — Real NDVI via Earth Search (Sentinel-2) + TiTiler
  * Free, no API key required. Fallback to deterministic mock if unavailable.
@@ -31,7 +33,7 @@ export async function getPaddockNDVI(
   }
 
   try {
-    const res = await fetch('/api/ndvi', {
+    const res = await apiFetch('/api/ndvi', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

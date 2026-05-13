@@ -559,7 +559,7 @@ export default function PaddockModal({
     try {
       const reader = new FileReader()
       const b64: string = await new Promise((res, rej) => { reader.onload = () => res((reader.result as string).split(',')[1]); reader.onerror = rej; reader.readAsDataURL(bioPhoto) })
-      const resp = await fetch('/api/analyze-biomass', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: b64, mimeType: bioPhoto.type, area_ha: areaHa }) })
+      const resp = await apiFetch('/api/analyze-biomass', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: b64, mimeType: bioPhoto.type, area_ha: areaHa }) })
       const data = resp.ok ? await resp.json() : null
       if (data?.dry_matter_kg_ha) { setBioResult(data); setMsHa(Math.round(data.dry_matter_kg_ha)) }
       else setBioError('No se pudo analizar la imagen.')
@@ -574,7 +574,7 @@ export default function PaddockModal({
       if (!geoRes.ok) return
       const { paddock: geo } = await geoRes.json()
       if (!geo?.boundary) return
-      const resp = await fetch('/api/ndvi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ geojson: geo.boundary, paddock_id: paddock.id }) })
+      const resp = await apiFetch('/api/ndvi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ geojson: geo.boundary, paddock_id: paddock.id }) })
       if (!resp.ok) return
       const res = await resp.json()
       await apiFetch(`/api/paddocks/${paddock.id}`, { method: 'PATCH', body: JSON.stringify({ current_ndvi: res.averageNdvi }) })

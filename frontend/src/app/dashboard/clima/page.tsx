@@ -28,7 +28,15 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 
 // ── Matriz de impacto: variable × entidad ─────────────────────────────────────
 
-const MATRIX_ROWS = [
+const MATRIX_ROWS: {
+  variable: string;
+  icon: React.ReactNode;
+  pastoImpact: string;
+  pastoDir: 'up' | 'down' | 'neutral';
+  animalImpact: string;
+  animalDir: 'up' | 'down' | 'neutral';
+  note: string;
+}[] = [
   {
     variable: 'Temperatura alta',
     icon: <Thermometer className="w-4 h-4 text-orange-500" />,
