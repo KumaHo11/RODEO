@@ -28,6 +28,9 @@ import {
   CATEGORIA_PESO_DEFAULT, CATEGORIA_DEMAND_FACTOR, CATEGORIA_REF
 } from '@/lib/categorias'
 import HerdModal, { type HerdData } from '@/components/HerdModal'
+import GanttClimateAlert from '@/components/GanttClimateAlert'
+import GanttClimatePanel, { type PaddockClimateInfo, type HerdClimateInfo } from '@/components/GanttClimatePanel'
+import GanttClimateMonthRow from '@/components/GanttClimateMonthRow'
 
 
 // ─────────────── CONSTANTS ───────────────
@@ -309,6 +312,8 @@ function InteractiveGantt({
   seasonPlanNames = {},
   ganttLayers = { showOriginal: true, showPlanned: true, showReal: true, showEvents: true, showAgenda: true, showRemnant: true, showAnimals: true },
   onPaddockToggle,
+  drawingHerdEV = 0,
+  drawingHerdsLabel = '',
 }: {
   plans: any[]
   paddocks: any[]
@@ -355,6 +360,10 @@ function InteractiveGantt({
   }
   /** Callback para habilitar/deshabilitar potrero desde el Gantt */
   onPaddockToggle?: (paddockId: string, isActive: boolean) => void
+  /** EV total de los rodeos seleccionados en modo dibujo (para alerta holística) */
+  drawingHerdEV?: number
+  /** Label legible de rodeos en modo dibujo (para tooltip) */
+  drawingHerdsLabel?: string
 }) {
   // Sort paddocks by suggested order when paddockOrder is provided
   const orderedPaddocks = paddockOrder.length > 0
@@ -389,12 +398,29 @@ function InteractiveGantt({
     })
   }
   
-  // Drawing state
+  // Drawing state — extended with holistic alert
   const [drawingState, setDrawingState] = useState<{
     paddockId: string;
     startDay: number;
     currentDay: number;
     mousePos: { x: number; y: number };
+    isOverOptimal: boolean;
+    optimalDays: number;
+  } | null>(null)
+
+  // Resize state
+  const resizing = useRef<{
+    planId: string;
+    edge: 'left' | 'right';
+    startX: number;
+    origEntry: string;
+    origExit: string;
+    plan?: any;
+  } | null>(null)
+
+  // Drag tooltip — shows dates while dragging existing blocks
+  const [dragTooltip, setDragTooltip] = useState<{
+    entry: string; exit: string; x: number; y: number
   } | null>(null)
 
   // Compute forage gaps for the current window
@@ -571,8 +597,18 @@ function InteractiveGantt({
   }, [timeMarkers])
 
   const pxPerDay = useCallback((containerW: number) => {
+    // Use the full scrollable content width (not the visible clientWidth)
+    // so drag/resize matches block positioning which is % of scrollWidth
     return (containerW - LABEL_W) / windowDays
   }, [windowDays, LABEL_W])
+
+  // Helper: get the real pixels-per-day from scrollWidth of the inner content
+  const getActualPpd = useCallback(() => {
+    if (!containerRef.current) return 1
+    // The inner div has minWidth = windowDays * 6 + LABEL_W
+    const innerW = containerRef.current.scrollWidth
+    return (innerW - LABEL_W) / windowDays
+  }, [windowDays])
 
   const handleMouseDown = (e: React.MouseEvent, plan: any) => {
     if (isDrawingMode) return  // drawing mode takes priority — ignore plan-block drags
@@ -597,15 +633,26 @@ function InteractiveGantt({
     e.preventDefault()
     e.stopPropagation()
     const rect = containerRef.current.getBoundingClientRect()
+    // Use scrollWidth for ppd to match block positioning (blocks use % of full inner width)
+    const ppd = getActualPpd()
     const xRel = e.clientX - rect.left - LABEL_W + containerRef.current.scrollLeft
-    const ppd = (containerRef.current.clientWidth - LABEL_W) / windowDays
     const dayIdx = Math.max(0, Math.min(windowDays - 1, Math.floor(xRel / ppd)))
+
+    // Compute optimal days for this paddock using holistic engine
+    const paddock = paddocks.find((p: any) => p.id === paddockId)
+    const msHa = Number(paddock?.dry_matter_kg_ha) || 0
+    const areaHa = Number(paddock?.area_ha) || 0
+    const usable = calculateUsableForage(msHa, targetRemnant, areaHa)
+    const demand = drawingHerdEV * dailyAllocationKg
+    const optDays = demand > 0 ? calculateGrazingDays(usable, demand) : 0
     
     const newState = {
       paddockId,
       startDay: dayIdx,
       currentDay: dayIdx,
-      mousePos: { x: e.clientX, y: e.clientY }
+      mousePos: { x: e.clientX, y: e.clientY },
+      isOverOptimal: false,
+      optimalDays: optDays,
     }
     // Set ref SYNCHRONOUSLY so the first mousemove event already sees a valid state
     drawingStateRef.current = newState
@@ -618,35 +665,71 @@ function InteractiveGantt({
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+      // Resize handle drag
+      if (resizing.current && containerRef.current) {
+        const ppd = getActualPpd()
+        const dxDays = Math.round((e.clientX - resizing.current.startX) / ppd)
+        if (dxDays === 0) return
+        const { edge, origEntry, origExit, planId, plan } = resizing.current
+        let newEntry = origEntry
+        let newExit = origExit
+        if (edge === 'right') {
+          newExit = addDays(origExit, dxDays)
+          if (newExit <= newEntry) newExit = addDays(newEntry, 1)
+        } else {
+          newEntry = addDays(origEntry, dxDays)
+          if (newEntry >= newExit) newEntry = addDays(newExit, -1)
+        }
+        setDragTooltip({ entry: newEntry, exit: newExit, x: e.clientX, y: e.clientY })
+        onBlockMove(planId, newEntry, newExit, plan)
+        return
+      }
+      // Block drag
       if (dragging.current && containerRef.current) {
-        const ppd = pxPerDay(containerRef.current.clientWidth)
+        const ppd = getActualPpd()
         const dxDays = Math.round((e.clientX - dragging.current.startX) / ppd)
         if (dxDays === 0) return
         const origDuration = daysBetween(dragging.current.origEntry, dragging.current.origExit)
         const newEntry = addDays(dragging.current.origEntry, dxDays)
         const newExit = addDays(newEntry, origDuration)
+        setDragTooltip({ entry: newEntry, exit: newExit, x: e.clientX, y: e.clientY })
         onBlockMove(dragging.current.planId, newEntry, newExit, dragging.current.plan)
       } else if (drawingStateRef.current && containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect()
         const xRel = e.clientX - rect.left - LABEL_W + containerRef.current.scrollLeft
-        const ppd = (containerRef.current.clientWidth - LABEL_W) / windowDays
+        const ppd = getActualPpd()
         const dayIdx = Math.max(0, Math.min(windowDays, Math.floor(xRel / ppd)))
-        setDrawingState(prev => prev ? { ...prev, currentDay: dayIdx, mousePos: { x: e.clientX, y: e.clientY } } : null)
+        const days = Math.abs(dayIdx - drawingStateRef.current.startDay) + 1
+        const isOver = drawingStateRef.current.optimalDays > 0 && days > drawingStateRef.current.optimalDays
+        setDrawingState(prev => prev ? {
+          ...prev,
+          currentDay: dayIdx,
+          mousePos: { x: e.clientX, y: e.clientY },
+          isOverOptimal: isOver,
+        } : null)
       }
     }
     const handleMouseUp = () => {
+      if (resizing.current) {
+        resizing.current = null
+        setDragTooltip(null)
+        return
+      }
+      if (dragging.current) {
+        dragging.current = null
+        setDragTooltip(null)
+      }
       const ds = drawingStateRef.current
       if (ds && onDrawEnd) {
         const d1 = Math.min(ds.startDay, ds.currentDay)
         const d2 = Math.max(ds.startDay, ds.currentDay)
         const startDate = addDays(windowStart, d1)
         const endDate   = addDays(windowStart, d2 + 1)
-        // Only open modal if the user dragged at least 1 day
+        // Only fire if the user dragged at least 1 day
         if (d2 >= d1) {
           onDrawEnd(ds.paddockId, startDate, endDate)
         }
       }
-      dragging.current = null
       setDrawingState(null)
     }
     window.addEventListener('mousemove', handleMouseMove)
@@ -662,12 +745,12 @@ function InteractiveGantt({
     if (containerRef.current) {
       const todayDiff = daysBetween(windowStart, new Date().toISOString().split('T')[0])
       if (todayDiff >= 0 && todayDiff <= windowDays) {
-        const ppd = pxPerDay(containerRef.current.clientWidth)
+        const ppd = getActualPpd()
         const scrollX = (todayDiff * ppd) - (containerRef.current.clientWidth / 2) + LABEL_W
         containerRef.current.scrollTo({ left: Math.max(0, scrollX), behavior: 'smooth' })
       }
     }
-  }, [windowStart, windowDays, pxPerDay])
+  }, [windowStart, windowDays, getActualPpd])
 
   // Pre-compute popup to avoid IIFE-in-JSX parsing issues
   const eventPopup = selectedEvent && popupPos ? (() => {
@@ -961,10 +1044,14 @@ function InteractiveGantt({
                 className={`flex-1 relative overflow-hidden ${!isEnabled ? 'cursor-not-allowed' : ''}`}
                 onMouseDown={(e) => isEnabled ? handleRowMouseDown(e, paddock.id) : undefined}
               >
-                {/* Drawing Highlight Overlay */}
+                {/* Drawing Highlight Overlay — red when exceeding optimal days */}
                 {drawingState && drawingState.paddockId === paddock.id && (
                   <div 
-                    className="absolute inset-y-0 z-20 bg-green-500/30 border-2 border-green-500/50 rounded-lg pointer-events-none"
+                    className={`absolute inset-y-0 z-20 border-2 rounded-lg pointer-events-none transition-colors ${
+                      drawingState.isOverOptimal
+                        ? 'bg-red-500/25 border-red-500/60'
+                        : 'bg-green-500/30 border-green-500/50'
+                    }`}
                     style={{
                       left: `${(Math.min(drawingState.startDay, drawingState.currentDay) / windowDays) * 100}%`,
                       width: `${(Math.abs(drawingState.currentDay - drawingState.startDay) + 1) / windowDays * 100}%`,
@@ -1151,7 +1238,9 @@ function InteractiveGantt({
                       bg: string, border: string, pattern: string | null, isGrabbable: boolean,
                       opacity: number = 1, zIndex: number = 20, extraTitle: string = '', showLock: boolean = false,
                       innerLabel: string = '', innerLabelColor: string = '#4c1d95'
-                    ) => (
+                    ) => {
+                      const isManualResizable = isGrabbable && !isCompleted && !hasRealEntry && !isSuggested
+                      return (
                       <div
                         key={key}
                         style={{
@@ -1170,7 +1259,7 @@ function InteractiveGantt({
                           cursor: isGrabbable ? 'grab' : 'pointer',
                           zIndex: zIndex,
                           opacity: opacity,
-                          overflow: 'hidden',
+                          overflow: 'visible',
                           backgroundImage: pattern ? `repeating-linear-gradient(45deg, transparent, transparent 4px, ${pattern} 4px, ${pattern} 8px)` : 'none',
                           backgroundSize: '8px 8px',
                           display: 'flex',
@@ -1179,7 +1268,7 @@ function InteractiveGantt({
                           paddingLeft: 4,
                           gap: 3,
                         }}
-                        className="transition-all hover:brightness-90 relative"
+                        className="transition-all hover:brightness-90 relative group/block"
                         onMouseDown={e => isGrabbable && !isCompleted && !hasRealEntry && handleMouseDown(e, plan)}
                         onClick={(e) => { e.stopPropagation(); onBlockClick(plan, e) }}
                         title={`${extraTitle} — ${herdLabel} · ${isCompleted ? ' ✔ Completado' : ''}`}
@@ -1193,8 +1282,46 @@ function InteractiveGantt({
                             {innerLabel}
                           </span>
                         )}
+                        {/* Resize handles — only for manual draggable blocks */}
+                        {isManualResizable && (
+                          <>
+                            {/* Left edge handle */}
+                            <div
+                              className="absolute left-0 top-0 bottom-0 w-2.5 cursor-col-resize opacity-0 group-hover/block:opacity-100 transition-opacity flex items-center justify-center z-30"
+                              style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.5), transparent)' }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation()
+                                e.preventDefault()
+                                const entry = plan.is_locked && plan.adjusted_entry_date ? plan.adjusted_entry_date : plan.entry_date
+                                const exit = plan.is_locked && plan.adjusted_exit_date ? plan.adjusted_exit_date : (plan.exit_date || addDays(plan.entry_date, 14))
+                                resizing.current = { planId: plan.id, edge: 'left', startX: e.clientX, origEntry: entry, origExit: exit, plan }
+                              }}
+                              title="Arrastrar para cambiar fecha de entrada"
+                            >
+                              <div className="w-0.5 h-3/5 rounded-full bg-white/80" />
+                              <div className="w-0.5 h-3/5 rounded-full bg-white/80 ml-px" />
+                            </div>
+                            {/* Right edge handle */}
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-2.5 cursor-col-resize opacity-0 group-hover/block:opacity-100 transition-opacity flex items-center justify-center z-30"
+                              style={{ background: 'linear-gradient(to left, rgba(255,255,255,0.5), transparent)' }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation()
+                                e.preventDefault()
+                                const entry = plan.is_locked && plan.adjusted_entry_date ? plan.adjusted_entry_date : plan.entry_date
+                                const exit = plan.is_locked && plan.adjusted_exit_date ? plan.adjusted_exit_date : (plan.exit_date || addDays(plan.entry_date, 14))
+                                resizing.current = { planId: plan.id, edge: 'right', startX: e.clientX, origEntry: entry, origExit: exit, plan }
+                              }}
+                              title="Arrastrar para cambiar fecha de salida"
+                            >
+                              <div className="w-0.5 h-3/5 rounded-full bg-white/80" />
+                              <div className="w-0.5 h-3/5 rounded-full bg-white/80 ml-px" />
+                            </div>
+                          </>
+                        )}
                       </div>
-                    )
+                      )
+                    }
 
                     if (plan.is_locked && ganttLayers.showOriginal) {
                       renderBlocks.push(createBlock(`t1-${plan.id}`, 4, leftPct, widthPct, T1_BG, T1_BORDER, T1_PAT, false, 1, 5, '🔒 PLAN ORIGINAL — Solo lectura', true))
@@ -1297,7 +1424,34 @@ function InteractiveGantt({
                       )
                     }
 
-                    return <React.Fragment key={plan.id}>{renderBlocks}</React.Fragment>
+                    return (
+                      <React.Fragment key={plan.id}>
+                        {renderBlocks}
+                        {/* ── Ajuste Climático: alert inline cuando el clima acorta días ── */}
+                        {climateViewEnabled && deltaClimate < 0 && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: `${leftPct}%`,
+                              top: TRACK2_TOP - 18,
+                              zIndex: 25,
+                              maxWidth: '90%',
+                            }}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <GanttClimateAlert
+                              compact
+                              paddockName={paddock.name}
+                              originalDays={baseDuration}
+                              adjustedDays={adjustedDuration}
+                              alertLevel={Math.abs(deltaClimate) >= 3 ? 'critical' : 'warning'}
+                              stressType={cAdj < 1 ? 'heat' : 'cold'}
+                              alertMessage={`Multiplicador climático: ×${cAdj.toFixed(2)}`}
+                            />
+                          </div>
+                        )}
+                      </React.Fragment>
+                    )
                   })
                 })()}
                 {/* ── No more per-row event diamonds; they are now shown once in the Agenda header row above ── */}
@@ -1306,7 +1460,7 @@ function InteractiveGantt({
           )
         })}
 
-        {/* ── Footer Row 1: Resumen del campo + crecimiento de pasto por mes ── */}
+        {/* ── Footer: fila unificada Resumen + Clima por mes ── */}
         {(() => {
           const totalHa = paddocks.reduce((s, p) => s + (Number(p.area_ha) || 0), 0)
           const totalMs = paddocks.reduce((s, p) => {
@@ -1315,63 +1469,63 @@ function InteractiveGantt({
             return s + ms * ha
           }, 0)
 
+          // Build plansPerMonth: which plans fall (entry or exit) in each month
+          const plansPerMonth: Record<string, import('@/components/GanttClimateMonthRow').PlanInMonth[]> = {}
+          MONTHS_FOOTER.forEach(m => { plansPerMonth[m.key] = [] })
+          plans.forEach(plan => {
+            const entryKey = (plan.entry_date || '').substring(0, 7)
+            const exitKey  = (plan.exit_date  || '').substring(0, 7)
+            const mult     = paddockCAdj?.[plan.paddock_id] ?? 1.0
+            const paddock  = paddocks.find(p => p.id === plan.paddock_id)
+            const durationDays = plan.entry_date && plan.exit_date
+              ? Math.max(1, Math.round((new Date(plan.exit_date).getTime() - new Date(plan.entry_date).getTime()) / 86400000))
+              : 21
+            const entry: import('@/components/GanttClimateMonthRow').PlanInMonth = {
+              id: plan.id,
+              paddockName: paddock?.name || plan.paddock_id,
+              paddockId: plan.paddock_id,
+              baseDays: durationDays,
+              climateMultiplier: mult,
+              areaHa: Number(paddock?.area_ha) || 0,
+              isPlanModified: !plan.is_locked,
+            }
+            if (plansPerMonth[entryKey]) plansPerMonth[entryKey].push(entry)
+            else if (plansPerMonth[exitKey]) plansPerMonth[exitKey].push(entry)
+          })
+
+          // Build herdsPerMonth from activeHerdsInWindow
+          const herdsPerMonth: Record<string, import('@/components/GanttClimateMonthRow').HerdInMonth[]> = {}
+          MONTHS_FOOTER.forEach(m => {
+            herdsPerMonth[m.key] = activeHerdsInWindow.map(h => ({
+              id: h.id,
+              name: h.name,
+              headCount: Number(h.head_count) || 0,
+              totalEv: Number(h.total_ev ?? (h as any).totalEv ?? 0),
+            }))
+          })
+
           return (
-            <>
-              {/* Row 1 — Resumen + crecimiento de pasto por mes */}
-              <div className="flex border-t border-gray-200 bg-white" style={{ minHeight: 56 }}>
-                {/* Label col */}
-                <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="px-2.5 py-2 flex flex-col justify-center gap-0.5 border-r border-gray-200 shrink-0">
-                  <div className="flex items-center gap-1">
-                    <BarChart3 className="w-3 h-3 text-gray-400" />
-                    <span className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Resumen</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Hectáreas totales</span>
-                    <span className="text-[10px] font-bold text-gray-700">{totalHa.toFixed(1)} ha</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Materia seca total</span>
-                    <span className="text-[10px] font-bold text-gray-700">{Math.round(totalMs).toLocaleString('es')} kg</span>
-                  </div>
-                </div>
-                {/* Monthly forage growth */}
-                <div className="flex-1 relative">
-                  {MONTHS_FOOTER.map(m => {
-                    const growthMult = SEASONAL_MS_GROWTH[m.month] ?? 1.0
-                    const rainMm = rainfallData[m.key] || 0
-                    // Crecimiento estimado mensual: MS base * mult estacional * (1 + rain bonus)
-                    const rainBonus = rainMm > 0 ? Math.min(rainMm / 100 * 0.2, 0.4) : 0
-                    const estimatedGrowthKgHa = Math.round(totalHa > 0 ? (totalMs / totalHa) * growthMult * (1 + rainBonus) / 12 : 0)
-                    const barPct = Math.min(100, growthMult * 50) // visual bar 0–100%
-                    const barColor = growthMult >= 1.2 ? '#16a34a' : growthMult >= 0.7 ? '#d97706' : '#94a3b8'
-                    return (
-                      <div
-                        key={m.key}
-                        className="absolute inset-y-0 border-r border-gray-100 flex flex-col items-center justify-center gap-0.5 px-1"
-                        style={{ left: `${m.leftPct}%`, width: `${m.widthPct}%` }}
-                      >
-                        {/* Growth bar */}
-                        <div className="w-4/5 h-1 rounded-full bg-gray-100 overflow-hidden">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${barPct}%`, backgroundColor: barColor }} />
-                        </div>
-                        {/* kg/ha label */}
-                        {estimatedGrowthKgHa > 0 ? (
-                          <div className="flex items-baseline gap-0.5">
-                            <span className="text-[8px] font-black" style={{ color: barColor }}>{estimatedGrowthKgHa}</span>
-                            <span className="text-[6px] text-gray-400 font-bold">kg/ha</span>
-                          </div>
-                        ) : (
-                          <span className="text-[7px] text-gray-200">—</span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+            <GanttClimateMonthRow
+              months={MONTHS_FOOTER}
+              plansPerMonth={plansPerMonth}
+              herdsPerMonth={herdsPerMonth}
+              growthPerMonth={{}}
+              rainfallPerMonth={rainfallData}
+              seasonalMult={SEASONAL_MS_GROWTH}
+              labelW={LABEL_W}
+              totalHa={totalHa}
+              totalMs={totalMs}
+              climateEnabled={climateViewEnabled}
+              onApplyMonthAdjustment={(monthKey, adjustments) => {
+                console.log('[clima] Aplicar ajuste mes', monthKey, adjustments)
+                // TODO: wire to handleBlockMove / plan PATCH per adjustment
+              }}
+            />
+          )
+        })()}
 
+              {/* Row — Tipo de Animal (planilla de control por rodeo) — sticky al fondo */}
 
-
-              {/* Row 3+ — Tipo de Animal (planilla de control por rodeo) — sticky al fondo */}
               {ganttLayers.showAnimals && (() => {
                 if (activeHerdsInWindow.length === 0) return null
 
@@ -1460,14 +1614,7 @@ function InteractiveGantt({
                               <span className="text-[7px] text-gray-400 font-medium shrink-0">({herd.category})</span>
                             )}
                           </div>
-                          {/* Eye icon individual por rodeo */}
-                          <button
-                            onClick={() => toggleHerdVisibility(herd.id)}
-                            title="Ocultar este rodeo"
-                            className="text-gray-300 hover:text-gray-600 transition-colors shrink-0 ml-1"
-                          >
-                            <EyeOff className="w-2.5 h-2.5" />
-                          </button>
+
                         </div>
                         {/* Monthly data — fixed width columns */}
                         <div className="flex flex-1">
@@ -1485,7 +1632,11 @@ function InteractiveGantt({
                             const peso = Number(herd.avg_weight_kg) || 0
                             const catKey = herd.categoria as string
                             const factor = CATEGORIA_DEMAND_FACTOR[catKey as keyof typeof CATEGORIA_DEMAND_FACTOR] ?? 1.0
-                            const evPerHead = peso > 0 ? Math.pow((peso || 400) / 400, 0.75) * factor : (Number(herd.total_ev) || (Math.pow((Number(herd.avg_weight_kg) || 400) / 400, 0.75) * (CATEGORIA_DEMAND_FACTOR[herd.categoria as keyof typeof CATEGORIA_DEMAND_FACTOR] ?? 1.0) * currentHeadCount)) / Math.max(currentHeadCount, 1)
+                            // Use stored weight; if missing, fall back to category default (e.g. TOROS=600kg)
+                            // This prevents dividing a wrong total_ev by head_count (which gave 0.12 for bulls)
+                            const pesoDefault = CATEGORIA_PESO_DEFAULT[catKey as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 400
+                            const effectivePeso = peso > 0 ? peso : pesoDefault
+                            const evPerHead = Math.pow(effectivePeso / 400, 0.75) * factor
                             const ev = headCount > 0 ? headCount * evPerHead : 0
                             const active = monthPlansForHerd.length > 0 && herdActiveThisMonth
                             return (
@@ -1551,7 +1702,9 @@ function InteractiveGantt({
                                 ) : (
                                   <span className="text-[8px] font-black text-gray-300 flex-[2] text-center w-full truncate">—</span>
                                 )}
-                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate">{herdActiveThisMonth && peso > 0 ? peso : '—'}</span>
+                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate">
+                                  {herdActiveThisMonth ? (peso > 0 ? peso : `~${effectivePeso}`) : '—'}
+                                </span>
                                 <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate">
                                   {herdActiveThisMonth && headCount > 0 && ev > 0 ? (ev / headCount).toFixed(2) : '—'}
                                 </span>
@@ -1583,7 +1736,12 @@ function InteractiveGantt({
                               const p = Number(h.avg_weight_kg) || 0
                               const cat = h.categoria as string
                               const fac = CATEGORIA_DEMAND_FACTOR[cat as keyof typeof CATEGORIA_DEMAND_FACTOR] ?? 1.0
-                              const evPH = p > 0 ? Math.pow((p || 400) / 400, 0.75) * fac : (Number(h.total_ev) || (Math.pow((Number(h.avg_weight_kg) || 400) / 400, 0.75) * (CATEGORIA_DEMAND_FACTOR[h.categoria as keyof typeof CATEGORIA_DEMAND_FACTOR] ?? 1.0) * (Number(h.head_count) || 1))) / Math.max(Number(h.head_count) || 1, 1)
+                              const evPH = (() => {
+                                const pesoD = CATEGORIA_PESO_DEFAULT[cat as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 400
+                                const effP = p > 0 ? p : pesoD
+                                return Math.pow(effP / 400, 0.75) * fac
+                              })()
+
                               totalCabMes += hc
                               totalEvMes += hc * evPH
                             }
@@ -1635,10 +1793,6 @@ function InteractiveGantt({
                 )
                })()}
 
-          </>
-          )
-        })()}
-
         {/* ── Legend: Plan Original / Plan Modificado / Plan Real + Agenda + Hoy */}
         <div className="flex items-center gap-3 px-4 py-2.5 border-t border-gray-100 bg-gray-50/80 flex-wrap">
           <div className="flex items-center gap-3 mr-2">
@@ -1681,6 +1835,60 @@ function InteractiveGantt({
       </div>
     </div>
     {eventPopup}
+
+    {/* ── Drawing Tooltip — pegado al cursor durante el trazado ── */}
+    {drawingState && (() => {
+      const d1 = Math.min(drawingState.startDay, drawingState.currentDay)
+      const d2 = Math.max(drawingState.startDay, drawingState.currentDay)
+      const days = d2 - d1 + 1
+      const startDateStr = addDays(windowStart, d1)
+      const startDateFmt = new Date(startDateStr + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+      const isAlert = drawingState.isOverOptimal
+      const tipX = Math.min(drawingState.mousePos.x + 14, (typeof window !== 'undefined' ? window.innerWidth : 800) - 190)
+      const tipY = drawingState.mousePos.y - 56
+      return (
+        <div
+          className="fixed z-[2000] pointer-events-none select-none"
+          style={{ left: tipX, top: tipY }}
+        >
+          <div className={`rounded-xl shadow-2xl border px-3 py-2 text-[11px] font-bold leading-tight ${
+            isAlert
+              ? 'bg-red-900/90 text-white border-red-500/60'
+              : 'bg-gray-900/90 text-white border-white/10'
+          }`}>
+            <div className="font-black">{startDateFmt}</div>
+            <div className={`mt-0.5 flex items-center gap-1 ${ isAlert ? 'text-red-300' : 'text-green-300' }`}>
+              <span className="text-base leading-none">{isAlert ? '⚠' : '✓'}</span>
+              <span>{days} día{days !== 1 ? 's' : ''}</span>
+              {isAlert && drawingState.optimalDays > 0 && (
+                <span className="text-red-400 text-[9px]">/ óptimo {drawingState.optimalDays}d</span>
+              )}
+            </div>
+            {drawingHerdsLabel && (
+              <div className="text-[9px] text-gray-400 mt-0.5 truncate max-w-[160px]">{drawingHerdsLabel}</div>
+            )}
+          </div>
+        </div>
+      )
+    })()}
+
+    {/* ── Drag / Resize Tooltip — fechas al mover o estirar un bloque ── */}
+    {dragTooltip && (
+      <div
+        className="fixed z-[2000] pointer-events-none select-none"
+        style={{
+          left: Math.min(dragTooltip.x + 14, (typeof window !== 'undefined' ? window.innerWidth : 800) - 180),
+          top: dragTooltip.y - 48,
+        }}
+      >
+        <div className="bg-gray-900/90 text-white border border-white/10 rounded-xl shadow-2xl px-3 py-2 text-[11px] font-bold">
+          <span>{new Date(dragTooltip.entry + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>
+          <span className="mx-1.5 text-gray-400">→</span>
+          <span>{new Date(dragTooltip.exit + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>
+          <span className="ml-1.5 text-gray-400">{daysBetween(dragTooltip.entry, dragTooltip.exit)}d</span>
+        </div>
+      </div>
+    )}
 
     {/* ── Gap Detail Panel ── */}
     {selectedGap && (
@@ -2090,7 +2298,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [showNewEventModal, setShowNewEventModal] = useState(false)
   const [savingEvent, setSavingEvent] = useState(false)
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
-  const [newEventForm, setNewEventForm] = useState<{ date: string; end_date: string; title: string; event_type: string; notes: string }>({
+  const [newEventForm, setNewEventForm] = useState<{ date: string; end_date: string; title: string; event_type: string; notes: string; head_count_bulls?: number; avg_weight_bulls?: number }>({
     date: '', end_date: '', title: '', event_type: 'servicio', notes: ''
   })
   const [showNewHerdUnifiedModal, setShowNewHerdUnifiedModal] = useState(false)
@@ -2100,6 +2308,19 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [editingGanttHerd, setEditingGanttHerd] = useState<HerdData | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [drawingMode, setDrawingMode] = useState(false)
+  /** IDs de rodeos seleccionados para el modo de dibujo continuo */
+  const [drawingHerdIds, setDrawingHerdIds] = useState<string[]>([])
+  /** Muestra el selector de rodeos antes de activar el modo dibujo */
+  const [showHerdSelector, setShowHerdSelector] = useState(false)
+  /** Mini-popover de confirmación rápida post-dibujo */
+  const [quickConfirm, setQuickConfirm] = useState<{
+    paddockId: string
+    entryDate: string
+    exitDate: string
+    anchorX: number
+    anchorY: number
+  } | null>(null)
+  const [savingQuick, setSavingQuick] = useState(false)
 
   const [viewMode, setViewMode] = useState<'gantt' | 'list' | 'history'>('gantt')
   const [activeGanttTab, setActiveGanttTab] = useState<'suggested' | 'manual'>('manual')
@@ -2126,8 +2347,9 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   })
 
   const [climateViewEnabled, setClimateViewEnabled] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem('rodeo_climate_view') === 'true'
+    if (typeof window === 'undefined') return true
+    const saved = localStorage.getItem('rodeo_climate_view')
+    return saved === null ? true : saved === 'true' // default ON
   })
   const [paddockCAdj, setPaddockCAdj] = useState<Record<string, number>>({})
 
@@ -3227,12 +3449,11 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   }
 
   const handleDrawEnd = useCallback((paddockId: string, entryDate: string, exitDate: string) => {
-    setDrawingMode(false)
-    // Chequeo de solapamiento: solo contra planes del mismo track (manual vs suggested)
-    // Colisión física: un potrero no puede estar ocupado por dos rodeos en la misma fecha,
-    // independientemente del plan_type o planificación de temporada.
+    // NO se desactiva el drawing mode — modo continuo "lápiz en mano"
+    // Chequeo de solapamiento físico — solo contra planes del mismo track (plan_type)
     const hasOverlap = plans.some(p =>
       p.paddock_id === paddockId &&
+      (p.plan_type || 'manual') === activeGanttTab &&
       p.entry_date < exitDate &&
       (p.exit_date || addDays(p.entry_date, 14)) > entryDate
     )
@@ -3240,28 +3461,65 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       toast.error('Ya existe una planificación en ese rango de fechas para este potrero.')
       return
     }
-    // Use setTimeout to ensure drawingMode state is cleared before modal opens
+    // Cerrar cualquier quickConfirm anterior y abrir uno nuevo
+    setQuickConfirm(null)
     setTimeout(() => {
-      setInlineDryMatter('')
-      setFormData({
-        id: '',
-        paddock_id: paddockId,          // ← Potrero pre-seleccionado
-        herd_ids: herds.map((h: any) => h.id), // ← Todos los rodeos pre-seleccionados
-        entry_date: entryDate,
-        exit_date: exitDate,
-        actual_entry_date: '',
-        actual_exit_date: '',
-        planned_recovery_days: 60,
-        status: 'PLANNED'
+      // Estimar posición del popover en el centro de la pantalla (fallback seguro)
+      setQuickConfirm({
+        paddockId,
+        entryDate,
+        exitDate,
+        anchorX: typeof window !== 'undefined' ? window.innerWidth / 2 : 600,
+        anchorY: typeof window !== 'undefined' ? window.innerHeight / 2 : 400,
       })
-      setTempAnimals([])
-      setCompletionPhoto('')
-      setRemnantAnalysis(null)
-      setExitDateWarning(false)
-      setModalStep(1)
-      setIsModalOpen(true)
     }, 0)
-  }, [plans, herds, activeGanttTab])
+  }, [plans, activeGanttTab])
+
+
+  // Guardar plan directamente desde el QuickConfirm (sin modal)
+  const handleQuickSave = useCallback(async () => {
+    if (!quickConfirm) return
+    setSavingQuick(true)
+    try {
+      const payload = {
+        paddock_id: quickConfirm.paddockId,
+        herd_id: drawingHerdIds[0] || null,
+        herd_ids: drawingHerdIds,
+        entry_date: quickConfirm.entryDate,
+        exit_date: quickConfirm.exitDate,
+        actual_entry_date: null,
+        actual_exit_date: null,
+        planned_recovery_days: 60,
+        status: 'PLANNED',
+        ai_analysis: { plan_source: 'manual' },
+      }
+      const res = await apiFetch('/api/grazing-plans', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error('Error al guardar')
+      toast.success('Planificación guardada')
+      setQuickConfirm(null)
+      loadData()
+    } catch {
+      toast.error('Error al guardar. Intentá de nuevo.')
+    } finally {
+      setSavingQuick(false)
+    }
+  }, [quickConfirm, drawingHerdIds])
+
+  // Esc key handler — desactiva modo dibujo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && drawingMode) {
+        setDrawingMode(false)
+        setQuickConfirm(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [drawingMode])
+
   // KPIs
   const activePlans    = plans.filter(p => p.status === 'ACTIVE').length
   const plannedPlans   = plans.filter(p => p.status === 'PLANNED').length
@@ -3452,10 +3710,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             >
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-tight text-gray-950 max-w-[200px] sm:max-w-none line-clamp-2 sm:line-clamp-none">
-                  {activeGanttTab === 'suggested' ? 'Planificación sugerida' : (
+                  {activeGanttTab === 'suggested' ? 'Planificación de pastoreo Sugerida' : (
                     <>
-                      <span className="sm:hidden">Plan de pastoreo</span>
-                      <span className="hidden sm:inline">Plan de pastoreo y planilla de control</span>
+                      <span className="sm:hidden">Pastoreo Manual</span>
+                      <span className="hidden sm:inline">Planificación de pastoreo Manual</span>
                     </>
                   )}
                 </h1>
@@ -3487,7 +3745,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                     className={`w-full flex items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 ${activeGanttTab === 'manual' ? 'bg-gray-50' : ''}`}
                   >
                     <div>
-                      <p className="text-sm font-bold text-gray-800">Plan de pastoreo y planilla de control</p>
+                      <p className="text-sm font-bold text-gray-800">Planificación de pastoreo Manual</p>
                       <p className="text-xs text-gray-500 mt-0.5">Planificación libre y seguimiento operativo</p>
                     </div>
                     {activeGanttTab === 'manual' && (
@@ -3507,7 +3765,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                     className={`w-full flex items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 ${activeGanttTab === 'suggested' ? 'bg-gray-50' : ''}`}
                   >
                     <div>
-                      <p className="text-sm font-bold text-gray-800">Planificación sugerida</p>
+                      <p className="text-sm font-bold text-gray-800">Planificación de pastoreo Sugerida</p>
                       <p className="text-xs text-gray-500 mt-0.5">Recorrido óptimo geográfico e inteligente</p>
                     </div>
                     {activeGanttTab === 'suggested' && (
@@ -3587,8 +3845,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                     })
                     setIsModalOpen(true)
                   } else {
-                    // Manual mode: activate drawing mode to drag-create plan blocks
-                    setDrawingMode(true)
+                    // Manual mode: show HerdSelector to choose herds before drawing
+                    setShowHerdSelector(true)
                   }
                 }
               }}
@@ -3622,23 +3880,34 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       )}
       {/* Context bar was removed as per user request to simplify UI and avoid confusion with plan selection in Gantt mode */}
 
-      {/* DRAWING MODE BANNER — only relevant in manual tab */}
+      {/* DRAWING MODE BANNER — barra sticky superior con rodeos seleccionados */}
       {drawingMode && activeGanttTab === 'manual' && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 bg-gray-900/90 backdrop-blur-md text-white px-4 py-2.5 rounded-2xl shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-[calc(100vw-2rem)] w-auto">
-          <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center animate-pulse shrink-0">
-              <Plus className="w-3 h-3 text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-black whitespace-nowrap">Modo Dibujo Activo</p>
-              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider hidden sm:block">Hacé click y arrastrá en el calendario</p>
-            </div>
+        <div className="sticky top-0 z-[100] flex items-center gap-3 bg-gray-900/95 backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-2xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-200 mb-3">
+          <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center animate-pulse shrink-0">
+            <span className="text-[10px] font-black text-white">✏</span>
           </div>
-          <button 
-            onClick={() => setDrawingMode(false)}
-            className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-black transition-colors whitespace-nowrap shrink-0"
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-black">
+              Planificando
+              {drawingHerdIds.length > 0 && (
+                <span className="ml-1.5 text-green-400">
+                  {herds.filter((h: any) => drawingHerdIds.includes(h.id)).map((h: any) => h.name).join(', ')}
+                </span>
+              )}
+            </p>
+            <p className="text-[9px] text-gray-400 font-medium">Arrastrá en el calendario para trazar · ESC para salir</p>
+          </div>
+          <button
+            onClick={() => setShowHerdSelector(true)}
+            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-bold transition-colors whitespace-nowrap shrink-0"
           >
-            CANCELAR
+            Cambiar rodeos
+          </button>
+          <button
+            onClick={() => { setDrawingMode(false); setQuickConfirm(null) }}
+            className="px-2.5 py-1 bg-green-600 hover:bg-green-500 rounded-lg text-[10px] font-black transition-colors whitespace-nowrap shrink-0"
+          >
+            Terminar ✓
           </button>
         </div>
       )}
@@ -3648,45 +3917,63 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
         </div>
-      ) : plans.length === 0 && viewMode === 'gantt' ? (
-        <div className="bg-white border border-gray-100 rounded-2xl py-16 text-center shadow-sm">
-          <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
-            <Calendar className="w-8 h-8 text-gray-200" />
+      ) : plans.length === 0 && viewMode === 'gantt' && !drawingMode ? (
+        <div className="relative rounded-2xl overflow-hidden" style={{ minHeight: 360 }}>
+          {/* Gantt borroso de fondo */}
+          <div className="pointer-events-none select-none" style={{ filter: 'blur(3px)', opacity: 0.4 }}>
+            <InteractiveGantt
+              plans={[]}
+              paddocks={paddocks}
+              herds={herds}
+              farmEvents={[]}
+              movements={[]}
+              windowStart={ganttWindow}
+              windowDays={WINDOW_DAYS}
+              onBlockClick={() => {}}
+              onBlockMove={() => {}}
+              rainfallData={rainfallData}
+              onRainfallChange={() => {}}
+              weatherEvents={weatherEvents}
+              droughtThresholdMm={droughtThresholdMm}
+              onDroughtThresholdChange={() => {}}
+              targetRemnant={targetRemnant}
+              dailyAllocationKg={dailyAllocationKg}
+              climateViewEnabled={false}
+              paddockCAdj={paddockCAdj}
+              isDrawingMode={false}
+              ganttLayers={ganttLayers}
+            />
           </div>
-          <p className="text-sm font-black text-gray-950">Sin planificaciones aún</p>
-          <p className="text-xs text-gray-400 mt-1 mb-6">
-            {activeGanttTab === 'suggested'
-              ? 'Generá un plan sugerido con recorrido inteligente de potreros.'
-              : 'Empezá tu primer plan de pastoreo. Hacé clic en Planificar para activar el modo dibujo.'}
-          </p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
+          {/* Overlay centrado */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/60 backdrop-blur-sm">
+            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-xl border border-gray-100">
+              <Calendar className="w-7 h-7 text-green-600" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-black text-gray-950">Sin planificaciones aún</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {activeGanttTab === 'suggested'
+                  ? 'Generá un plan sugerido con recorrido inteligente de potreros.'
+                  : 'Seleccioná tus rodeos y empezá a trazar el primer pastoreo.'}
+              </p>
+            </div>
             <button
               onClick={() => {
                 if (activeGanttTab === 'suggested') {
                   setShowSeasonPlan(true)
                 } else {
-                  setFormData({
-                    id: '',
-                    paddock_id: '',
-                    herd_ids: [] as string[],
-                    entry_date: new Date().toISOString().split('T')[0],
-                    exit_date: '',
-                    actual_entry_date: '',
-                    actual_exit_date: '',
-                    planned_recovery_days: 0,
-                    status: 'PLANNED',
-                  })
-                  setIsModalOpen(true)
+                  setShowHerdSelector(true)
                 }
               }}
               disabled={loading}
-              className={`flex items-center gap-2 px-5 py-2.5 text-white font-bold text-sm rounded-xl transition-all shadow-sm hover:shadow-md disabled:opacity-50 ${
+              className={`flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50 ${
                 activeGanttTab === 'suggested'
-                  ? 'bg-purple-600 hover:bg-purple-700'
-                  : 'bg-green-600 hover:bg-green-700'
+                  ? 'bg-purple-600 hover:bg-purple-500'
+                  : 'bg-green-600 hover:bg-green-500'
               }`}
             >
-              <Plus className="w-4 h-4" /> Planificar
+              <Plus className="w-4 h-4" />
+              {activeGanttTab === 'suggested' ? 'Generar Plan Sugerido' : 'Comenzar a planificar'}
             </button>
           </div>
         </div>
@@ -3752,47 +4039,114 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 </button>
               )
             })()}
+            {/* Toggle Clima — siempre visible en toolbar */}
+            <button
+              onClick={toggleClimateView}
+              title={climateViewEnabled ? 'Ocultar ajuste climático' : 'Mostrar ajuste climático'}
+              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-bold transition-all ${
+                climateViewEnabled
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 border-transparent hover:border-emerald-100'
+              }`}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                <circle cx="12" cy="12" r="4"/>
+              </svg>
+              <span className="hidden sm:inline text-[11px]">Clima</span>
+              {climateViewEnabled && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              )}
+            </button>
             {/* Toggles de Capas Visuales */}
             <div className="relative">
               <button
                 onClick={() => setShowLayersPanel(p => !p)}
-                title="Configurar visibilidad del Gantt"
-                className={`p-2 rounded-xl border transition-all ${
+                title="Visibilidad de capas"
+                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-bold transition-all ${
                   showLayersPanel ? 'bg-green-50 text-green-700 border-green-200' : 'text-gray-400 hover:text-green-600 hover:bg-green-50 border-transparent hover:border-green-100'
                 }`}
               >
-                <Layers className="w-4 h-4" />
+                <Eye className="w-4 h-4" />
               </button>
               {showLayersPanel && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 shadow-xl rounded-2xl p-4 z-[50]">
-                  <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
-                    <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Capas Visuales</span>
-                    <button onClick={() => setShowLayersPanel(false)} className="text-gray-400 hover:text-gray-700">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {[
-                      { key: 'showOriginal', label: 'Plan Original (Cerrado)' },
-                      { key: 'showPlanned', label: 'Plan Modificado/Sugerido' },
-                      { key: 'showReal', label: 'Plan Real (Completado)' },
-                      { key: 'showEvents', label: 'Eventos del Campo' },
-                      { key: 'showAgenda', label: 'Agenda Climática' },
-                      { key: 'showRemnant', label: 'Alerta Sin Remanente' },
-                      { key: 'showAnimals', label: 'Panel de Animales' },
-                    ].map(layer => (
-                      <label key={layer.key} className="flex items-center justify-between cursor-pointer group">
-                        <span className="text-xs font-bold text-gray-600 group-hover:text-gray-900 transition-colors">{layer.label}</span>
-                        <div className={`w-8 h-4 rounded-full transition-colors relative ${ganttLayers[layer.key as keyof typeof ganttLayers] ? 'bg-green-500' : 'bg-gray-200'}`}>
-                          <div className={`absolute top-0.5 bottom-0.5 w-3 bg-white rounded-full transition-all shadow-sm ${ganttLayers[layer.key as keyof typeof ganttLayers] ? 'left-[18px]' : 'left-0.5'}`} />
+                <>
+                  {/* Backdrop */}
+                  <div className="fixed inset-0 z-[49]" onClick={() => setShowLayersPanel(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-60 bg-white border border-gray-100 shadow-2xl rounded-2xl overflow-hidden z-[50] animate-in fade-in zoom-in-95 duration-150">
+                    {/* Header */}
+                    <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Eye className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Capas Visibles</span>
+                      </div>
+                    </div>
+                    {/* Layer rows */}
+                    <div className="py-2">
+                      {[
+                        { key: 'showOriginal', label: 'Plan Original',            striped: true,  color: '#22c55e', extraKey: null },
+                        { key: 'showPlanned',  label: 'Plan Modificado/Sugerido', striped: true,  color: '#38bdf8', extraKey: null },
+                        { key: 'showReal',     label: 'Plan Real',                striped: false, color: '#22c55e', extraKey: null },
+                        { key: 'showEvents',   label: 'Eventos',                  striped: false, color: '#8b5cf6', extraKey: 'showAgenda' as keyof typeof ganttLayers },
+                        { key: 'showRemnant',  label: 'Alerta Sin Remanente',     striped: false, color: '#ef4444', extraKey: null },
+                        { key: 'showAnimals',  label: 'Panel de Animales',        striped: false, color: '#eab308', extraKey: null },
+                      ].map(layer => {
+                        const active = ganttLayers[layer.key as keyof typeof ganttLayers] ||
+                          (layer.extraKey ? ganttLayers[layer.extraKey] : false)
+                        const dotStyle = active
+                          ? layer.striped
+                            ? { background: `repeating-linear-gradient(45deg, ${layer.color}, ${layer.color} 2px, transparent 2px, transparent 5px)`, border: `1.5px solid ${layer.color}` }
+                            : { backgroundColor: layer.color }
+                          : { backgroundColor: '#d1d5db' }
+                        return (
+                          <button
+                            key={layer.key}
+                            onClick={() => {
+                              toggleGanttLayer(layer.key as keyof typeof ganttLayers)
+                              if (layer.extraKey) toggleGanttLayer(layer.extraKey)
+                            }}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${active ? '' : 'opacity-50'}`}
+                          >
+                            {/* Color indicator */}
+                            <span
+                              className="w-3 h-3 rounded-sm shrink-0 transition-all"
+                              style={dotStyle}
+                            />
+                            <span className={`flex-1 text-[12px] font-bold transition-colors ${active ? 'text-gray-800' : 'text-gray-400'}`}>
+                              {layer.label}
+                            </span>
+                            {/* Toggle pill */}
+                            <div className={`w-7 h-3.5 rounded-full transition-colors relative shrink-0 ${active ? 'bg-green-500' : 'bg-gray-200'}`}>
+                              <div className={`absolute top-0.5 bottom-0.5 w-2.5 bg-white rounded-full transition-all shadow-sm ${active ? 'left-[14px]' : 'left-0.5'}`} />
+                            </div>
+                          </button>
+                        )
+                      })}
+
+                      {/* Separador + fila Clima */}
+                      <div className="mx-4 my-1 border-t border-gray-100" />
+                      <button
+                        onClick={toggleClimateView}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${climateViewEnabled ? '' : 'opacity-50'}`}
+                      >
+                        <span
+                          className="w-3 h-3 rounded-sm shrink-0"
+                          style={climateViewEnabled ? { backgroundColor: '#10b981' } : { backgroundColor: '#d1d5db' }}
+                        />
+                        <span className={`flex-1 text-[12px] font-bold ${climateViewEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
+                          Ajuste Climático
+                        </span>
+                        <div className={`w-7 h-3.5 rounded-full relative shrink-0 ${climateViewEnabled ? 'bg-emerald-500' : 'bg-gray-200'}`}>
+                          <div className={`absolute top-0.5 bottom-0.5 w-2.5 bg-white rounded-full transition-all shadow-sm ${climateViewEnabled ? 'left-[14px]' : 'left-0.5'}`} />
                         </div>
-                        <input type="checkbox" className="sr-only" checked={ganttLayers[layer.key as keyof typeof ganttLayers]} onChange={() => toggleGanttLayer(layer.key as keyof typeof ganttLayers)} />
-                      </label>
-                    ))}
+                      </button>
+
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
+
 
             {/* Exportar CSV */}
             <button
@@ -3927,6 +4281,15 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             seasonPlanNames={seasonPlanNames}
             ganttLayers={ganttLayers}
             onPaddockToggle={handlePaddockToggle}
+            drawingHerdEV={herds
+              .filter((h: any) => drawingHerdIds.includes(h.id))
+              .reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
+            }
+            drawingHerdsLabel={herds
+              .filter((h: any) => drawingHerdIds.includes(h.id))
+              .map((h: any) => h.name)
+              .join(', ')
+            }
           />
 
 
@@ -4926,8 +5289,158 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         )
       })()}
 
+      {/* ─── HERD SELECTOR PANEL ─────────────────────────────────────────── */}
+      {showHerdSelector && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-200">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.15em] text-green-600">Modo Dibujo</p>
+                  <h3 className="text-base font-black text-gray-950 mt-0.5">Seleccioná los rodeos</h3>
+                </div>
+                <button
+                  onClick={() => setShowHerdSelector(false)}
+                  className="w-7 h-7 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 text-xs font-bold transition-colors"
+                >×</button>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">Estos rodeos se asignarán a cada bloque que traces.</p>
+            </div>
+            <div className="px-6 py-4">
+              <div className="flex flex-wrap gap-2">
+                {herds.map((h: any) => {
+                  const sel = drawingHerdIds.includes(h.id)
+                  return (
+                    <button
+                      key={h.id}
+                      onClick={() => setDrawingHerdIds(prev =>
+                        sel ? prev.filter(id => id !== h.id) : [...prev, h.id]
+                      )}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-[12px] font-bold transition-all ${
+                        sel
+                          ? 'bg-green-600 border-green-600 text-white shadow-sm'
+                          : 'bg-white border-gray-200 text-gray-700 hover:border-green-300 hover:text-green-700'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${ sel ? 'bg-white' : 'bg-gray-300' }`} />
+                      {h.name}
+                      <span className="text-[10px] opacity-70">{Number(h.total_ev || 0).toFixed(1)} EV</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {herds.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-4">No hay rodeos configurados aún.</p>
+              )}
+            </div>
+            <div className="px-6 pb-6 flex items-center gap-3">
+              <button
+                onClick={() => setShowHerdSelector(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+              >Cancelar</button>
+              <button
+                onClick={() => {
+                  if (drawingHerdIds.length === 0) {
+                    setDrawingHerdIds(herds.map((h: any) => h.id))
+                  }
+                  setShowHerdSelector(false)
+                  setDrawingMode(true)
+                }}
+                disabled={herds.length === 0}
+                className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-black transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                ✏ Comenzar a trazar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── QUICK CONFIRM POPOVER ───────────────────────────────────────── */}
+      {quickConfirm && (
+        <div className="fixed inset-0 z-[9997] pointer-events-none">
+          {/* Backdrop para cerrar al clickear fuera */}
+          <div
+            className="absolute inset-0 pointer-events-auto"
+            onClick={() => setQuickConfirm(null)}
+          />
+          <div
+            className="absolute pointer-events-auto"
+            style={{
+              left: Math.max(8, Math.min(quickConfirm.anchorX - 140, (typeof window !== 'undefined' ? window.innerWidth : 900) - 300)),
+              top: Math.max(8, Math.min(quickConfirm.anchorY - 80, (typeof window !== 'undefined' ? window.innerHeight : 700) - 200)),
+              width: 288,
+            }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-90 duration-150">
+              <div className="px-4 pt-4 pb-3 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
+                    <span className="text-green-600 text-[10px] font-black">✓</span>
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Nuevo pastoreo</p>
+                </div>
+                <p className="text-sm font-black text-gray-950 mt-1.5">
+                  {herds.filter((h: any) => drawingHerdIds.includes(h.id)).map((h: any) => h.name).join(' + ') || 'Rodeos seleccionados'}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-0.5 font-medium">
+                  {(() => {
+                    const e = new Date(quickConfirm.entryDate + 'T00:00:00')
+                    const x = new Date(quickConfirm.exitDate + 'T00:00:00')
+                    const days = Math.round((x.getTime() - e.getTime()) / 86400000)
+                    const fmt = (d: Date) => d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+                    return `${fmt(e)} → ${fmt(x)} · ${days} día${days !== 1 ? 's' : ''}`
+                  })()}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  {paddocks.find((p: any) => p.id === quickConfirm.paddockId)?.name || 'Potrero'}
+                </p>
+              </div>
+              <div className="px-4 py-3 flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setQuickConfirm(null)
+                    setDrawingMode(false)
+                    setInlineDryMatter('')
+                    setFormData({
+                      id: '',
+                      paddock_id: quickConfirm.paddockId,
+                      herd_ids: drawingHerdIds,
+                      entry_date: quickConfirm.entryDate,
+                      exit_date: quickConfirm.exitDate,
+                      actual_entry_date: '',
+                      actual_exit_date: '',
+                      planned_recovery_days: 60,
+                      status: 'PLANNED',
+                    })
+                    setTempAnimals([])
+                    setCompletionPhoto('')
+                    setRemnantAnalysis(null)
+                    setExitDateWarning(false)
+                    setModalStep(1)
+                    setIsModalOpen(true)
+                  }}
+                  className="flex-1 py-2 rounded-xl border border-gray-200 text-[11px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Ampliar para editar
+                </button>
+                <button
+                  onClick={handleQuickSave}
+                  disabled={savingQuick}
+                  className="flex-1 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-[11px] font-black transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-1"
+                >
+                  {savingQuick ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>✓</span>}
+                  {savingQuick ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── MODAL: Vista única — diseño unificado ─────────────────────────── */}
       {isModalOpen && (
+
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
 
@@ -5652,6 +6165,32 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   ))}
                 </select>
               </div>
+              {/* Servicio: campos de toros */}
+              {newEventForm.event_type === 'servicio' && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-orange-700 uppercase tracking-widest">N° Toros</label>
+                    <input
+                      type="number" min={0}
+                      value={newEventForm.head_count_bulls ?? ''}
+                      onChange={e => setNewEventForm(p => ({ ...p, head_count_bulls: e.target.value ? Number(e.target.value) : undefined }))}
+                      placeholder="Ej: 62"
+                      className="w-full bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400 outline-none transition-all placeholder:text-gray-300"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-orange-700 uppercase tracking-widest">Peso toros (kg)</label>
+                    <input
+                      type="number" min={0}
+                      value={newEventForm.avg_weight_bulls ?? ''}
+                      onChange={e => setNewEventForm(p => ({ ...p, avg_weight_bulls: e.target.value ? Number(e.target.value) : undefined }))}
+                      placeholder="Ej: 600"
+                      className="w-full bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400 outline-none transition-all placeholder:text-gray-300"
+                    />
+                  </div>
+                  <p className="col-span-2 text-[9px] text-orange-500 font-medium">Estos datos se usan para calcular el EV de los toros en el Panel de Animales.</p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Observaciones</label>
                 <textarea
@@ -5684,6 +6223,12 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                         end_date: newEventForm.end_date || newEventForm.date,
                         event_type: newEventForm.event_type,
                         description: newEventForm.notes,
+                        ...(newEventForm.event_type === 'servicio' && newEventForm.avg_weight_bulls && {
+                          metadata: {
+                            head_count_bulls: newEventForm.head_count_bulls,
+                            avg_weight_bulls: newEventForm.avg_weight_bulls,
+                          }
+                        }),
                       }),
                     })
                     if (res.ok) {

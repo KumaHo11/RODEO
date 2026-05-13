@@ -8,7 +8,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { usePlan } from '@/hooks/usePlan'
 import BitacoraModal from '../../bitacora/components/BitacoraModal'
 import PaddockModal from './PaddockModal'
-import PaddockClimateStatus, { type ClimateSnapshot } from '@/components/PaddockClimateStatus'
+import WeatherConditionChip from '@/components/WeatherConditionChip'
 import { kml as kmlToGeo } from '@tmcw/togeojson'
 import { area as turfArea } from '@turf/area'
 
@@ -54,8 +54,6 @@ interface Props {
   onFieldImageUploaded?: (url: string) => void
   defaultEditPaddockId?: string
   planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
-  /** Snapshots de ajuste climático indexados por paddock_id */
-  climateSnapshots?: Record<string, ClimateSnapshot>
 }
 
 const TECH_ICONS = [
@@ -76,7 +74,7 @@ export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0,
   onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField, onDataRefresh,
-  onFieldImageUploaded, defaultEditPaddockId, planningDefaults, climateSnapshots = {},
+  onFieldImageUploaded, defaultEditPaddockId, planningDefaults,
 }: Props) {
   const [search, setSearch]     = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -478,13 +476,13 @@ export default function PaddockSidePanel({
                     {/* ── Bottom: semáforo climático + indicadores técnicos + Detalles ── */}
                     {isActive && (
                       <div className="px-4 pb-4 pt-2 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          {/* Semáforo de carga climática */}
-                          <PaddockClimateStatus
-                            paddockId={paddock.id}
-                            paddockName={paddock.name}
-                            snapshot={climateSnapshots[paddock.id]}
-                            hasPlanAccess={canNdvi}
+                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          {/* Chip de clima con icóno + estado de crecimiento */}
+                          <WeatherConditionChip
+                            mode="paddock"
+                            entityName={paddock.name}
+                            grassGrowthRate={paddock.dry_matter_kg_ha ? Number(paddock.dry_matter_kg_ha) * 0.012 : undefined}
+                            ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
                           />
                           {/* Iconos técnicos */}
                           <div className="flex items-center gap-1">

@@ -17,6 +17,7 @@ import { useConfirm } from '@/components/ui/ConfirmModal'
 import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
 import { Lock } from 'lucide-react'
+import WeatherConditionChip from '@/components/WeatherConditionChip'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -469,6 +470,14 @@ export default function HerdsPage() {
 
                     {/* ── Body: Stock destacado + métricas secundarias ── */}
                     <div className="px-5 pb-4">
+                      {/* Chip de clima con icóno + estado de bienestar animal */}
+                      <div className="mb-3" onClick={e => e.stopPropagation()}>
+                        <WeatherConditionChip
+                          mode="herd"
+                          entityName={herd.name}
+                        />
+                      </div>
+
                       {/* Cabezas — dato principal */}
                       <div className="flex items-baseline gap-2 mb-3">
                         <p className="text-3xl font-semibold text-gray-950 tabular-nums leading-none">

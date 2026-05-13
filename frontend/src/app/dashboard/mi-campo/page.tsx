@@ -562,7 +562,6 @@ export default function MiCampoPage() {
           onDataRefresh={loadData}
           herds={herds}
           planningDefaults={planningDefaults}
-          climateSnapshots={climateSnapshots}
         />
       </div>
 

@@ -3,7 +3,8 @@ import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { checkFeatureAccess } from '@/lib/plan-limits'
 
 const EARTH_SEARCH_URL = 'https://earth-search.aws.element84.com/v1/search'
-const TITILER_URL = 'https://titiler.xyz'
+// URL de la instancia privada de TiTiler en Google Cloud Run (se configura en el .env)
+const TITILER_URL = process.env.TITILER_URL || 'https://titiler.xyz'
 
 export async function POST(req: NextRequest) {
   try {
