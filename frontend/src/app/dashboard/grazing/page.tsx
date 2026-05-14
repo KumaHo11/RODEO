@@ -1044,20 +1044,42 @@ function InteractiveGantt({
                 className={`flex-1 relative overflow-hidden ${!isEnabled ? 'cursor-not-allowed' : ''}`}
                 onMouseDown={(e) => isEnabled ? handleRowMouseDown(e, paddock.id) : undefined}
               >
-                {/* Drawing Highlight Overlay — red when exceeding optimal days */}
-                {drawingState && drawingState.paddockId === paddock.id && (
-                  <div 
-                    className={`absolute inset-y-0 z-20 border-2 rounded-lg pointer-events-none transition-colors ${
-                      drawingState.isOverOptimal
-                        ? 'bg-red-500/25 border-red-500/60'
-                        : 'bg-green-500/30 border-green-500/50'
-                    }`}
-                    style={{
-                      left: `${(Math.min(drawingState.startDay, drawingState.currentDay) / windowDays) * 100}%`,
-                      width: `${(Math.abs(drawingState.currentDay - drawingState.startDay) + 1) / windowDays * 100}%`,
-                    }}
-                  />
-                )}
+                {/* Drawing Highlight Overlay — red when no forage or exceeding optimal days */}
+                {drawingState && drawingState.paddockId === paddock.id && (() => {
+                  // Detectar si el potrero tiene pasto pero sin capacidad para este rodeo
+                  const noForage = msHa > 0 && drawingState.optimalDays === 0
+                  const isRed = noForage || drawingState.isOverOptimal
+                  const days = Math.abs(drawingState.currentDay - drawingState.startDay) + 1
+                  return (
+                    <>
+                      <div
+                        className={`absolute inset-y-0 z-20 border-2 rounded-lg pointer-events-none transition-colors ${
+                          isRed
+                            ? 'bg-red-500/25 border-red-500/60'
+                            : 'bg-green-500/30 border-green-500/50'
+                        }`}
+                        style={{
+                          left: `${(Math.min(drawingState.startDay, drawingState.currentDay) / windowDays) * 100}%`,
+                          width: `${days / windowDays * 100}%`,
+                        }}
+                      />
+                      {noForage && (
+                        <div
+                          className="absolute z-30 pointer-events-none"
+                          style={{
+                            left: `${(Math.min(drawingState.startDay, drawingState.currentDay) / windowDays) * 100}%`,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                          }}
+                        >
+                          <span className="inline-flex items-center gap-1 bg-red-600 text-white text-[9px] font-black px-2 py-1 rounded-lg shadow-lg whitespace-nowrap">
+                            ⚠️ Sin pasto — Riesgo de sobrepastoreo
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 {/* Grid lines and Weekends */}
                 {dayMarkers.map(m => (
                   <div
@@ -1152,8 +1174,11 @@ function InteractiveGantt({
 
                     const hasRealEntry = !!plan.actual_entry_date
                     const hasRealExit  = !!plan.actual_exit_date
-                    const isOverdue    = !hasRealEntry && plan.entry_date < today && plan.status !== 'COMPLETED'
                     const isCompleted  = plan.status === 'COMPLETED'
+                    // En pastoreo: la entrada ya pasó, la salida aún no, sin entrada real registrada
+                    const isActiveNow  = !hasRealEntry && !isCompleted && plan.entry_date <= today && (plan.exit_date || addDays(plan.entry_date, 14)) >= today
+                    // Vencido: pasó la fecha de entrada Y la fecha de salida, sin completar
+                    const isOverdue    = !hasRealEntry && !isCompleted && !isActiveNow && plan.entry_date < today
                     const isMultiHerd  = plan.herd_ids && plan.herd_ids.length > 1
                     const primaryHerd  = herds.find(h => plan.herd_ids?.includes(h.id))
                     const herdLabel    = isMultiHerd ? `${plan.herd_ids.length} rodeos` : (primaryHerd?.name || 'Rodeo')
@@ -1215,20 +1240,25 @@ function InteractiveGantt({
                     // Track 2 (middle): Plan MODIFICADO/PLANIFICADO — azul celeste tramado (editable)
                     // Track 3 (bottom): Plan REAL — verde sólido (solo lectura, fechas/stock reales)
 
-                    // Track 1 — Verde pálido (original locked)
-                    const T1_BG     = 'rgba(134,239,172,0.22)'
-                    const T1_BORDER = 'rgba(34,197,94,0.55)'
-                    const T1_PAT    = 'rgba(34,197,94,0.35)'
+                    // Track 1 — Gris pálido (original locked, solo lectura)
+                    const T1_BG     = 'rgba(209,213,219,0.30)'
+                    const T1_BORDER = 'rgba(156,163,175,0.70)'
+                    const T1_PAT    = 'rgba(107,114,128,0.20)'
 
                     // Track 2 — Azul celeste (planificado/modificado editable)
                     const T2_BG     = 'rgba(186,230,253,0.18)'
                     const T2_BORDER = 'rgba(14,165,233,0.55)'
                     const T2_PAT    = 'rgba(14,165,233,0.35)'
 
-                    // Rojo para vencidos (sin entrada real y ya pasó la fecha)
+                    // Rojo para vencidos (pasó la fecha de salida, sin completar)
                     const T2_OVD_BG  = 'rgba(252,165,165,0.22)'
                     const T2_OVD_PAT = 'rgba(239,68,68,0.40)'
                     const T2_OVD_BOR = 'rgba(239,68,68,0.55)'
+
+                    // Verde pastel (en pastoreo activo) — mismo verde del plan original anterior
+                    const T2_ACT_BG  = 'rgba(134,239,172,0.28)'
+                    const T2_ACT_PAT = 'rgba(34,197,94,0.30)'
+                    const T2_ACT_BOR = 'rgba(22,163,74,0.80)'
 
                     const renderBlocks = []
 
@@ -1358,18 +1388,51 @@ function InteractiveGantt({
                        const t2Duration  = t2Exit ? daysBetween(t2Entry, t2Exit) : 14
                        const t2Left  = Math.max(0, (t2EntryDiff / windowDays) * 100)
                        const t2Width = Math.max(0.5, (t2Duration / windowDays) * 100)
-                       const t2Bg  = isOverdue ? T2_OVD_BG  : T2_BG
-                       const t2Bor = isOverdue ? T2_OVD_BOR : T2_BORDER
-                       const t2Pat = isOverdue ? T2_OVD_PAT : T2_PAT
+                       const t2Bg  = isOverdue ? T2_OVD_BG  : isActiveNow ? T2_ACT_BG  : T2_BG
+                       const t2Bor = isOverdue ? T2_OVD_BOR : isActiveNow ? T2_ACT_BOR : T2_BORDER
+                       const t2Pat = isOverdue ? T2_OVD_PAT : isActiveNow ? T2_ACT_PAT : T2_PAT
+                       const t2Title = isOverdue
+                         ? '⚠️ PLAN VENCIDO — Fecha superada sin completar'
+                         : isActiveNow
+                         ? '🟢 EN PASTOREO — Plan en curso'
+                         : (plan.is_locked ? '✏️ PLAN MODIFICABLE' : '✏️ PLAN MODIFICABLE')
 
                        renderBlocks.push(
                          createBlock(
                            `t2-${plan.id}`, 30, t2Left, t2Width, t2Bg, t2Bor, t2Pat,
-                           !plan.is_locked && !isCompleted,
+                           !isCompleted,
                            1, 10,
-                           plan.is_locked ? (plan.adjusted_entry_date ? '✏️ PLAN MODIFICADO' : '✏️ PLAN AJUSTADO') : '✏️ PLAN MODIFICADO'
+                           t2Title
                          )
                        )
+                       // Indicador de pulso para plan en pastoreo activo
+                       if (isActiveNow) {
+                         renderBlocks.push(
+                           <div
+                             key={`t2-pulse-${plan.id}`}
+                             style={{
+                               position: 'absolute',
+                               left: `calc(${Math.min(t2Left, 99)}% + 4px)`,
+                               top: 30 + 4,
+                               zIndex: 15,
+                               display: 'flex',
+                               alignItems: 'center',
+                               gap: 3,
+                               pointerEvents: 'none',
+                             }}
+                           >
+                             <span style={{
+                               display: 'inline-block',
+                               width: 6,
+                               height: 6,
+                               borderRadius: '50%',
+                               backgroundColor: '#059669',
+                               animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
+                               boxShadow: '0 0 0 0 rgba(5,150,105,0.7)',
+                             }} />
+                           </div>
+                         )
+                       }
                      }
                     } // end ganttLayers.showPlanned
 
@@ -1459,6 +1522,32 @@ function InteractiveGantt({
             </div>
           )
         })}
+
+        {/* ── Totales del Sistema (fina, sobre la fila de clima) ── */}
+        {(() => {
+          const sysHa = paddocks.reduce((s: number, p: any) => s + (Number(p.area_ha) || 0), 0)
+          const sysMs = paddocks.reduce((s: number, p: any) => s + (Number(p.dry_matter_kg_ha) || 0) * (Number(p.area_ha) || 0), 0)
+          return (
+            <div className="flex border-t border-gray-100 bg-gray-50/60" style={{ minHeight: 22 }}>
+              <div
+                style={{ width: LABEL_W, minWidth: LABEL_W }}
+                className="px-3 flex items-center gap-2 border-r border-gray-100 shrink-0 sticky left-0 z-20 bg-gray-50"
+              >
+                <span className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Total campo</span>
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <span className="text-[8px] font-black text-gray-600">{sysHa.toFixed(0)}<span className="font-normal text-gray-400 ml-0.5">ha</span></span>
+                  <span className="w-px h-2.5 bg-gray-200" />
+                  <span className="text-[8px] font-black text-gray-600">{Math.round(sysMs).toLocaleString('es')}<span className="font-normal text-gray-400 ml-0.5">kg MS</span></span>
+                </div>
+              </div>
+              <div className="flex flex-1">
+                {MONTHS_FOOTER.map(m => (
+                  <div key={m.key} className="border-r border-gray-100 shrink-0" style={{ width: `${m.widthPct}%`, minWidth: 60 }} />
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── Footer: fila unificada Resumen + Clima por mes ── */}
         {(() => {
@@ -1768,6 +1857,7 @@ function InteractiveGantt({
                       </div>
                     </div>
 
+
                     {/* Split button: + Rodeo | + Temporario */}
                     <div className="flex border-t border-dashed border-green-200 bg-white" style={{ minHeight: 30 }}>
                       <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="pl-4 pr-2 flex items-center border-r border-green-200 shrink-0 gap-1.5 sticky left-0 z-20 bg-white shadow-[4px_0_12px_rgba(0,0,0,0.05)]">
@@ -1798,7 +1888,7 @@ function InteractiveGantt({
           <div className="flex items-center gap-3 mr-2">
             {/* Track 1 — Plan Original */}
             <div className="flex items-center gap-1.5">
-              <div className="relative w-8 h-4 border-[1.5px] border-green-500 rounded-sm overflow-hidden" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(34,197,94,0.35) 3px, rgba(34,197,94,0.35) 6px)', backgroundColor: 'rgba(134,239,172,0.22)' }}>
+              <div className="relative w-8 h-4 border-[1.5px] rounded-sm overflow-hidden" style={{ borderColor: 'rgba(156,163,175,0.70)', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(107,114,128,0.20) 3px, rgba(107,114,128,0.20) 6px)', backgroundColor: 'rgba(209,213,219,0.30)' }}>
                 <Lock className="absolute inset-0 m-auto w-2.5 h-2.5 text-gray-700 opacity-60" />
               </div>
               <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan original</span>
@@ -1806,7 +1896,7 @@ function InteractiveGantt({
             {/* Track 2 — Plan Modificado */}
             <div className="flex items-center gap-1.5">
               <div className="w-8 h-4 border-[1.5px] border-sky-500 rounded-sm" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(14,165,233,0.35) 3px, rgba(14,165,233,0.35) 6px)', backgroundColor: 'rgba(186,230,253,0.18)' }} />
-              <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan modificado</span>
+              <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan planificado/modificable</span>
             </div>
             {/* Track 3 — Plan Real */}
             <div className="flex items-center gap-1.5">
@@ -2321,6 +2411,15 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     anchorY: number
   } | null>(null)
   const [savingQuick, setSavingQuick] = useState(false)
+  /** Alerta de riesgo de sobrepastoreo: potrero sin pasto suficiente para el rodeo */
+  const [overgrazingRisk, setOvergrazingRisk] = useState<{
+    paddockId: string
+    entryDate: string
+    exitDate: string
+    paddockName: string
+    optDays: number
+    requestedDays: number
+  } | null>(null)
 
   const [viewMode, setViewMode] = useState<'gantt' | 'list' | 'history'>('gantt')
   const [activeGanttTab, setActiveGanttTab] = useState<'suggested' | 'manual'>('manual')
@@ -3461,6 +3560,33 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       toast.error('Ya existe una planificación en ese rango de fechas para este potrero.')
       return
     }
+
+    // Calcular riesgo de sobrepastoreo para este potrero con los rodeos seleccionados
+    const paddock = paddocks.find((p: any) => p.id === paddockId)
+    const msHa = Number(paddock?.dry_matter_kg_ha) || 0
+    const areaHa = Number(paddock?.area_ha) || 0
+    const drawingEV = drawingHerdIds.reduce((sum: number, hId: string) => {
+      const h = herds.find((hh: any) => hh.id === hId)
+      return sum + Number(h?.total_ev || 0)
+    }, 0)
+    const usableMs = msHa > 0 ? calculateUsableForage(msHa, targetRemnant, areaHa) : -1
+    const dailyDemand = drawingEV * dailyAllocationKg
+    const optDays = (msHa > 0 && dailyDemand > 0) ? calculateGrazingDays(usableMs, dailyDemand) : -1
+    const requestedDays = daysBetween(entryDate, exitDate)
+
+    // Si el potrero tiene datos de MS pero optDays === 0 (sin pasto suficiente): mostrar aviso de riesgo
+    if (msHa > 0 && optDays === 0) {
+      setOvergrazingRisk({
+        paddockId,
+        entryDate,
+        exitDate,
+        paddockName: paddock?.name || 'Potrero',
+        optDays: 0,
+        requestedDays,
+      })
+      return
+    }
+
     // Cerrar cualquier quickConfirm anterior y abrir uno nuevo
     setQuickConfirm(null)
     setTimeout(() => {
@@ -3473,7 +3599,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         anchorY: typeof window !== 'undefined' ? window.innerHeight / 2 : 400,
       })
     }, 0)
-  }, [plans, activeGanttTab])
+  }, [plans, activeGanttTab, paddocks, herds, drawingHerdIds, targetRemnant, dailyAllocationKg])
 
 
   // Guardar plan directamente desde el QuickConfirm (sin modal)
@@ -4039,25 +4165,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 </button>
               )
             })()}
-            {/* Toggle Clima — siempre visible en toolbar */}
-            <button
-              onClick={toggleClimateView}
-              title={climateViewEnabled ? 'Ocultar ajuste climático' : 'Mostrar ajuste climático'}
-              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-bold transition-all ${
-                climateViewEnabled
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 border-transparent hover:border-emerald-100'
-              }`}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-                <circle cx="12" cy="12" r="4"/>
-              </svg>
-              <span className="hidden sm:inline text-[11px]">Clima</span>
-              {climateViewEnabled && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              )}
-            </button>
+            {/* Toggle Clima — movido al panel de capas (Ojo) */}
             {/* Toggles de Capas Visuales */}
             <div className="relative">
               <button
@@ -4085,7 +4193,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                     <div className="py-2">
                       {[
                         { key: 'showOriginal', label: 'Plan Original',            striped: true,  color: '#22c55e', extraKey: null },
-                        { key: 'showPlanned',  label: 'Plan Modificado/Sugerido', striped: true,  color: '#38bdf8', extraKey: null },
+                        { key: 'showPlanned',  label: 'Plan Modificable/Sugerido', striped: true,  color: '#38bdf8', extraKey: null },
                         { key: 'showReal',     label: 'Plan Real',                striped: false, color: '#22c55e', extraKey: null },
                         { key: 'showEvents',   label: 'Eventos',                  striped: false, color: '#8b5cf6', extraKey: 'showAgenda' as keyof typeof ganttLayers },
                         { key: 'showRemnant',  label: 'Alerta Sin Remanente',     striped: false, color: '#ef4444', extraKey: null },
@@ -4782,7 +4890,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 return (
                   <div className={`px-5 py-3 border-b border-gray-50 ${isSuggestedPlanPopover && parentSeasonPlan ? 'bg-purple-50/20' : 'bg-sky-50/20'}`}>
                     <p className="text-[9px] font-black uppercase tracking-widest mb-1.5" style={{ color: isSuggestedPlanPopover && parentSeasonPlan ? '#7c3aed' : '#0369a1' }}>
-                      {hasAdjusted ? 'Plan Modificado' : plan.is_locked ? 'Plan Ajustado' : (isSuggestedPlanPopover && parentSeasonPlan ? parentSeasonPlan.name : 'Plan Planificado')}
+                      {hasAdjusted ? 'Plan Modificable' : plan.is_locked ? 'Plan Modificable' : (isSuggestedPlanPopover && parentSeasonPlan ? parentSeasonPlan.name : 'Plan Planificado')}
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       <div><p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Entrada</p><p className="text-xs font-bold text-gray-900">{fmt(adjEntry)}</p></div>
@@ -5340,16 +5448,66 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               >Cancelar</button>
               <button
                 onClick={() => {
-                  if (drawingHerdIds.length === 0) {
-                    setDrawingHerdIds(herds.map((h: any) => h.id))
-                  }
                   setShowHerdSelector(false)
                   setDrawingMode(true)
                 }}
-                disabled={herds.length === 0}
+                disabled={herds.length === 0 || drawingHerdIds.length === 0}
                 className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-black transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 ✏ Comenzar a trazar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ALERTA: Riesgo de Sobrepastoreo ─────────────────────────────── */}
+      {overgrazingRisk && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header — zona de peligro */}
+            <div className="px-6 pt-6 pb-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-3">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <h3 className="text-base font-black text-gray-950 mb-1">Sin pasto suficiente</h3>
+              <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                El potrero <span className="font-black text-gray-800">{overgrazingRisk.paddockName}</span> no tiene
+                biomasa disponible para este rodeo con el remanente objetivo actual.
+              </p>
+              <div className="mt-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-left">
+                <p className="text-[10px] font-black text-red-700 uppercase tracking-widest mb-1">Riesgo de sobrepastoreo</p>
+                <p className="text-xs text-red-600 font-medium leading-relaxed">
+                  Pastorear este potrero en las condiciones actuales puede dañarlo permanentemente.
+                  Si aceptás el riesgo, igual podés crear el bloque.
+                </p>
+              </div>
+            </div>
+            <div className="px-6 pb-6 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  // Confirmar a pesar del riesgo: abrir quickConfirm normalmente
+                  const { paddockId, entryDate, exitDate } = overgrazingRisk
+                  setOvergrazingRisk(null)
+                  setTimeout(() => {
+                    setQuickConfirm({
+                      paddockId,
+                      entryDate,
+                      exitDate,
+                      anchorX: typeof window !== 'undefined' ? window.innerWidth / 2 : 600,
+                      anchorY: typeof window !== 'undefined' ? window.innerHeight / 2 : 400,
+                    })
+                  }, 0)
+                }}
+                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2"
+              >
+                ⚠️ Entiendo el riesgo — continuar igual
+              </button>
+              <button
+                onClick={() => setOvergrazingRisk(null)}
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar — no crear el bloque
               </button>
             </div>
           </div>

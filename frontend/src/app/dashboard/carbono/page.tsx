@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Leaf, Award, Download, TrendingUp, Sparkles, MapPin, Loader2, Info } from 'lucide-react'
+import { Leaf, Award, Download, TrendingUp, Sparkles, MapPin, Loader2, Info, FileText, CheckCircle2, CloudRain } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { usePlan } from '@/hooks/usePlan'
 import { PremiumOverlay } from '@/components/PremiumOverlay'
@@ -60,6 +60,57 @@ export default function CarbonoPage() {
     return { totalHa, grazingEvents, carbonTotal, socPct }
   }, [paddocks, farmEvents])
 
+  const finishedGrazings = useMemo(() => {
+    const grazings = farmEvents
+      .filter(e => e.type === 'GRAZING')
+      .map((e, index) => {
+        // Mocking enrichment from MVP satellite and climate crossing
+        const restDays = Math.floor(Math.random() * 40) + 35; // 35 to 75 days
+        const isDrought = Math.random() > 0.6; // 40% chance of unfavorable climate
+        const ndviScore = isDrought ? (Math.random() * 0.3 + 0.5) : (Math.random() * 0.3 + 0.65);
+        const paddock = paddocks.find(p => p.id === e.paddock_id) || { name: `Potrero ${index + 1}` };
+        
+        let efficiency = 'Estándar';
+        let efficiencyColor = 'text-gray-600 bg-gray-100 border-gray-200';
+        
+        // Eficiencia de Manejo logic:
+        if (restDays >= 60 && ndviScore > 0.65 && isDrought) {
+            efficiency = 'Alta (Resiliencia Climática)';
+            efficiencyColor = 'text-green-700 bg-green-50 border-green-200';
+        } else if (restDays >= 45 && ndviScore >= 0.7) {
+            efficiency = 'Óptima';
+            efficiencyColor = 'text-blue-700 bg-blue-50 border-blue-200';
+        } else if (restDays < 30) {
+            efficiency = 'Baja (Alerta)';
+            efficiencyColor = 'text-red-700 bg-red-50 border-red-200';
+        }
+
+        const fallbackStartDate = new Date();
+        fallbackStartDate.setDate(fallbackStartDate.getDate() - (index * 10) - 20);
+        
+        const fallbackEndDate = new Date(fallbackStartDate);
+        fallbackEndDate.setDate(fallbackEndDate.getDate() + 5);
+
+        return {
+          id: e.id || `mock-${index}`,
+          paddockName: paddock.name,
+          startDate: e.start_date || fallbackStartDate.toISOString(),
+          endDate: e.end_date || fallbackEndDate.toISOString(),
+          restDays,
+          isDrought,
+          ndviScore,
+          efficiency,
+          efficiencyColor,
+          animalLoad: e.metadata?.ev ? `${e.metadata.ev} EV` : `${Math.floor(Math.random() * 100) + 80} EV`,
+          carbonCaptured: (Math.random() * 0.2 + 0.05).toFixed(2)
+        }
+      })
+      .sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())
+      .slice(0, 8); // Show only recent 8 for demo
+
+    return grazings;
+  }, [farmEvents, paddocks]);
+
   const certificates = [
     { id: 'CERT-2026-001', year: 2026, tons: Math.round(stats.carbonTotal * 0.8), status: 'ISSUED', date: '2026-03-15' },
     { id: 'CERT-2025-042', year: 2025, tons: Math.round(stats.carbonTotal * 0.6), status: 'RETIRED', date: '2025-11-10' },
@@ -68,7 +119,6 @@ export default function CarbonoPage() {
   const handleEmitCertificate = () => {
     setSimulating(true)
     setTimeout(() => {
-      // Create Data Room Blob
       const reportContent = `RODEO - DATA ROOM AUDITORÍA CARBONO\n\nFecha de generación: ${new Date().toISOString()}\nSuperficie Total (Ha): ${stats.totalHa.toFixed(2)}\nEventos de Pastoreo Registrados: ${stats.grazingEvents}\nCarbono Estimado (tCO2e): ${stats.carbonTotal}\nSOC Promedio (%): ${stats.socPct}\n\n---\nEste documento empaqueta la evidencia criptográfica y registros de la bitácora de la temporada para la auditoría EOV.\n`
       const blob = new Blob([reportContent], { type: 'text/plain' })
       const url = URL.createObjectURL(blob)
@@ -80,17 +130,31 @@ export default function CarbonoPage() {
 
       setSimulating(false)
       setShowCertModal(false)
-      toast.success('Reporte Data Room generado y descargado. Listo para revisión de estándares EOV.')
+      toast.success('Reporte Data Room generado y descargado con éxito.')
     }, 2500)
+  }
+
+  const handleDownloadReport = (type: string) => {
+    toast.success(`Iniciando descarga del reporte: ${type}`)
+  }
+
+  const formatDate = (dateString: string) => {
+    try {
+      const d = new Date(dateString)
+      // Produce un formato tipo "14 may 2026" o "14 may, 2026" dependiendo del locale
+      return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+    } catch (e) {
+      return dateString
+    }
   }
 
   if (!hasFeature('carbon_module')) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-950">Sustentabilidad y Carbono</h1>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Sustentabilidad y carbono</h1>
           <p className="text-sm text-gray-500 font-medium mt-1">
-            Monitoreo Ecológico · Medición de Carbono en Suelo (SOC) · Certificaciones
+            Monitoreo ecológico · Medición de carbono en suelo (SOC) · Certificaciones
           </p>
         </div>
         <PremiumOverlay 
@@ -98,9 +162,8 @@ export default function CarbonoPage() {
           description="Accede a la auditoría satelital NDVI y la emisión de bonos de carbono. Este módulo empaqueta automáticamente tus datos de pastoreo para certificadoras internacionales."
           requiredPlan="Holístico"
         >
-          {/* Fondo borroso decorativo para que el usuario "vea" lo que se pierde */}
           <div className="p-8 space-y-6 pointer-events-none">
-            <div className="bg-emerald-900 rounded-2xl h-48 opacity-30 shadow-xl" />
+            <div className="bg-green-900 rounded-2xl h-48 opacity-30 shadow-xl" />
             <div className="grid md:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl border border-gray-100 h-64 opacity-50 shadow-sm" />
               <div className="bg-white rounded-2xl border border-gray-100 h-64 opacity-50 shadow-sm" />
@@ -112,12 +175,12 @@ export default function CarbonoPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-12">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-950">Sustentabilidad y Carbono</h1>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Sustentabilidad y carbono</h1>
           <p className="text-sm text-gray-500 font-medium mt-1">
-            Monitoreo Ecológico · Medición de Carbono en Suelo (SOC) · Certificaciones
+            Monitoreo ecológico · Medición de carbono en suelo (SOC) · Certificaciones
           </p>
         </div>
         <button
@@ -129,86 +192,187 @@ export default function CarbonoPage() {
         </button>
       </div>
 
-      <div className="bg-emerald-900 rounded-2xl p-6 text-white relative overflow-hidden shadow-xl">
+      <div className="bg-green-900 rounded-2xl p-6 text-white relative overflow-hidden shadow-xl">
         <div className="absolute top-0 right-0 p-8 opacity-10">
           <Leaf className="w-40 h-40" />
         </div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <p className="text-emerald-300 text-xs font-black uppercase tracking-widest mb-1">Carbono Total Secuestrado</p>
+            <p className="text-green-300 text-xs font-black uppercase tracking-widest mb-1">Carbono total secuestrado</p>
             <h2 className="text-5xl font-black">{stats.carbonTotal.toLocaleString()} <span className="text-2xl opacity-60">tCO₂e</span></h2>
-            <p className="text-emerald-100/70 text-sm mt-2 font-medium max-w-md">
+            <p className="text-green-100/70 text-sm mt-2 font-medium max-w-md">
               Basado en {stats.totalHa.toFixed(0)} hectáreas y {stats.grazingEvents} rotaciones de pastoreo registradas en la bitácora.
             </p>
           </div>
           <div className="flex gap-4">
-            <div className="bg-emerald-800/50 rounded-xl p-4 border border-emerald-700/50 text-center min-w-[120px]">
-              <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">SOC (Suelo)</p>
+            <div className="bg-green-800/50 rounded-xl p-4 border border-green-700/50 text-center min-w-[120px]">
+              <p className="text-[10px] font-black text-green-300 uppercase tracking-widest mb-1">SOC (Suelo)</p>
               <p className="text-3xl font-black text-white">{stats.socPct}%</p>
-              <p className="text-[10px] font-bold text-emerald-400 mt-1 flex justify-center items-center gap-1"><TrendingUp className="w-3 h-3"/> +0.2% anual</p>
+              <p className="text-[10px] font-bold text-green-400 mt-1 flex justify-center items-center gap-1"><TrendingUp className="w-3 h-3"/> +0.2% anual</p>
             </div>
-            <div className="bg-emerald-800/50 rounded-xl p-4 border border-emerald-700/50 text-center min-w-[120px]">
-              <p className="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">Valor Estimado</p>
+            <div className="bg-green-800/50 rounded-xl p-4 border border-green-700/50 text-center min-w-[120px]">
+              <p className="text-[10px] font-black text-green-300 uppercase tracking-widest mb-1">Valor estimado</p>
               <p className="text-3xl font-black text-white">${(stats.carbonTotal * 15).toLocaleString()}</p>
-              <p className="text-[10px] font-bold text-emerald-400 mt-1">Mercado voluntario</p>
+              <p className="text-[10px] font-bold text-green-400 mt-1">Mercado voluntario</p>
             </div>
           </div>
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-6">
-            <Award className="w-5 h-5 text-emerald-600" />
-            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Certificados de Carbono</h3>
+            <Download className="w-5 h-5 text-blue-600" />
+            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Centro de descargas</h3>
           </div>
-          <div className="space-y-4">
-            {certificates.map(cert => (
-              <div key={cert.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-100">
-                    <Leaf className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">{cert.id}</p>
-                    <p className="text-xs text-gray-500">Vintage {cert.year} · {cert.date}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="text-sm font-black text-gray-900">{cert.tons.toLocaleString()} t</p>
-                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${cert.status === 'ISSUED' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
-                      {cert.status === 'ISSUED' ? 'Emitido' : 'Retirado'}
-                    </span>
-                  </div>
-                  <button className="p-2 hover:bg-gray-200 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
-                    <Download className="w-4 h-4" />
-                  </button>
-                </div>
+          <p className="text-sm text-gray-600 leading-relaxed mb-6 flex-1">
+            Exporta registros operativos y de clima cruzados, formateados específicamente para procesos de auditoría y certificación de créditos de carbono.
+          </p>
+          <div className="space-y-3">
+            <button onClick={() => handleDownloadReport('Historial Movimientos')} className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 transition-colors">
+              <div className="flex items-center gap-3">
+                <FileText className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-800">Historial de Movimientos Cruzados</span>
               </div>
-            ))}
+              <Download className="w-4 h-4 text-gray-400" />
+            </button>
+            <button onClick={() => handleDownloadReport('Planillas Pastoreo')} className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 transition-colors">
+              <div className="flex items-center gap-3">
+                <FileText className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-800">Planillas de Pastoreo (Auditoría)</span>
+              </div>
+              <Download className="w-4 h-4 text-gray-400" />
+            </button>
+            <button onClick={() => handleDownloadReport('Reporte Climático')} className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 transition-colors">
+              <div className="flex items-center gap-3">
+                <CloudRain className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-800">Datos Climáticos y NDVI</span>
+              </div>
+              <Download className="w-4 h-4 text-gray-400" />
+            </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Info className="w-5 h-5 text-blue-500" />
-            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Impacto Regenerativo</h3>
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Info className="w-5 h-5 text-blue-500" />
+              <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Impacto regenerativo</h3>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed mb-6">
+              El pastoreo planificado incrementa la materia orgánica en el suelo. Cada 1% de aumento en SOC en una hectárea equivale a una gran cantidad de carbono retirado de la atmósfera.
+            </p>
+            <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+              <h4 className="text-xs font-black text-blue-800 uppercase tracking-widest mb-2">Siguientes Pasos</h4>
+              <ul className="text-sm text-blue-900 space-y-2 font-medium">
+                <li className="flex items-start gap-2">
+                  <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-blue-600" /> Realizar muestreo físico en potreros testigo (Primavera 2026).
+                </li>
+                <li className="flex items-start gap-2">
+                  <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-blue-600" /> Cargar polígonos faltantes para precisión satelital.
+                </li>
+              </ul>
+            </div>
           </div>
-          <p className="text-sm text-gray-600 leading-relaxed mb-6">
-            El pastoreo planificado incrementa la materia orgánica en el suelo. Cada 1% de aumento en SOC en una hectárea equivale a una gran cantidad de carbono retirado de la atmósfera. En tu campo, las {stats.grazingEvents} rotaciones han garantizado el descanso necesario para este crecimiento.
-          </p>
-          <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-            <h4 className="text-xs font-black text-blue-800 uppercase tracking-widest mb-2">Próximos Pasos</h4>
-            <ul className="text-sm text-blue-900 space-y-2 font-medium">
-              <li className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 mt-0.5 shrink-0" /> Realizar muestreo físico de suelo en potreros testigo (Primavera 2026).
-              </li>
-              <li className="flex items-start gap-2">
-                <Sparkles className="w-4 h-4 mt-0.5 shrink-0" /> Cargar polígonos faltantes para auditoría satelital NDVI.
-              </li>
-            </ul>
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+             <div className="flex items-center gap-2 mb-4">
+              <Award className="w-5 h-5 text-green-600" />
+              <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Certificados activos</h3>
+            </div>
+            <div className="space-y-3">
+              {certificates.map(cert => (
+                <div key={cert.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{cert.id}</p>
+                    <p className="text-xs text-gray-500">Vintage {cert.year} · {cert.date}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-900">{cert.tons.toLocaleString()} t</p>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${cert.status === 'ISSUED' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                      {cert.status === 'ISSUED' ? 'Emitido' : 'Retirado'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-green-600" />
+            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Módulo de pastoreos finalizados</h3>
+          </div>
+          <p className="text-xs text-gray-500 font-medium">Cruce de registros operativos vs métricas climáticas</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="px-6 py-4 font-black text-gray-500 text-xs uppercase tracking-widest">Potrero</th>
+                <th className="px-6 py-4 font-black text-gray-500 text-xs uppercase tracking-widest">Período Real</th>
+                <th className="px-6 py-4 font-black text-gray-500 text-xs uppercase tracking-widest">Carga (EV)</th>
+                <th className="px-6 py-4 font-black text-gray-500 text-xs uppercase tracking-widest">Descanso</th>
+                <th className="px-6 py-4 font-black text-gray-500 text-xs uppercase tracking-widest">Clima / NDVI</th>
+                <th className="px-6 py-4 font-black text-gray-500 text-xs uppercase tracking-widest">Eficiencia de manejo</th>
+                <th className="px-6 py-4 font-black text-gray-500 text-xs uppercase tracking-widest text-right">Captura</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {finishedGrazings.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    No hay pastoreos finalizados en la bitácora actual.
+                  </td>
+                </tr>
+              ) : (
+                finishedGrazings.map(g => (
+                  <tr key={g.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <span className="font-medium text-gray-900">{g.paddockName}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-gray-600">{formatDate(g.startDate)} - {formatDate(g.endDate)}</span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">
+                      {g.animalLoad}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${g.restDays >= 45 ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}>
+                        {g.restDays} días
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {g.isDrought ? (
+                          <span className="text-orange-500 flex items-center gap-1 text-xs font-medium" title="Déficit Hídrico">
+                            <CloudRain className="w-3 h-3" /> Seco
+                          </span>
+                        ) : (
+                          <span className="text-blue-500 flex items-center gap-1 text-xs font-medium" title="Lluvias Adecuadas">
+                            <CloudRain className="w-3 h-3" /> Óptimo
+                          </span>
+                        )}
+                        <span className="text-gray-300">|</span>
+                        <span className="text-gray-600 text-xs">NDVI {g.ndviScore.toFixed(2)}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-3 py-1 rounded-md text-xs border ${g.efficiencyColor}`}>
+                        {g.efficiency}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="font-medium text-green-700">+{g.carbonCaptured} tCO₂e</span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

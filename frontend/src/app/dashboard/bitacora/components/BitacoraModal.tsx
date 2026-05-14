@@ -219,8 +219,9 @@ export default function BitacoraModal({
     setSaving(true)
     const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
 
-    // ── Offline path (text only — audio/photo need internet to upload) ──
+    // ── Offline path ──
     if (!navigator.onLine) {
+      const offlineId = crypto.randomUUID()
       if (mode === 'TEXTO') {
         addToOfflineQueue({
           type: 'field_note',
@@ -231,11 +232,32 @@ export default function BitacoraModal({
           },
           timestamp: Date.now(),
         })
-        setSaving(false); onSaved(); onClose(); return
+      } else if (mode === 'AUDIO' && audioBlob) {
+        import('@/lib/audioOfflineStore').then(({ savePendingAudio }) => {
+          savePendingAudio({
+            id: offlineId,
+            blob: audioBlob,
+            durationSecs: recordSecsSnap.current,
+            lat: null, lng: null,
+            createdAt: new Date().toISOString(),
+            title: `Audio · ${timestamp}`,
+            transcript: liveTranscript
+          })
+        })
+        toast.success('Audio guardado offline. Se sincronizará automáticamente.')
+      } else if (mode === 'FOTO' && photoFile) {
+        import('@/lib/audioOfflineStore').then(({ savePendingPhoto }) => {
+          savePendingPhoto({
+            id: offlineId,
+            blob: photoFile,
+            lat: null, lng: null,
+            createdAt: new Date().toISOString(),
+            title: `Foto · ${timestamp}`
+          })
+        })
+        toast.success('Foto guardada offline. Se sincronizará automáticamente.')
       }
-      // Audio/foto offline: inform user
-      toast.warning('Sin conexión. El audio y las fotos requieren internet. Intentá cuando tengas señal.')
-      setSaving(false); return
+      setSaving(false); onSaved(); onClose(); return
     }
 
     try {

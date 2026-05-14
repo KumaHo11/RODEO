@@ -355,6 +355,54 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     if (!herd?.id) return
     setBcsSaving(true)
 
+    const label = bcsLabel(bcsScore)
+
+    // ── Offline Path ──
+    if (!navigator.onLine) {
+      if (bcsPhotoFile) {
+        import('@/lib/audioOfflineStore').then(({ savePendingPhoto }) => {
+          savePendingPhoto({
+            id: crypto.randomUUID(),
+            blob: bcsPhotoFile,
+            lat: null, lng: null,
+            createdAt: new Date().toISOString(),
+            title: `Condición Corporal: ${bcsScore}/5 — ${label}`
+          })
+        })
+      }
+      import('@/components/OfflineIndicator').then(({ addToOfflineQueue }) => {
+        addToOfflineQueue({
+          type: 'bcs_update',
+          data: {
+            herd_id: herd.id,
+            bcs_score: bcsScore,
+            bcs_label: label,
+            quantity: herd.head_count,
+            weight_kg: herd.avg_weight_kg,
+            categoria: herd.categoria,
+            breed: herd.breed,
+            admission_date: herd.admission_date,
+            herd_name: herd.name,
+            total_ev: herd.total_ev,
+          },
+          timestamp: Date.now()
+        })
+      })
+      setBcsSaving(false)
+      setBcsSaved(true)
+      setSessionNoteCount(c => c + 1)
+      setTimeout(() => {
+        setBcsSaved(false)
+        setBcsPhotoFile(null)
+        setBcsPhotoPreview(null)
+      }, 3000)
+      import('sonner').then(({ toast }) => {
+        toast.success('Condición corporal guardada offline. Se sincronizará al conectar.')
+      })
+      return
+    }
+
+    // ── Online Path ──
     let photo_url: string | null = null
     if (bcsPhotoFile) {
       const fd = new FormData()
@@ -364,7 +412,6 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       if (up.ok) ({ url: photo_url } = await up.json())
     }
 
-    const label = bcsLabel(bcsScore)
     const [patchRes] = await Promise.all([
       apiFetch(`/api/herds/${herd.id}`, {
         method: 'PATCH',

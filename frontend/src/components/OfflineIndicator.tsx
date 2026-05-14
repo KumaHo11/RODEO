@@ -38,18 +38,64 @@ export default function OfflineIndicator() {
         if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({ type: 'SYNC_OFFLINE_QUEUE' })
         }
-        // Simulate sync delay then mark as complete
-        setTimeout(() => {
-          localStorage.removeItem('rodeo_offline_queue')
-          setPendingCount(0)
-          setStatus('synced')
+        // Actual sync logic
+        import('@/lib/apiFetch').then(async ({ apiFetch }) => {
+          let hasErrors = false
+          const newQueue = []
+          for (const item of queue) {
+            try {
+              if (item.type === 'field_note') {
+                const res = await apiFetch('/api/field-notes', {
+                  method: 'POST',
+                  body: JSON.stringify(item.data)
+                })
+                if (!res.ok) throw new Error('Sync failed')
+              } else if (item.type === 'bcs_update') {
+                const { herd_id, bcs_score, bcs_label, ...metadata } = item.data
+                await apiFetch(`/api/herds/${herd_id}`, {
+                  method: 'PATCH',
+                  body: JSON.stringify({ bcs_score, bcs_label })
+                })
+                await apiFetch('/api/movements', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    entity_type: 'herd',
+                    entity_id: herd_id,
+                    entity_name: metadata.herd_name,
+                    event_type: 'bcs',
+                    bcs_score,
+                    quantity: metadata.quantity,
+                    weight_kg: metadata.weight_kg,
+                    categoria: metadata.categoria,
+                    breed: metadata.breed,
+                    admission_date: metadata.admission_date,
+                    notes: `Condición Corporal registrada offline: ${bcs_score}/5 — ${bcs_label}`,
+                    metadata: { bcs_label, head_count: metadata.quantity, ev: metadata.total_ev }
+                  })
+                })
+              }
+            } catch (e) {
+              console.error('Failed to sync item:', item, e)
+              newQueue.push(item)
+              hasErrors = true
+            }
+          }
+
+          localStorage.setItem('rodeo_offline_queue', JSON.stringify(newQueue))
+          setPendingCount(newQueue.length)
+          
+          if (newQueue.length === 0) {
+            setStatus('synced')
+          } else {
+            setStatus('offline') // some failed
+          }
           setRecentlyOnline(true)
           setTimeout(() => {
             setVisible(false)
             setRecentlyOnline(false)
-            setStatus('online')
+            if (newQueue.length === 0) setStatus('online')
           }, 3000)
-        }, 1500)
+        })
       } else {
         setStatus('online')
         setRecentlyOnline(true)

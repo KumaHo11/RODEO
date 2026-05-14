@@ -457,7 +457,62 @@ export default function PaddockModal({
     const content = noteText || audioTranscript
     if (!content && !noteImage && !audioBlob) return
     setNoteSaving(true)
+    const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+    const finalContent = noteText || audioTranscript
+    const title = noteTitle.trim() || finalContent?.slice(0, 60) || noteImage?.name || (audioBlob ? `Audio · ${timestamp}` : 'Nota de campo')
 
+    // ── Offline Path ──
+    if (!navigator.onLine) {
+      const offlineId = crypto.randomUUID()
+      if (!audioBlob && !noteImage) {
+        import('@/components/OfflineIndicator').then(({ addToOfflineQueue }) => {
+          addToOfflineQueue({
+            type: 'field_note',
+            data: {
+              paddock_id: paddock.id,
+              category: noteResult ? 'BIOMASA' : 'GENERAL',
+              tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
+              title,
+              content: finalContent || null,
+              sync_status: 'PENDING',
+              analysis_result: noteResult || null,
+            },
+            timestamp: Date.now(),
+          })
+        })
+      } else if (audioBlob) {
+        import('@/lib/audioOfflineStore').then(({ savePendingAudio }) => {
+          savePendingAudio({
+            id: offlineId,
+            blob: audioBlob,
+            durationSecs: 0, // we don't have accurate duration here
+            lat: null, lng: null,
+            createdAt: new Date().toISOString(),
+            title,
+            transcript: audioTranscript
+          })
+        })
+        toast.success('Audio guardado offline. Se sincronizará automáticamente.')
+      } else if (noteImage) {
+        import('@/lib/audioOfflineStore').then(({ savePendingPhoto }) => {
+          savePendingPhoto({
+            id: offlineId,
+            blob: noteImage,
+            lat: null, lng: null,
+            createdAt: new Date().toISOString(),
+            title
+          })
+        })
+        toast.success('Foto guardada offline. Se sincronizará automáticamente.')
+      }
+      setNoteSaving(false)
+      setNoteSaved(true)
+      setTimeout(() => setNoteSaved(false), 3000)
+      resetNoteCapture()
+      return
+    }
+
+    // ── Online Path ──
     let photo_url: string | null = null
     if (noteImage) {
       const fd = new FormData()
@@ -488,9 +543,6 @@ export default function PaddockModal({
         }
       } catch { /* keep Web Speech transcript */ }
     }
-
-    const finalContent = noteText || audioTranscript
-    const title = noteTitle.trim() || finalContent?.slice(0, 60) || noteImage?.name || 'Nota de campo'
 
     await apiFetch('/api/field-notes', {
       method: 'POST',
