@@ -233,7 +233,9 @@ export default function PaddockSidePanel({
             <div className="flex-1 min-w-0">
               <p className="text-xs font-black text-gray-600 uppercase tracking-widest mb-1">Mi Campo</p>
               <div className="flex items-center gap-2 mb-0.5">
-                <h2 className="text-2xl font-black text-gray-950 tracking-tight truncate">{org?.name || 'Mi Campo'}</h2>
+                <h2 className="text-2xl font-black text-gray-950 tracking-tight truncate" title={org?.name || 'Mi Campo'}>
+                  {org?.name || 'Mi Campo'}
+                </h2>
                 {ndviLoading && <Loader2 className="w-3.5 h-3.5 text-green-500 animate-spin" />}
               </div>
               

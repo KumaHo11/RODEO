@@ -2,10 +2,14 @@
  * Centralized email sender — uses Resend (https://resend.com)
  * Set RESEND_API_KEY in environment (.env.local and Cloud Run secrets)
  * Free tier: 3,000 emails/month · No credit card required
+ *
+ * IMPORTANT: Domain rodeoagtech.com must be verified at https://resend.com/domains
+ * Required DNS records: DKIM (TXT resend._domainkey), SPF (MX+TXT send), DMARC (TXT _dmarc)
  */
 import { Resend } from 'resend'
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'soporte@rodeoagtech.com'
+// Use noreply@ for transactional, soporte@ only for support replies
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@rodeoagtech.com'
 const FROM_NAME  = 'RODEO'
 
 // ── Template builder ───────────────────────────────────────────────────────
@@ -246,13 +250,25 @@ export async function sendEmail<T extends EmailType>(
   const resend = new Resend(apiKey)
   const tpl = (templates[type] as (p: any) => { subject: string; html: string })(params)
 
-  const { error } = await resend.emails.send({
+  console.log(`[sendEmail] Attempting: type=${type} from=${FROM_EMAIL} to=${to}`)
+
+  const { data, error } = await resend.emails.send({
     to,
     from: `${FROM_NAME} <${FROM_EMAIL}>`,
     subject: tpl.subject,
     html: tpl.html,
   })
 
-  if (error) throw new Error(`[sendEmail] Resend error: ${error.message}`)
-  console.log(`[sendEmail] ✓ sent type=${type} to=${to}`)
+  if (error) {
+    // Surface the full error for debugging (domain not verified, API key issues, etc.)
+    console.error(`[sendEmail] ✗ FAILED type=${type} to=${to}`, {
+      errorName: (error as any).name,
+      errorMessage: error.message,
+      from: FROM_EMAIL,
+      hint: 'Check domain verification at https://resend.com/domains',
+    })
+    throw new Error(`[sendEmail] Resend error (${(error as any).name}): ${error.message}`)
+  }
+
+  console.log(`[sendEmail] ✓ sent type=${type} to=${to} id=${data?.id}`)
 }

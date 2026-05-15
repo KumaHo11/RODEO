@@ -25,6 +25,8 @@ import {
   type CategoriaComercial,
 } from '@/lib/categorias'
 import { usePlan } from '@/hooks/usePlan'
+import { calculateBaseEV } from '@/lib/grazing/evProjection'
+import { todayISO } from '@/lib/utils/dates'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -56,17 +58,9 @@ interface Props {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+// calculateBaseEV importado desde lib/grazing/evProjection
+// todayISO importado desde lib/utils/dates
 
-function todayISO() { return new Date().toISOString().split('T')[0] }
-
-function calcEV(catKey: string | null, weight: number, count: number): number {
-  const FACTORS: Record<string, number> = {
-    NOVILLOS: 1.0, NOVILLITOS: 0.9, VAQUILLONAS: 0.9,
-    TERNEROS: 0.6, TERNERAS: 0.55, VACAS: 1.0, TOROS: 1.25, MEJ: 0.9, BUBALINOS: 1.1,
-  }
-  const f = catKey ? (FACTORS[catKey] ?? 1.0) : 1.0
-  return parseFloat((Math.pow((weight || 400) / 400, 0.75) * f * count).toFixed(2))
-}
 function bcsLabel(s: number) {
   if (s <= 1) return 'Muy baja'
   if (s <= 2) return 'Baja'
@@ -174,7 +168,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const availableBreeds = useMemo(() => catKey ? (RAZAS_POR_CATEGORIA[catKey] ?? ['Otra']) : ['Otra'], [catKey])
   const currentRef = catKey ? CATEGORIA_REF[catKey] : undefined
   const ageMonths  = ageValue !== '' ? (ageUnit === 'years' ? Number(ageValue) * 12 : Number(ageValue)) : null
-  const liveEV     = useMemo(() => count && weight ? calcEV(catKey, Number(weight), Number(count)) : 0, [catKey, weight, count])
+  const liveEV     = useMemo(() => count && weight ? calculateBaseEV(catKey, Number(weight), Number(count)) : 0, [catKey, weight, count])
 
   const [saving,    setSaving]    = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -237,7 +231,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         : Math.max((herd.head_count || 0) - n, 0)
 
       // Recalculate EV with updated head count
-      const newEV = calcEV(catKey, Number(herd.avg_weight_kg || weight || 400), newCount)
+      const newEV = calculateBaseEV(catKey, Number(herd.avg_weight_kg || weight || 400), newCount)
 
       const patchRes = await apiFetch(`/api/herds/${herd.id}`, {
         method: 'PATCH',
@@ -260,7 +254,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       if (actId === 'destete' && n > 0) {
         setActSaving(false)
         setWeanLoading(true)
-        const childEV = calcEV('TERNEROS', 180, n) // peso referencia ternero destetado
+        const childEV = calculateBaseEV('TERNEROS', 180, n) // peso referencia ternero destetado
         const childRes = await apiFetch('/api/herds', {
           method: 'POST',
           body: JSON.stringify({
@@ -504,7 +498,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           const isAdd = ['paricion', 'compra'].includes(type)
           // If the event added animals, deleting it subtracts them. If it subtracted animals, deleting it adds them back.
           const newCount = isAdd ? Math.max((herd.head_count || 0) - n, 0) : (herd.head_count || 0) + n
-          const newEV = calcEV(catKey, Number(herd.avg_weight_kg || weight || 400), newCount)
+          const newEV = calculateBaseEV(catKey, Number(herd.avg_weight_kg || weight || 400), newCount)
           await apiFetch(`/api/herds/${herd.id}`, {
             method: 'PATCH',
             body: JSON.stringify({ head_count: newCount, total_ev: newEV }),

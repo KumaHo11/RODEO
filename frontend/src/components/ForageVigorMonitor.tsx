@@ -57,7 +57,6 @@ interface Props {
 export default function ForageVigorMonitor({ hasPlanAccess = true, className = '' }: Props) {
   const { user } = useAuth()
   const [data, setData] = useState<any[]>([])
-  const [paddockLines, setPaddockLines] = useState<{ id: string; name: string; color: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [trend, setTrend] = useState<{ value: number; diff: number; direction: 'up' | 'down' | 'flat'; pct: number }>({ value: 0, diff: 0, direction: 'flat', pct: 0 })
@@ -90,60 +89,50 @@ export default function ForageVigorMonitor({ hasPlanAccess = true, className = '
         return
       }
 
-      // Procesar datos para Recharts
       // Agrupar por fecha
       const datesMap = new Map<string, any>()
-      const paddocksMap = new Map<string, { name: string; color: string }>()
       
-      let pIdx = 0
-      raw.forEach(s => {
-        if (s.grass_growth_rate == null) return
+      raw.forEach((s: any) => {
+        const d = s.calculated_at.split('T')[0]
+        const entry = datesMap.get(d) || { date: d, formattedDate: formatDate(d), sumGrowth: 0, countGrowth: 0, sumNdvi: 0, countNdvi: 0 }
         
-        if (!paddocksMap.has(s.paddock_id)) {
-          paddocksMap.set(s.paddock_id, {
-            name: s.paddock_name || `Potrero ${s.paddock_id}`,
-            color: COLORS[pIdx % COLORS.length]
-          })
-          pIdx++
+        if (s.grass_growth_rate != null) {
+          entry.sumGrowth += Number(s.grass_growth_rate)
+          entry.countGrowth++
+        }
+        if (s.ndvi != null) {
+          entry.sumNdvi += Number(s.ndvi)
+          entry.countNdvi++
         }
         
-        const d = s.calculated_at.split('T')[0]
-        const entry = datesMap.get(d) || { date: d, formattedDate: formatDate(d) }
-        entry[s.paddock_id] = Number(s.grass_growth_rate)
         datesMap.set(d, entry)
       })
 
-      const sortedData = Array.from(datesMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+      const sortedData = Array.from(datesMap.values())
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(entry => ({
+          date: entry.date,
+          formattedDate: entry.formattedDate,
+          'Crecimiento': entry.countGrowth > 0 ? parseFloat((entry.sumGrowth / entry.countGrowth).toFixed(1)) : 0,
+          'NDVI': entry.countNdvi > 0 ? parseFloat((entry.sumNdvi / entry.countNdvi).toFixed(3)) : 0,
+        }))
+
       setData(sortedData)
-      setPaddockLines(Array.from(paddocksMap.entries()).map(([id, val]) => ({ id, ...val })))
 
       // Calcular tendencia global (promedio de la última fecha vs la anterior)
       if (sortedData.length >= 2) {
         const last = sortedData[sortedData.length - 1]
         const prev = sortedData[sortedData.length - 2]
         
-        let lastSum = 0, lastCount = 0
-        let prevSum = 0, prevCount = 0
-        
-        paddocksMap.forEach((_, pId) => {
-          if (last[pId] != null) { lastSum += last[pId]; lastCount++ }
-          if (prev[pId] != null) { prevSum += prev[pId]; prevCount++ }
-        })
-        
-        const lastAvg = lastCount > 0 ? lastSum / lastCount : 0
-        const prevAvg = prevCount > 0 ? prevSum / prevCount : 0
+        const lastAvg = last['Crecimiento']
+        const prevAvg = prev['Crecimiento']
         const diff = lastAvg - prevAvg
         const direction = Math.abs(diff) < 0.5 ? 'flat' : diff > 0 ? 'up' : 'down'
         const pct = prevAvg > 0 ? Math.round((diff / prevAvg) * 100) : 0
         
         setTrend({ value: lastAvg, diff, direction, pct })
       } else if (sortedData.length === 1) {
-        const last = sortedData[0]
-        let sum = 0, count = 0
-        paddocksMap.forEach((_, pId) => {
-          if (last[pId] != null) { sum += last[pId]; count++ }
-        })
-        setTrend({ value: count > 0 ? sum / count : 0, diff: 0, direction: 'flat', pct: 0 })
+        setTrend({ value: sortedData[0]['Crecimiento'], diff: 0, direction: 'flat', pct: 0 })
       }
 
     } catch (e: any) {
@@ -220,7 +209,7 @@ export default function ForageVigorMonitor({ hasPlanAccess = true, className = '
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis 
                 dataKey="formattedDate" 
@@ -230,29 +219,45 @@ export default function ForageVigorMonitor({ hasPlanAccess = true, className = '
                 dy={10}
               />
               <YAxis 
+                yAxisId="left"
                 axisLine={false} 
                 tickLine={false} 
-                tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}
+                tick={{ fontSize: 10, fill: '#10b981', fontWeight: 600 }}
+                domain={['auto', 'auto']}
+              />
+              <YAxis 
+                yAxisId="right"
+                orientation="right"
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fill: '#3b82f6', fontWeight: 600 }}
                 domain={['auto', 'auto']}
               />
               <RechartsTooltip
                 contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 itemStyle={{ fontSize: '12px', fontWeight: 600 }}
                 labelStyle={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}
-                formatter={(value: any) => [`${Number(value).toFixed(1)} kg/ha/d`, 'Crecimiento']}
               />
-              {paddockLines.map(p => (
-                <Line 
-                  key={p.id}
-                  type="monotone" 
-                  dataKey={p.id} 
-                  name={p.name}
-                  stroke={p.color} 
-                  strokeWidth={2.5}
-                  dot={{ r: 3, strokeWidth: 2, fill: '#fff' }}
-                  activeDot={{ r: 5, strokeWidth: 0 }}
-                />
-              ))}
+              <Line 
+                yAxisId="left"
+                type="monotone" 
+                dataKey="Crecimiento" 
+                name="Crecimiento Promedio"
+                stroke="#10b981" 
+                strokeWidth={2.5}
+                dot={{ r: 3, strokeWidth: 2, fill: '#fff' }}
+                activeDot={{ r: 5, strokeWidth: 0 }}
+              />
+              <Line 
+                yAxisId="right"
+                type="monotone" 
+                dataKey="NDVI" 
+                name="NDVI Promedio"
+                stroke="#3b82f6" 
+                strokeWidth={2.5}
+                dot={{ r: 3, strokeWidth: 2, fill: '#fff' }}
+                activeDot={{ r: 5, strokeWidth: 0 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         )}

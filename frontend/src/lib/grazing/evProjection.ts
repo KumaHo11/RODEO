@@ -22,9 +22,140 @@ export const EV_BASE: Record<string, number> = {
   BUBALINOS:   1.10,
 }
 
+/**
+ * Calcula el EV base de un rodeo.
+ * Fórmula canónica INTA: vaca 450 kg = 1 EV.
+ * @param categoria  Clave de categoría (VACAS, TERNEROS, TOROS…)
+ * @param weight     Peso promedio en kg
+ * @param count      Número de cabezas
+ */
 export function calculateBaseEV(categoria: string | null, weight: number, count: number): number {
   const evBase = categoria ? (EV_BASE[categoria.toUpperCase()] ?? 1.0) : 1.0
   return evBase * Math.pow((weight || 450) / 450, 0.75) * count
+}
+
+// ── Tipos de eventos de hacienda (mínimo necesario para cálculos dinámicos) ──
+
+interface FarmEventLike {
+  herd_id?: string
+  herd_ids?: string[]
+  event_type: string
+  event_date: string
+  quantity?: number | string
+}
+
+/**
+ * Calcula el headcount dinámico de un rodeo en una fecha dada,
+ * aplicando o revirtiendo los eventos de hacienda en ese período.
+ *
+ * - Fecha pasada: revierte los movimientos desde la fecha hasta hoy
+ * - Fecha futura: aplica los movimientos programados
+ *
+ * @param herdId       ID del rodeo
+ * @param baseCount    Headcount actual del rodeo
+ * @param dateStr      Fecha target en formato 'YYYY-MM-DD'
+ * @param unifiedEvents Eventos de hacienda unificados
+ */
+export function calculateDynamicHeadcount(
+  herdId: string,
+  baseCount: number,
+  dateStr: string,
+  unifiedEvents: FarmEventLike[],
+): number {
+  const today = new Date().toISOString().split('T')[0]
+  let count = baseCount
+
+  const relEvents = unifiedEvents.filter(
+    e => e.herd_id === herdId || (e.herd_ids && e.herd_ids.includes(herdId)),
+  )
+
+  if (dateStr < today) {
+    // Pasado: revertir movimientos que ocurrieron entre dateStr y hoy
+    const eventsBetween = relEvents.filter(
+      e => e.event_date > dateStr && e.event_date <= today,
+    )
+    eventsBetween.forEach(e => {
+      const q = Number(e.quantity || 0)
+      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count += q
+      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count -= q
+    })
+  } else if (dateStr > today) {
+    // Futuro: aplicar movimientos programados desde hoy hasta dateStr
+    const eventsBetween = relEvents.filter(
+      e => e.event_date > today && e.event_date <= dateStr,
+    )
+    eventsBetween.forEach(e => {
+      const q = Number(e.quantity || 0)
+      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count -= q
+      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count += q
+    })
+  }
+
+  return Math.max(0, count)
+}
+
+interface HerdLike {
+  id: string
+  total_ev?: number | string | null
+  head_count?: number | string | null
+  animal_count?: number | string | null
+}
+
+/**
+ * Calcula el EV dinámico de un rodeo en una fecha dada,
+ * ajustando por estado fenológico (lactancia, preñez).
+ *
+ * @param herd             Datos del rodeo
+ * @param dateISO          Fecha de evaluación en 'YYYY-MM-DD'
+ * @param farmEvents       Eventos de hacienda para detectar pariciones
+ * @param headCountOverride Headcount override (ej: calculado por calculateDynamicHeadcount)
+ */
+export function getDynamicHerdEV(
+  herd: HerdLike,
+  dateISO: string,
+  farmEvents: FarmEventLike[],
+  headCountOverride?: number,
+): number {
+  const currentEV = Number(herd?.total_ev) || 0
+  if (currentEV === 0) return 0
+
+  const currentHeadCount = Number(herd?.head_count ?? herd?.animal_count) || currentEV
+  const headCount = headCountOverride !== undefined ? headCountOverride : currentHeadCount
+  if (headCount === 0) return 0
+
+  const evPerHead = currentHeadCount > 0
+    ? currentEV / currentHeadCount
+    : currentEV > 0 ? currentEV : 1
+
+  const sorted = farmEvents
+    .filter(e => (e.herd_id === herd.id || !e.herd_id) && e.event_date <= dateISO)
+    .sort((a, b) => a.event_date.localeCompare(b.event_date))
+
+  let currentState = 'normal'
+  let lastParicion: string | null = null
+
+  for (const ev of sorted) {
+    if (ev.event_type === 'paricion') {
+      currentState = 'lactating'
+      lastParicion = ev.event_date
+    } else if (ev.event_type === 'destete') {
+      currentState = 'normal'
+      lastParicion = null
+    }
+  }
+
+  // Lactancia con ternero al pie: ≥ 90 días post-parto
+  if (currentState === 'lactating' && lastParicion) {
+    const daysSinceParicion = Math.round(
+      (new Date(dateISO + 'T00:00:00').getTime() - new Date(lastParicion + 'T00:00:00').getTime())
+      / 86_400_000,
+    )
+    if (daysSinceParicion >= 90) currentState = 'lactating_with_calf'
+  }
+
+  if (currentState === 'lactating') return headCount * 1.5
+  if (currentState === 'lactating_with_calf') return headCount * 1.8
+  return evPerHead * headCount
 }
 
 /** Temporadas de parición disponibles en el selector */

@@ -64,6 +64,10 @@ export function ForageBalanceWidget({ avgGrowthRate }: { avgGrowthRate: number |
     })
   }, [avgGrowthRate, herds, paddocks])
 
+  const currentOffer = chartData.find(d => d.month === new Date().toLocaleString('es-AR', { month: 'short' }).charAt(0).toUpperCase())?.Oferta || chartData[0]?.Oferta || 0;
+  const currentDemand = chartData[0]?.Demanda || 0;
+  const balance = currentOffer - currentDemand;
+
   return (
     <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm p-5">
       <div className="flex items-center gap-3 mb-6">
@@ -71,12 +75,32 @@ export function ForageBalanceWidget({ avgGrowthRate }: { avgGrowthRate: number |
           <Leaf className="w-4 h-4 text-emerald-600" />
         </div>
         <div>
-          <h2 className="text-sm font-black text-gray-900 leading-tight">Balance Forrajero Anual</h2>
-          <p className="text-[10px] text-gray-500 font-medium">Proyección de oferta vs demanda según curva estacional</p>
+          <h2 className="text-sm font-black text-gray-900 leading-tight">Balance Forrajero Actual</h2>
+          <p className="text-[10px] text-gray-500 font-medium">Relación entre el crecimiento del pasto y el consumo animal</p>
         </div>
       </div>
 
-      <div className="h-[280px] w-full">
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mb-1">Oferta (Crecimiento)</p>
+          <p className="text-2xl font-black text-emerald-900 leading-none">{Math.round(currentOffer).toLocaleString('es-AR')}</p>
+          <p className="text-[10px] font-bold text-emerald-600 mt-1">kg MS/ha/d</p>
+        </div>
+        <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 text-center">
+          <p className="text-[10px] font-black uppercase tracking-widest text-orange-700 mb-1">Demanda (Consumo)</p>
+          <p className="text-2xl font-black text-orange-900 leading-none">{Math.round(currentDemand).toLocaleString('es-AR')}</p>
+          <p className="text-[10px] font-bold text-orange-600 mt-1">kg MS/ha/d</p>
+        </div>
+        <div className={`border rounded-xl p-4 text-center ${balance >= 0 ? 'bg-sky-50 border-sky-100' : 'bg-red-50 border-red-100'}`}>
+          <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${balance >= 0 ? 'text-sky-700' : 'text-red-700'}`}>Balance actual</p>
+          <p className={`text-2xl font-black leading-none ${balance >= 0 ? 'text-sky-900' : 'text-red-900'}`}>
+            {balance > 0 ? '+' : ''}{Math.round(balance).toLocaleString('es-AR')}
+          </p>
+          <p className={`text-[10px] font-bold mt-1 ${balance >= 0 ? 'text-sky-600' : 'text-red-600'}`}>kg MS/ha/d</p>
+        </div>
+      </div>
+
+      <div className="h-[220px] w-full mt-4">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -103,9 +127,8 @@ export function ForageBalanceWidget({ avgGrowthRate }: { avgGrowthRate: number |
             />
             <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 800, color: '#64748b' }} iconType="circle" />
             
-            <Line type="monotone" dataKey="Demanda" stroke="#0f172a" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
-            <Line type="monotone" dataKey="Oferta" stroke="#84cc16" strokeDasharray="5 5" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
-            <Line type="monotone" dataKey="Oferta + Supl." stroke="#a3e635" strokeWidth={3} dot={false} activeDot={{ r: 4 }} />
+            <Line type="monotone" dataKey="Demanda" stroke="#ea580c" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
+            <Line type="monotone" dataKey="Oferta" stroke="#10b981" strokeDasharray="5 5" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

@@ -9,6 +9,11 @@
  */
 
 import { queryOne, query } from '@/lib/db'
+import {
+  getAustralSeason,
+  SEASONAL_BASE_GROWTH,
+  SEASONAL_TEMP_ESTIMATE,
+} from '@/lib/grazing/forageCurves'
 
 // ─── Tipos públicos ──────────────────────────────────────────────────────────
 
@@ -99,33 +104,14 @@ export interface ClimateAdjustmentAccessResult {
   planType?: string
 }
 
-// ─── Constantes agronómicas ──────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+// getAustralSeason, SEASONAL_BASE_GROWTH, SEASONAL_TEMP_ESTIMATE importados
+// desde lib/grazing/forageCurves.ts (fuente de verdad canónica).
 
+// ─── Constantes agronómicas (privadas de este módulo) ───────────────────────
 const MIN_REMNANT_MS_HA   = 900
 const DEFAULT_DAILY_RATION = 12
 const HARVEST_EFFICIENCY   = 0.60
-
-/** kg MS/ha/día base en condiciones óptimas por estación (hemisferio sur) */
-const SEASONAL_BASE_GROWTH: Record<string, number> = {
-  VERANO:    32,
-  OTONO:     18,
-  INVIERNO:   8,
-  PRIMAVERA: 38,
-}
-
-/** Temperatura óptima de crecimiento por estación (Pampa Húmeda) */
-const SEASONAL_TEMP_ESTIMATE: Record<string, number> = {
-  VERANO: 26, OTONO: 15, INVIERNO: 8, PRIMAVERA: 18,
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getAustralSeason(month: number): string {
-  if (month >= 12 || month <= 2) return 'VERANO'
-  if (month >= 3  && month <= 5) return 'OTONO'
-  if (month >= 6  && month <= 8) return 'INVIERNO'
-  return 'PRIMAVERA'
-}
 
 // ─── Evapotranspiración (Hargreaves simplificado) ────────────────────────────
 

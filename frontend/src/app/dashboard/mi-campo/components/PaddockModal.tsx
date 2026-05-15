@@ -283,8 +283,15 @@ export default function PaddockModal({
   const { hasFeature } = usePlan()
   const { snapshots } = useClimateAnalytics()
   const paddockSnapshots = React.useMemo(() => {
-    return snapshots.filter(s => s.paddock_name === paddock.name).sort((a, b) => new Date(b.calculated_at).getTime() - new Date(a.calculated_at).getTime())
-  }, [snapshots, paddock.name])
+    const sorted = snapshots.filter(s => s.paddock_id === paddock.id).sort((a, b) => new Date(b.calculated_at).getTime() - new Date(a.calculated_at).getTime())
+    const seenDates = new Set<string>()
+    return sorted.filter(s => {
+      const dateStr = new Date(s.calculated_at).toISOString().split('T')[0]
+      if (seenDates.has(dateStr)) return false
+      seenDates.add(dateStr)
+      return true
+    })
+  }, [snapshots, paddock.id])
   const canVoice     = hasFeature('voice_bitacora') // audio + transcripción IA
   const canAiInsight = hasFeature('ai_insights')    // análisis biomasa IA
   const canNdvi      = hasFeature('ndvi_access')    // NDVI satelital
@@ -631,11 +638,33 @@ export default function PaddockModal({
       if (!geoRes.ok) return
       const { paddock: geo } = await geoRes.json()
       if (!geo?.boundary) return
+
+      // Deduplicate snapshots by date
+      const todayStr = new Date().toLocaleDateString('es-AR', {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+      const snapshots = geo?.technical_data?.historical_snapshots || [];
+      const hasTodaySnapshot = snapshots.some((snap: any) => {
+        const snapDate = new Date(snap.date).toLocaleDateString('es-AR', {
+          year: 'numeric', month: 'long', day: 'numeric'
+        });
+        return snapDate === todayStr;
+      });
+
+      if (hasTodaySnapshot) {
+        toast.info(`Ya hay una actualización de NDVI registrada para el día de hoy.`);
+        setNdviRefreshing(false);
+        return;
+      }
+
       const resp = await apiFetch('/api/ndvi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ geojson: geo.boundary, paddock_id: paddock.id }) })
       if (!resp.ok) return
       const res = await resp.json()
       await apiFetch(`/api/paddocks/${paddock.id}`, { method: 'PATCH', body: JSON.stringify({ current_ndvi: res.averageNdvi }) })
-    } catch {}
+      toast.success('NDVI actualizado correctamente.');
+    } catch {
+      toast.error('Error al actualizar NDVI.');
+    }
     setNdviRefreshing(false)
   }, [paddock.id])
 
@@ -738,19 +767,9 @@ export default function PaddockModal({
                 </p>
               )}
 
-              {/* Métricas Holísticas */}
+              {/* Rendimiento Relativo */}
               {(msHa !== '' && areaHa !== '') && (() => {
                 const _ms = Number(msHa)
-                const _ha = Number(areaHa)
-                const _remnant = planningDefaults?.targetRemnantKgHa ?? 600
-                const _daily   = planningDefaults?.dailyAllocationKg  ?? 12
-                const _totalEV = herds.reduce((s, h) => s + Number(h.total_ev || 0), 0)
-                const _usableMs = Math.max(0, (_ms - _remnant) * _ha)
-
-                // DAH Estimado
-                const _dah = _totalEV > 0 && _daily > 0 && _usableMs > 0
-                  ? Math.max(0, Math.floor(_usableMs / (_totalEV * _daily)))
-                  : null
 
                 // Coeficiente de Rendimiento
                 const _activePaddocks = paddocks.filter(p => Number(p.dry_matter_kg_ha) > 0)
@@ -759,25 +778,15 @@ export default function PaddockModal({
                   : 0
                 const _coef = _modAvg > 0 && _ms > 0 ? _ms / _modAvg : null
 
-                if (_dah === null && _coef === null) return null
+                if (_coef === null) return null
 
                 return (
                   <div className="rounded-xl bg-green-50 border border-green-100 p-3.5 space-y-3">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">Métricas Holísticas</p>
-                      <Tooltip text="Indicadores del Manejo Holístico calculados con los datos actuales de materia seca, superficie y rodeo." />
+                      <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">Rendimiento Relativo</p>
+                      <Tooltip text="Indicador de rendimiento del potrero." />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {_dah !== null && (
-                        <div className="bg-white rounded-xl border border-green-100 p-3 text-center">
-                          <div className="flex items-center justify-center gap-1 mb-0.5">
-                            <p className="text-[9px] font-black text-green-500 uppercase tracking-widest">DAH Estimado</p>
-                            <Tooltip text="Días Animal por Hectárea: cuántos días puede este potrero alimentar a 1 Equivalente Vaca según el pasto actual. Fórmula: (MS − remanente) × ha / (EV × kg MS/día)." />
-                          </div>
-                          <p className="text-2xl font-black text-green-800 leading-none">{_dah}</p>
-                          <p className="text-[9px] text-green-500 font-bold mt-0.5">días</p>
-                        </div>
-                      )}
+                    <div className="grid grid-cols-1 gap-2">
                       {_coef !== null && (
                         <div className={`bg-white rounded-xl border p-3 text-center ${
                           _coef >= 1.1 ? 'border-green-200' : _coef >= 0.9 ? 'border-gray-200' : 'border-amber-200'

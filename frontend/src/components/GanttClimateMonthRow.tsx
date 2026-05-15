@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useWeather } from '@/lib/context/WeatherContext'
 import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
+import { getAustralSeason, type AustralSeason } from '@/lib/grazing/forageCurves'
 
 export interface MonthMeta {
   key: string
@@ -57,19 +58,13 @@ function thiIndex(tempC: number, humPct: number) {
   return tempC + 0.36 * dp + 41.5
 }
 
-type Season = 'summer' | 'autumn' | 'winter' | 'spring'
-function getSeason(month: number): Season {
-  if ([11, 0, 1].includes(month))  return 'summer'
-  if ([2, 3, 4].includes(month))   return 'autumn'
-  if ([5, 6, 7].includes(month))   return 'winter'
-  return 'spring'
-}
-
-function getSeasonIcon(season: Season, rainMm: number, mult: number) {
+// getAustralSeason importado desde lib/grazing/forageCurves.ts
+// Mapa de estación austral → ícono de clima
+function getSeasonIcon(season: AustralSeason, rainMm: number, mult: number) {
   if (mult <= 0.3) return <CloudSnow className="w-3 h-3 text-sky-500" />
   if (rainMm > 20) return <CloudRain className="w-3 h-3 text-blue-500" />
-  if (season === 'winter') return <Cloud className="w-3 h-3 text-gray-400" />
-  if (season === 'summer') return <Sun className="w-3 h-3 text-amber-500" />
+  if (season === 'INVIERNO') return <Cloud className="w-3 h-3 text-gray-400" />
+  if (season === 'VERANO')   return <Sun className="w-3 h-3 text-amber-500" />
   return <Cloud className="w-3 h-3 text-emerald-400" />
 }
 

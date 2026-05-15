@@ -14,7 +14,7 @@
  */
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { getDynamicHerdEV } from '@/app/dashboard/grazing/page'
+import { getDynamicHerdEV } from '@/lib/grazing/evProjection'
 import { calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
 
 // ── Tipos ────────────────────────────────────────────────────────────────────

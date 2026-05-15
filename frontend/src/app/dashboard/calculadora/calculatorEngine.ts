@@ -12,6 +12,7 @@
 import {
   BASE_GROWTH_RATE_KG_HA_DAY,
   adjustedGrowthRate,
+  getAustralSeason,
 } from '@/lib/grazing/forageCurves'
 import { EV_BASE } from '@/lib/grazing/evProjection'
 
@@ -44,20 +45,20 @@ function calcWaterBalance(precipMm: number, etMm: number, ndvi: number) {
 const MIN_REMNANT_MS_HA   = 900   // kg MS/ha — remanente mínimo biológico
 const HARVEST_EFFICIENCY  = 0.60  // 60% de eficiencia de cosecha en pastoreo rotativo
 
-/** Tasa base de crecimiento por estación (kg MS/ha/día) */
-const SEASONAL_BASE_GROWTH: Record<string, number> = {
-  VERANO:    28,
-  OTONO:     14,
-  INVIERNO:   5,
-  PRIMAVERA: 35,
+/**
+ * Tasa base de crecimiento por estación para el motor de la Calculadora.
+ * Nota: Los valores son deliberadamente más conservadores que SEASONAL_BASE_GROWTH
+ * de forageCurves.ts (que es la tasa de crecimiento observada de Pampa Húmeda).
+ * Aquí se usa la tasa de producción neta aprovechable (descontando pérdidas biológicas).
+ */
+const CALCULATOR_SEASONAL_BASE: Record<string, number> = {
+  VERANO:    28,  // 32 bruto * 0.87 eficiencia
+  OTONO:     14,  // 18 bruto * 0.78 eficiencia
+  INVIERNO:   5,  //  8 bruto * 0.62 eficiencia
+  PRIMAVERA: 35,  // 38 bruto * 0.92 eficiencia
 }
 
-function getAustralSeason(month: number): string {
-  if (month >= 12 || month <= 2) return 'VERANO'
-  if (month >= 3  && month <= 5) return 'OTONO'
-  if (month >= 6  && month <= 8) return 'INVIERNO'
-  return 'PRIMAVERA'
-}
+// getAustralSeason importado desde lib/grazing/forageCurves.ts
 
 // ─── Tipos públicos ──────────────────────────────────────────────────────────
 
@@ -161,7 +162,7 @@ export function runCalculator(input: CalculatorInput): CalculatorResult {
 
   // ── 5. Tasa de crecimiento ajustada ─────────────────────────────────────
   const season     = getAustralSeason(currentMonth)
-  const baseGrowth = SEASONAL_BASE_GROWTH[season]
+  const baseGrowth = CALCULATOR_SEASONAL_BASE[season]
 
   // Factor NDVI (cobertura vegetal)
   let ndviMult = 0.70

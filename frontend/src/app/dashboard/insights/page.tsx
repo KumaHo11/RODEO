@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
+import { safeIso, daysBetween } from '@/lib/utils/dates'
 
 // Chart lazy-loaded to avoid SSR issues with Recharts
 const ClimateAdjustmentChart = dynamic(
@@ -47,23 +48,7 @@ function fmt(n: number, digits = 0) {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-// Safe ISO date normalizer
-function safeIso(val: any): string {
-  if (!val) return ''
-  if (val instanceof Date) return val.toISOString().split('T')[0]
-  const s = String(val)
-  return s.includes('T') ? s.split('T')[0] : s
-}
-
-function daysBetween(a: any, b: any): number {
-  const sa = safeIso(a)
-  const sb = safeIso(b)
-  if (!sa || !sb) return 0
-  const da = new Date(sa + 'T00:00:00')
-  const db = new Date(sb + 'T00:00:00')
-  if (isNaN(da.getTime()) || isNaN(db.getTime())) return 0
-  return Math.round((db.getTime() - da.getTime()) / 86400000)
-}
+// safeIso y daysBetween importados desde lib/utils/dates
 
 // Detect southern hemisphere season based on month
 function getCurrentSeason(): { name: string; icon: string; restDaysMin: number; restDaysMax: number; growthFactor: number } {

@@ -19,6 +19,7 @@ import {
   Leaf, TrendingUp, TrendingDown, Minus, BarChart3, Users, Clock,
   AlertTriangle, CheckCircle2, ArrowRight, ChevronDown, ChevronUp, LayoutGrid, List
 } from 'lucide-react'
+import { calculateBaseEV } from '@/lib/grazing/evProjection'
 
 // ── Tab definition ─────────────────────────────────────────────────────────────
 type Tab = 'resumen' | 'potreros' | 'rodeos' | 'historial'
@@ -253,35 +254,21 @@ function TabPotreros({ onSaveWeatherEvent, orgName }: { onSaveWeatherEvent: any;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+// calculateBaseEV importado desde lib/grazing/evProjection
+
 const CATEGORIA_ABBR: Record<string, string> = {
   VACAS: 'VAC', VAQUILLONAS: 'VEQ', TERNEROS: 'TER', TERNERAS: 'TRA',
   NOVILLOS: 'NOV', NOVILLITOS: 'NVT', TOROS: 'TOR', MEJ: 'MEJ',
   BUBALINOS: 'BUB',
 }
 
-function calcEV(weight: number, count: number, catKey: string | null): number {
-  const FACTORS: Record<string, number> = {
-    NOVILLOS: 1.0, NOVILLITOS: 0.9, VAQUILLONAS: 0.9,
-    TERNEROS: 0.6, TERNERAS: 0.55, VACAS: 1.0, TOROS: 1.25, MEJ: 0.9, BUBALINOS: 1.1,
-  }
-  const f = catKey ? (FACTORS[catKey] ?? 1.0) : 1.0
-  return parseFloat((Math.pow((weight || 400) / 400, 0.75) * f * count).toFixed(2))
-}
-
-function fmtDate(iso: string | null | undefined) {
-  if (!iso) return '—'
-  try {
-    const datePart = String(iso).slice(0, 10)
-    return new Date(datePart + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' })
-  } catch { return String(iso).slice(0, 10) }
-}
 
 // ── Herd Card ─────────────────────────────────────────────────────────────────
 function HerdCard({ herd, consumptionAdj, energyAdj, viewMode = 'grid' }: any) {
   const catKey     = herd.categoria as CategoriaComercial | null
   const colors     = catKey ? CATEGORIA_COLORS[catKey] : null
   const catDisp    = catKey ? (CATEGORIA_LABEL_RAE[catKey] ?? catKey) : herd.species
-  const ev         = Number(herd.total_ev) || calcEV(Number(herd.avg_weight_kg), herd.head_count, catKey)
+  const ev         = Number(herd.total_ev) || calculateBaseEV(catKey, Number(herd.avg_weight_kg), herd.head_count)
   const baseMsDay  = Math.round(ev * 11)
   
   const hasClimateData = consumptionAdj !== undefined && energyAdj !== undefined

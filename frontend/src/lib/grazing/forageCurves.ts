@@ -3,7 +3,49 @@
  * ─────────────────────────────────────────────────────────────────────
  * Tasa de crecimiento (kg MS/ha/día) por mes, ajustada por precipitación.
  * Fuente: INTA Balcarce / Ovis 21 / García Stepien para zona pampeana.
+ *
+ * También exporta la lógica estacional canónica (getAustralSeason,
+ * SEASONAL_BASE_GROWTH) que anteriormente estaba duplicada en:
+ *  - lib/climate-adjustment.ts
+ *  - app/dashboard/calculadora/calculatorEngine.ts
+ *  - components/GanttClimateMonthRow.tsx
  */
+
+// ─── Estaciones Hemisferio Sur ───────────────────────────────────────────────
+
+/** Tipo de estación del hemisferio sur */
+export type AustralSeason = 'VERANO' | 'OTONO' | 'INVIERNO' | 'PRIMAVERA'
+
+/**
+ * Retorna la estación del hemisferio sur para un mes dado (1=Enero, 12=Dic).
+ * @param month  Número de mes 1-based (1=Enero … 12=Diciembre)
+ */
+export function getAustralSeason(month: number): AustralSeason {
+  if (month >= 12 || month <= 2) return 'VERANO'
+  if (month >= 3 && month <= 5)  return 'OTONO'
+  if (month >= 6 && month <= 8)  return 'INVIERNO'
+  return 'PRIMAVERA'
+}
+
+/**
+ * Tasa base de crecimiento kg MS/ha/día por estación (Pampa Húmeda).
+ * Fuente: INTA Balcarce / Ovis 21.
+ */
+export const SEASONAL_BASE_GROWTH: Record<AustralSeason, number> = {
+  VERANO:    32,
+  OTONO:     18,
+  INVIERNO:   8,
+  PRIMAVERA: 38,
+}
+
+/**
+ * Temperatura media de referencia por estación para cálculos de ET.
+ * Calibrado para Pampa Húmeda.
+ */
+export const SEASONAL_TEMP_ESTIMATE: Record<AustralSeason, number> = {
+  VERANO: 26, OTONO: 15, INVIERNO: 8, PRIMAVERA: 18,
+}
+
 
 /** Tasa base de crecimiento en kg MS/ha/día por mes del año (0=Enero … 11=Dic) */
 export const BASE_GROWTH_RATE_KG_HA_DAY: number[] = [

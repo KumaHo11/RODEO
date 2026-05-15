@@ -11,3 +11,7 @@ parser_service/__pycache__/
 **/__pycache__/
 *.pyc
 *.pyo
+server_logs.txt
+*.resolved
+modal_code.tsx
+tmp/

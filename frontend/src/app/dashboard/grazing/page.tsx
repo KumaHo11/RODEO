@@ -102,8 +102,18 @@ const addDays = (iso: any, n: number): string => {
   return d.toISOString().split('T')[0]
 }
 
-// Calculate dynamic headcount based on events timeline
-export const calculateDynamicHeadcount = (herdId: string, baseCount: number, dateStr: string, unifiedEvents: any[]) => {
+// ─── Re-exports desde lib/grazing/evProjection (fuente de verdad canónica) ───
+// Mantenidos para compatibilidad con consumidores externos.
+export { calculateDynamicHeadcount, getDynamicHerdEV } from '@/lib/grazing/evProjection'
+
+// ── Alias local para uso interno del Gantt (evita import circular) ──
+import {
+  calculateDynamicHeadcount as _calculateDynamicHeadcount,
+  getDynamicHerdEV as _getDynamicHerdEV,
+} from '@/lib/grazing/evProjection'
+
+// Calculate dynamic headcount — wrapper local para uso en callbacks del Gantt
+const calculateDynamicHeadcount = (herdId: string, baseCount: number, dateStr: string, unifiedEvents: any[]) => {
   const today = new Date().toISOString().split('T')[0]
   let count = baseCount
   
@@ -129,8 +139,8 @@ export const calculateDynamicHeadcount = (herdId: string, baseCount: number, dat
   return Math.max(0, count)
 }
 
-// Biological Demand Evolution
-export const getDynamicHerdEV = (herd: any, dateISO: string, farmEvents: any[], headCountOverride?: number): number => {
+// Biological Demand Evolution — wrapper local
+const getDynamicHerdEV = (herd: any, dateISO: string, farmEvents: any[], headCountOverride?: number): number => {
   const currentEV = Number(herd?.total_ev) || 0
   if (currentEV === 0) return 0
   const currentHeadCount = Number(herd?.head_count || herd?.animal_count) || currentEV 
@@ -435,6 +445,14 @@ function InteractiveGantt({
     herds.forEach((h, i) => { map[h.id] = HERD_COLORS[i % HERD_COLORS.length] })
     return map
   }, [herds])
+
+  // ── Rendimiento: moduleMsHaAvg calculado UNA vez, no N veces en el render ──
+  // Previene el doble/triple filter por cada fila de potrero en el Gantt.
+  const moduleMsHaAvg = useMemo(() => {
+    const active = paddocks.filter((p: any) => Number(p.dry_matter_kg_ha) > 0)
+    if (active.length === 0) return 0
+    return active.reduce((s: number, p: any) => s + Number(p.dry_matter_kg_ha), 0) / active.length
+  }, [paddocks])
 
   // Virtual events from movements combined with farmEvents
   const unifiedEvents = useMemo(() => {
@@ -946,10 +964,7 @@ function InteractiveGantt({
           const dailyDemand = totalEV * dailyAllocationKg
           const estimatedDah = calculateGrazingDays(usableMs, dailyDemand) || null
           // Yield Coefficient: MS potrero / promedio MS módulo
-          const moduleMsHaAvg = paddocks.filter((p: any) => Number(p.dry_matter_kg_ha) > 0).length > 0
-            ? paddocks.filter((p: any) => Number(p.dry_matter_kg_ha) > 0).reduce((s: number, p: any) => s + Number(p.dry_matter_kg_ha), 0)
-              / paddocks.filter((p: any) => Number(p.dry_matter_kg_ha) > 0).length
-            : 0
+          // moduleMsHaAvg se calcula una sola vez via useMemo — no inline aquí
           const yieldCoef = moduleMsHaAvg > 0 && msHa > 0 ? (msHa / moduleMsHaAvg) : null
 
           return (

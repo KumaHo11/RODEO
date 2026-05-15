@@ -19,6 +19,7 @@ import { FeatureWidget } from '@/components/FeatureWidget'
 import { AppHeader } from '@/components/AppHeader'
 import { MarketWidget } from '@/components/MarketWidget'
 import ForageVigorMonitor from '@/components/ForageVigorMonitor'
+import { toast } from 'sonner'
 
 const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 51: '🌦️', 61: '🌧️', 80: '🌩️', 95: '⛈️' }
 const getWeatherIcon = (code: number) => {
@@ -178,6 +179,16 @@ export default function DashboardOverview() {
   // ── Refresh NDVI from satellite for each paddock ────────────────────────────
   const refreshAllNdvi = useCallback(async () => {
     if (ndviLoading || paddocks.length === 0) return
+    
+    const todayStr = new Date().toISOString().split('T')[0]
+    
+    // Check if ALL eligible paddocks (with boundary) are already updated today
+    const eligiblePaddocks = paddocks.filter(p => p.boundary)
+    if (eligiblePaddocks.length > 0 && eligiblePaddocks.every(p => p.previous_ndvi_date && p.previous_ndvi_date.startsWith(todayStr))) {
+      toast.info(`La actualización ya se realizó el ${todayStr}. Volvé a intentar mañana.`)
+      return
+    }
+
     setNdviLoading(true)
     setNdviStatus('Consultando satélite...')
 
@@ -189,6 +200,12 @@ export default function DashboardOverview() {
       toProcess.map(async (p: any) => {
         try {
           if (!p.boundary) {
+            processed++
+            setNdviStatus(`Procesando ${processed}/${toProcess.length} potreros...`)
+            return
+          }
+          
+          if (p.previous_ndvi_date && p.previous_ndvi_date.startsWith(todayStr)) {
             processed++
             setNdviStatus(`Procesando ${processed}/${toProcess.length} potreros...`)
             return
@@ -553,26 +570,37 @@ export default function DashboardOverview() {
           className="lg:col-span-2"
         >
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
-              <p className="text-[9px] font-black text-emerald-700/70 uppercase tracking-widest mb-1">Crec. Promedio</p>
-              <p className="text-3xl font-black text-emerald-950 leading-none">{avgGrowthRate !== null ? avgGrowthRate.toFixed(1) : '—'}</p>
-              <p className="text-[10px] text-emerald-600 font-bold mt-1">kg MS/ha/d</p>
+            <div className="bg-orange-50 rounded-xl p-3 border border-orange-100 relative overflow-hidden">
+              <Sun className="absolute -bottom-4 -right-4 w-16 h-16 text-orange-200/50" />
+              <p className="text-[9px] font-black text-orange-700/70 uppercase tracking-widest mb-1 relative z-10">ITH Animal</p>
+              <p className="text-3xl font-black text-orange-950 leading-none relative z-10">
+                {weatherCurrent ? (() => {
+                  const dp = weatherCurrent.tempC - (100 - weatherCurrent.humidityPct) / 5;
+                  return (weatherCurrent.tempC + 0.36 * dp + 41.5).toFixed(1);
+                })() : '—'}
+              </p>
+              <p className="text-[10px] text-orange-600 font-bold mt-1 relative z-10">índice térmico</p>
             </div>
-            <div className="bg-green-50 rounded-xl p-3 border border-green-100 relative overflow-hidden">
-              <Leaf className="absolute -bottom-4 -right-4 w-16 h-16 text-green-200/50" />
-              <p className="text-[9px] font-black text-green-700/70 uppercase tracking-widest mb-1 relative z-10">Disponibilidad</p>
-              <p className="text-3xl font-black text-green-950 leading-none relative z-10">{totalArea > 0 ? Math.round(totalMS / totalArea).toLocaleString() : '—'}</p>
-              <p className="text-[10px] text-green-600 font-bold mt-1 relative z-10">kg MS/ha</p>
+            <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100 relative overflow-hidden">
+              <TrendingUp className="absolute -bottom-4 -right-4 w-16 h-16 text-emerald-200/50" />
+              <p className="text-[9px] font-black text-emerald-700/70 uppercase tracking-widest mb-1 relative z-10">Crecimiento</p>
+              <p className="text-3xl font-black text-emerald-950 leading-none relative z-10">{avgGrowthRate !== null ? avgGrowthRate.toFixed(1) : '—'}</p>
+              <p className="text-[10px] text-emerald-600 font-bold mt-1 relative z-10">kg MS/ha/d</p>
             </div>
-            <div className={`rounded-xl p-3 border ${autonomyDays > 30 ? 'bg-blue-50 border-blue-100' : autonomyDays > 15 ? 'bg-amber-50 border-amber-100' : 'bg-red-50 border-red-100'}`}>
-              <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${autonomyDays > 30 ? 'text-blue-700/70' : autonomyDays > 15 ? 'text-amber-700/70' : 'text-red-700/70'}`}>Autonomía</p>
-              <p className={`text-3xl font-black leading-none ${autonomyDays > 30 ? 'text-blue-950' : autonomyDays > 15 ? 'text-amber-950' : 'text-red-950'}`}>{autonomyDays > 0 ? autonomyDays : '—'}</p>
-              <p className={`text-[10px] font-bold mt-1 ${autonomyDays > 30 ? 'text-blue-600' : autonomyDays > 15 ? 'text-amber-600' : 'text-red-600'}`}>días estimados</p>
+            <div className="bg-blue-50 rounded-xl p-3 border border-blue-100 relative overflow-hidden">
+              <Satellite className="absolute -bottom-4 -right-4 w-16 h-16 text-blue-200/50" />
+              <p className="text-[9px] font-black text-blue-700/70 uppercase tracking-widest mb-1 relative z-10">NDVI Promedio</p>
+              <p className="text-3xl font-black text-blue-950 leading-none relative z-10">
+                {paddocks.filter(p => Number(p.current_ndvi) > 0).length > 0
+                  ? (paddocks.filter(p => Number(p.current_ndvi) > 0).reduce((s, p) => s + Number(p.current_ndvi), 0) / paddocks.filter(p => Number(p.current_ndvi) > 0).length).toFixed(3)
+                  : '—'}
+              </p>
+              <p className="text-[10px] text-blue-600 font-bold mt-1 relative z-10">vigor fotosintético</p>
             </div>
           </div>
           
-          <div className="h-[220px] rounded-xl overflow-hidden relative">
-             <ForageVigorMonitor />
+          <div className="rounded-xl relative">
+             <ForageVigorMonitor className="min-h-[260px] h-full" />
           </div>
         </FeatureWidget>
 

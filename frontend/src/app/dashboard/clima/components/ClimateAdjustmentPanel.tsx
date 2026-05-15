@@ -550,9 +550,11 @@ export function ClimateAdjustmentPanel({
         <div className="bg-white border border-gray-200 rounded-2xl p-5">
           {/* Field name title */}
           <div className="flex items-center justify-between mb-4">
-            <div>
+            <div className="min-w-0 flex-1 pr-4">
               {orgName && (
-                <p className="text-xl font-black text-gray-900 leading-none mb-0.5">{orgName}</p>
+                <p className="text-xl font-black text-gray-900 leading-none mb-0.5 truncate" title={orgName}>
+                  {orgName}
+                </p>
               )}
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
                 Resumen del campo
