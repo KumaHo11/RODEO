@@ -164,7 +164,10 @@ export default function DashboardOverview() {
       const prevDate = p.previous_ndvi_date
       if (curr > 0 && prev > 0 && prevDate) {
         const days = Math.max(1, Math.round((Date.now() - new Date(prevDate).getTime()) / 86400000))
-        rates[p.id] = (curr - prev) / days
+        const rate = (curr - prev) / days
+        if (rate >= 0) {
+          rates[p.id] = rate
+        }
       }
     })
     setGrowthRates(rates)
@@ -205,9 +208,15 @@ export default function DashboardOverview() {
             const prevForCalc = Number(p.previous_dry_matter_kg_ha) || currMs
             const prevDateForCalc = p.previous_ndvi_date || new Date(Date.now() - 7 * 86400000).toISOString()
             const days = Math.max(1, Math.round((Date.now() - new Date(prevDateForCalc).getTime()) / 86400000))
-            rates[p.id] = (newMs - prevForCalc) / days
+            const rate = (newMs - prevForCalc) / days
+            if (rate >= 0) {
+              rates[p.id] = rate
+            }
           } else {
-            rates[p.id] = (newMs - 500) / 7
+            const rate = (newMs - 500) / 7
+            if (rate >= 0) {
+              rates[p.id] = rate
+            }
           }
 
           // Save NDVI to estimated_adh — DO NOT overwrite user-declared dry_matter_kg_ha
@@ -337,13 +346,16 @@ export default function DashboardOverview() {
                 ) : (
                   <>
                     <p className="text-4xl font-black text-blue-900">{weatherCurrent?.tempC ?? '—'}°</p>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-bold text-blue-800 leading-tight">
                         {weatherCurrent?.conditionLabel ?? '—'}
                       </p>
-                      <p className="text-[10px] font-bold text-blue-600/70 uppercase flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {locationName ?? 'Campo'}
+                      <p 
+                        className="text-[10px] font-bold text-blue-600/70 uppercase flex items-center gap-1 truncate"
+                        title={locationName ?? 'Campo'}
+                      >
+                        <MapPin className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{locationName ?? 'Campo'}</span>
                       </p>
                     </div>
                   </>

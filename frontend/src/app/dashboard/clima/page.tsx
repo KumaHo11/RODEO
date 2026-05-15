@@ -6,6 +6,7 @@ import { WeatherWidget }          from './components/WeatherWidget'
 import { ClimateGrowthChart }     from './components/ClimateGrowthChart'
 import { ClimateAdjustmentPanel } from './components/ClimateAdjustmentPanel'
 import { WeatherHistoryTable }    from './components/WeatherHistoryTable'
+import { ForageBalanceWidget }    from './components/ForageBalanceWidget'
 import { FeatureGate } from '@/components/FeatureGate'
 import { apiFetch } from '@/lib/apiFetch'
 import { useWeather } from '@/lib/context/WeatherContext'
@@ -144,16 +145,12 @@ function CurrentConditionsBar() {
 // ── Tab: Resumen ──────────────────────────────────────────────────────────────
 
 function TabResumen({ orgName }: { orgName: string | null }) {
-  const { current } = useWeather()
   const { avgGrowthRate } = useClimateAnalytics()
-
+  
   return (
     <div className="space-y-6">
-      {/* Widget actual + gráfico de crecimiento */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-        <WeatherWidget />
-        <ClimateGrowthChart baseGrowthRate={avgGrowthRate} />
-      </div>
+      {/* Balance Forrajero Anual */}
+      <ForageBalanceWidget avgGrowthRate={avgGrowthRate} />
 
       {/* KPIs actuales */}
       <div>
