@@ -2423,6 +2423,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
   const [viewMode, setViewMode] = useState<'gantt' | 'list' | 'history'>('gantt')
   const [activeGanttTab, setActiveGanttTab] = useState<'suggested' | 'manual'>('manual')
+  const [historyTab, setHistoryTab] = useState<'all' | 'suggested' | 'manual'>('all')
   const [showGanttModeDropdown, setShowGanttModeDropdown] = useState(false)
   // Ordered paddock IDs from the last generated suggested plan (for Gantt row sorting)
   const [suggestedPaddockOrder, setSuggestedPaddockOrder] = useState<string[]>([])
@@ -3460,12 +3461,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           // Manual tab: show all non-suggested plans
           matchTab = (p.plan_type !== 'suggested' && p.ai_analysis?.plan_source !== 'suggested')
         }
+      } else if (viewMode === 'history') {
+        if (historyTab === 'suggested') {
+          matchTab = (p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested')
+        } else if (historyTab === 'manual') {
+          matchTab = (p.plan_type !== 'suggested' && p.ai_analysis?.plan_source !== 'suggested')
+        }
       }
       // Todas las planificaciones sugeridas son visibles simultáneamente en el mismo Gantt.
       // El color de intensidad púrpura diferencia cada season plan.
       return matchSearch && matchStatus && matchTab
     }),
-    [plans, search, filterStatus, viewMode, activeGanttTab]
+    [plans, search, filterStatus, viewMode, activeGanttTab, historyTab]
   )
 
 
@@ -4546,11 +4553,16 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                         <Calendar className="w-3.5 h-3.5 text-gray-500" />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-gray-900">{sp.name}</p>
-                        <p className="text-[10px] text-gray-400 font-medium">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${sp.source === 'suggested' ? 'bg-purple-500' : 'bg-green-500'}`} />
+                          <p className="text-sm font-bold text-gray-900">{sp.name}</p>
+                        </div>
+                        <p className="text-[10px] text-gray-400 font-medium mt-0.5">
                           {sp.year} · {sp.season_type === 'cerrado' ? 'Plan cerrado' : 'Plan abierto'}
                           {sp.total_ha ? ` · ${Number(sp.total_ha).toFixed(0)} ha` : ''}
                           {sp.source === 'excel_import' ? ' · Excel' : ''}
+                          <span className="mx-1">·</span>
+                          {sp.source === 'suggested' ? 'Sugerida' : 'Manual'}
                         </p>
                       </div>
                     </div>
@@ -4611,6 +4623,26 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               </div>
               {/* Exportar botones */}
               <div className="flex items-center gap-2">
+                <div className="flex items-center bg-gray-100 p-1 rounded-xl mr-2">
+                  <button
+                    onClick={() => setHistoryTab('all')}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${historyTab === 'all' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Todas
+                  </button>
+                  <button
+                    onClick={() => setHistoryTab('suggested')}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1 ${historyTab === 'suggested' ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-purple-600'}`}
+                  >
+                    Sugeridas
+                  </button>
+                  <button
+                    onClick={() => setHistoryTab('manual')}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1 ${historyTab === 'manual' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Manuales
+                  </button>
+                </div>
                 <button
                   onClick={handleExportHistory}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 hover:border-green-300 hover:text-green-700 transition-all shadow-sm"
@@ -4693,7 +4725,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       {/* Potrero / Rodeo */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${plan.plan_type === 'suggested' || plan.ai_analysis?.plan_source === 'suggested' ? 'bg-purple-500' : 'bg-green-500'}`} />
                           <div>
                             <p className="text-sm font-bold text-gray-900">{plan.paddocks?.name}</p>
                             <p className="text-[10px] text-gray-400 mt-0.5 max-w-[150px] truncate">{herdNames}</p>
@@ -4791,7 +4823,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 })}
                 {filteredPlans.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-gray-400 font-medium">
+                    <td colSpan={14} className="px-5 py-10 text-center text-sm text-gray-400 font-medium">
                       No hay registros históricos que coincidan con la búsqueda
                     </td>
                   </tr>

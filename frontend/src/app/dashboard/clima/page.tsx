@@ -13,7 +13,7 @@ import WeatherConditionChip from '@/components/WeatherConditionChip'
 import {
   Sun, Cloud, CloudRain, CloudSnow, Wind, Thermometer, Droplets,
   Leaf, TrendingUp, TrendingDown, Minus, BarChart3, Users, Clock,
-  AlertTriangle, CheckCircle2, ArrowRight,
+  AlertTriangle, CheckCircle2, ArrowRight, ChevronDown, ChevronUp,
 } from 'lucide-react'
 
 // ── Tab definition ─────────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ function TabResumen({ orgName }: { orgName: string | null }) {
             <BarChart3 className="w-4 h-4 text-emerald-600" />
           </div>
           <div>
-            <h2 className="text-sm font-black text-gray-900">Matriz de Impacto Climático</h2>
+            <h2 className="text-sm font-black text-gray-900">Matriz de impacto climático</h2>
             <p className="text-[10px] text-gray-400 font-medium">Cómo afectan las variables climáticas al pasto y a los animales</p>
           </div>
         </div>
@@ -175,10 +175,10 @@ function TabResumen({ orgName }: { orgName: string | null }) {
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="px-5 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Variable climática</th>
                 <th className="px-5 py-3 text-left text-[10px] font-black text-emerald-600 uppercase tracking-widest">
-                  <div className="flex items-center gap-1.5"><Leaf className="w-3 h-3" />Impacto en Pasto</div>
+                  <div className="flex items-center gap-1.5"><Leaf className="w-3 h-3" />Impacto en pasto</div>
                 </th>
                 <th className="px-5 py-3 text-left text-[10px] font-black text-orange-600 uppercase tracking-widest">
-                  <div className="flex items-center gap-1.5"><Users className="w-3 h-3" />Impacto en Animal</div>
+                  <div className="flex items-center gap-1.5"><Users className="w-3 h-3" />Impacto en animal</div>
                 </th>
                 <th className="px-5 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Nota</th>
               </tr>
@@ -236,7 +236,7 @@ function TabPotreros({ onSaveWeatherEvent, orgName }: { onSaveWeatherEvent: any;
       <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
         <Leaf className="w-5 h-5 text-emerald-600 shrink-0" />
         <div>
-          <p className="text-xs font-black text-emerald-800">Ajuste Climático por Potrero</p>
+          <p className="text-xs font-black text-emerald-800">Ajuste climático por potrero</p>
           <p className="text-[10px] text-emerald-700 font-medium">
             Crecimiento en kg MS/ha/d ajustado por NDVI, lluvia, humedad y temperatura. Expandí cada potrero para ver el historial y registrar lluvia o helada.
           </p>
@@ -247,6 +247,81 @@ function TabPotreros({ onSaveWeatherEvent, orgName }: { onSaveWeatherEvent: any;
         orgName={orgName}
         onSaveWeatherEvent={onSaveWeatherEvent}
       />
+    </div>
+  )
+}
+
+// ── Herd Card ─────────────────────────────────────────────────────────────────
+function HerdCard({ herd, consumptionAdj, energyAdj, thiLabel, thi, current, coldStress, thiColor }: any) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-all">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-black text-gray-900 truncate">{herd.name}</span>
+            <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${consumptionAdj < 0 ? 'bg-orange-50 text-orange-700 border border-orange-200' : energyAdj > 0 ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${consumptionAdj < 0 ? 'bg-orange-500 animate-pulse' : energyAdj > 0 ? 'bg-sky-500 animate-pulse' : 'bg-emerald-500'}`} />
+              {consumptionAdj < 0 ? 'Alerta Consumo' : energyAdj > 0 ? 'Alerta Frío' : 'Normal'}
+            </span>
+          </div>
+          <p className="text-[10px] text-gray-400 font-medium mt-0.5 flex items-center gap-1.5">
+            {Math.round(herd.head_count ?? 0).toLocaleString('es-AR')} cab.
+            <span className="text-gray-300">•</span>
+            {Number(herd.total_ev ?? 0).toFixed(1)} EV
+          </p>
+        </div>
+
+        {/* Bolsa de Valores Metrics */}
+        <div className="flex items-center gap-6 shrink-0 mr-4">
+          <div className="text-right">
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Consumo</p>
+            <div className={`flex items-center justify-end gap-1 ${consumptionAdj < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+              <span className="text-sm font-black">{consumptionAdj < 0 ? consumptionAdj : '0'}%</span>
+              {consumptionAdj < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
+            </div>
+          </div>
+          
+          <div className="text-right min-w-[70px]">
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Energía</p>
+            <div className={`flex items-center justify-end gap-1 ${energyAdj > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+              <span className="text-sm font-black">{energyAdj > 0 ? '+' : ''}{energyAdj}%</span>
+              {energyAdj > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+            </div>
+          </div>
+        </div>
+
+        {expanded ? <ChevronUp className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" />}
+      </button>
+
+      {/* Expanded details */}
+      {expanded && current && (
+        <div className="border-t border-gray-100 px-5 py-4 space-y-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+              Variables climáticas y estrés esta semana
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Índice THI</p>
+                <p className={`text-sm font-black ${thiColor}`}>{thi} <span className="text-[10px] font-bold text-gray-400">({thiLabel})</span></p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Temperatura</p>
+                <p className="text-sm font-black text-gray-900">{Math.round(current.tempC)}°C</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Viento Máx.</p>
+                <p className="text-sm font-black text-gray-900">{Math.round(current.windSpeedKmh)} km/h</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -317,29 +392,17 @@ function TabRodeos() {
         ) : (
           <div className="space-y-2">
             {herds.map(herd => (
-              <div key={herd.id} className="bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-black text-gray-900">{herd.name}</p>
-                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-                    {Math.round(herd.head_count ?? 0).toLocaleString('es-AR')} cab. · {Number(herd.total_ev ?? 0).toFixed(1)} EV
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <WeatherConditionChip mode="herd" entityName={herd.name} />
-                  {consumptionAdj < 0 && (
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-red-600">{consumptionAdj}%</p>
-                      <p className="text-[9px] text-gray-400">consumo</p>
-                    </div>
-                  )}
-                  {energyAdj > 0 && (
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-sky-600">+{energyAdj}%</p>
-                      <p className="text-[9px] text-gray-400">energía</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <HerdCard
+                key={herd.id}
+                herd={herd}
+                consumptionAdj={consumptionAdj}
+                energyAdj={energyAdj}
+                thiLabel={thiLabel}
+                thi={thi}
+                current={current}
+                coldStress={coldStress}
+                thiColor={thiColor}
+              />
             ))}
           </div>
         )}

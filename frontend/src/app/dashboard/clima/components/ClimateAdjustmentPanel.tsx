@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiFetch } from '@/lib/apiFetch'
-import { RefreshCw, Loader2, Lock, ChevronDown, ChevronUp, Check } from 'lucide-react'
+import { RefreshCw, Loader2, Lock, ChevronDown, ChevronUp, Check, TrendingUp, TrendingDown } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
 import { useWeather } from '@/lib/context/WeatherContext'
 import { useAuth } from '@/components/AuthProvider'
@@ -269,21 +269,41 @@ function PaddockCard({
             <span className="text-sm font-black text-gray-900 truncate">{paddock.name}</span>
             <AlertBadge level={r.alertLevel} />
           </div>
-          <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-            {paddock.areaHa} ha · {totalEv.toFixed(1)} EV
+          <p className="text-[10px] text-gray-400 font-medium mt-0.5 flex items-center gap-1.5">
+            {paddock.areaHa} ha
+            <span className="text-gray-300">•</span>
+            NDVI {inputSummary.ndvi.toFixed(2)}
           </p>
         </div>
 
-        {/* Crecimiento actual */}
-        <div className="text-right shrink-0">
-          <p className="text-lg font-black text-gray-900 leading-none">
-            {r.grassGrowthRateKgHaDay} <span className="text-xs font-bold text-gray-400">kg/ha/d</span>
-          </p>
-          {growthDiff !== null && (
-            <p className={`text-[10px] font-black mt-0.5 ${growthDiff > 0 ? 'text-emerald-600' : growthDiff < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-              {growthDiff > 0 ? '+' : ''}{growthDiff} vs. anterior
-            </p>
-          )}
+        {/* Bolsa de Valores Metrics */}
+        <div className="flex items-center gap-6 shrink-0 mr-4">
+          {/* Variable Clima */}
+          <div className="text-right">
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Impacto Clima</p>
+            <div className={`flex items-center justify-end gap-1 ${r.climateMultiplier >= 1 ? 'text-emerald-600' : 'text-red-600'}`}>
+              <span className="text-sm font-black">
+                {r.climateMultiplier >= 1 ? '+' : ''}{((r.climateMultiplier - 1) * 100).toFixed(1)}%
+              </span>
+              {r.climateMultiplier >= 1 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+            </div>
+          </div>
+          
+          {/* Variable Crecimiento en kg */}
+          <div className="text-right min-w-[70px]">
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Crecimiento</p>
+            <div className="flex items-center justify-end gap-1">
+              <span className="text-sm font-black text-gray-900">
+                {r.grassGrowthRateKgHaDay.toFixed(1)} <span className="text-[10px] font-bold text-gray-400">kg/d</span>
+              </span>
+            </div>
+            {growthDiff !== null && (
+              <div className={`text-[9px] font-black mt-0.5 flex items-center justify-end gap-0.5 ${growthDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {growthDiff >= 0 ? '+' : ''}{growthDiff}
+                {growthDiff >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
+              </div>
+            )}
+          </div>
         </div>
 
         {expanded ? <ChevronUp className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" />}
