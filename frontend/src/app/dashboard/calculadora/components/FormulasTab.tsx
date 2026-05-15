@@ -42,25 +42,25 @@ function Card({ num, title, desc, formula, result, unit, resultLabel, children }
 }) {
   return (
     <div className="bg-white border border-gray-100 rounded-xl overflow-hidden flex flex-col">
-      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
+      <div className="px-5 py-4 border-b border-gray-100">
         <div className="flex items-start gap-2">
           <span className="shrink-0 text-[10px] font-black text-gray-400 bg-gray-100 rounded-md px-1.5 py-0.5 mt-0.5">{num}</span>
           <div>
-            <h3 className="text-xs font-bold text-gray-800 leading-tight">{title}</h3>
-            <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{desc}</p>
+            <h3 className="text-sm font-bold text-gray-800 leading-tight">{title}</h3>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">{desc}</p>
           </div>
         </div>
-        <div className="mt-2 bg-gray-900 px-3 py-1.5 rounded-lg font-mono text-[10px] text-green-400 overflow-x-auto whitespace-nowrap">
+        <div className="mt-3 bg-gray-50 border border-gray-100 px-3 py-2 rounded-lg font-mono text-[10px] text-gray-600 overflow-x-auto whitespace-nowrap">
           {formula}
         </div>
       </div>
-      <div className="p-4 flex-1 flex flex-col gap-4">
+      <div className="p-5 flex-1 flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">{children}</div>
-        <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
+        <div className="pt-4 border-t border-gray-50 flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">{resultLabel}</span>
           <div className="text-right">
-            <span className="text-xl font-black text-gray-900 tabular-nums">{result}</span>
-            <span className="text-xs text-gray-400 ml-1">{unit}</span>
+            <span className="text-2xl font-black text-gray-900 tabular-nums">{result}</span>
+            <span className="text-xs text-gray-400 ml-1.5">{unit}</span>
           </div>
         </div>
       </div>
@@ -68,16 +68,11 @@ function Card({ num, title, desc, formula, result, unit, resultLabel, children }
   )
 }
 
-function ModuleHeader({ icon, title, subtitle, color }: { icon: string; title: string; subtitle: string; color: string }) {
+function ModuleHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className={clsx('rounded-xl p-4 border', color)}>
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">{icon}</span>
-        <div>
-          <h2 className="text-sm font-black text-gray-900">{title}</h2>
-          <p className="text-[10px] text-gray-500 mt-0.5">{subtitle}</p>
-        </div>
-      </div>
+    <div className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
+      <p className="text-xs font-bold text-gray-800 tracking-widest uppercase border-b border-gray-100 pb-3">{title}</p>
+      <p className="text-xs text-gray-500 pt-3">{subtitle}</p>
     </div>
   )
 }
@@ -108,10 +103,8 @@ function ModuloHolistico() {
   return (
     <div className="space-y-4">
       <ModuleHeader
-        icon="🌿"
         title="Módulo 1 — Manejo Holístico"
         subtitle="Protocolo Allan Savory · Planificación temporal y recuperación vegetal"
-        color="bg-green-50 border-green-100"
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -188,10 +181,8 @@ function ModuloPRV() {
   return (
     <div className="space-y-4">
       <ModuleHeader
-        icon="🔄"
         title="Módulo 2 — Pastoreo Racional Voisin (PRV)"
         subtitle="Leyes de la Biocenosis · Curva sigmoidea de crecimiento y eficiencia de cosecha"
-        color="bg-blue-50 border-blue-100"
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -247,10 +238,8 @@ function ModuloTradicional() {
   return (
     <div className="space-y-4">
       <ModuleHeader
-        icon="🐄"
         title="Módulo 3 — Ganadería Tradicional y Extensiva"
         subtitle="Métricas estándar · Control de stock, equivalencias y rendimientos físicos"
-        color="bg-amber-50 border-amber-100"
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -307,10 +296,8 @@ function ModuloSupl() {
   return (
     <div className="space-y-4">
       <ModuleHeader
-        icon="🌾"
         title="Módulo 4 — Suplementación, Feedlot y Reservas Forrajeras"
         subtitle="Alta precisión · Control de costos, insumos y balance estacional"
-        color="bg-purple-50 border-purple-100"
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -356,11 +343,11 @@ function ModuloSupl() {
 
 type ModuleKey = 'holistico' | 'prv' | 'tradicional' | 'supl'
 
-const MODULE_TABS: { key: ModuleKey; label: string; icon: string }[] = [
-  { key: 'holistico',    label: 'Holístico',     icon: '🌿' },
-  { key: 'prv',          label: 'PRV Voisin',    icon: '🔄' },
-  { key: 'tradicional',  label: 'Tradicional',   icon: '🐄' },
-  { key: 'supl',         label: 'Suplementación', icon: '🌾' },
+const MODULE_TABS: { key: ModuleKey; label: string }[] = [
+  { key: 'holistico',    label: 'Holístico' },
+  { key: 'prv',          label: 'PRV Voisin' },
+  { key: 'tradicional',  label: 'Tradicional' },
+  { key: 'supl',         label: 'Suplementación' },
 ]
 
 export function FormulasTab() {
@@ -370,9 +357,9 @@ export function FormulasTab() {
     <div className="space-y-5 animate-in fade-in duration-300">
 
       {/* Banner */}
-      <div className="bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700 rounded-xl p-4">
-        <h2 className="text-sm font-black text-white">Calculadora Agrotecnológica — Motor de Precisión</h2>
-        <p className="text-[11px] text-gray-400 mt-1 max-w-3xl leading-relaxed">
+      <div className="bg-white border border-gray-100 rounded-xl p-5">
+        <p className="text-xs font-bold text-gray-800 tracking-widest uppercase border-b border-gray-100 pb-3">Calculadora Agrotecnológica — Motor de Precisión</p>
+        <p className="text-xs text-gray-500 mt-3 max-w-3xl leading-relaxed">
           16 fórmulas organizadas en 4 paradigmas de manejo. Ingresá valores de prueba en cada campo para ver el resultado en tiempo real. Resultados redondeados a 2 decimales con unidades de medida explícitas.
         </p>
       </div>
@@ -384,13 +371,12 @@ export function FormulasTab() {
             key={m.key}
             onClick={() => setActiveModule(m.key)}
             className={clsx(
-              'flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all border',
+              'px-4 py-2 rounded-lg text-xs font-bold transition-colors border',
               activeModule === m.key
-                ? 'bg-gray-900 text-white border-gray-900'
-                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700'
+                ? 'bg-gray-100 text-gray-900 border-gray-200'
+                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700'
             )}
           >
-            <span>{m.icon}</span>
             {m.label}
           </button>
         ))}
