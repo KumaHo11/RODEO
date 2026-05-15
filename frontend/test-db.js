@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 
 const pool = new Pool({
-  connectionString: 'postgresql://postgres:Fottballer1144@35.247.199.183:5432/rodeo'
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:<PASSWORD>@35.247.199.183:5432/rodeo'
 });
 
 async function run() {

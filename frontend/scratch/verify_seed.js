@@ -1,5 +1,5 @@
 const { Client } = require('pg');
-const connectionString = 'postgresql://postgres:Fottballer1144@35.247.199.183:5432/rodeo';
+const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:<PASSWORD>@35.247.199.183:5432/rodeo';
 const orgId = '1ea6dbed-44fb-4b4f-ade5-708589e097ed';
 
 async function run() {
