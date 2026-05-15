@@ -448,19 +448,19 @@ function TabRodeos() {
     <div className="space-y-5">
       {/* Banner de bienestar actual */}
       {current && (
-        <div className={`rounded-2xl border p-5 ${consumptionAdj < 0 ? 'bg-orange-50 border-orange-200' : coldStress ? (severeColdStress ? 'bg-red-50 border-red-200' : 'bg-sky-50 border-sky-200') : 'bg-emerald-50 border-emerald-100'}`}>
+        <div className="rounded-2xl border p-5 bg-white border-gray-200">
           <div className="flex items-start gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${consumptionAdj < 0 ? 'bg-orange-100' : coldStress ? (severeColdStress ? 'bg-red-100' : 'bg-sky-100') : 'bg-emerald-100'}`}>
-              {consumptionAdj < 0 ? <Thermometer className="w-6 h-6 text-orange-600" /> : coldStress ? <CloudSnow className={`w-6 h-6 ${severeColdStress ? 'text-red-600' : 'text-sky-600'}`} /> : <CheckCircle2 className="w-6 h-6 text-emerald-600" />}
-            </div>
             <div className="flex-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">Estado de bienestar animal · Ahora</p>
-              <p className={`text-lg font-black leading-tight ${welfareColor}`}>{welfareLabel}</p>
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${consumptionAdj < 0 ? 'bg-orange-500' : coldStress ? (severeColdStress ? 'bg-red-500' : 'bg-sky-500') : 'bg-emerald-500'}`} />
+                <p className={`text-lg font-black leading-tight text-gray-900`}>{welfareLabel}</p>
+              </div>
               <p className="text-xs text-gray-500 font-medium mt-1">
                 {consumptionAdj < 0
                   ? `Consumo reducido estimado: ${consumptionAdj}% · Índice THI: ${thi}`
                   : energyAdj > 0
-                  ? `Gasto energético adicional: +${energyAdj}% · Pérdida estimada CC: -${bcsDrop} pts/mes`
+                  ? `Gasto energético adicional: +${energyAdj}% · Pérdida CC: -${bcsDrop} pts/m`
                   : `Sin ajustes de consumo. Condiciones óptimas para el rodeo.`}
               </p>
             </div>
@@ -508,21 +508,22 @@ function TabRodeos() {
           <p className="text-xs font-black text-gray-700">Referencia índices de bienestar térmico</p>
           <p className="text-[10px] text-gray-400 font-medium mt-0.5">Cuándo actuar según las condiciones climáticas</p>
         </div>
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-gray-100">
           {[
-            { range: 'T < 5°C', label: 'Estrés severo por frío', action: 'Proveer refugio, aumentar ración ++', color: 'bg-red-50', text: 'text-red-700' },
-            { range: 'T < 10°C (con viento)', label: 'Estrés por frío', action: 'Aumentar requerimiento energético', color: 'bg-sky-50', text: 'text-sky-700' },
-            { range: 'Confort térmico', label: 'Zona de confort', action: 'Sin acción requerida', color: 'bg-emerald-50', text: 'text-emerald-700' },
-            { range: 'THI 72–79', label: 'Estrés calórico moderado', action: 'Revisar sombra y agua fresca', color: 'bg-yellow-50', text: 'text-yellow-700' },
-            { range: 'THI 80–89', label: 'Estrés calórico severo', action: 'Limitar actividad y reducir carga', color: 'bg-orange-50', text: 'text-orange-700' },
-            { range: 'THI ≥ 90', label: 'Estrés calórico crítico', action: 'Riesgo de mortalidad. Acción inmediata.', color: 'bg-red-50', text: 'text-red-700' },
+            { range: 'T < 5°C', label: 'Estrés severo por frío', action: 'Proveer refugio, aumentar ración ++', text: 'text-red-600' },
+            { range: 'T < 10°C (con viento)', label: 'Estrés por frío', action: 'Aumentar requerimiento energético', text: 'text-sky-600' },
+            { range: 'Confort térmico', label: 'Zona de confort', action: 'Sin acción requerida', text: 'text-emerald-600' },
+            { range: 'THI 72–79', label: 'Estrés calórico moderado', action: 'Revisar sombra y agua fresca', text: 'text-yellow-600' },
+            { range: 'THI 80–89', label: 'Estrés calórico severo', action: 'Limitar actividad y reducir carga', text: 'text-orange-600' },
+            { range: 'THI ≥ 90', label: 'Estrés calórico crítico', action: 'Riesgo de mortalidad. Acción inmediata.', text: 'text-red-600' },
           ].map(r => (
-            <div key={r.range} className={`px-5 py-3 flex items-center justify-between ${r.color}`}>
+            <div key={r.range} className={`px-5 py-3 flex items-center justify-between`}>
               <div className="flex items-center gap-3">
-                <span className={`text-xs font-black ${r.text}`}>{r.range}</span>
-                <span className={`text-[10px] font-bold ${r.text} opacity-80`}>{r.label}</span>
+                <span className={`w-2 h-2 rounded-full ${r.text.replace('text-', 'bg-')}`} />
+                <span className={`text-xs font-black text-gray-900`}>{r.range}</span>
+                <span className={`text-[10px] font-bold text-gray-500`}>{r.label}</span>
               </div>
-              <p className={`text-[10px] font-medium ${r.text} opacity-70`}>{r.action}</p>
+              <p className={`text-[10px] font-medium text-gray-400`}>{r.action}</p>
             </div>
           ))}
         </div>
@@ -574,7 +575,6 @@ export default function ClimaPage() {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab.icon}
               {tab.label}
             </button>
           ))}

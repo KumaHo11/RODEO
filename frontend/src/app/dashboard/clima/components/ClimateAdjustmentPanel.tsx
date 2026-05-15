@@ -177,8 +177,8 @@ function PaddockWeatherForm({
       </div>
 
       {/* Fields */}
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+        <div className="w-full sm:flex-1">
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">
             {tab === 'rain' ? 'Milímetros (mm)' : 'Temperatura (°C)'}
           </label>
@@ -196,7 +196,7 @@ function PaddockWeatherForm({
             </span>
           </div>
         </div>
-        <div className="w-36">
+        <div className="w-full sm:w-36">
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Fecha</label>
           <input
             type="date"
@@ -210,7 +210,7 @@ function PaddockWeatherForm({
           type="button"
           onClick={handleSubmit}
           disabled={!isValid || saving || !onSave}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl transition-all shadow-sm disabled:opacity-40 shrink-0"
+          className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl transition-all shadow-sm disabled:opacity-40 shrink-0"
           style={{ backgroundColor: saved ? '#10b981' : '#166534', color: 'white' }}
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -560,23 +560,15 @@ export function ClimateAdjustmentPanel({
       {/* ── Global summary ─────────────────────────────────────────────── */}
       {showGlobalSummary && allResults.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-2xl p-5">
-          {/* Field name title */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="min-w-0 flex-1 pr-4">
-              {orgName && (
-                <p className="text-xl font-black text-gray-900 leading-none mb-0.5 truncate" title={orgName}>
-                  {orgName}
-                </p>
-              )}
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                Resumen del campo
+          <div className="mb-4">
+            {orgName && (
+              <p className="text-xl font-black text-gray-900 leading-none mb-0.5 truncate" title={orgName}>
+                {orgName}
               </p>
-            </div>
-            
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-              <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md ${viewMode === 'grid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}><LayoutGrid className="w-3.5 h-3.5" /></button>
-              <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md ${viewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}><List className="w-3.5 h-3.5" /></button>
-            </div>
+            )}
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+              Resumen del campo
+            </p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
             {[
@@ -595,19 +587,25 @@ export function ClimateAdjustmentPanel({
         </div>
       )}
 
-      {/* ── Refresh button ─────────────────────────────────────────────── */}
+      {/* ── View toggles & Refresh button ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 hidden sm:block">
           Por potrero ({paddocks.length})
         </p>
-        <button
-          onClick={calculateAll}
-          disabled={running}
-          className="flex items-center gap-1.5 text-[10px] font-black text-green-700 hover:text-green-900 disabled:opacity-50 transition-colors"
-        >
-          <RefreshCw className={`w-3 h-3 ${running ? 'animate-spin' : ''}`} />
-          {running ? 'Calculando…' : 'Actualizar'}
-        </button>
+        <div className="flex items-center justify-between w-full sm:w-auto sm:justify-end gap-3">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+            <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md ${viewMode === 'grid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}><LayoutGrid className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md ${viewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}><List className="w-3.5 h-3.5" /></button>
+          </div>
+          <button
+            onClick={calculateAll}
+            disabled={running}
+            className="flex items-center gap-1.5 text-[10px] font-black text-green-700 hover:text-green-900 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className={`w-3 h-3 ${running ? 'animate-spin' : ''}`} />
+            <span>{running ? 'Calculando…' : 'Actualizar'}</span>
+          </button>
+        </div>
       </div>
 
       {/* ── Paddock cards ─────────────────────────────────────────────── */}
