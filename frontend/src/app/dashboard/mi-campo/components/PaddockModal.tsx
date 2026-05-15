@@ -1355,7 +1355,7 @@ export default function PaddockModal({
                     <div key={i} className="flex flex-wrap items-center justify-between gap-2 p-4 bg-gray-50 rounded-xl border border-gray-100">
                       <div>
                         <p className="text-sm font-black text-gray-900">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">Multiplicador clima: <span className="font-bold">{snap.climate_multiplier.toFixed(2)}x</span></p>
+                        <p className="text-xs text-gray-400 mt-0.5">Multiplicador clima: <span className="font-bold">{Number(snap.climate_multiplier || 1).toFixed(2)}x</span></p>
                       </div>
                       <div className="flex items-center gap-6 text-right">
                         <div>

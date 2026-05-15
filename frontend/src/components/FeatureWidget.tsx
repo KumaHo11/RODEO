@@ -7,7 +7,7 @@ interface FeatureWidgetProps {
   icon?: React.ReactNode;
   children: React.ReactNode;
   isFeatureEnabled: boolean;
-  requiredPlan?: 'holistico' | 'enterprise';
+  requiredPlan?: 'holistico' | 'latifundio';
   onAction?: () => void;
   actionLabel?: string;
   className?: string;
@@ -25,7 +25,7 @@ export function FeatureWidget({
   className = '',
   href
 }: FeatureWidgetProps) {
-  const isEnterprise = requiredPlan === 'enterprise';
+  const isLatifundio = requiredPlan === 'latifundio';
 
   const widgetContent = (
     <div className={`relative flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden h-full ${className}`}>
@@ -53,7 +53,7 @@ export function FeatureWidget({
         {isFeatureEnabled ? (
           children
         ) : (
-          isEnterprise ? (
+          isLatifundio ? (
             <>
               <div className="blur-sm opacity-50 select-none pointer-events-none absolute inset-0 p-4">
                 {children}
@@ -62,7 +62,7 @@ export function FeatureWidget({
                 <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mb-3">
                   <Lock className="w-6 h-6 text-amber-600" />
                 </div>
-                <p className="text-sm font-bold text-gray-900 mb-2">Desbloquea esta métrica en el Plan Enterprise.</p>
+                <p className="text-sm font-bold text-gray-900 mb-2">Desbloquea esta métrica en el Plan Latifundio.</p>
                 <Link href="/dashboard/planes" className="px-4 py-2 bg-gray-900 text-white text-xs font-bold rounded-lg hover:bg-gray-800 transition-colors">
                   Ver planes
                 </Link>

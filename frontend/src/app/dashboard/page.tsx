@@ -35,15 +35,17 @@ const TASK_PRIORITY_COLORS: Record<string, string> = {
   media: 'bg-amber-100 text-amber-700 border-amber-200',
   baja: 'bg-gray-100 text-gray-600 border-gray-200',
 }
+import { usePlan } from '@/hooks/usePlan'
 
 export default function DashboardOverview() {
   const { user, profile, isLoading: authLoading } = useAuth()
+  const { hasFeature } = usePlan()
   const router = useRouter()
   const [loading, setLoading]             = useState(true)
   const [herds, setHerds]                 = useState<any[]>([])
   const [paddocks, setPaddocks]           = useState<any[]>([])
   const [org, setOrg]                     = useState<any>(null)
-  const { current: weatherCurrent, forecast: weatherForecast, isLoading: weatherLoading } = useWeather()
+  const { current: weatherCurrent, forecast: weatherForecast, locationName, isLoading: weatherLoading } = useWeather()
   const [nextMoves, setNextMoves]         = useState<any[]>([])
   const [upcomingTasks, setUpcomingTasks] = useState<any[]>([])
   const [farmEvents, setFarmEvents]       = useState<any[]>([])
@@ -291,10 +293,8 @@ export default function DashboardOverview() {
   const totalMSOffer   = totalMS * 0.5
   const dailyDemand    = totalEV * 12
   const balanceDeficit = dailyDemand > 0 && totalMSOffer < dailyDemand
-
-  // Lógica de Plan y Feature Flags (ejemplo usando org, por defecto a 'holistico' para ver upsell)
-  const currentPlan = (org as any)?.subscription_plan || 'holistico'
-  const isEnterprisePlan = currentPlan === 'enterprise'
+  
+  const canNdvi = hasFeature('ndvi_access')
 
   // Ajuste por Frío / THI
   const currentTemp = weatherCurrent?.tempC ?? 20
@@ -341,7 +341,10 @@ export default function DashboardOverview() {
                       <p className="text-sm font-bold text-blue-800 leading-tight">
                         {weatherCurrent?.conditionLabel ?? '—'}
                       </p>
-                      <p className="text-[10px] font-bold text-blue-600/70 uppercase">Sensación</p>
+                      <p className="text-[10px] font-bold text-blue-600/70 uppercase flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {locationName ?? 'Campo'}
+                      </p>
                     </div>
                   </>
                 )}
@@ -531,8 +534,8 @@ export default function DashboardOverview() {
         <FeatureWidget
           title="Pastoreo y vigor (NDVI)"
           icon={<Satellite className="w-4 h-4 text-emerald-600" />}
-          isFeatureEnabled={isEnterprisePlan}
-          requiredPlan="enterprise"
+          isFeatureEnabled={canNdvi}
+          requiredPlan="latifundio"
           actionLabel="Actualizar"
           onAction={refreshAllNdvi}
           className="lg:col-span-2"
