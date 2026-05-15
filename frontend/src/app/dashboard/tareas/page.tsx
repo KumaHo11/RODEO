@@ -32,18 +32,18 @@ interface Task {
 }
 
 // ── Config ─────────────────────────────────────────────────────────────────────
-const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; dot: string }> = {
-  BAJA:    { label: 'Baja',    color: 'bg-gray-100 text-gray-600',    dot: 'bg-gray-400' },
-  NORMAL:  { label: 'Normal',  color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500' },
-  ALTA:    { label: 'Alta',    color: 'bg-orange-100 text-orange-700',dot: 'bg-orange-500' },
-  URGENTE: { label: 'Urgente', color: 'bg-red-100 text-red-700',      dot: 'bg-red-500' },
+const PRIORITY_CONFIG: Record<Priority, { label: string }> = {
+  BAJA:    { label: 'Baja' },
+  NORMAL:  { label: 'Normal' },
+  ALTA:    { label: 'Alta' },
+  URGENTE: { label: 'Urgente' },
 }
 
-const STATUS_CONFIG: Record<Status, { label: string; color: string; headerBg: string; headerText: string }> = {
-  PENDIENTE:   { label: 'Pendiente',   color: 'bg-amber-50 border-amber-200',  headerBg: 'bg-amber-50',  headerText: 'text-amber-700' },
-  EN_PROCESO:  { label: 'En proceso',  color: 'bg-blue-50 border-blue-200',    headerBg: 'bg-blue-50',   headerText: 'text-blue-700' },
-  COMPLETADA:  { label: 'Completada',  color: 'bg-green-50 border-green-200',  headerBg: 'bg-green-50',  headerText: 'text-green-700' },
-  CANCELADA:   { label: 'Cancelada',   color: 'bg-gray-50 border-gray-200',    headerBg: 'bg-gray-50',   headerText: 'text-gray-500' },
+const STATUS_CONFIG: Record<Status, { label: string }> = {
+  PENDIENTE:   { label: 'Pendiente' },
+  EN_PROCESO:  { label: 'En proceso' },
+  COMPLETADA:  { label: 'Completada' },
+  CANCELADA:   { label: 'Cancelada' },
 }
 
 const TYPE_ICONS: Record<TaskType, React.ComponentType<any>> = {
@@ -74,30 +74,31 @@ function TaskCard({ task, onStatusChange, isOwner }: {
   isOwner: boolean
 }) {
   const pCfg = PRIORITY_CONFIG[task.priority]
-  const Icon = TYPE_ICONS[task.task_type] || TextCursor
   const overdue = isOverdue(task.due_date) && task.status !== 'COMPLETADA'
   const assigneeName = task.assignee
     ? [task.assignee.first_name, task.assignee.last_name].filter(Boolean).join(' ') || 'Sin nombre'
     : 'Sin asignar'
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-all group">
+    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-all group">
       {/* Priority + type row */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <Icon className="w-3.5 h-3.5 text-gray-400" />
-          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-            {TASK_TYPES.find(t => t.id === task.task_type)?.label}
-          </span>
-        </div>
-        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 ${pCfg.color}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${pCfg.dot}`} />
-          {pCfg.label}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+          {TASK_TYPES.find(t => t.id === task.task_type)?.label}
         </span>
+        {task.priority === 'URGENTE' ? (
+          <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200 uppercase tracking-widest">
+            Urgente
+          </span>
+        ) : (
+          <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border border-gray-200 uppercase tracking-widest">
+            {pCfg.label}
+          </span>
+        )}
       </div>
 
       {/* Title */}
-      <p className="text-sm font-black text-gray-900 leading-snug mb-2">{task.title}</p>
+      <p className="text-sm font-bold text-gray-900 leading-snug mb-2">{task.title}</p>
 
       {/* Description */}
       {task.description && (
@@ -105,44 +106,43 @@ function TaskCard({ task, onStatusChange, isOwner }: {
       )}
 
       {/* Meta */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-3 mt-3">
         {task.paddock && (
-          <span className="flex items-center gap-1 text-[9px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded-lg">
-            <MapPin className="w-2.5 h-2.5" /> {task.paddock.name}
+          <span className="text-[9px] font-bold bg-gray-50 text-gray-600 border border-gray-100 px-2 py-1 rounded-lg">
+            {task.paddock.name}
           </span>
         )}
         {task.due_date && (
-          <span className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-lg ${overdue ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
-            <Calendar className="w-2.5 h-2.5" />
-            {overdue ? '⚠ ' : ''}{fmtDate(task.due_date)}
+          <span className={`text-[9px] font-bold px-2 py-1 rounded-lg border ${overdue ? 'bg-red-50 text-red-600 border-red-100' : 'bg-gray-50 text-gray-600 border-gray-100'}`}>
+            {fmtDate(task.due_date)}
           </span>
         )}
-        <span className="flex items-center gap-1 text-[9px] font-bold bg-gray-50 text-gray-500 px-2 py-0.5 rounded-lg">
-          <User className="w-2.5 h-2.5" /> {assigneeName}
+        <span className="text-[9px] font-bold bg-gray-50 text-gray-600 border border-gray-100 px-2 py-1 rounded-lg">
+          {assigneeName}
         </span>
       </div>
 
-      {/* Status controls — clearly interactive action buttons */}
+      {/* Status controls */}
       {task.status !== 'CANCELADA' && (
-        <div className="pt-2 border-t border-gray-100">
-          <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1.5">Mover a</p>
+        <div className="pt-3 border-t border-gray-100">
+          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Mover a</p>
           <div className="flex gap-1.5 flex-wrap">
             {task.status !== 'PENDIENTE' && (
               <button onClick={() => onStatusChange(task.id, 'PENDIENTE')}
-                className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 active:scale-95 transition-all">
-                <RotateCcw className="w-3 h-3" /> Pendiente
+                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                Pendiente
               </button>
             )}
             {task.status !== 'EN_PROCESO' && (
               <button onClick={() => onStatusChange(task.id, 'EN_PROCESO')}
-                className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 active:scale-95 transition-all">
-                <ChevronRight className="w-3 h-3" /> En proceso
+                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                En proceso
               </button>
             )}
             {task.status !== 'COMPLETADA' && (
               <button onClick={() => onStatusChange(task.id, 'COMPLETADA')}
-                className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 active:scale-95 transition-all">
-                <Check className="w-3 h-3" /> Completar
+                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                Completada
               </button>
             )}
           </div>
@@ -267,13 +267,13 @@ function TareasContent({ user }: { user: any }) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-gray-950">Tareas</h1>
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             {[
-              { label: 'Pendientes', count: pendingCount, color: 'bg-amber-100 text-amber-700' },
-              { label: 'En proceso', count: inProgressCount, color: 'bg-blue-100 text-blue-700' },
-              { label: 'Completadas', count: doneCount, color: 'bg-green-100 text-green-700' },
+              { label: 'Pendientes', count: pendingCount },
+              { label: 'En proceso', count: inProgressCount },
+              { label: 'Completadas', count: doneCount },
             ].map(s => (
-              <span key={s.label} className={`text-[10px] font-black px-2.5 py-1 rounded-lg ${s.color}`}>
+              <span key={s.label} className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 shadow-sm">
                 {s.count} {s.label}
               </span>
             ))}
@@ -322,9 +322,9 @@ function TareasContent({ user }: { user: any }) {
             const cols = grouped[status] || []
             return (
               <div key={status} className="flex flex-col gap-3">
-                <div className={`flex items-center justify-between px-3 py-2 rounded-xl ${cfg.headerBg}`}>
-                  <h3 className={`text-xs font-black uppercase tracking-widest ${cfg.headerText}`}>{cfg.label}</h3>
-                  <span className={`text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center ${cfg.headerBg} ${cfg.headerText} border`}>
+                <div className="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-800">{cfg.label}</h3>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">
                     {cols.length}
                   </span>
                 </div>
@@ -351,8 +351,8 @@ function TareasContent({ user }: { user: any }) {
               <button
                 key={s}
                 onClick={() => setFilterStatus(s as any)}
-                className={`text-[10px] font-black px-3 py-1.5 rounded-xl whitespace-nowrap transition-all ${
-                  filterStatus === s ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                className={`text-[10px] font-bold px-3 py-1.5 rounded-xl whitespace-nowrap transition-all border ${
+                  filterStatus === s ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
                 }`}
               >
                 {s === 'ALL' ? 'Todas' : STATUS_CONFIG[s as Status].label}
@@ -360,35 +360,39 @@ function TareasContent({ user }: { user: any }) {
               </button>
             ))}
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-gray-100">
             {filteredTasks.map(task => {
               const pCfg = PRIORITY_CONFIG[task.priority]
-              const Icon = TYPE_ICONS[task.task_type]
               const overdue = isOverdue(task.due_date) && task.status !== 'COMPLETADA'
-              const sc = STATUS_CONFIG[task.status]
               return (
                 <div key={task.id} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${sc.color}`}>
-                    <Icon className="w-4 h-4" />
-                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-black text-gray-900">{task.title}</p>
-                      <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${pCfg.color}`}>{pCfg.label}</span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 flex-wrap text-[10px] text-gray-400 font-bold">
-                      {task.due_date && (
-                        <span className={overdue ? 'text-red-500' : ''}>{fmtDate(task.due_date)}</span>
+                      <p className="text-sm font-bold text-gray-900">{task.title}</p>
+                      {task.priority === 'URGENTE' ? (
+                        <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200 uppercase tracking-widest">
+                          Urgente
+                        </span>
+                      ) : (
+                        <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border border-gray-200 uppercase tracking-widest">
+                          {pCfg.label}
+                        </span>
                       )}
-                      {task.paddock && <span><MapPin className="inline w-2.5 h-2.5 mr-0.5" />{task.paddock.name}</span>}
-                      {task.assignee && <span><User className="inline w-2.5 h-2.5 mr-0.5" />{[task.assignee.first_name, task.assignee.last_name].filter(Boolean).join(' ') || 'Sin nombre'}</span>}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1.5 flex-wrap text-[10px] text-gray-500 font-medium">
+                      <span className="uppercase tracking-widest font-black text-gray-400">{TASK_TYPES.find(t => t.id === task.task_type)?.label}</span>
+                      {task.due_date && (
+                        <span className={overdue ? 'text-red-500 font-bold' : ''}>{fmtDate(task.due_date)}</span>
+                      )}
+                      {task.paddock && <span>{task.paddock.name}</span>}
+                      {task.assignee && <span>{[task.assignee.first_name, task.assignee.last_name].filter(Boolean).join(' ') || 'Sin nombre'}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {task.status !== 'COMPLETADA' && (
                       <button onClick={() => changeStatus(task.id, 'COMPLETADA')}
-                        className="text-[9px] font-bold px-2.5 py-1.5 rounded-xl bg-green-50 text-green-700 hover:bg-green-100 flex items-center gap-1 transition-colors">
-                        <Check className="w-3 h-3" /> Completar
+                        className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                        Completar
                       </button>
                     )}
                   </div>
