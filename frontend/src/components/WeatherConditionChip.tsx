@@ -248,9 +248,9 @@ function ClimateDetailDrawer({
                     <span className="text-xs font-bold text-gray-500">NDVI (verdor)</span>
                     <div className="flex items-center gap-2">
                       <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${ndvi * 100}%` }} />
+                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Number(ndvi) * 100}%` }} />
                       </div>
-                      <span className="text-sm font-black text-gray-700">{ndvi.toFixed(3)}</span>
+                      <span className="text-sm font-black text-gray-700">{Number(ndvi).toFixed(3)}</span>
                     </div>
                   </div>
                 )}
