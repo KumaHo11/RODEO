@@ -414,7 +414,7 @@ function PaddockCard({
                     <div key={i} className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
                       <div>
                         <p className="text-xs font-black text-gray-900">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
-                        <p className="text-[10px] text-gray-400">Multiplicador clima: {snap.climate_multiplier.toFixed(2)}x</p>
+                        <p className="text-[10px] text-gray-400">Multiplicador clima: {Number(snap.climate_multiplier).toFixed(2)}x</p>
                       </div>
                       <div className="flex items-center gap-4 text-right">
                         <div>
