@@ -484,16 +484,7 @@ export default function PaddockSidePanel({
                             grassGrowthRate={paddock.dry_matter_kg_ha ? Number(paddock.dry_matter_kg_ha) * 0.012 : undefined}
                             ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
                           />
-                          {/* Iconos técnicos */}
                           <div className="flex items-center gap-1">
-                            {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff }) => {
-                              const active = Boolean(td[key]) || (key === 'hasPests' && (td.weeds || td.weed_types || []).length > 0)
-                              return (
-                                <span key={key} className={`w-6 h-6 rounded-lg flex items-center justify-center ${active ? bgOn : 'bg-gray-50'}`}>
-                                  <Icon className={`w-3.5 h-3.5 ${active ? color : 'text-gray-200'}`} />
-                                </span>
-                              )
-                            })}
                             {canNdvi && ndviVal != null && (
                               <span className="text-[9px] font-bold text-gray-600 ml-1">
                                 NDVI {Number(ndviVal).toFixed(2)}
@@ -505,7 +496,7 @@ export default function PaddockSidePanel({
                           onClick={e => { e.stopPropagation(); openModal(paddock) }}
                           className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-sm shrink-0"
                         >
-                          Detalles
+                          Gestionar
                         </button>
                       </div>
                     )}

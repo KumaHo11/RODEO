@@ -19,7 +19,7 @@
 
 import React, { useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { Sun, Cloud, CloudRain, CloudSnow, Wind, Thermometer, Droplets, X, ExternalLink, Leaf, TrendingDown, TrendingUp, Minus } from 'lucide-react'
+import { Sun, Cloud, CloudRain, CloudSnow, Wind, Thermometer, Droplets, X, ExternalLink, Leaf, TrendingDown, TrendingUp, Minus, Info } from 'lucide-react'
 import { useWeather } from '@/lib/context/WeatherContext'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -233,7 +233,10 @@ function ClimateDetailDrawer({
                   <div className={`flex items-center justify-between px-4 py-3 rounded-xl border ${cond.bg} ${cond.border}`}>
                     <div className="flex items-center gap-2">
                       <Leaf className={`w-4 h-4 ${cond.text}`} />
-                      <span className={`text-xs font-bold ${cond.text}`}>Tasa de crecimiento</span>
+                      <div className="flex items-center gap-1.5" title="Kilogramos de Materia Seca por hectárea, por día. Representa el ritmo de crecimiento diario estimado del pasto.">
+                        <span className={`text-xs font-bold ${cond.text}`}>Tasa de crecimiento</span>
+                        <Info className={`w-3.5 h-3.5 ${cond.text} opacity-60 hover:opacity-100 cursor-help transition-opacity`} />
+                      </div>
                     </div>
                     <span className={`text-base font-black ${cond.text}`}>
                       {grassGrowthRate.toFixed(1)} <span className="text-xs font-medium">kg MS/ha/d</span>
