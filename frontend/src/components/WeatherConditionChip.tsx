@@ -444,9 +444,8 @@ export default function WeatherConditionChip({
       <button
         onClick={() => setDrawerOpen(true)}
         className={`
-          flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border
-          transition-all hover:shadow-sm active:scale-95 cursor-pointer
-          ${cond.bg} ${cond.border} ${className}
+          flex items-center gap-1.5 transition-all hover:opacity-70 active:scale-95 cursor-pointer
+          bg-transparent border-none ${className}
         `}
         title={`${label} · Clic para ver detalle`}
       >

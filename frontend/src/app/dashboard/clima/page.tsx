@@ -448,22 +448,19 @@ function TabRodeos() {
     <div className="space-y-5">
       {/* Banner de bienestar actual */}
       {current && (
-        <div className="rounded-2xl border p-5 bg-white border-gray-200">
-          <div className="flex items-start gap-4">
-            <div className="flex-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">Estado de bienestar animal · Ahora</p>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${consumptionAdj < 0 ? 'bg-orange-500' : coldStress ? (severeColdStress ? 'bg-red-500' : 'bg-sky-500') : 'bg-emerald-500'}`} />
-                <p className={`text-lg font-black leading-tight text-gray-900`}>{welfareLabel}</p>
-              </div>
-              <p className="text-xs text-gray-500 font-medium mt-1">
-                {consumptionAdj < 0
-                  ? `Consumo reducido estimado: ${consumptionAdj}% · Índice THI: ${thi}`
-                  : energyAdj > 0
-                  ? `Gasto energético adicional: +${energyAdj}% · Pérdida CC: -${bcsDrop} pts/m`
-                  : `Sin ajustes de consumo. Condiciones óptimas para el rodeo.`}
-              </p>
-            </div>
+        <div className={`flex items-center gap-3 p-4 rounded-2xl border ${consumptionAdj < 0 ? 'bg-orange-50 border-orange-100' : coldStress ? (severeColdStress ? 'bg-red-50 border-red-100' : 'bg-sky-50 border-sky-100') : 'bg-emerald-50 border-emerald-100'}`}>
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${consumptionAdj < 0 ? 'bg-orange-100' : coldStress ? (severeColdStress ? 'bg-red-100' : 'bg-sky-100') : 'bg-emerald-100'}`}>
+            {consumptionAdj < 0 ? <Thermometer className="w-4 h-4 text-orange-600" /> : coldStress ? <CloudSnow className={`w-4 h-4 ${severeColdStress ? 'text-red-600' : 'text-sky-600'}`} /> : <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+          </div>
+          <div>
+            <p className={`text-xs font-black ${consumptionAdj < 0 ? 'text-orange-900' : coldStress ? (severeColdStress ? 'text-red-900' : 'text-sky-900') : 'text-emerald-900'}`}>{welfareLabel}</p>
+            <p className={`text-[10px] font-medium ${consumptionAdj < 0 ? 'text-orange-700' : coldStress ? (severeColdStress ? 'text-red-700' : 'text-sky-700') : 'text-emerald-700'}`}>
+              {consumptionAdj < 0
+                ? `Consumo reducido estimado: ${consumptionAdj}% · Índice THI: ${thi}`
+                : energyAdj > 0
+                ? `Gasto energético adicional: +${energyAdj}% · Pérdida CC: -${bcsDrop} pts/m`
+                : `Condiciones óptimas para el rodeo. Sin ajustes de consumo.`}
+            </p>
           </div>
         </div>
       )}
@@ -519,9 +516,8 @@ function TabRodeos() {
           ].map(r => (
             <div key={r.range} className={`px-5 py-3 flex items-center justify-between`}>
               <div className="flex items-center gap-3">
-                <span className={`w-2 h-2 rounded-full ${r.text.replace('text-', 'bg-')}`} />
-                <span className={`text-xs font-black text-gray-900`}>{r.range}</span>
-                <span className={`text-[10px] font-bold text-gray-500`}>{r.label}</span>
+                <span className={`text-xs font-black min-w-[80px] ${r.text}`}>{r.range}</span>
+                <span className={`text-[10px] font-bold ${r.text} opacity-80`}>{r.label}</span>
               </div>
               <p className={`text-[10px] font-medium text-gray-400`}>{r.action}</p>
             </div>
