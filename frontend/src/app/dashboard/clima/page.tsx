@@ -9,11 +9,14 @@ import { WeatherHistoryTable }    from './components/WeatherHistoryTable'
 import { FeatureGate } from '@/components/FeatureGate'
 import { apiFetch } from '@/lib/apiFetch'
 import { useWeather } from '@/lib/context/WeatherContext'
+import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
 import WeatherConditionChip from '@/components/WeatherConditionChip'
+import { CATEGORIA_LABEL_RAE, CATEGORIA_COLORS, type CategoriaComercial } from '@/lib/categorias'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, Cloud, CloudRain, CloudSnow, Wind, Thermometer, Droplets,
   Leaf, TrendingUp, TrendingDown, Minus, BarChart3, Users, Clock,
-  AlertTriangle, CheckCircle2, ArrowRight, ChevronDown, ChevronUp,
+  AlertTriangle, CheckCircle2, ArrowRight, ChevronDown, ChevronUp, LayoutGrid, List
 } from 'lucide-react'
 
 // ── Tab definition ─────────────────────────────────────────────────────────────
@@ -142,13 +145,14 @@ function CurrentConditionsBar() {
 
 function TabResumen({ orgName }: { orgName: string | null }) {
   const { current } = useWeather()
+  const { avgGrowthRate } = useClimateAnalytics()
 
   return (
     <div className="space-y-6">
       {/* Widget actual + gráfico de crecimiento */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         <WeatherWidget />
-        <ClimateGrowthChart baseGrowthRate={20} />
+        <ClimateGrowthChart baseGrowthRate={avgGrowthRate} />
       </div>
 
       {/* KPIs actuales */}
@@ -251,77 +255,167 @@ function TabPotreros({ onSaveWeatherEvent, orgName }: { onSaveWeatherEvent: any;
   )
 }
 
-// ── Herd Card ─────────────────────────────────────────────────────────────────
-function HerdCard({ herd, consumptionAdj, energyAdj, thiLabel, thi, current, coldStress, thiColor }: any) {
-  const [expanded, setExpanded] = useState(false)
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const CATEGORIA_ABBR: Record<string, string> = {
+  VACAS: 'VAC', VAQUILLONAS: 'VEQ', TERNEROS: 'TER', TERNERAS: 'TRA',
+  NOVILLOS: 'NOV', NOVILLITOS: 'NVT', TOROS: 'TOR', MEJ: 'MEJ',
+  BUBALINOS: 'BUB',
+}
 
-  return (
-    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-all">
-      <button
-        onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors"
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-black text-gray-900 truncate">{herd.name}</span>
-            <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${consumptionAdj < 0 ? 'bg-orange-50 text-orange-700 border border-orange-200' : energyAdj > 0 ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${consumptionAdj < 0 ? 'bg-orange-500 animate-pulse' : energyAdj > 0 ? 'bg-sky-500 animate-pulse' : 'bg-emerald-500'}`} />
-              {consumptionAdj < 0 ? 'Alerta Consumo' : energyAdj > 0 ? 'Alerta Frío' : 'Normal'}
+function calcEV(weight: number, count: number, catKey: string | null): number {
+  const FACTORS: Record<string, number> = {
+    NOVILLOS: 1.0, NOVILLITOS: 0.9, VAQUILLONAS: 0.9,
+    TERNEROS: 0.6, TERNERAS: 0.55, VACAS: 1.0, TOROS: 1.25, MEJ: 0.9, BUBALINOS: 1.1,
+  }
+  const f = catKey ? (FACTORS[catKey] ?? 1.0) : 1.0
+  return parseFloat((Math.pow((weight || 400) / 400, 0.75) * f * count).toFixed(2))
+}
+
+function fmtDate(iso: string | null | undefined) {
+  if (!iso) return '—'
+  try {
+    const datePart = String(iso).slice(0, 10)
+    return new Date(datePart + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' })
+  } catch { return String(iso).slice(0, 10) }
+}
+
+// ── Herd Card ─────────────────────────────────────────────────────────────────
+function HerdCard({ herd, consumptionAdj, energyAdj, viewMode = 'grid' }: any) {
+  const catKey     = herd.categoria as CategoriaComercial | null
+  const colors     = catKey ? CATEGORIA_COLORS[catKey] : null
+  const catDisp    = catKey ? (CATEGORIA_LABEL_RAE[catKey] ?? catKey) : herd.species
+  const ev         = Number(herd.total_ev) || calcEV(Number(herd.avg_weight_kg), herd.head_count, catKey)
+  const baseMsDay  = Math.round(ev * 11)
+  
+  const hasClimateData = consumptionAdj !== undefined && energyAdj !== undefined
+  const reqAdjPercentage = consumptionAdj < 0 ? consumptionAdj : (energyAdj || 0)
+  const adjMsDay   = baseMsDay * (1 + reqAdjPercentage / 100)
+  const varMsDay   = adjMsDay - baseMsDay
+
+  if (viewMode === 'list') {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex items-center justify-between p-4 group">
+        <div className="flex items-center gap-4 flex-1">
+          <div className="shrink-0 w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center">
+            <span className="text-[10px] font-black text-gray-400">
+              {catKey ? (CATEGORIA_ABBR[catKey] ?? catKey.slice(0,3)) : (herd.species ?? '?').slice(0,3).toUpperCase()}
             </span>
           </div>
-          <p className="text-[10px] text-gray-400 font-medium mt-0.5 flex items-center gap-1.5">
-            {Math.round(herd.head_count ?? 0).toLocaleString('es-AR')} cab.
-            <span className="text-gray-300">•</span>
-            {Number(herd.total_ev ?? 0).toFixed(1)} EV
-          </p>
-        </div>
-
-        {/* Bolsa de Valores Metrics */}
-        <div className="flex items-center gap-6 shrink-0 mr-4">
-          <div className="text-right">
-            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Consumo</p>
-            <div className={`flex items-center justify-end gap-1 ${consumptionAdj < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-              <span className="text-sm font-black">{consumptionAdj < 0 ? consumptionAdj : '0'}%</span>
-              {consumptionAdj < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
-            </div>
-          </div>
-          
-          <div className="text-right min-w-[70px]">
-            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Energía</p>
-            <div className={`flex items-center justify-end gap-1 ${energyAdj > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-              <span className="text-sm font-black">{energyAdj > 0 ? '+' : ''}{energyAdj}%</span>
-              {energyAdj > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-            </div>
-          </div>
-        </div>
-
-        {expanded ? <ChevronUp className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" />}
-      </button>
-
-      {/* Expanded details */}
-      {expanded && current && (
-        <div className="border-t border-gray-100 px-5 py-4 space-y-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-              Variables climáticas y estrés esta semana
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-black text-gray-950 leading-tight truncate">{herd.name}</h3>
+              {herd.exit_date && (
+                <span className="text-[8px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md tracking-wider">TEMP</span>
+              )}
+            </div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate mt-0.5 flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full inline-block ${colors?.dot ?? 'bg-gray-300'}`} />
+              {catDisp}
             </p>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Índice THI</p>
-                <p className={`text-sm font-black ${thiColor}`}>{thi} <span className="text-[10px] font-bold text-gray-400">({thiLabel})</span></p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Temperatura</p>
-                <p className="text-sm font-black text-gray-900">{Math.round(current.tempC)}°C</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Viento Máx.</p>
-                <p className="text-sm font-black text-gray-900">{Math.round(current.windSpeedKmh)} km/h</p>
-              </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-8 shrink-0">
+          <WeatherConditionChip mode="herd" entityName={herd.name} className="hidden md:flex" />
+
+          <div className="w-px h-8 bg-gray-100 hidden sm:block" />
+
+          <div className="text-right min-w-[70px]">
+            <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-0.5">Base EV</p>
+            <p className="text-sm font-black text-gray-500">{Math.round(baseMsDay).toLocaleString('es-AR')} kg</p>
+          </div>
+
+          <div className="text-right min-w-[90px]">
+            <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-0.5">Demanda Total</p>
+            <div className="flex items-center justify-end gap-1.5">
+              <span className="text-lg font-black text-gray-900 leading-none">
+                {hasClimateData ? Math.round(adjMsDay).toLocaleString('es-AR') : '—'}
+              </span>
+              <span className="text-[10px] font-bold text-gray-400">kg/d</span>
+            </div>
+          </div>
+
+          <div className="text-right min-w-[70px]">
+            <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-0.5">Ajuste térmico</p>
+            {hasClimateData ? (
+              <p className={`text-sm font-black flex items-center justify-end gap-1 ${varMsDay > 0 ? 'text-sky-600' : varMsDay < 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
+                {varMsDay > 0 ? '+' : ''}{Math.round(varMsDay).toLocaleString('es-AR')} kg
+                {varMsDay > 0 ? <TrendingUp className="w-3 h-3" /> : varMsDay < 0 ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
+              </p>
+            ) : (
+              <p className="text-sm font-black text-gray-300 flex items-center justify-end gap-1">
+                — <Minus className="w-3 h-3" />
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group">
+      {/* ── Header: abbr badge + nombre + cat ── */}
+      <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="shrink-0 w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center">
+            <span className="text-[10px] font-black text-gray-400">
+              {catKey ? (CATEGORIA_ABBR[catKey] ?? catKey.slice(0,3)) : (herd.species ?? '?').slice(0,3).toUpperCase()}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-black text-gray-950 leading-tight truncate">{herd.name}</h3>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors?.dot ?? 'bg-gray-300'}`} />
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">{catDisp}</p>
+              {herd.exit_date && (
+                <span className="ml-1 text-[8px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md tracking-wider">TEMP</span>
+              )}
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ── Body: Stock destacado + métricas secundarias ── */}
+      <div className="px-5 pb-4">
+        {/* Consumo Requerido + Chip de clima */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-semibold text-gray-950 tabular-nums leading-none">
+              {hasClimateData ? Math.round(adjMsDay).toLocaleString('es-AR') : '—'}
+            </p>
+            <p className="text-sm font-bold text-gray-400">kg MS/día</p>
+          </div>
+          <div>
+            <WeatherConditionChip
+              mode="herd"
+              entityName={herd.name}
+            />
+          </div>
+        </div>
+
+        {/* Variación térmica + EV — segundo plano */}
+        <div className="flex items-center gap-4 pt-3 border-t border-gray-50">
+          <div>
+            <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-0.5">Base EV</p>
+            <p className="text-sm font-black text-gray-500">{Math.round(baseMsDay).toLocaleString('es-AR')} kg</p>
+          </div>
+          <div className="w-px h-6 bg-gray-100" />
+          <div>
+            <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-0.5">Ajuste térmico</p>
+            {hasClimateData ? (
+              <p className={`text-sm font-black flex items-center gap-1 ${varMsDay > 0 ? 'text-sky-600' : varMsDay < 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
+                {varMsDay > 0 ? '+' : ''}{Math.round(varMsDay).toLocaleString('es-AR')} kg
+                {varMsDay > 0 ? <TrendingUp className="w-3 h-3" /> : varMsDay < 0 ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
+              </p>
+            ) : (
+              <p className="text-sm font-black text-gray-300 flex items-center gap-1">
+                — <Minus className="w-3 h-3" />
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -332,6 +426,7 @@ function TabRodeos() {
   const { current, isLoading } = useWeather()
   const [herds, setHerds] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   useEffect(() => {
     apiFetch('/api/herds')
@@ -348,28 +443,40 @@ function TabRodeos() {
   }, [current])
 
   const thiLabel = !thi ? '—' : thi > 80 ? 'Estrés severo' : thi > 72 ? 'Estrés moderado' : 'Confort'
-  const thiColor = !thi ? 'text-gray-400' : thi > 80 ? 'text-red-600' : thi > 72 ? 'text-orange-600' : 'text-emerald-600'
   const consumptionAdj = thi && thi > 72 ? Math.round(Math.min(25, (thi - 72) * 1.2) * -1) : 0
   const coldStress = current && (current.tempC < 8 || (current.tempC < 12 && current.windSpeedKmh > 20))
+  const severeColdStress = current && current.tempC < 5
   const energyAdj = current && coldStress ? Math.round((Math.min(0.12, current.windSpeedKmh / 300) + (current.tempC! < 5 ? 0.15 : 0.08)) * 100) : 0
+  const bcsDrop = energyAdj > 0 ? parseFloat((energyAdj * 0.01).toFixed(2)) : 0
+
+  const welfareLabel = !current ? '—' : 
+    thi && thi > 80 ? 'Estrés calórico severo' : 
+    thi && thi > 72 ? 'Estrés calórico moderado' : 
+    severeColdStress ? 'Estrés severo por frío' :
+    coldStress ? 'Estrés por frío' : 'Confort'
+  
+  const welfareColor = !current ? 'text-gray-400' : 
+    (thi && thi > 80) || severeColdStress ? 'text-red-600' : 
+    (thi && thi > 72) ? 'text-orange-600' : 
+    coldStress ? 'text-sky-600' : 'text-emerald-600'
 
   return (
     <div className="space-y-5">
       {/* Banner de bienestar actual */}
       {current && (
-        <div className={`rounded-2xl border p-5 ${consumptionAdj < 0 ? 'bg-orange-50 border-orange-200' : energyAdj > 0 ? 'bg-sky-50 border-sky-200' : 'bg-emerald-50 border-emerald-100'}`}>
+        <div className={`rounded-2xl border p-5 ${consumptionAdj < 0 ? 'bg-orange-50 border-orange-200' : coldStress ? (severeColdStress ? 'bg-red-50 border-red-200' : 'bg-sky-50 border-sky-200') : 'bg-emerald-50 border-emerald-100'}`}>
           <div className="flex items-start gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${consumptionAdj < 0 ? 'bg-orange-100' : energyAdj > 0 ? 'bg-sky-100' : 'bg-emerald-100'}`}>
-              {consumptionAdj < 0 ? <Thermometer className="w-6 h-6 text-orange-600" /> : energyAdj > 0 ? <CloudSnow className="w-6 h-6 text-sky-600" /> : <CheckCircle2 className="w-6 h-6 text-emerald-600" />}
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${consumptionAdj < 0 ? 'bg-orange-100' : coldStress ? (severeColdStress ? 'bg-red-100' : 'bg-sky-100') : 'bg-emerald-100'}`}>
+              {consumptionAdj < 0 ? <Thermometer className="w-6 h-6 text-orange-600" /> : coldStress ? <CloudSnow className={`w-6 h-6 ${severeColdStress ? 'text-red-600' : 'text-sky-600'}`} /> : <CheckCircle2 className="w-6 h-6 text-emerald-600" />}
             </div>
             <div className="flex-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">Estado de bienestar animal · Ahora</p>
-              <p className={`text-lg font-black leading-tight ${thiColor}`}>{thiLabel}</p>
+              <p className={`text-lg font-black leading-tight ${welfareColor}`}>{welfareLabel}</p>
               <p className="text-xs text-gray-500 font-medium mt-1">
                 {consumptionAdj < 0
                   ? `Consumo reducido estimado: ${consumptionAdj}% · Índice THI: ${thi}`
                   : energyAdj > 0
-                  ? `Gasto energético adicional: +${energyAdj}% · Temp ${Math.round(current.tempC)}°C`
+                  ? `Gasto energético adicional: +${energyAdj}% · Pérdida estimada CC: -${bcsDrop} pts/mes`
                   : `Sin ajustes de consumo. Condiciones óptimas para el rodeo.`}
               </p>
             </div>
@@ -379,7 +486,14 @@ function TabRodeos() {
 
       {/* Grilla de rodeos con chip de clima */}
       <div>
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Estado por rodeo</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estado por rodeo</p>
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+            <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md ${viewMode === 'grid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}><LayoutGrid className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md ${viewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}><List className="w-3.5 h-3.5" /></button>
+          </div>
+        </div>
+        
         {loading ? (
           <div className="space-y-2">
             {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-2xl animate-pulse" />)}
@@ -390,18 +504,14 @@ function TabRodeos() {
             <p className="text-sm font-bold text-gray-400">Sin rodeos registrados</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-4"}>
             {herds.map(herd => (
               <HerdCard
                 key={herd.id}
                 herd={herd}
                 consumptionAdj={consumptionAdj}
                 energyAdj={energyAdj}
-                thiLabel={thiLabel}
-                thi={thi}
-                current={current}
-                coldStress={coldStress}
-                thiColor={thiColor}
+                viewMode={viewMode}
               />
             ))}
           </div>
@@ -411,15 +521,17 @@ function TabRodeos() {
       {/* Tabla THI de referencia */}
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
         <div className="px-5 py-4 border-b border-gray-100">
-          <p className="text-xs font-black text-gray-700">Referencia índice THI (Temperature-Humidity Index)</p>
+          <p className="text-xs font-black text-gray-700">Referencia índices de bienestar térmico</p>
           <p className="text-[10px] text-gray-400 font-medium mt-0.5">Cuándo actuar según las condiciones climáticas</p>
         </div>
         <div className="divide-y divide-gray-50">
           {[
-            { range: 'THI < 72', label: 'Zona de confort', action: 'Sin acción requerida', color: 'bg-emerald-50', text: 'text-emerald-700' },
-            { range: 'THI 72–79', label: 'Estrés moderado', action: 'Revisar sombra y agua fresca', color: 'bg-yellow-50', text: 'text-yellow-700' },
-            { range: 'THI 80–89', label: 'Estrés severo', action: 'Limitar actividad y reducir carga', color: 'bg-orange-50', text: 'text-orange-700' },
-            { range: 'THI ≥ 90', label: 'Estrés crítico', action: 'Riesgo de mortalidad. Acción inmediata.', color: 'bg-red-50', text: 'text-red-700' },
+            { range: 'T < 5°C', label: 'Estrés severo por frío', action: 'Proveer refugio, aumentar ración ++', color: 'bg-red-50', text: 'text-red-700' },
+            { range: 'T < 10°C (con viento)', label: 'Estrés por frío', action: 'Aumentar requerimiento energético', color: 'bg-sky-50', text: 'text-sky-700' },
+            { range: 'Confort térmico', label: 'Zona de confort', action: 'Sin acción requerida', color: 'bg-emerald-50', text: 'text-emerald-700' },
+            { range: 'THI 72–79', label: 'Estrés calórico moderado', action: 'Revisar sombra y agua fresca', color: 'bg-yellow-50', text: 'text-yellow-700' },
+            { range: 'THI 80–89', label: 'Estrés calórico severo', action: 'Limitar actividad y reducir carga', color: 'bg-orange-50', text: 'text-orange-700' },
+            { range: 'THI ≥ 90', label: 'Estrés calórico crítico', action: 'Riesgo de mortalidad. Acción inmediata.', color: 'bg-red-50', text: 'text-red-700' },
           ].map(r => (
             <div key={r.range} className={`px-5 py-3 flex items-center justify-between ${r.color}`}>
               <div className="flex items-center gap-3">

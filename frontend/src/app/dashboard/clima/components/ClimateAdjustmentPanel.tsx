@@ -6,9 +6,10 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiFetch } from '@/lib/apiFetch'
-import { RefreshCw, Loader2, Lock, ChevronDown, ChevronUp, Check, TrendingUp, TrendingDown } from 'lucide-react'
+import { RefreshCw, Loader2, Lock, ChevronDown, ChevronUp, Check, TrendingUp, TrendingDown, LayoutGrid, List } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
 import { useWeather } from '@/lib/context/WeatherContext'
+import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
 import { useAuth } from '@/components/AuthProvider'
 import type { CreateWeatherEventPayload } from '@/lib/types/weather'
 import {
@@ -42,28 +43,10 @@ interface Snapshot {
   paddock_name: string; adjusted_remaining_days: number
   base_remaining_days: number; grass_growth_rate: number
   alert_level: string; calculated_at: string
-  climate_multiplier: number
+  climate_multiplier: number; ndvi: number
 }
 
-// ─── Alert badge ──────────────────────────────────────────────────────────────
-
-function AlertBadge({ level }: { level: string }) {
-  if (level === 'ok') return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Normal
-    </span>
-  )
-  if (level === 'warning') return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />Advertencia
-    </span>
-  )
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />Crítico
-    </span>
-  )
-}
+// AlertBadge removed since this view must focus purely on climate and its impact.
 
 // ─── Mini growth chart (dentro del expand del potrero) ───────────────────────
 
@@ -135,11 +118,12 @@ function PaddockGrowthMini({ data }: { data: Snapshot[] }) {
 // ─── Inline weather registration (lluvia / helada per-paddock) ───────────────
 
 function PaddockWeatherForm({
-  paddockId, paddockName, onSave,
+  paddockId, paddockName, onSave, onRecalculate
 }: {
   paddockId: string
   paddockName: string
   onSave?: (p: CreateWeatherEventPayload) => Promise<boolean>
+  onRecalculate?: (id: string, mm?: number) => Promise<void>
 }) {
   const today = new Date().toISOString().split('T')[0]
   const [tab, setTab] = useState<'rain' | 'frost'>('rain')
@@ -164,6 +148,9 @@ function PaddockWeatherForm({
       setSaved(true)
       setValue('')
       setDate(today)
+      if (onRecalculate) {
+        await onRecalculate(paddockId, tab === 'rain' ? Number(value) : undefined)
+      }
       setTimeout(() => setSaved(false), 2000)
     }
   }
@@ -237,37 +224,83 @@ function PaddockWeatherForm({
 // ─── Paddock card ─────────────────────────────────────────────────────────────
 
 function PaddockCard({
-  result, paddockSnapshots, onRecalculate, current, onSaveWeatherEvent,
+  result, paddockSnapshots, current, onSaveWeatherEvent, onRecalculate, viewMode = 'list'
 }: {
   result: PaddockResult
   paddockSnapshots: Snapshot[]
-  onRecalculate: (id: string, mm?: number) => Promise<void>
   current: { windSpeedKmh: number; humidityPct: number } | null
   onSaveWeatherEvent?: (p: CreateWeatherEventPayload) => Promise<boolean>
+  onRecalculate?: (id: string, mm?: number) => Promise<void>
+  viewMode?: 'list' | 'grid'
 }) {
   const [expanded, setExpanded] = useState(false)
-  const { paddock, result: r, inputSummary, totalEv } = result
+  const [activeTab, setActiveTab] = useState<'evolucion' | 'historico'>('evolucion')
+  const { paddock, result: r, inputSummary } = result
 
-  // Growth delta vs previous snapshot
+  // Growth & NDVI delta vs previous snapshot
   const sortedSnaps = [...paddockSnapshots].sort((a, b) => a.calculated_at.localeCompare(b.calculated_at))
-  const prevGrowth = sortedSnaps.length >= 2
-    ? Number(sortedSnaps[sortedSnaps.length - 2].grass_growth_rate)
+  const prevSnap = sortedSnaps.length >= 2 ? sortedSnaps[sortedSnaps.length - 2] : null
+  
+  const growthDiff = prevSnap != null
+    ? parseFloat((r.grassGrowthRateKgHaDay - Number(prevSnap.grass_growth_rate)).toFixed(1))
     : null
-  const growthDiff = prevGrowth != null
-    ? parseFloat((r.grassGrowthRateKgHaDay - prevGrowth).toFixed(1))
+    
+  const ndviDiff = prevSnap != null && prevSnap.ndvi != null
+    ? parseFloat((inputSummary.ndvi - Number(prevSnap.ndvi)).toFixed(3))
     : null
+
+  if (viewMode === 'grid') {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden p-5 flex flex-col justify-between">
+        <div>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-base font-black text-gray-950 leading-tight truncate">{paddock.name}</h3>
+            <span className="text-[10px] font-black text-gray-400 bg-gray-50 px-2 py-1 rounded-md">{paddock.areaHa} ha</span>
+          </div>
+          
+          <div className="space-y-3 mb-4">
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Crecimiento MS</p>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-gray-950 leading-none">{r.grassGrowthRateKgHaDay.toFixed(1)}</span>
+                <span className="text-xs font-bold text-gray-400">kg/d</span>
+              </div>
+              {growthDiff !== null && (
+                <div className={`text-[10px] font-black mt-1 flex items-center gap-1 ${growthDiff >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
+                  {growthDiff > 0 ? '+' : ''}{growthDiff} kg
+                  {growthDiff >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-gray-50">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">NDVI Actual</p>
+              <div className="flex items-center justify-between">
+                <span className="text-base font-black text-gray-900">{inputSummary.ndvi.toFixed(2)}</span>
+                <div className={`text-[10px] font-black flex items-center gap-1 ${ndviDiff && ndviDiff >= 0 ? 'text-emerald-600' : ndviDiff && ndviDiff < 0 ? 'text-orange-600' : 'text-gray-500'}`}>
+                  {ndviDiff !== null ? (ndviDiff > 0 ? `+${ndviDiff}` : ndviDiff) : '—'}
+                  {ndviDiff !== null && (ndviDiff >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* We can open expanded view by setting viewMode to list manually or use a modal, but for now we just show summary */}
+      </div>
+    )
+  }
 
   return (
-    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-all">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group">
       {/* ── Collapsed header ── */}
       <button
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors"
+        className="w-full flex items-start justify-between gap-4 px-5 py-4 text-left hover:bg-gray-50/50 transition-colors"
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-black text-gray-900 truncate">{paddock.name}</span>
-            <AlertBadge level={r.alertLevel} />
+            <h3 className="text-base font-black text-gray-950 leading-tight truncate">{paddock.name}</h3>
           </div>
           <p className="text-[10px] text-gray-400 font-medium mt-0.5 flex items-center gap-1.5">
             {paddock.areaHa} ha
@@ -276,50 +309,60 @@ function PaddockCard({
           </p>
         </div>
 
-        {/* Bolsa de Valores Metrics */}
+        {/* Variaciones Climáticas Metrics */}
         <div className="flex items-center gap-6 shrink-0 mr-4">
-          {/* Variable Clima */}
+          {/* Variación NDVI */}
           <div className="text-right">
-            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Impacto Clima</p>
-            <div className={`flex items-center justify-end gap-1 ${r.climateMultiplier >= 1 ? 'text-emerald-600' : 'text-red-600'}`}>
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Evolución NDVI</p>
+            <div className={`flex items-center justify-end gap-1 ${ndviDiff && ndviDiff >= 0 ? 'text-emerald-600' : ndviDiff && ndviDiff < 0 ? 'text-orange-600' : 'text-gray-500'}`}>
               <span className="text-sm font-black">
-                {r.climateMultiplier >= 1 ? '+' : ''}{((r.climateMultiplier - 1) * 100).toFixed(1)}%
+                {ndviDiff !== null ? (ndviDiff > 0 ? `+${ndviDiff}` : ndviDiff) : '—'}
               </span>
-              {r.climateMultiplier >= 1 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+              {ndviDiff !== null && (ndviDiff >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />)}
             </div>
           </div>
           
           {/* Variable Crecimiento en kg */}
           <div className="text-right min-w-[70px]">
-            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Crecimiento</p>
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Crecimiento MS</p>
             <div className="flex items-center justify-end gap-1">
               <span className="text-sm font-black text-gray-900">
                 {r.grassGrowthRateKgHaDay.toFixed(1)} <span className="text-[10px] font-bold text-gray-400">kg/d</span>
               </span>
             </div>
             {growthDiff !== null && (
-              <div className={`text-[9px] font-black mt-0.5 flex items-center justify-end gap-0.5 ${growthDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {growthDiff >= 0 ? '+' : ''}{growthDiff}
+              <div className={`text-[9px] font-black mt-0.5 flex items-center justify-end gap-0.5 ${growthDiff >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
+                {growthDiff > 0 ? '+' : ''}{growthDiff}
                 {growthDiff >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
               </div>
             )}
           </div>
         </div>
 
-        {expanded ? <ChevronUp className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" />}
+        {expanded ? <ChevronUp className="w-4 h-4 text-gray-300 shrink-0 mt-1" /> : <ChevronDown className="w-4 h-4 text-gray-300 shrink-0 mt-1" />}
       </button>
-
-      {/* Alert message */}
-      {r.alertMessage && (
-        <div className="px-5 py-2 border-t border-gray-100 text-xs text-gray-500 leading-snug flex items-start gap-2">
-          <span className={`mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full ${r.alertLevel === 'critical' ? 'bg-red-400' : 'bg-amber-400'}`} />
-          {r.alertMessage}
-        </div>
-      )}
 
       {/* ── Expanded ── */}
       {expanded && (
-        <div className="border-t border-gray-100 px-5 py-4 space-y-4">
+        <div className="border-t border-gray-100">
+          <div className="flex border-b border-gray-100 bg-gray-50/50">
+            <button
+              onClick={() => setActiveTab('evolucion')}
+              className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === 'evolucion' ? 'text-emerald-700 border-emerald-500' : 'text-gray-400 border-transparent hover:text-gray-600'}`}
+            >
+              Evolución
+            </button>
+            <button
+              onClick={() => setActiveTab('historico')}
+              className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === 'historico' ? 'text-emerald-700 border-emerald-500' : 'text-gray-400 border-transparent hover:text-gray-600'}`}
+            >
+              Histórico
+            </button>
+          </div>
+          
+          <div className="px-5 py-4 space-y-4">
+            {activeTab === 'evolucion' ? (
+              <>
 
           {/* Variables climáticas reales */}
           <div>
@@ -359,7 +402,36 @@ function PaddockCard({
             paddockId={paddock.id}
             paddockName={paddock.name}
             onSave={onSaveWeatherEvent}
+            onRecalculate={onRecalculate}
           />
+        </>
+            ) : (
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                {sortedSnaps.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic text-center py-4">No hay mediciones históricas registradas.</p>
+                ) : (
+                  sortedSnaps.slice().reverse().map((snap, i) => (
+                    <div key={i} className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <div>
+                        <p className="text-xs font-black text-gray-900">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
+                        <p className="text-[10px] text-gray-400">Multiplicador clima: {snap.climate_multiplier.toFixed(2)}x</p>
+                      </div>
+                      <div className="flex items-center gap-4 text-right">
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">NDVI</p>
+                          <p className="text-xs font-bold text-emerald-700">{Number(snap.ndvi).toFixed(3)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Crecim.</p>
+                          <p className="text-xs font-bold text-gray-900">{Number(snap.grass_growth_rate).toFixed(1)} kg</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -380,13 +452,14 @@ export function ClimateAdjustmentPanel({
   const { hasFeature } = usePlan()
   const hasAccess = hasFeature('climate_adjustment')
   const { current } = useWeather()
+  const { snapshots, refreshSnapshots } = useClimateAnalytics()
 
   const [paddocks, setPaddocks]   = useState<any[]>([])
   const [results, setResults]     = useState<Map<string, PaddockResult>>(new Map())
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [loading, setLoading]     = useState(true)
   const [running, setRunning]     = useState(false)
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
+  const [viewMode, setViewMode]   = useState<'list' | 'grid'>('list')
 
   const loadPaddocks = useCallback(async () => {
     setLoading(true)
@@ -396,13 +469,6 @@ export function ClimateAdjustmentPanel({
       setPaddocks(data.filter((p: any) => p.is_active !== false))
     } catch {}
     setLoading(false)
-  }, [])
-
-  const loadSnapshots = useCallback(async () => {
-    try {
-      const res = await apiFetch('/api/climate-adjustment')
-      if (res.ok) setSnapshots((await res.json()).snapshots ?? [])
-    } catch {}
   }, [])
 
   const calculateForPaddock = useCallback(async (paddockId: string, manualMm?: number) => {
@@ -424,12 +490,12 @@ export function ClimateAdjustmentPanel({
     setRunning(true)
     await Promise.all(paddocks.map(p => calculateForPaddock(p.id)))
     setRunning(false)
-    await loadSnapshots()
-  }, [paddocks, calculateForPaddock, loadSnapshots])
+    await refreshSnapshots()
+  }, [paddocks, calculateForPaddock, refreshSnapshots])
 
   useEffect(() => {
-    if (hasAccess) { loadPaddocks(); loadSnapshots() }
-  }, [hasAccess, loadPaddocks, loadSnapshots])
+    if (hasAccess) { loadPaddocks() }
+  }, [hasAccess, loadPaddocks])
 
   useEffect(() => {
     if (hasAccess && paddocks.length > 0) calculateAll()
@@ -437,7 +503,7 @@ export function ClimateAdjustmentPanel({
 
   // Group snapshots by paddock name
   const snapshotsByPaddock = useMemo(() => {
-    const map: Record<string, Snapshot[]> = {}
+    const map: Record<string, any[]> = {}
     snapshots.forEach(s => {
       if (!map[s.paddock_name]) map[s.paddock_name] = []
       map[s.paddock_name].push(s)
@@ -474,7 +540,7 @@ export function ClimateAdjustmentPanel({
     ? parseFloat((allResults.reduce((s, r) => s + r.result.grassGrowthRateKgHaDay, 0) / allResults.length).toFixed(1))
     : null
   const totalHa       = paddocks.reduce((s, p) => s + (Number(p.area_ha) || 0), 0)
-  const totalEv       = allResults.reduce((s, r) => s + r.totalEv, 0)
+  const totalGrowthMs = allResults.reduce((s, r) => s + (r.result.grassGrowthRateKgHaDay * Number(r.paddock.areaHa)), 0)
 
   return (
     <div className={showGlobalSummary ? 'p-5 space-y-4' : 'space-y-4'}>
@@ -483,20 +549,27 @@ export function ClimateAdjustmentPanel({
       {showGlobalSummary && allResults.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-2xl p-5">
           {/* Field name title */}
-          <div className="mb-4">
-            {orgName && (
-              <p className="text-xl font-black text-gray-900 leading-none mb-0.5">{orgName}</p>
-            )}
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-              Resumen del campo
-            </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              {orgName && (
+                <p className="text-xl font-black text-gray-900 leading-none mb-0.5">{orgName}</p>
+              )}
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                Resumen del campo
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+              <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md ${viewMode === 'grid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}><LayoutGrid className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md ${viewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}><List className="w-3.5 h-3.5" /></button>
+            </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
             {[
               { label: 'Superficie',        value: `${totalHa.toFixed(0)} ha`,                            sub: `${paddocks.length} potreros` },
-              { label: 'Carga animal',      value: totalEv > 0 ? `${totalEv.toFixed(1)} EV` : '—',       sub: totalHa > 0 ? `${(totalEv/totalHa).toFixed(2)} EV/ha` : '—' },
               { label: 'Crecim. promedio',  value: avgGrowth != null ? `${avgGrowth} kg/ha/d` : '—',     sub: 'campo completo', highlight: 'text-emerald-600' },
-              { label: 'Estado general',    value: criticals > 0 ? `${criticals} crítico${criticals > 1 ? 's' : ''}` : warnings > 0 ? `${warnings} advertencia${warnings > 1 ? 's' : ''}` : 'Normal',  sub: `${allResults.length} potreros analizados`, highlight: criticals > 0 ? 'text-red-600' : warnings > 0 ? 'text-amber-600' : 'text-emerald-600' },
+              { label: 'Crecimiento total', value: `${Math.round(totalGrowthMs).toLocaleString('es-AR')} kg/d`, sub: 'sumatoria en campo', highlight: 'text-emerald-600' },
+              { label: 'Mediciones',        value: `${allResults.length} potreros`,  sub: `con datos analizados` },
             ].map(m => (
               <div key={m.label}>
                 <p className={`text-lg font-black text-gray-900 leading-none ${(m as any).highlight ?? ''}`}>{m.value}</p>
@@ -524,7 +597,7 @@ export function ClimateAdjustmentPanel({
       </div>
 
       {/* ── Paddock cards ─────────────────────────────────────────────── */}
-      <div className="space-y-2">
+      <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-4"}>
         {paddocks.length === 0 && (
           <div className="rounded-2xl border border-dashed border-gray-200 p-8 text-center">
             <p className="text-sm font-black text-gray-500">Sin potreros disponibles</p>
@@ -533,6 +606,7 @@ export function ClimateAdjustmentPanel({
         {paddocks.map(paddock => {
           const r = results.get(paddock.id)
           const isLoadingPaddock = loadingIds.has(paddock.id)
+          
           if (isLoadingPaddock || !r) return (
             <div key={paddock.id} className="border border-gray-100 rounded-2xl px-5 py-4 flex items-center gap-3 bg-white">
               <Loader2 className="w-4 h-4 text-green-600 animate-spin shrink-0" />
@@ -542,16 +616,18 @@ export function ClimateAdjustmentPanel({
               </div>
             </div>
           )
+
           const paddockSnaps = snapshotsByPaddock[paddock.name] ?? []
           return (
-            <PaddockCard
-              key={paddock.id}
-              result={r}
-              paddockSnapshots={paddockSnaps}
-              onRecalculate={calculateForPaddock}
-              current={current}
-              onSaveWeatherEvent={onSaveWeatherEvent}
-            />
+              <PaddockCard
+                key={paddock.id}
+                result={r}
+                paddockSnapshots={paddockSnaps}
+                current={current}
+                onSaveWeatherEvent={onSaveWeatherEvent}
+                onRecalculate={calculateForPaddock}
+                viewMode={viewMode}
+              />
           )
         })}
       </div>

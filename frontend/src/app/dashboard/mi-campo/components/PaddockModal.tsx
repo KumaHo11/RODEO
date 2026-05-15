@@ -14,6 +14,7 @@ import { Tooltip } from '@/design-system/atoms/Tooltip'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ui/ConfirmModal'
 import { usePlan } from '@/hooks/usePlan'
+import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -280,10 +281,14 @@ export default function PaddockModal({
 }: Props) {
   const { confirm, ConfirmModal } = useConfirm()
   const { hasFeature } = usePlan()
+  const { snapshots } = useClimateAnalytics()
+  const paddockSnapshots = React.useMemo(() => {
+    return snapshots.filter(s => s.paddock_name === paddock.name).sort((a, b) => new Date(b.calculated_at).getTime() - new Date(a.calculated_at).getTime())
+  }, [snapshots, paddock.name])
   const canVoice     = hasFeature('voice_bitacora') // audio + transcripción IA
   const canAiInsight = hasFeature('ai_insights')    // análisis biomasa IA
   const canNdvi      = hasFeature('ndvi_access')    // NDVI satelital
-  const [activeTab, setActiveTab] = useState<'operativo' | 'infraestructura' | 'registros'>('operativo')
+  const [activeTab, setActiveTab] = useState<'operativo' | 'infraestructura' | 'registros' | 'historico'>('operativo')
   const [saving, setSaving]       = useState(false)
 
   // Tab 1
@@ -640,6 +645,7 @@ export default function PaddockModal({
     { id: 'operativo',       label: 'Datos operativos' },
     { id: 'infraestructura', label: 'Infraestructura'  },
     { id: 'registros',       label: 'Registros'        },
+    { id: 'historico',       label: 'Histórico'        },
   ] as const
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -685,7 +691,7 @@ export default function PaddockModal({
 
           {/* ════ TAB 1 — DATOS OPERATIVOS ════ */}
           {activeTab === 'operativo' && (
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 pt-5 pb-48 space-y-4">
 
               {/* Nombre */}
               <div className="space-y-1.5">
@@ -1334,6 +1340,38 @@ export default function PaddockModal({
                   )}
                 </div>
               </div>
+          )}
+          {/* ════ TAB 4 — HISTÓRICO ════ */}
+          {activeTab === 'historico' && (
+            <div className="px-6 py-5 space-y-4">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">
+                  Historial de mediciones climáticas y de crecimiento
+                </p>
+                {paddockSnapshots.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic text-center py-8">No hay mediciones históricas registradas para este potrero.</p>
+                ) : (
+                  paddockSnapshots.map((snap: any, i: number) => (
+                    <div key={i} className="flex flex-wrap items-center justify-between gap-2 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                      <div>
+                        <p className="text-sm font-black text-gray-900">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">Multiplicador clima: <span className="font-bold">{snap.climate_multiplier.toFixed(2)}x</span></p>
+                      </div>
+                      <div className="flex items-center gap-6 text-right">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">NDVI</p>
+                          <p className="text-sm font-black text-emerald-700">{Number(snap.ndvi).toFixed(3)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Crecimiento</p>
+                          <p className="text-sm font-black text-gray-900">{Number(snap.grass_growth_rate).toFixed(1)} <span className="text-xs font-bold text-gray-400">kg/d</span></p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
         </div>
 

@@ -1551,13 +1551,6 @@ function InteractiveGantt({
 
         {/* ── Footer: fila unificada Resumen + Clima por mes ── */}
         {(() => {
-          const totalHa = paddocks.reduce((s, p) => s + (Number(p.area_ha) || 0), 0)
-          const totalMs = paddocks.reduce((s, p) => {
-            const ms = Number(p.dry_matter_kg_ha) || 0
-            const ha = Number(p.area_ha) || 0
-            return s + ms * ha
-          }, 0)
-
           // Build plansPerMonth: which plans fall (entry or exit) in each month
           const plansPerMonth: Record<string, import('@/components/GanttClimateMonthRow').PlanInMonth[]> = {}
           MONTHS_FOOTER.forEach(m => { plansPerMonth[m.key] = [] })
@@ -1602,8 +1595,6 @@ function InteractiveGantt({
               rainfallPerMonth={rainfallData}
               seasonalMult={SEASONAL_MS_GROWTH}
               labelW={LABEL_W}
-              totalHa={totalHa}
-              totalMs={totalMs}
               climateEnabled={climateViewEnabled}
               onApplyMonthAdjustment={(monthKey, adjustments) => {
                 console.log('[clima] Aplicar ajuste mes', monthKey, adjustments)

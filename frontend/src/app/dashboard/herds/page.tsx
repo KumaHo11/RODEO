@@ -470,20 +470,20 @@ export default function HerdsPage() {
 
                     {/* ── Body: Stock destacado + métricas secundarias ── */}
                     <div className="px-5 pb-4">
-                      {/* Chip de clima con icóno + estado de bienestar animal */}
-                      <div className="mb-3" onClick={e => e.stopPropagation()}>
-                        <WeatherConditionChip
-                          mode="herd"
-                          entityName={herd.name}
-                        />
-                      </div>
-
-                      {/* Cabezas — dato principal */}
-                      <div className="flex items-baseline gap-2 mb-3">
-                        <p className="text-3xl font-semibold text-gray-950 tabular-nums leading-none">
-                          {Math.round(herd.head_count).toLocaleString('es-AR')}
-                        </p>
-                        <p className="text-sm font-bold text-gray-400">cabezas</p>
+                      {/* Cabezas — dato principal + Chip de Clima */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-baseline gap-2">
+                          <p className="text-3xl font-semibold text-gray-950 tabular-nums leading-none">
+                            {Math.round(herd.head_count).toLocaleString('es-AR')}
+                          </p>
+                          <p className="text-sm font-bold text-gray-400">cabezas</p>
+                        </div>
+                        <div onClick={e => e.stopPropagation()}>
+                          <WeatherConditionChip
+                            mode="herd"
+                            entityName={herd.name}
+                          />
+                        </div>
                       </div>
 
                       {/* EV + Consumo — segundo plano */}

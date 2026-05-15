@@ -12,9 +12,10 @@ import {
   TrendingUp, CloudRain, AlertTriangle, Calendar, ArrowRight,
   Layers, Navigation, Droplets, ChevronRight, CheckSquare, Leaf,
   Scale, RefreshCw, Loader2, Satellite, TrendingDown, Sun, Wind,
-  Lightbulb, Target, RotateCcw, PawPrint, MapPin
+  Lightbulb, Target, RotateCcw, PawPrint, MapPin, Download, ThermometerSnowflake, Flame
 } from 'lucide-react'
 import CowIcon from '@/components/CowIcon'
+import { FeatureWidget } from '@/components/FeatureWidget'
 import { AppHeader } from '@/components/AppHeader'
 import { MarketWidget } from '@/components/MarketWidget'
 import ForageVigorMonitor from '@/components/ForageVigorMonitor'
@@ -291,10 +292,14 @@ export default function DashboardOverview() {
   const dailyDemand    = totalEV * 12
   const balanceDeficit = dailyDemand > 0 && totalMSOffer < dailyDemand
 
-  const droughtColors: Record<string, string> = {
-    LOW: 'text-green-600 bg-green-50', MODERATE: 'text-amber-600 bg-amber-50', HIGH: 'text-red-600 bg-red-50',
-  }
-  const droughtLabels: Record<string, string> = { LOW: 'Normal', MODERATE: 'Sequía', HIGH: 'Riesgo' }
+  // Lógica de Plan y Feature Flags (ejemplo usando org, por defecto a 'holistico' para ver upsell)
+  const currentPlan = (org as any)?.subscription_plan || 'holistico'
+  const isEnterprisePlan = currentPlan === 'enterprise'
+
+  // Ajuste por Frío / THI
+  const currentTemp = weatherCurrent?.tempC ?? 20
+  const isColdStress = currentTemp < 10
+  const isHeatStress = currentTemp > 30
 
   return (
     <div className="flex flex-col h-full gap-5 overflow-y-auto pb-8">
@@ -303,459 +308,306 @@ export default function DashboardOverview() {
         title="Panel principal"
         subtitle="Centro de mando unificado"
         actions={
-          loading && <Loader2 className="w-5 h-5 text-green-600 animate-spin" />
+          <div className="flex items-center gap-3">
+            {loading && <Loader2 className="w-5 h-5 text-green-600 animate-spin" />}
+            <button className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors shadow-sm">
+              <Download className="w-4 h-4" /> Descargar historial
+            </button>
+          </div>
         }
       />
 
-      {/* ══ FILA 1: Pilares del campo (2/3 + 1/3) ══ */}
-      <div className="flex flex-col lg:flex-row gap-4 shrink-0">
-        {/* IZQUIERDA: Agenda (2/3) */}
-        <div className="flex-[2] bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-white text-gray-900 shrink-0">
-            <h2 className="text-sm font-bold flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-green-600" /> Agenda
-            </h2>
-            <Link href="/dashboard/agenda" className="text-xs font-bold text-gray-400 hover:text-green-600 hover:underline flex items-center gap-1 transition-colors">
-              Gestionar eventos <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto min-h-[300px]">
-            {loading ? (
-              <div className="p-6 space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="flex gap-4 animate-pulse">
-                    <div className="w-12 h-12 bg-gray-100 rounded-xl" />
-                    <div className="flex-1 space-y-2 py-1">
-                      <div className="h-4 bg-gray-100 rounded w-1/4" />
-                      <div className="h-3 bg-gray-100 rounded w-1/2" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : farmEvents.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center p-10 text-center">
-                <div className="w-16 h-16 bg-gray-50 rounded-3xl flex items-center justify-center mb-4 text-gray-300">
-                  <Calendar className="w-8 h-8" />
-                </div>
-                <p className="text-sm font-bold text-gray-400">Sin eventos próximos</p>
-                <Link href="/dashboard/agenda" className="mt-2 text-xs font-bold text-green-600 hover:underline">Programar primer evento</Link>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {farmEvents.map(e => {
-                  const d = new Date(e.event_date + 'T00:00:00')
-                  const today = new Date(); today.setHours(0,0,0,0)
-                  const isActive = d <= today
-                  return (
-                    <div key={e.id} className={`p-4 hover:bg-gray-50 transition-colors flex items-center gap-4 group ${isActive ? 'border-l-2 border-[#D4A373] bg-amber-50/20' : ''}`}>
-                      {/* Date Bubble */}
-                      <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border shrink-0 transition-all ${isActive ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-100 group-hover:bg-white group-hover:border-green-100'}`}>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase leading-none">{d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', '')}</span>
-                        <span className="text-xl font-bold text-gray-900 leading-none mt-1">{d.getDate()}</span>
-                      </div>
-                      
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className={`w-2 h-2 rounded-full ${e.event_type === 'servicio' ? 'bg-red-500' : e.event_type === 'paricion' ? 'bg-blue-500' : e.event_type === 'tratamiento_sanitario' ? 'bg-amber-800' : 'bg-green-500'}`} />
-                          <h3 className="text-sm font-bold text-gray-950 truncate">{e.title}</h3>
-                          {isActive && (
-                            <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 uppercase tracking-wider">Activo</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 font-medium truncate">
-                          {e.herd_id ? (herds.find(h => h.id === e.herd_id)?.name || 'Rodeo') : 'Multi-rodeo'}
-                          {e.description && <span className="mx-1.5 opacity-30">·</span>}
-                          {e.description && <span className="opacity-70">{e.description}</span>}
-                        </p>
-                      </div>
-
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity pr-2">
-                        <button onClick={() => router.push('/dashboard/agenda')} className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-xl">
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* DERECHA: 4 cards — Clima · Precio · Disponibilidad · Rodeos */}
-        <div className="flex-1 flex flex-col gap-4">
-
-          {/* 1. Clima — uses shared WeatherContext (same data as /clima page) */}
-          <div className="bg-[#f0f9ff] rounded-2xl border border-[#bae6fd] shadow-sm p-4 flex flex-col justify-between relative overflow-hidden">
-            <div className="absolute -top-6 -right-6 text-blue-200/40 w-24 h-24">
+      {/* ══ FILA 1: Contextual Header (Clima + Mercado) ══ */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0">
+        <FeatureWidget
+          title="Clima actual"
+          icon={<CloudRain className="w-4 h-4 text-blue-500" />}
+          isFeatureEnabled={true}
+          className="md:col-span-1 bg-[#f0f9ff] border-[#bae6fd]"
+        >
+          <div className="flex flex-col justify-between h-full relative overflow-hidden">
+            <div className="absolute -top-6 -right-6 text-blue-200/40 w-24 h-24 pointer-events-none">
               <Sun className="w-full h-full" />
             </div>
-            <div className="relative z-10">
-              <h3 className="text-[10px] font-bold text-blue-800/60 tracking-widest uppercase flex items-center gap-1">
-                <CloudRain className="w-3 h-3" /> Clima
-              </h3>
-              <div className="mt-1 flex items-center gap-3">
-                {loading || weatherLoading ? <div className="h-8 w-16 bg-blue-100/50 animate-pulse rounded-lg" /> : (
+            
+            <div className="flex items-center justify-between z-10 relative">
+              <div className="flex items-center gap-3">
+                {loading || weatherLoading ? (
+                  <div className="h-8 w-16 bg-blue-100/50 animate-pulse rounded-lg" />
+                ) : (
                   <>
-                    <p className="text-3xl font-bold text-blue-900">{weatherCurrent?.tempC ?? '—'}°</p>
-                    <p className="text-xs font-bold text-blue-800 leading-tight">
-                      {weatherCurrent?.conditionLabel ?? '—'}
-                    </p>
+                    <p className="text-4xl font-black text-blue-900">{weatherCurrent?.tempC ?? '—'}°</p>
+                    <div>
+                      <p className="text-sm font-bold text-blue-800 leading-tight">
+                        {weatherCurrent?.conditionLabel ?? '—'}
+                      </p>
+                      <p className="text-[10px] font-bold text-blue-600/70 uppercase">Sensación</p>
+                    </div>
                   </>
                 )}
               </div>
             </div>
-            {!loading && !weatherLoading && weatherForecast?.length > 0 && (
-              <div className="flex gap-2 mt-3 relative z-10 justify-between">
-                {weatherForecast.slice(0, 4).map((d, i) => (
-                  <div key={i} className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-blue-800/80">
-                      {WEEK_DAYS[new Date(d.date + 'T00:00:00').getDay()]}
-                    </p>
-                    <p className="text-xs my-0.5">{CONDITION_EMOJI[d.condition] ?? (d.precipitationMm > 0 ? '🌧️' : '☀️')}</p>
-                    <p className="text-[10px] font-bold text-blue-900">
-                      {d.precipitationMm > 0 ? d.precipitationMm : d.maxTempC}<span className="text-[8px] ml-0.5">{d.precipitationMm > 0 ? 'mm' : '°'}</span>
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* 2. Precio índice novillo (MarketWidget) */}
-          <MarketWidget />
-
-          {/* 3. Disponibilidad de Forraje — mejorada */}
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-100 shadow-sm p-4 relative overflow-hidden">
-            <div className="absolute -bottom-4 -right-4 w-20 h-20 text-green-200/50">
-              <Leaf className="w-full h-full" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-[10px] font-bold text-green-700/70 tracking-widest uppercase flex items-center gap-1">
-                  <Leaf className="w-3 h-3" /> Disponibilidad de forraje
-                </h3>
-                <Link href="/dashboard/mi-campo" className="text-[9px] font-bold text-green-600 hover:underline">Ver mapa →</Link>
-              </div>
-              <div className="flex items-end gap-2 mb-3">
-                <p className="text-4xl font-black text-green-950 leading-none">
-                  {totalArea > 0 ? Math.round(totalMS / totalArea).toLocaleString() : '—'}
-                </p>
-                <span className="text-xs font-bold text-green-600 pb-1">kg MS/ha</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className={`px-3 py-2 rounded-xl border bg-white/80 ${autonomyDays > 30 ? 'border-green-100' : autonomyDays > 15 ? 'border-amber-100' : 'border-red-100'}`}>
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Autonomía</p>
-                  <p className={`text-sm font-black mt-0.5 ${autonomyDays > 30 ? 'text-green-600' : autonomyDays > 15 ? 'text-amber-500' : 'text-red-600'}`}>
-                    {autonomyDays > 0 ? `${autonomyDays}d` : '—'}
+            <div className="mt-4 z-10">
+              {isColdStress && (
+                <div className="bg-blue-100/80 text-blue-800 p-2.5 rounded-xl flex items-center gap-3 border border-blue-200 shadow-sm">
+                  <ThermometerSnowflake className="w-5 h-5 shrink-0" />
+                  <p className="text-[10px] leading-tight font-medium">
+                    <strong className="block text-xs font-bold mb-0.5">Alerta de frío</strong>
+                    Menor crecimiento CC. Sugerencia: Aumentar oferta de forraje.
                   </p>
                 </div>
-                <div className="px-3 py-2 rounded-xl border border-green-100 bg-white/80">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">Potreros</p>
-                  <p className="text-sm font-black mt-0.5 text-gray-900">{paddocksWithUserForraje}/{paddocks.length}</p>
+              )}
+              {isHeatStress && (
+                <div className="bg-red-100/80 text-red-800 p-2.5 rounded-xl flex items-center gap-3 border border-red-200 shadow-sm">
+                  <Flame className="w-5 h-5 shrink-0" />
+                  <p className="text-[10px] leading-tight font-medium">
+                    <strong className="block text-xs font-bold mb-0.5">Estrés térmico</strong>
+                    Sugerencia: Priorizar potreros con sombra natural.
+                  </p>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. Rodeos — Carga animal */}
-          <div className="bg-[#fffbeb] rounded-2xl border border-[#fde68a] shadow-sm flex flex-col p-4">
-            <h3 className="text-[10px] font-bold text-amber-700/60 tracking-widest uppercase flex items-center gap-1 mb-1">
-              <Layers className="w-3.5 h-3.5" /> Carga animal
-            </h3>
-            <p className="text-xs font-bold text-amber-900">{herds.length} rodeos · {herds.reduce((s, h) => s + (Number(h.head_count) || 0), 0)} animales</p>
-            <div className="mt-3 flex items-end gap-2">
-              <p className="text-4xl font-black text-[#92400e] leading-none">{cargaAnimal.toFixed(2)}</p>
-              <div className="pb-1 group relative">
-                <p className="text-xs font-bold text-amber-800">EV/ha <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-amber-200/50 rounded-full text-[9px] cursor-help font-black">?</span></p>
-                <div className="absolute opacity-0 group-hover:opacity-100 bg-gray-900 text-white text-[10px] p-2 rounded-lg w-48 bottom-full mb-1 left-0 transition-opacity pointer-events-none z-10 shadow-xl">
-                  Equivalente Vaca por hectárea. Un EV ≈ 400 kg, consume ~12 kg MS/día.
-                </div>
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-center gap-2">
-              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${cargaAnimal <= 0.8 ? 'bg-green-500' : cargaAnimal <= 1.2 ? 'bg-amber-500' : 'bg-red-500'}`}
-                  style={{ width: `${Math.min(100, (cargaAnimal / 1.5) * 100)}%` }}
-                />
-              </div>
-              <p className={`text-[10px] font-black shrink-0 ${cargaAnimal <= 0.8 ? 'text-green-700' : cargaAnimal <= 1.2 ? 'text-amber-700' : 'text-red-700'}`}>
-                {cargaAnimal <= 0.8 ? 'Óptimo' : cargaAnimal <= 1.2 ? 'Normal' : 'Alto'}
-              </p>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* ══ FILA 2: Agenda (Mini-Gantt) & Tareas ══ */}
-      <div className="flex flex-col md:flex-row gap-4 shrink-0 min-h-[px]">
-        {/* Removed Agenda from here */}
-
-        {/* Tareas */}
-        <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-50 flex justify-between items-center bg-violet-50/30">
-            <h3 className="text-xs font-black text-violet-900 flex items-center gap-1.5"><CheckSquare className="w-3.5 h-3.5" /> Próximas tareas</h3>
-            <Link href="/dashboard/tareas" className="text-[10px] font-bold text-violet-700 hover:underline">Ir a tareas</Link>
-          </div>
-          <div className="p-2 flex-1">
-            {upcomingTasks.length === 0 ? (
-              <p className="p-4 text-xs text-gray-400 text-center font-bold">Sin tareas pendientes</p>
-            ) : upcomingTasks.map(t => (
-              <div key={t.id} className="p-3 flex items-start gap-3 hover:bg-gray-50 rounded-xl transition-all group">
-                <input type="checkbox" className="mt-1 w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" readOnly />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-gray-900 truncate">{t.title}</p>
-                  {t.paddocks?.name && <p className="text-[10px] items-center gap-1 text-gray-500 truncate flex"><MapPin className="w-3 h-3"/> {t.paddocks.name}</p>}
-                  {t.herds?.name && <p className="text-[10px] items-center gap-1 text-gray-500 truncate flex"><Layers className="w-3 h-3"/> {t.herds.name}</p>}
-                  <span className={`inline-block mt-1 text-[8px] font-black px-1.5 py-0.5 rounded-full ${TASK_PRIORITY_COLORS[t.priority?.toLowerCase()] || TASK_PRIORITY_COLORS.baja}`}>{t.priority || 'Normal'}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ══ FILA 3: Movimientos + NDVI ══ */}
-      <div className="flex flex-col xl:flex-row gap-4 shrink-0">
-        {/* Próximos movimientos (Mini-Gantt simplificado) */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col flex-[2] overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-            <h2 className="text-sm font-black flex items-center gap-2 text-gray-900">
-              <Navigation className="w-4 h-4 text-green-600" /> Próximos movimientos
-            </h2>
-            <Link href="/dashboard/grazing" className="text-xs font-bold text-green-600 hover:underline flex items-center gap-1">
-              Planificador <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-
-          {/* KPI Strip — derived 100% from real grazing plans */}
-          {(() => {
-            const today = new Date(); today.setHours(0,0,0,0)
-            const todayStr = new Date().toISOString().split('T')[0]
-
-            // Active plans (currently grazing)
-            const activePlans = nextMoves.filter((p: any) => {
-              if (p.status === 'ACTIVE') return true
-              if (p.entry_date <= todayStr && (!p.exit_date || p.exit_date >= todayStr)) return true
-              return false
-            })
-
-            // Plans with imminent exit (next 7 days)
-            const urgentExits = nextMoves.filter((p: any) => {
-              if (!p.exit_date) return false
-              const d = Math.round((new Date(p.exit_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)
-              return d >= 0 && d <= 7
-            })
-
-            // Next planned entry
-            const nextEntry = nextMoves.find((p: any) => {
-              const d = Math.round((new Date(p.entry_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)
-              return d > 0
-            })
-            const daysToNextEntry = nextEntry
-              ? Math.round((new Date(nextEntry.entry_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)
-              : null
-
-            const restingCount = paddocks.length - activePaddockIds.length
-            const rotPct = paddocks.length > 0 ? Math.round((restingCount / paddocks.length) * 100) : 0
-
-            return (
-              <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
-                {/* Rotación */}
-                <div className="px-4 py-3 flex items-center gap-3">
-                  <div className="relative w-10 h-10 shrink-0">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                      <path className="text-gray-100" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                      <path className="text-green-500" strokeWidth="4" strokeDasharray={`${rotPct}, 100`} stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-[9px] font-black text-gray-700">{rotPct}%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rotación</p>
-                    <p className="text-xs font-black text-gray-900">{restingCount}/{paddocks.length} <span className="text-[9px] font-normal text-gray-500">en descanso</span></p>
-                  </div>
-                </div>
-
-                {/* Pastoreando ahora */}
-                <div className="px-4 py-3 flex flex-col justify-center">
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">En pastoreo</p>
-                  {activePlans.length > 0 ? (
-                    <>
-                      <p className="text-sm font-black mt-0.5 text-green-600">{activePlans.length} potrero{activePlans.length !== 1 ? 's' : ''}</p>
-                      <p className="text-[9px] text-gray-500 font-medium">
-                        {urgentExits.length > 0
-                          ? `${urgentExits.length} salida${urgentExits.length !== 1 ? 's' : ''} próxima${urgentExits.length !== 1 ? 's' : ''}`
-                          : 'Sin salidas urgentes'}
+              )}
+              {!isColdStress && !isHeatStress && weatherForecast?.length > 0 && (
+                <div className="flex gap-2 justify-between mt-2 pt-3 border-t border-blue-200/50">
+                  {weatherForecast.slice(0, 4).map((d, i) => (
+                    <div key={i} className="text-center">
+                      <p className="text-[9px] font-bold uppercase text-blue-800/80">
+                        {WEEK_DAYS[new Date(d.date + 'T00:00:00').getDay()]}
                       </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm font-black mt-0.5 text-gray-400">—</p>
-                      <p className="text-[9px] text-gray-400 font-medium">Sin planes activos</p>
-                    </>
-                  )}
-                </div>
-
-                {/* Próximo movimiento */}
-                <div className="px-4 py-3 flex items-start gap-2">
-                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${activePlans.length === 0 ? 'bg-amber-100 text-amber-600' : urgentExits.length > 0 ? 'bg-indigo-100 text-indigo-600' : daysToNextEntry !== null ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
-                    <Target className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <p className={`text-[9px] font-black uppercase tracking-widest ${activePlans.length === 0 ? 'text-amber-600' : urgentExits.length > 0 ? 'text-indigo-700' : 'text-blue-700'}`}>
-                      {activePlans.length === 0 ? 'Días sin pastoreo' : urgentExits.length > 0 ? 'Mover pronto' : 'Próx. entrada'}
-                    </p>
-                    <p className="text-[10px] text-gray-700 font-medium leading-relaxed mt-0.5">
-                      {activePlans.length === 0
-                        ? '⚠️ No hay animales en el campo'
-                        : urgentExits.length > 0
-                          ? `${urgentExits[0].paddocks?.name || 'Potrero'} en ${Math.round((new Date(urgentExits[0].exit_date + 'T00:00:00').getTime() - today.getTime()) / 86400000)}d`
-                          : daysToNextEntry !== null
-                            ? `${nextEntry?.paddocks?.name || 'Potrero'} en ${daysToNextEntry}d`
-                            : nextMoves.length === 0 ? 'Sin planificación' : 'Sin mov. próximos'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
-
-          {/* Timeline de movimientos */}
-          <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
-            {loading ? (
-              <div className="p-4 space-y-3">
-                {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
-              </div>
-            ) : nextMoves.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <RotateCcw className="w-8 h-8 text-gray-200 mb-2" />
-                <p className="text-xs font-bold text-gray-400">Sin movimientos planificados</p>
-                <Link href="/dashboard/grazing" className="mt-1 text-[10px] font-bold text-green-600 hover:underline">Crear planificación</Link>
-              </div>
-            ) : (
-              nextMoves.map((plan: any, i: number) => {
-                const HERD_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#be185d']
-                const color = HERD_COLORS[i % HERD_COLORS.length]
-                const todayMid = new Date(); todayMid.setHours(0,0,0,0)
-                const today = new Date().toISOString().split('T')[0]
-                const isActive = plan.status === 'ACTIVE' || plan.entry_date <= today
-
-                // Exit-date countdown (days until animals must LEAVE)
-                const exitDate = plan.exit_date
-                const daysUntilExit = exitDate
-                  ? Math.round((new Date(exitDate + 'T00:00:00').getTime() - todayMid.getTime()) / 86400000)
-                  : null
-                const isExitToday     = daysUntilExit === 0
-                const isExitTomorrow  = daysUntilExit === 1
-                const isExitOverdue   = daysUntilExit !== null && daysUntilExit < 0
-                const isExitUrgent    = daysUntilExit !== null && daysUntilExit <= 1
-
-                // Entry-date countdown (days until animals ENTER)
-                const entryD = new Date(plan.entry_date + 'T00:00:00')
-                const daysUntilEntry = Math.round((entryD.getTime() - todayMid.getTime()) / 86400000)
-
-                // Animals grazing
-                const planHerds = herds.filter((h: any) => plan.herd_ids?.includes(h.id))
-                const totalHeads = planHerds.reduce((s: number, h: any) =>
-                  s + (Number(h.head_count) || Number(h.animal_count) || 0), 0)
-                const herdLabel = planHerds.length > 0
-                  ? planHerds.map((h: any) => h.name).join(', ')
-                  : (plan.herds?.name || 'Multi-rodeo')
-
-                return (
-                  <div
-                    key={plan.id}
-                    className={`px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
-                      isExitUrgent ? 'bg-amber-50/40' : isActive ? 'bg-green-50/20' : ''
-                    }`}
-                    style={{ borderLeft: `3px solid ${isExitOverdue ? '#ef4444' : isExitUrgent ? '#f59e0b' : isActive ? '#D4A373' : color}` }}
-                  >
-                    {/* Date block */}
-                    <div className="w-12 shrink-0 text-center">
-                      <p className="text-lg font-black text-gray-900 leading-none">{entryD.getDate()}</p>
-                      <p className="text-[9px] font-bold text-gray-400 uppercase">{entryD.toLocaleDateString('es', { month: 'short' })}</p>
+                      <p className="text-xs my-0.5">{CONDITION_EMOJI[d.condition] ?? (d.precipitationMm > 0 ? '🌧️' : '☀️')}</p>
+                      <p className="text-[10px] font-bold text-blue-900">
+                        {d.precipitationMm > 0 ? d.precipitationMm : d.maxTempC}<span className="text-[8px] ml-0.5">{d.precipitationMm > 0 ? 'mm' : '°'}</span>
+                      </p>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </FeatureWidget>
+        
+        <div className="md:col-span-2">
+          <MarketWidget />
+        </div>
+      </div>
 
-                    {/* Main content */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-gray-900 truncate">{plan.paddocks?.name || '—'}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        <span className="text-[10px] text-gray-500 truncate">{herdLabel}</span>
-                        {totalHeads > 0 && (
-                          <>
-                            <span className="text-gray-200 text-[10px]">·</span>
-                            <span className="text-[10px] font-bold text-gray-600 flex items-center gap-0.5">
-                              {totalHeads} cab.
-                            </span>
-                          </>
+      {/* ══ FILA 2: Operacional y Logística ══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 shrink-0">
+        
+        {/* Gestión Operativa */}
+        <FeatureWidget
+          title="Gestión operativa"
+          icon={<CheckSquare className="w-4 h-4 text-violet-600" />}
+          isFeatureEnabled={true}
+          actionLabel="Ver agenda"
+          href="/dashboard/agenda"
+        >
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-50 pr-2">
+              {[...farmEvents.map(e => ({ ...e, _type: 'event' })), ...upcomingTasks.map(t => ({ ...t, _type: 'task' }))]
+                .sort((a, b) => {
+                  const dateA = a._type === 'event' ? a.event_date : a.due_date || '9999-12-31';
+                  const dateB = b._type === 'event' ? b.event_date : b.due_date || '9999-12-31';
+                  return dateA.localeCompare(dateB);
+                })
+                .slice(0, 6)
+                .map((item) => {
+                  if (item._type === 'event') {
+                    const d = new Date(item.event_date + 'T00:00:00');
+                    const isActive = d <= new Date();
+                    return (
+                      <div key={`evt-${item.id}`} className="py-2.5 flex items-center gap-3 group">
+                        <div className={`w-12 h-12 rounded-xl border flex flex-col items-center justify-center shrink-0 ${isActive ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-100'}`}>
+                          <span className="text-[9px] font-bold text-gray-500 uppercase">{d.toLocaleDateString('es-AR', { month: 'short' }).replace('.','')}</span>
+                          <span className="text-base font-black text-gray-900 leading-none mt-0.5">{d.getDate()}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`w-2 h-2 rounded-full ${item.event_type === 'servicio' ? 'bg-red-500' : item.event_type === 'paricion' ? 'bg-blue-500' : 'bg-green-500'}`} />
+                            <p className="text-xs font-bold text-gray-900 truncate">{item.title}</p>
+                          </div>
+                          <p className="text-[10px] text-gray-500 truncate">{item.description || 'Evento de campo'}</p>
+                        </div>
+                      </div>
+                    )
+                  } else {
+                    return (
+                      <div key={`task-${item.id}`} className="py-2.5 flex items-center gap-3 group">
+                        <div className="w-12 h-12 rounded-xl bg-violet-50 border border-violet-100 flex flex-col items-center justify-center shrink-0 text-violet-600">
+                          <CheckSquare className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-gray-900 truncate">{item.title}</p>
+                          <p className="text-[10px] text-gray-500 truncate flex items-center gap-1 mt-0.5">
+                            {item.paddocks?.name && <><MapPin className="w-3 h-3"/> {item.paddocks.name}</>}
+                          </p>
+                        </div>
+                        <span className={`inline-block mt-1 text-[8px] font-black px-1.5 py-0.5 rounded-full ${TASK_PRIORITY_COLORS[item.priority?.toLowerCase()] || TASK_PRIORITY_COLORS.baja}`}>{item.priority || 'Normal'}</span>
+                      </div>
+                    )
+                  }
+                })}
+                {farmEvents.length === 0 && upcomingTasks.length === 0 && (
+                  <p className="text-xs text-gray-400 font-bold py-8 text-center flex flex-col items-center gap-2">
+                    <CheckSquare className="w-6 h-6 text-gray-200" />
+                    Sin tareas ni eventos urgentes
+                  </p>
+                )}
+            </div>
+          </div>
+        </FeatureWidget>
+
+        {/* Logística de Movimientos */}
+        <FeatureWidget
+          title="Logística de movimientos"
+          icon={<Navigation className="w-4 h-4 text-green-600" />}
+          isFeatureEnabled={true}
+          actionLabel="Planificador"
+          href="/dashboard/grazing"
+        >
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-50 pr-2">
+              {nextMoves.length === 0 ? (
+                <p className="text-xs text-gray-400 font-bold py-8 text-center flex flex-col items-center gap-2">
+                  <RotateCcw className="w-6 h-6 text-gray-200" />
+                  Sin movimientos planificados
+                </p>
+              ) : (
+                nextMoves.slice(0, 5).map((plan: any, i: number) => {
+                  const todayMid = new Date(); todayMid.setHours(0,0,0,0)
+                  const exitDate = plan.exit_date
+                  const daysUntilExit = exitDate
+                    ? Math.round((new Date(exitDate + 'T00:00:00').getTime() - todayMid.getTime()) / 86400000)
+                    : null
+                  const isExitToday     = daysUntilExit === 0
+                  const isExitUrgent    = daysUntilExit !== null && daysUntilExit <= 1
+                  const isActive        = plan.status === 'ACTIVE' || plan.entry_date <= new Date().toISOString().split('T')[0]
+
+                  return (
+                    <div key={plan.id} className={`py-2.5 flex items-center gap-3 ${isExitUrgent ? 'bg-red-50/30 rounded-xl px-2' : ''}`}>
+                      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${isExitUrgent ? 'bg-red-50 border-red-100 text-red-500' : isActive ? 'bg-green-50 border-green-100 text-green-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                        <Target className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-900 truncate">{plan.paddocks?.name || 'Potrero'}</p>
+                        <p className="text-[10px] text-gray-500 truncate mt-0.5">{plan.herds?.name || 'Rodeo'}</p>
+                      </div>
+                      <div className="flex flex-col items-end shrink-0">
+                        {isExitToday && (
+                          <span className="text-[9px] font-black px-2.5 py-1 rounded-md bg-red-500 text-white shadow-sm shadow-red-500/20 uppercase tracking-widest animate-pulse">
+                            ¡Sale hoy!
+                          </span>
+                        )}
+                        {!isExitToday && isExitUrgent && (
+                          <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 uppercase tracking-widest">
+                            Mañana
+                          </span>
+                        )}
+                        {!isExitUrgent && exitDate && (
+                          <span className="text-[10px] font-bold text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
+                            en {daysUntilExit}d
+                          </span>
+                        )}
+                        {!exitDate && !isActive && (
+                          <span className="text-[10px] font-bold text-gray-400">
+                            próxima entrada
+                          </span>
                         )}
                       </div>
                     </div>
-
-                    {/* Right: countdown badges */}
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      {/* Exit badge */}
-                      {exitDate && (
-                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
-                          isExitOverdue  ? 'bg-red-100 text-red-700' :
-                          isExitToday    ? 'bg-red-100 text-red-700' :
-                          isExitTomorrow ? 'bg-amber-100 text-amber-800' :
-                          'bg-gray-100 text-gray-500'
-                        }`}>
-                          {isExitOverdue
-                            ? `Venció hace ${Math.abs(daysUntilExit!)}d`
-                            : isExitToday
-                              ? '¡Sale HOY!'
-                              : isExitTomorrow
-                                ? '¡Sale mañana!'
-                                : `Sale en ${daysUntilExit}d`}
-                        </span>
-                      )}
-
-                      {/* Entry countdown when not yet active */}
-                      {!isActive && daysUntilEntry > 0 && (
-                        <span className="text-[9px] font-bold text-gray-400">
-                          entra en {daysUntilEntry}d
-                        </span>
-                      )}
-                      {isActive && !exitDate && (
-                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 uppercase tracking-wider">
-                          Activo
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Vigor Forrajero y Ajuste Climático */}
-        <div className="flex-[2] bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden min-h-[400px]">
-          <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/30">
-            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-              <Satellite className="w-4 h-4 text-green-600" /> Monitoreo de Vigor y Clima (CDP)
-            </h3>
-            <div className="flex items-center gap-4">
-               <button onClick={refreshAllNdvi} className="text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-1">
-                <RefreshCw className={`w-3 h-3 ${ndviLoading ? 'animate-spin' : ''}`} /> Actualizar NDVI
-              </button>
-              <Link href="/dashboard/grazing" className="text-[10px] font-bold text-green-600 hover:underline">Ver Planificador →</Link>
+                  )
+                })
+              )}
             </div>
           </div>
-          <div className="p-4 flex-1">
-            <ForageVigorMonitor />
-          </div>
-        </div>
+        </FeatureWidget>
+
       </div>
 
+      {/* ══ FILA 3: NDVI y Carga Animal ══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 shrink-0">
+        
+        {/* Pastoreo y vigor (NDVI) */}
+        <FeatureWidget
+          title="Pastoreo y vigor (NDVI)"
+          icon={<Satellite className="w-4 h-4 text-emerald-600" />}
+          isFeatureEnabled={isEnterprisePlan}
+          requiredPlan="enterprise"
+          actionLabel="Actualizar"
+          onAction={refreshAllNdvi}
+          className="lg:col-span-2"
+        >
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+              <p className="text-[9px] font-black text-emerald-700/70 uppercase tracking-widest mb-1">Crec. Promedio</p>
+              <p className="text-3xl font-black text-emerald-950 leading-none">{avgGrowthRate !== null ? avgGrowthRate.toFixed(1) : '—'}</p>
+              <p className="text-[10px] text-emerald-600 font-bold mt-1">kg MS/ha/d</p>
+            </div>
+            <div className="bg-green-50 rounded-xl p-3 border border-green-100 relative overflow-hidden">
+              <Leaf className="absolute -bottom-4 -right-4 w-16 h-16 text-green-200/50" />
+              <p className="text-[9px] font-black text-green-700/70 uppercase tracking-widest mb-1 relative z-10">Disponibilidad</p>
+              <p className="text-3xl font-black text-green-950 leading-none relative z-10">{totalArea > 0 ? Math.round(totalMS / totalArea).toLocaleString() : '—'}</p>
+              <p className="text-[10px] text-green-600 font-bold mt-1 relative z-10">kg MS/ha</p>
+            </div>
+            <div className={`rounded-xl p-3 border ${autonomyDays > 30 ? 'bg-blue-50 border-blue-100' : autonomyDays > 15 ? 'bg-amber-50 border-amber-100' : 'bg-red-50 border-red-100'}`}>
+              <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${autonomyDays > 30 ? 'text-blue-700/70' : autonomyDays > 15 ? 'text-amber-700/70' : 'text-red-700/70'}`}>Autonomía</p>
+              <p className={`text-3xl font-black leading-none ${autonomyDays > 30 ? 'text-blue-950' : autonomyDays > 15 ? 'text-amber-950' : 'text-red-950'}`}>{autonomyDays > 0 ? autonomyDays : '—'}</p>
+              <p className={`text-[10px] font-bold mt-1 ${autonomyDays > 30 ? 'text-blue-600' : autonomyDays > 15 ? 'text-amber-600' : 'text-red-600'}`}>días estimados</p>
+            </div>
+          </div>
+          
+          <div className="h-[220px] rounded-xl overflow-hidden relative">
+             <ForageVigorMonitor />
+          </div>
+        </FeatureWidget>
+
+        {/* Métrica de Carga Animal */}
+        <FeatureWidget
+          title="Carga animal (EV/ha)"
+          icon={<Scale className="w-4 h-4 text-amber-600" />}
+          isFeatureEnabled={true}
+        >
+          <div className="flex flex-col items-center justify-between h-full py-2">
+            <div className="relative w-40 h-32 flex items-end justify-center mb-2">
+              <svg className="absolute top-0 w-40 h-40 transform -rotate-180" viewBox="0 0 36 36">
+                <path className="text-gray-100" strokeWidth="2.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeDasharray="50, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path className={`stroke-current ${cargaAnimal <= 0.8 ? 'text-green-500' : cargaAnimal <= 1.2 ? 'text-amber-500' : 'text-red-500'} drop-shadow-md`} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${Math.min(50, (cargaAnimal / 1.5) * 50)}, 100`} fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+              <div className="text-center z-10 bg-white/80 rounded-full px-4 py-2 backdrop-blur-sm">
+                <p className="text-4xl font-black text-gray-900 leading-none">{cargaAnimal.toFixed(2)}</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase mt-1 tracking-wider">Actual</p>
+              </div>
+            </div>
+
+            <div className="w-full space-y-2 mt-auto">
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase">Límite óptimo</p>
+                  <p className="text-xs font-black text-gray-900">0.8 EV/ha</p>
+                </div>
+                <div className={`px-2 py-1 rounded text-[10px] font-bold ${cargaAnimal <= 0.8 ? 'bg-green-100 text-green-700' : cargaAnimal <= 1.2 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                  {cargaAnimal <= 0.8 ? 'Balanceado' : cargaAnimal <= 1.2 ? 'Atención' : 'Sobrepastoreo'}
+                </div>
+              </div>
+              
+              {cargaAnimal > 0.8 && (
+                <p className="text-[10px] text-amber-700 font-bold bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-start gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  Carga por encima del nivel regenerativo ideal del campo.
+                </p>
+              )}
+              {isColdStress && cargaAnimal > 0.5 && (
+                <p className="text-[10px] text-blue-700 font-bold bg-blue-50 p-2 rounded-lg border border-blue-100 flex items-start gap-1.5">
+                  <ThermometerSnowflake className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  Bajas temperaturas elevan el requerimiento basal. Ajustar carga o suplementar.
+                </p>
+              )}
+            </div>
+          </div>
+        </FeatureWidget>
+
+      </div>
     </div>
   )
 }
+

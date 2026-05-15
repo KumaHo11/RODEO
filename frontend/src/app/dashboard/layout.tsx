@@ -18,6 +18,7 @@ import Image from 'next/image'
 import RodeoLogo from '@/components/RodeoLogo'
 import { WelcomeScreen } from '@/components/WelcomeScreen'
 import { WeatherProvider } from '@/lib/context/WeatherContext'
+import { ClimateAnalyticsProvider } from '@/lib/context/ClimateAnalyticsContext'
 
 const NOTIF_ICONS: Record<string, React.ComponentType<any>> = {
   EVENTO:    CalendarDays,
@@ -312,6 +313,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <WeatherProvider>
+      <ClimateAnalyticsProvider>
     <div className="flex h-screen bg-gray-50 overflow-hidden">
 
       {/* ── Welcome overlay (first login of guests) ───────────────────────── */}
@@ -636,6 +638,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       </div>
     </div>
+      </ClimateAnalyticsProvider>
     </WeatherProvider>
   )
 }

@@ -17,10 +17,36 @@
  *   herd    → bienestar animal (THI, ajuste consumo, gasto energético)
  */
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Sun, Cloud, CloudRain, CloudSnow, Wind, Thermometer, Droplets, X, ExternalLink, Leaf, TrendingDown, TrendingUp, Minus, Info } from 'lucide-react'
 import { useWeather } from '@/lib/context/WeatherContext'
+
+function InfoTip({ text, className = '' }: { text: string; className?: string }) {
+  const [open, setOpen] = useState(false)
+  const toggle = useCallback((e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setOpen(v => !v) }, [])
+  return (
+    <span className={`relative inline-flex items-center ${className}`}>
+      <button
+        type="button"
+        onClick={toggle}
+        className="text-inherit opacity-60 hover:opacity-100 transition-opacity focus:outline-none"
+        aria-label="Información"
+      >
+        <Info className="w-3.5 h-3.5" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setOpen(false) }} />
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-[9999] w-56 bg-gray-900 text-white text-[11px] font-medium leading-relaxed rounded-xl px-3 py-2.5 shadow-xl text-left whitespace-normal">
+            {text}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
+          </div>
+        </>
+      )}
+    </span>
+  )
+}
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -68,8 +94,8 @@ function classifyCondition(
     return {
       condition:    'FROST',
       icon:         <CloudSnow className="w-3.5 h-3.5" />,
-      paddockLabel: 'Helada · Crecimiento detenido',
-      herdLabel:    'Helada · Gasto elevado',
+      paddockLabel: 'Crecimiento detenido',
+      herdLabel:    'Gasto elevado',
       bg:    'bg-sky-50',
       border:'border-sky-200',
       text:  'text-sky-700',
@@ -81,8 +107,8 @@ function classifyCondition(
     return {
       condition:    'STORMY',
       icon:         <CloudRain className="w-3.5 h-3.5" />,
-      paddockLabel: 'Tormenta · Crecimiento pausado',
-      herdLabel:    'Tormenta · Estrés animal',
+      paddockLabel: 'Crecimiento pausado',
+      herdLabel:    'Estrés animal',
       bg:    'bg-slate-50',
       border:'border-slate-200',
       text:  'text-slate-700',
@@ -94,8 +120,8 @@ function classifyCondition(
     return {
       condition:    'RAINY',
       icon:         <CloudRain className="w-3.5 h-3.5" />,
-      paddockLabel: 'Lluvia · Crecimiento activo',
-      herdLabel:    'Lluvia · Confort limitado',
+      paddockLabel: 'Crecimiento activo',
+      herdLabel:    'Confort limitado',
       bg:    'bg-blue-50',
       border:'border-blue-200',
       text:  'text-blue-700',
@@ -107,8 +133,8 @@ function classifyCondition(
     return {
       condition:    'WINDY',
       icon:         <Wind className="w-3.5 h-3.5" />,
-      paddockLabel: 'Viento · Crecimiento reducido',
-      herdLabel:    'Viento · Estrés por frío',
+      paddockLabel: 'Crecimiento reducido',
+      herdLabel:    'Estrés por frío',
       bg:    'bg-gray-50',
       border:'border-gray-200',
       text:  'text-gray-600',
@@ -120,8 +146,8 @@ function classifyCondition(
     return {
       condition:    'PARTLY_CLOUDY',
       icon:         <Cloud className="w-3.5 h-3.5" />,
-      paddockLabel: 'Nublado · Crecimiento lento',
-      herdLabel:    'Nublado · Confort',
+      paddockLabel: 'Crecimiento lento',
+      herdLabel:    'Confort',
       bg:    'bg-gray-50',
       border:'border-gray-200',
       text:  'text-gray-600',
@@ -130,14 +156,15 @@ function classifyCondition(
 
   // Sol (default): WMO 0-1
   const isHot = tempC > 30 || (tempC > 25 && humidityPct > 70)
+  const isCold = tempC < 8 || (tempC < 12 && windSpeedKmh > 20)
   return {
     condition:    'SUNNY',
     icon:         <Sun className="w-3.5 h-3.5" />,
-    paddockLabel: isHot ? 'Sol · Crecimiento óptimo' : 'Sol · Crecimiento óptimo',
-    herdLabel:    isHot ? 'Calor · Estrés calórico' : 'Sol · Confort',
-    bg:    isHot ? 'bg-orange-50' : 'bg-emerald-50',
-    border:isHot ? 'border-orange-200' : 'border-emerald-100',
-    text:  isHot ? 'text-orange-700' : 'text-emerald-700',
+    paddockLabel: 'Crecimiento',
+    herdLabel:    isHot ? 'Estrés calórico' : isCold ? 'Estrés térmico' : 'Confort',
+    bg:    isHot ? 'bg-orange-50' : isCold ? 'bg-sky-50' : 'bg-emerald-50',
+    border:isHot ? 'border-orange-200' : isCold ? 'border-sky-200' : 'border-emerald-100',
+    text:  isHot ? 'text-orange-700' : isCold ? 'text-sky-700' : 'text-emerald-700',
   }
 }
 
@@ -233,9 +260,9 @@ function ClimateDetailDrawer({
                   <div className={`flex items-center justify-between px-4 py-3 rounded-xl border ${cond.bg} ${cond.border}`}>
                     <div className="flex items-center gap-2">
                       <Leaf className={`w-4 h-4 ${cond.text}`} />
-                      <div className="flex items-center gap-1.5" title="Kilogramos de Materia Seca por hectárea, por día. Representa el ritmo de crecimiento diario estimado del pasto.">
+                      <div className="flex items-center gap-1.5">
                         <span className={`text-xs font-bold ${cond.text}`}>Tasa de crecimiento</span>
-                        <Info className={`w-3.5 h-3.5 ${cond.text} opacity-60 hover:opacity-100 cursor-help transition-opacity`} />
+                        <InfoTip className={cond.text} text="Kilogramos de Materia Seca por hectárea, por día. Representa el ritmo de crecimiento diario estimado del pasto." />
                       </div>
                     </div>
                     <span className={`text-base font-black ${cond.text}`}>

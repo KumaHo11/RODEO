@@ -9,6 +9,7 @@ import {
   Thermometer, Droplets, BarChart3, Sprout,
 } from 'lucide-react'
 import { useWeather } from '@/lib/context/WeatherContext'
+import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
 
 export interface MonthMeta {
   key: string
@@ -45,8 +46,6 @@ interface Props {
   rainfallPerMonth: Record<string, number>
   seasonalMult: Record<number, number>
   labelW: number
-  totalHa: number
-  totalMs: number
   climateEnabled: boolean
   onApplyMonthAdjustment?: (monthKey: string, adjustments: { planId: string; newDays: number }[]) => void
 }
@@ -311,10 +310,11 @@ function MonthDrawer({
 export default function GanttClimateMonthRow({
   months, plansPerMonth, herdsPerMonth,
   rainfallPerMonth, seasonalMult, labelW,
-  totalHa, totalMs, climateEnabled,
+  climateEnabled,
   onApplyMonthAdjustment,
 }: Props) {
   const { current } = useWeather()
+  const { avgGrowthRate } = useClimateAnalytics()
   const [openMonth, setOpenMonth] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   React.useEffect(() => { setMounted(true) }, [])
@@ -346,6 +346,14 @@ export default function GanttClimateMonthRow({
     ? Math.round(STANDARD_RATION_KG * (energyAdj / 100))         // positivo (frío)
     : 0
   const animalTotalKg = STANDARD_RATION_KG + animalDeltaKg
+
+  // Anchor future predictions on the CURRENT real average growth rate
+  const currentMonthKey = new Date().toISOString().substring(0, 7)
+  const currentMonthIdx = new Date().getMonth()
+  const currentRain = rainfallPerMonth[currentMonthKey] || 0
+  const currentRainBonus = currentRain > 0 ? Math.min(currentRain / 100 * 0.2, 0.4) : 0
+  const currentAdjMult = (seasonalMult[currentMonthIdx] ?? 1.0) * (1 + currentRainBonus)
+  const annualBaseDaily = currentAdjMult > 0 ? avgGrowthRate / currentAdjMult : avgGrowthRate
 
   return (
     <>
@@ -379,8 +387,7 @@ export default function GanttClimateMonthRow({
             const rain = rainfallPerMonth[m.key] || 0
             const rainBonus = rain > 0 ? Math.min(rain / 100 * 0.2, 0.4) : 0
             const adjMult = mult * (1 + rainBonus)
-            const baseGrowth = totalHa > 0 ? (totalMs / totalHa) * adjMult / 12 : 0
-            const growthKgHaDay = Math.round(baseGrowth / 30)
+            const growthKgHaDay = Math.round(annualBaseDaily * adjMult)
             const growthColor = getGrowthColor(adjMult)
 
             // Flecha de tendencia: gris para constante/lento, verde para crecimiento, rojo para sequía
@@ -473,7 +480,7 @@ export default function GanttClimateMonthRow({
             const mult = seasonalMult[m.month] ?? 1.0
             const rain = rainfallPerMonth[m.key] || 0
             const rainBonus = rain > 0 ? Math.min(rain / 100 * 0.2, 0.4) : 0
-            return Math.round(totalHa > 0 ? (totalMs / totalHa) * mult * (1 + rainBonus) / 12 / 30 : 0)
+            return Math.round(annualBaseDaily * mult * (1 + rainBonus))
           })()}
           growthMult={(() => {
             const m = openMonthData.meta

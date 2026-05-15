@@ -9,6 +9,7 @@ import { usePlan } from '@/hooks/usePlan'
 import BitacoraModal from '../../bitacora/components/BitacoraModal'
 import PaddockModal from './PaddockModal'
 import WeatherConditionChip from '@/components/WeatherConditionChip'
+import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
 import { kml as kmlToGeo } from '@tmcw/togeojson'
 import { area as turfArea } from '@turf/area'
 
@@ -81,6 +82,7 @@ export default function PaddockSidePanel({
   const [bitacoraModalOpen, setBitacoraModalOpen] = useState(false)
   const { user } = useAuth()
   const { hasFeature } = usePlan()
+  const { latestByPaddock } = useClimateAnalytics()
   const canNdvi = hasFeature('ndvi_access')
   const [editingPaddock, setEditingPaddock] = useState<Paddock | null>(null)
   const [paddockNotes, setPaddockNotes]     = useState<any[]>([])
@@ -371,6 +373,8 @@ export default function PaddockSidePanel({
                   : qualityScore >= 4 ? 'bg-amber-100 text-amber-800 border-amber-200'
                   : 'bg-red-100 text-red-800 border-red-200'
                   : ''
+                const climateSnap = latestByPaddock.get(paddock.id)
+                const realGrowthRate = climateSnap ? Number(climateSnap.grass_growth_rate) : (paddock.dry_matter_kg_ha ? Number(paddock.dry_matter_kg_ha) * 0.012 : undefined)
 
                 return (
                   <div
@@ -481,7 +485,7 @@ export default function PaddockSidePanel({
                           <WeatherConditionChip
                             mode="paddock"
                             entityName={paddock.name}
-                            grassGrowthRate={paddock.dry_matter_kg_ha ? Number(paddock.dry_matter_kg_ha) * 0.012 : undefined}
+                            grassGrowthRate={realGrowthRate}
                             ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
                           />
                           <div className="flex items-center gap-1">
