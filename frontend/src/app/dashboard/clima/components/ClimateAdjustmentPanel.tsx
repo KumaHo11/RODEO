@@ -238,7 +238,14 @@ function PaddockCard({
   const { paddock, result: r, inputSummary } = result
 
   // Growth & NDVI delta vs previous snapshot
-  const sortedSnaps = [...paddockSnapshots].sort((a, b) => a.calculated_at.localeCompare(b.calculated_at))
+  const rawSortedSnaps = [...paddockSnapshots].sort((a, b) => a.calculated_at.localeCompare(b.calculated_at))
+  const sortedSnaps = Array.from(
+    rawSortedSnaps.reduce((map, snap) => {
+      const d = new Date(snap.calculated_at).toLocaleDateString('en-CA') // YYYY-MM-DD
+      map.set(d, snap)
+      return map
+    }, new Map<string, Snapshot>()).values()
+  )
   const prevSnap = sortedSnaps.length >= 2 ? sortedSnaps[sortedSnaps.length - 2] : null
   
   const growthDiff = prevSnap != null
@@ -286,7 +293,12 @@ function PaddockCard({
           </div>
         </div>
         
-        {/* We can open expanded view by setting viewMode to list manually or use a modal, but for now we just show summary */}
+        <PaddockWeatherForm
+          paddockId={paddock.id}
+          paddockName={paddock.name}
+          onSave={onSaveWeatherEvent}
+          onRecalculate={onRecalculate}
+        />
       </div>
     )
   }
