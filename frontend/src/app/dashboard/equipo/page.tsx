@@ -109,7 +109,7 @@ function RoleBadge({ roleId, customRoles }: { roleId?: string; customRoles: any[
   if (!roleId) {
     return (
       <span className="flex items-center gap-1 text-[9px] font-black bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-        <Crown className="w-2.5 h-2.5" /> Propietario
+        Propietario
       </span>
     )
   }
@@ -418,7 +418,7 @@ export default function EquipoPage() {
             {tab.label}
             {tab.count > 0 && (
               <span className={`w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center ${
-                activeTab === tab.key ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'
+                activeTab === tab.key ? 'bg-gray-900 text-white shadow-sm' : 'bg-gray-200 text-gray-500'
               }`}>
                 {tab.count}
               </span>
@@ -459,24 +459,16 @@ export default function EquipoPage() {
                         isOwner && !isOwnerRow && !isCurrentUser ? 'hover:bg-gray-50 cursor-pointer' : ''
                       }`}
                     >
-                      {/* Avatar */}
-                      <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-black shrink-0 overflow-hidden">
-                        {member.avatar_url
-                          ? <img src={member.avatar_url} alt="" className="w-full h-full object-cover" />
-                          : initials
-                        }
-                      </div>
-
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-black text-gray-900">
                             {[member.first_name, member.last_name].filter(Boolean).join(' ') || 'Sin nombre'}
                           </p>
                           {isCurrentUser && (
-                            <span className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Tú</span>
+                            <span className="text-[9px] font-black bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">Tú</span>
                           )}
                           {!member.is_active && (
-                            <span className="text-[9px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Inactivo</span>
+                            <span className="text-[9px] font-black bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Inactivo</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -534,16 +526,13 @@ export default function EquipoPage() {
                     const isExpired = new Date(inv.expires_at) < new Date()
                     return (
                       <div key={inv.id} className="flex items-center gap-4 px-6 py-4">
-                        <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
-                          <Mail className="w-4 h-4 text-amber-400" />
-                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-gray-900 truncate">{inv.email}</p>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <RoleBadge roleId={inv.team_role} customRoles={customRoles} />
-                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pendiente</span>
+                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">Pendiente</span>
                             <span className="text-[9px] text-gray-400">{fmtDate(inv.created_at)}</span>
-                            {isExpired && <span className="text-[9px] font-bold text-red-500">Expirada</span>}
+                            {isExpired && <span className="text-[9px] font-bold text-gray-500">Expirada</span>}
                           </div>
                         </div>
                         {isOwner && (
@@ -598,17 +587,11 @@ export default function EquipoPage() {
                     }
                     return (
                       <div key={inv.id} className="flex items-center gap-4 px-6 py-3.5 opacity-75">
-                        <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                          {inv.status === 'ACCEPTED'
-                            ? <Check className="w-4 h-4 text-green-500" />
-                            : <X className="w-4 h-4 text-gray-400" />
-                          }
-                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-gray-700 truncate">{inv.email}</p>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <RoleBadge roleId={inv.team_role} customRoles={customRoles} />
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[inv.status] || 'bg-gray-100 text-gray-500'}`}>
+                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                               {statusLabels[inv.status] || inv.status}
                             </span>
                             <span className="text-[9px] text-gray-400">{fmtDate(inv.created_at)}</span>
@@ -662,7 +645,6 @@ export default function EquipoPage() {
                 <label className="block text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">Rol</label>
                 <div className="grid grid-cols-2 gap-2">
                   {allRoles.map(role => {
-                    const Icon = role.icon
                     const isSelected = editRole === role.id
                     return (
                       <button
@@ -672,14 +654,16 @@ export default function EquipoPage() {
                           setEditRole(role.id)
                           setEditPerms({ ...EMPTY_PERMS, ...(role.defaultPermissions || {}) })
                         }}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                          isSelected ? `${role.bg} border-current` : 'border-gray-200 hover:bg-gray-50'
+                        className={`px-3 py-2.5 rounded-xl border text-left transition-all ${
+                          isSelected ? `border-gray-900 bg-white` : 'border-gray-200 hover:bg-gray-50'
                         }`}
                       >
-                        <Icon className={`w-4 h-4 ${isSelected ? role.color : 'text-gray-400'}`} />
-                        <div>
-                          <p className={`text-xs font-black leading-none ${isSelected ? role.color : 'text-gray-700'}`}>{role.label}</p>
-                          {role.isCustom && <p className="text-[9px] text-indigo-400 mt-0.5">Custom</p>}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className={`text-xs font-black leading-none ${isSelected ? role.color : 'text-gray-700'}`}>{role.label}</p>
+                            {role.isCustom && <p className="text-[9px] text-gray-400 mt-0.5">Personalizado</p>}
+                          </div>
+                          {isSelected && <Check className="w-4 h-4 text-gray-900" />}
                         </div>
                       </button>
                     )
@@ -797,38 +781,36 @@ export default function EquipoPage() {
                       <button
                         type="button"
                         onClick={() => setNewRoleModalOpen(true)}
-                        className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                        className="text-[10px] font-bold text-gray-500 hover:text-gray-800 transition-colors"
                       >
-                        <BadgePlus className="w-3 h-3" /> Crear rol personalizado
+                        Crear rol personalizado
                       </button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {allRoles.map(role => {
-                        const Icon = role.icon
                         const isSelected = inviteRole === role.id
                         return (
                           <button
                             key={role.id}
                             type="button"
                             onClick={() => handleRoleChange(role.id)}
-                            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl border-2 text-left transition-all min-w-0 ${
+                            className={`px-4 py-3 rounded-2xl border-2 text-left transition-all min-w-0 ${
                               isSelected
-                                ? `${role.bg} border-current`
+                                ? `border-gray-900 bg-white`
                                 : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'
                             }`}
                           >
-                            <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${isSelected ? role.bg : 'bg-gray-100'}`}>
-                              <Icon className={`w-3.5 h-3.5 ${isSelected ? role.color : 'text-gray-400'}`} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className={`text-xs font-black leading-tight truncate ${isSelected ? role.color : 'text-gray-800'}`}>{role.label}</p>
-                              {role.isCustom && <p className="text-[9px] text-indigo-400 mt-0.5">Personalizado</p>}
-                            </div>
-                            {isSelected && (
-                              <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${role.bg}`}>
-                                <Check className={`w-2.5 h-2.5 ${role.color}`} />
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-xs font-black leading-tight truncate ${isSelected ? role.color : 'text-gray-800'}`}>{role.label}</p>
+                                {role.isCustom && <p className="text-[9px] text-gray-400 mt-0.5">Personalizado</p>}
                               </div>
-                            )}
+                              {isSelected && (
+                                <div className="shrink-0 ml-2">
+                                  <Check className="w-4 h-4 text-gray-900" />
+                                </div>
+                              )}
+                            </div>
                           </button>
                         )
                       })}
