@@ -28,11 +28,12 @@ function LoginContent() {
   const isDisabled   = searchParams.get('disabled') === '1'
 
   useEffect(() => {
-    // Only redirect if email is verified
-    if (!isLoading && user && user.emailVerified) {
+    // Solo redirigir si ya hay sesión activa al montar (refresh de página, sesión persistida)
+    // No interferir si el loading manual del handleLogin está activo
+    if (!isLoading && !loading && user && user.emailVerified) {
       redirectAfterAuth()
     }
-  }, [user, isLoading, profile])
+  }, [user, isLoading, loading, profile])
 
   const redirectAfterAuth = () => {
     if (nextPath && nextPath !== '/login') {
@@ -77,7 +78,16 @@ function LoginContent() {
         return
       }
 
-      // Auth state change triggers useEffect → redirectAfterAuth()
+      // Email verificado: redirigir activamente sin esperar al useEffect
+      // Esto evita el deadlock si fetchProfile del AuthProvider tarda o falla
+      if (nextPath && nextPath !== '/login') {
+        router.replace(nextPath)
+      } else if (profile && (profile.onboarding_step ?? 0) < 4) {
+        router.replace('/onboarding')
+      } else {
+        router.replace('/dashboard')
+      }
+      // No llamar a setLoading(false) — el redirect lo resuelve
     } catch (err: any) {
       setLoading(false)
       const code = err.code || ''

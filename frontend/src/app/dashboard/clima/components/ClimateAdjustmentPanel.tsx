@@ -261,7 +261,7 @@ function PaddockCard({
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden p-5 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="text-base font-black text-gray-950 leading-tight truncate">{paddock.name}</h3>
+            <h3 className="text-xl font-black text-gray-950 leading-tight truncate">{paddock.name}</h3>
             <span className="text-[10px] font-black text-gray-400 bg-gray-50 px-2 py-1 rounded-md">{paddock.areaHa} ha</span>
           </div>
           
@@ -312,7 +312,7 @@ function PaddockCard({
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-black text-gray-950 leading-tight truncate">{paddock.name}</h3>
+            <h3 className="text-xl font-black text-gray-950 leading-tight truncate">{paddock.name}</h3>
           </div>
           <p className="text-[10px] text-gray-400 font-medium mt-0.5 flex items-center gap-1.5">
             {paddock.areaHa} ha

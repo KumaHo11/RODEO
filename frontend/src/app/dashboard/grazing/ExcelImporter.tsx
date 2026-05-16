@@ -409,7 +409,7 @@ export default function ExcelImporter({ paddocks, herds, onClose, onImported }: 
               <FileSpreadsheet className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <h3 className="text-base font-black text-gray-950">Importar desde Excel</h3>
+              <h3 className="text-xl font-black text-gray-950">Importar desde Excel</h3>
               <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
                 {filename || 'Ningún archivo seleccionado'} · {' '}
                 {step === 'upload' ? 'Paso 1 de 4' : step === 'columns' ? 'Paso 2 de 4' : step === 'match' ? 'Paso 3 de 4' : step === 'confirm' ? 'Paso 4 de 4' : 'Listo'}

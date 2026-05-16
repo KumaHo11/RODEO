@@ -209,10 +209,21 @@ Los tokens están en `tokens/tokens.css` e importados globalmente desde `globals
 
 ## Convenciones de estilo
 
+### Jerarquía tipográfica de cards
+
+| Nivel | Elemento | Clase canónica |
+|---|---|---|
+| Eyebrow / Label de sección | Categoría, tipo, etiqueta | `text-[10px] font-black text-gray-400 uppercase tracking-widest` |
+| **Título de card** | Nombre del rodeo, potrero, tarea | **`text-xl font-black text-gray-950 leading-tight`** |
+| Subtítulo / meta | Fecha, categoría secundaria | `text-sm font-medium text-gray-500` |
+| Cuerpo de card | Descripción, notas | `text-sm text-gray-600 leading-relaxed` |
+| Valor destacado (KPI) | Número grande en una card | `text-3xl font-black text-gray-950 tabular-nums` |
+
+### Otros elementos
+
 | Elemento | Clase |
 |---|---|
 | Labels de formulario | `text-[10px] font-black text-gray-400 uppercase tracking-widest` |
-| Títulos de card/sección | Igual que labels |
 | Inputs | `bg-gray-50 border-gray-200 rounded-xl font-bold text-gray-800` |
 | Botón primario | `bg-green-600 hover:bg-green-700 rounded-xl font-bold` |
 | Botón cancelar | `bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-xl font-bold` |

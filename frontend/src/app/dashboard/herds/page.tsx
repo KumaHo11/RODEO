@@ -437,7 +437,7 @@ export default function HerdsPage() {
                         </div>
                         <div className="min-w-0">
                           {/* Nombre — jerarquía principal */}
-                          <h3 className="text-base font-black text-gray-950 leading-tight truncate">{herd.name}</h3>
+                          <h3 className="text-xl font-black text-gray-950 leading-tight truncate">{herd.name}</h3>
                           {/* Categoría — segundo plano */}
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors?.dot ?? 'bg-gray-300'}`} />

@@ -545,7 +545,7 @@ export default function SeasonPlanModal({
 
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 pb-20 md:pb-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] overflow-hidden flex flex-col">
 
         {/* ── Header ── */}

@@ -98,7 +98,7 @@ function TaskCard({ task, onStatusChange, isOwner }: {
       </div>
 
       {/* Title */}
-      <p className="text-sm font-bold text-gray-900 leading-snug mb-2">{task.title}</p>
+      <p className="text-xl font-black text-gray-950 leading-tight mb-2">{task.title}</p>
 
       {/* Description */}
       {task.description && (
@@ -408,7 +408,7 @@ function TareasContent({ user }: { user: any }) {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-3xl">
-              <h2 className="font-black text-gray-900 text-base">Nueva tarea</h2>
+              <h2 className="text-xl font-black text-gray-900">Nueva tarea</h2>
               <button onClick={() => setModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500">
                 <X className="w-4 h-4" />
               </button>

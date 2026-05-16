@@ -79,7 +79,7 @@ export function useConfirm() {
 
     return (
       <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pb-20 md:pb-4"
         style={{ backdropFilter: 'blur(4px)', backgroundColor: 'rgba(0,0,0,0.45)' }}
         onMouseDown={(e) => { if (e.target === e.currentTarget) handleCancel() }}
       >

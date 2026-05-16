@@ -54,9 +54,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchProfile = useCallback(async (firebaseUser: User) => {
     try {
       const idToken = await firebaseUser.getIdToken()
-      const res = await fetch('/api/auth/profile', {
-        headers: { Authorization: `Bearer ${idToken}` },
-      })
+
+      // Timeout de 8 s para evitar que isLoading quede bloqueado si la DB tarda
+      const controller = new AbortController()
+      const timeoutId  = setTimeout(() => controller.abort(), 8000)
+
+      let res: Response
+      try {
+        res = await fetch('/api/auth/profile', {
+          headers: { Authorization: `Bearer ${idToken}` },
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timeoutId)
+      }
 
       if (res.ok) {
         const data = await res.json()
@@ -76,8 +87,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       setProfile(null)
-    } catch (err) {
-      console.error('Error fetching profile:', err)
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.warn('fetchProfile timeout — continuando sin perfil')
+      } else {
+        console.error('Error fetching profile:', err)
+      }
       setProfile(null)
     }
   }, [])

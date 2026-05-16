@@ -684,7 +684,7 @@ function FieldSetupModalInline({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
           <div>
-            <h3 className="text-base font-black text-gray-900">Configurar campo</h3>
+            <h3 className="text-xl font-black text-gray-900">Configurar campo</h3>
             <p className="text-xs text-gray-400 mt-0.5">Editá el nombre, ubicación, superficie e imagen</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">

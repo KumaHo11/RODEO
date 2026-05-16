@@ -30,7 +30,7 @@ export default function RawDataModal({ plan, onClose }: Props) {
               <TableIcon className="w-5 h-5 text-gray-500" />
             </div>
             <div>
-              <h3 className="text-base font-black text-gray-900">{plan.name}</h3>
+              <h3 className="text-xl font-black text-gray-900">{plan.name}</h3>
               <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mt-0.5">
                 Datos Crudos Originales
               </p>

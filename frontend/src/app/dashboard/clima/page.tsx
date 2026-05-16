@@ -287,7 +287,7 @@ function HerdCard({ herd, consumptionAdj, energyAdj, viewMode = 'grid' }: any) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-black text-gray-950 leading-tight truncate">{herd.name}</h3>
+              <h3 className="text-xl font-black text-gray-950 leading-tight truncate">{herd.name}</h3>
               {herd.exit_date && (
                 <span className="text-[8px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md tracking-wider">TEMP</span>
               )}
@@ -348,7 +348,7 @@ function HerdCard({ herd, consumptionAdj, energyAdj, viewMode = 'grid' }: any) {
             </span>
           </div>
           <div className="min-w-0">
-            <h3 className="text-base font-black text-gray-950 leading-tight truncate">{herd.name}</h3>
+            <h3 className="text-xl font-black text-gray-950 leading-tight truncate">{herd.name}</h3>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors?.dot ?? 'bg-gray-300'}`} />
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">{catDisp}</p>

@@ -11,7 +11,7 @@ function Num({ label, value, onChange, unit, step = 1, min }: {
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-[10px] text-gray-500 font-medium block">{label}</label>
+      <label className="text-[10px] text-gray-600 font-medium block">{label}</label>
       <div className="relative">
         <input
           type="number"
@@ -21,7 +21,7 @@ function Num({ label, value, onChange, unit, step = 1, min }: {
           onChange={e => onChange(parseFloat(e.target.value) || 0)}
           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition-all pr-10"
         />
-        {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">{unit}</span>}
+        {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">{unit}</span>}
       </div>
     </div>
   )
@@ -30,8 +30,8 @@ function Num({ label, value, onChange, unit, step = 1, min }: {
 function ReadOnly({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div className="space-y-1">
-      <label className="text-[10px] text-gray-400 block">{label}</label>
-      <div className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-500 font-mono">{value} <span className="text-[10px] text-gray-400">{unit}</span></div>
+      <label className="text-[10px] text-gray-500 font-medium block">{label}</label>
+      <div className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-600 font-mono">{value} <span className="text-[10px] text-gray-500">{unit}</span></div>
     </div>
   )
 }
@@ -41,26 +41,26 @@ function Card({ num, title, desc, formula, result, unit, resultLabel, children }
   result: string; unit: string; resultLabel: string; children: React.ReactNode
 }) {
   return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden flex flex-col">
+    <div className="bg-white border border-gray-100 shadow-md rounded-xl overflow-hidden flex flex-col">
       <div className="px-5 py-4 border-b border-gray-100">
         <div className="flex items-start gap-2">
           <span className="shrink-0 text-[10px] font-black text-gray-400 bg-gray-100 rounded-md px-1.5 py-0.5 mt-0.5">{num}</span>
           <div>
-            <h3 className="text-sm font-bold text-gray-800 leading-tight">{title}</h3>
-            <p className="text-xs text-gray-500 mt-1 leading-relaxed">{desc}</p>
+            <h3 className="text-xl font-bold text-gray-800 leading-tight">{title}</h3>
+            <p className="text-xs text-gray-600 mt-1 leading-relaxed">{desc}</p>
           </div>
         </div>
-        <div className="mt-3 bg-gray-50 border border-gray-100 px-3 py-2 rounded-lg font-mono text-[10px] text-gray-600 overflow-x-auto whitespace-nowrap">
+        <div className="mt-3 bg-gray-50 border border-gray-100 px-3 py-2 rounded-lg font-mono text-[10px] text-gray-700 overflow-x-auto whitespace-nowrap">
           {formula}
         </div>
       </div>
       <div className="p-5 flex-1 flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">{children}</div>
         <div className="pt-4 border-t border-gray-50 flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">{resultLabel}</span>
+          <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{resultLabel}</span>
           <div className="text-right">
             <span className="text-2xl font-black text-gray-900 tabular-nums">{result}</span>
-            <span className="text-xs text-gray-400 ml-1.5">{unit}</span>
+            <span className="text-xs text-gray-500 ml-1.5">{unit}</span>
           </div>
         </div>
       </div>

@@ -433,7 +433,7 @@ export default function AgendaPage() {
               <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
                 <div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Eventos</p>
-                  <h4 className="text-base font-black text-gray-950 capitalize">
+                  <h4 className="text-xl font-black text-gray-950 capitalize">
                     {dayDate.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </h4>
                 </div>

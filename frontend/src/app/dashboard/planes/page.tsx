@@ -126,7 +126,7 @@ function PlanCard({
             <Icon className="w-5 h-5" style={{ color: plan.color }} />
           </div>
           <div>
-            <p className="text-base font-black text-gray-900">{plan.name}</p>
+            <p className="text-xl font-black text-gray-900">{plan.name}</p>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{plan.description}</p>
           </div>
         </div>

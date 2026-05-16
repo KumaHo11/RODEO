@@ -529,7 +529,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   ] as const
 
   const modalContent = (
-    <div className="fixed inset-0 z-[9999] bg-white sm:bg-black/40 sm:backdrop-blur-sm flex flex-col sm:items-center sm:justify-center sm:p-4">
+    <div className="fixed inset-0 z-[9999] bg-white sm:bg-black/40 sm:backdrop-blur-sm flex flex-col sm:items-center sm:justify-center sm:p-4 pb-20 sm:pb-0">
       <div className="bg-white w-full h-full sm:rounded-2xl sm:shadow-2xl sm:w-full sm:max-w-2xl sm:max-h-[92vh] flex flex-col">
 
         {/* Header */}
@@ -541,7 +541,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               </div>
             )}
             <div>
-              <h3 className="text-base font-black text-gray-950">
+              <h3 className="text-xl font-black text-gray-950">
                 {isEditing ? herd.name : 'Nuevo rodeo'}
               </h3>
               <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
@@ -1065,7 +1065,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-base font-black text-gray-900">¿Eliminar registro?</h3>
+              <h3 className="text-xl font-black text-gray-900">¿Eliminar registro?</h3>
               <p className="text-xs text-gray-500 leading-relaxed">
                 Vas a eliminar el evento <span className="font-bold text-gray-700">"{eventToDelete.title}"</span>. 
                 Si este evento modificó el stock (ej. Parición, Mortandad, Compra, Venta), el stock general del rodeo se revertirá automáticamente.

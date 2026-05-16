@@ -679,14 +679,14 @@ export default function PaddockModal({
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-[9999] bg-white md:bg-black/40 md:backdrop-blur-sm flex flex-col md:items-center md:justify-center md:p-4">
+    <div className="fixed inset-0 z-[9999] bg-white md:bg-black/40 md:backdrop-blur-sm flex flex-col md:items-center md:justify-center md:p-4 pb-20 md:pb-0">
       <ConfirmModal />
       <div className="bg-white w-full h-full md:rounded-2xl md:shadow-2xl md:w-full md:max-w-2xl md:max-h-[92vh] flex flex-col">
 
         {/* Header — mismo estilo que Rebaños */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
           <div>
-            <h3 className="text-base font-black text-gray-950">
+            <h3 className="text-xl font-black text-gray-950">
               {isCreating ? 'Nuevo potrero' : paddock.name}
             </h3>
             <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">

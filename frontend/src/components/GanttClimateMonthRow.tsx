@@ -359,18 +359,18 @@ export default function GanttClimateMonthRow({
           {/* Label col */}
           <div
             style={{ width: labelW, minWidth: labelW }}
-            className="px-2.5 py-2 flex flex-col justify-center gap-1 border-r border-gray-100 shrink-0 sticky left-0 bg-white z-10"
+            className={`px-2.5 py-2 flex flex-col justify-center gap-1 border-r shrink-0 sticky left-0 z-10 transition-colors ${climateEnabled ? 'bg-white border-gray-100' : 'bg-gray-50/60 border-gray-100'}`}
           >
-            <span className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Ajuste por clima</span>
+            <span className={`text-[9px] font-black tracking-widest uppercase transition-colors ${climateEnabled ? 'text-gray-500' : 'text-gray-300'}`}>Ajuste por clima</span>
             {/* Sub-labels */}
             <div className="flex flex-col gap-0.5 pl-0.5">
               <div className="flex items-center gap-1">
-                <Sprout className="w-2.5 h-2.5 text-emerald-400" />
-                <span className="text-[8px] text-gray-400 font-semibold">Pasto</span>
+                <Sprout className={`w-2.5 h-2.5 transition-colors ${climateEnabled ? 'text-emerald-400' : 'text-gray-300'}`} />
+                <span className={`text-[8px] font-semibold transition-colors ${climateEnabled ? 'text-gray-400' : 'text-gray-300'}`}>Pasto</span>
               </div>
               <div className="flex items-center gap-1">
-                <Thermometer className="w-2.5 h-2.5 text-orange-400" />
-                <span className="text-[8px] text-gray-400 font-semibold">Animal</span>
+                <Thermometer className={`w-2.5 h-2.5 transition-colors ${climateEnabled ? 'text-orange-400' : 'text-gray-300'}`} />
+                <span className={`text-[8px] font-semibold transition-colors ${climateEnabled ? 'text-gray-400' : 'text-gray-300'}`}>Animal</span>
               </div>
             </div>
           </div>
@@ -383,50 +383,54 @@ export default function GanttClimateMonthRow({
             const rainBonus = rain > 0 ? Math.min(rain / 100 * 0.2, 0.4) : 0
             const adjMult = mult * (1 + rainBonus)
             const growthKgHaDay = Math.round(annualBaseDaily * adjMult)
-            const growthColor = getGrowthColor(adjMult)
+            const growthColor = climateEnabled ? getGrowthColor(adjMult) : '#d1d5db'
 
-            // Flecha de tendencia: gris para constante/lento, verde para crecimiento, rojo para sequía
+            // Flecha de tendencia — gris cuando está desactivado
             const isGrowth   = adjMult >= 1.0
             const isDrought  = adjMult <= 0.1
-            const isFlat     = !isGrowth && !isDrought
-            const TrendIcon = isGrowth
-              ? <TrendingUp className="w-3 h-3 shrink-0" style={{ color: growthColor }} />
-              : isDrought
-              ? <TrendingDown className="w-3 h-3 shrink-0" style={{ color: growthColor }} />
-              : <Minus className="w-3 h-3 shrink-0" style={{ color: '#9ca3af' }} />
+            const TrendIcon = climateEnabled
+              ? isGrowth
+                ? <TrendingUp className="w-3 h-3 shrink-0" style={{ color: growthColor }} />
+                : isDrought
+                ? <TrendingDown className="w-3 h-3 shrink-0" style={{ color: growthColor }} />
+                : <Minus className="w-3 h-3 shrink-0" style={{ color: '#9ca3af' }} />
+              : <Minus className="w-3 h-3 shrink-0 text-gray-300" />
 
-            // Colores animal
-            const hasHeatStress = consumptionAdj < 0
-            const hasColdStress = energyAdj > 0
-            // Calor = baja consumo = rojo; Frío = sube demanda = naranja
-            const animalColor = hasHeatStress ? '#dc2626' : hasColdStress ? '#f97316' : '#16a34a'
+            // Colores animal — gris cuando desactivado
+            const hasHeatStress = climateEnabled && consumptionAdj < 0
+            const hasColdStress = climateEnabled && energyAdj > 0
+            const animalColor = hasHeatStress ? '#dc2626' : hasColdStress ? '#f97316' : climateEnabled ? '#16a34a' : '#d1d5db'
 
-            const animalLine = hasHeatStress || hasColdStress
-              ? `${hasHeatStress ? '' : '+'}${animalDeltaKg} kg → ${animalTotalKg} kg`
-              : `${STANDARD_RATION_KG} kg`
+            const animalLine = climateEnabled
+              ? (hasHeatStress || hasColdStress
+                  ? `${hasHeatStress ? '' : '+'}${animalDeltaKg} kg → ${animalTotalKg} kg`
+                  : `${STANDARD_RATION_KG} kg`)
+              : '—'
 
-            const animalTitle = hasHeatStress
-              ? `Estrés calor: −${Math.abs(animalDeltaKg)} kg (${animalTotalKg} kg/día)`
-              : hasColdStress
-              ? `Estrés frío: +${animalDeltaKg} kg (${animalTotalKg} kg/día)`
-              : `Confort: ${STANDARD_RATION_KG} kg/día`
+            const animalTitle = climateEnabled
+              ? (hasHeatStress
+                  ? `Estrés calor: −${Math.abs(animalDeltaKg)} kg (${animalTotalKg} kg/día)`
+                  : hasColdStress
+                  ? `Estrés frío: +${animalDeltaKg} kg (${animalTotalKg} kg/día)`
+                  : `Confort: ${STANDARD_RATION_KG} kg/día`)
+              : 'Ajuste climático desactivado'
 
             return (
               <button
                 key={m.key}
-                onClick={() => setOpenMonth(m.key)}
+                onClick={() => climateEnabled && setOpenMonth(m.key)}
                 className={`absolute inset-y-0 border-r flex flex-col justify-center px-1.5 py-1 transition-all group ${
                   climateEnabled
-                    ? 'hover:bg-emerald-50/60 cursor-pointer border-emerald-100/60'
-                    : 'hover:bg-gray-50 cursor-pointer border-gray-100'
+                    ? 'hover:bg-emerald-50/60 cursor-pointer border-emerald-100/60 bg-white'
+                    : 'cursor-default border-gray-100 bg-gray-50/30'
                 }`}
                 style={{ left: `${m.leftPct}%`, width: `${m.widthPct}%` }}
-                title={`${m.label ?? m.key}: ${getGrowthLabel(adjMult)} · ${animalTitle}`}
+                title={`${m.label ?? m.key}: ${climateEnabled ? getGrowthLabel(adjMult) + ' · ' + animalTitle : 'Desactivado'}`}
               >
                 {/* Sub-fila A — Ajuste Pasto */}
                 <div className="flex items-center gap-0.5 w-full">
                   {TrendIcon}
-                  {growthKgHaDay > 0 ? (
+                  {climateEnabled && growthKgHaDay > 0 ? (
                     <div className="flex items-baseline gap-0.5">
                       <span className="text-[9px] font-black leading-none tabular-nums" style={{ color: growthColor }}>
                         {growthKgHaDay}
@@ -434,23 +438,19 @@ export default function GanttClimateMonthRow({
                       <span className="text-[6px] text-gray-400 font-bold">kg/ha/d</span>
                     </div>
                   ) : (
-                    <span className="text-[8px] font-black" style={{ color: growthColor }}>—</span>
+                    <span className="text-[8px] font-black text-gray-300">—</span>
                   )}
                 </div>
 
                 {/* Separador */}
                 <div className="w-full border-t border-gray-100 my-0.5" />
 
-                {/* Sub-fila B — Ajuste Animal (ración real en kg) */}
+                {/* Sub-fila B — Ajuste Animal */}
                 <div className="flex items-center gap-0.5 w-full">
-                  <Thermometer className="w-2.5 h-2.5 shrink-0" style={{ color: climateEnabled ? animalColor : '#d1d5db' }} />
-                  {climateEnabled ? (
-                    <span className="text-[8px] font-black leading-none tabular-nums truncate" style={{ color: animalColor }}>
-                      {animalLine}
-                    </span>
-                  ) : (
-                    <span className="text-[8px] text-gray-300">—</span>
-                  )}
+                  <Thermometer className="w-2.5 h-2.5 shrink-0" style={{ color: animalColor }} />
+                  <span className="text-[8px] font-black leading-none tabular-nums truncate" style={{ color: animalColor }}>
+                    {animalLine}
+                  </span>
                 </div>
 
                 {/* Hover indicator */}

@@ -13,6 +13,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import { safeIso, daysBetween } from '@/lib/utils/dates'
+import { BIActionCards } from './BIActionCards'
+import { calcularBICards } from './biEngine'
 
 // Chart lazy-loaded to avoid SSR issues with Recharts
 const ClimateAdjustmentChart = dynamic(
@@ -600,12 +602,32 @@ function InsightsContent({ user, profile }: { user: any; profile: any }) {
         </div>
       </div>
 
+      {/* ── Motor BI: 5 algoritmos de Business Intelligence ganadero ─────── */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-xs font-black text-gray-800 uppercase tracking-widest">Análisis de rentabilidad</h2>
+          <span className="text-[9px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Motor BI · 5 indicadores</span>
+        </div>
+        <BIActionCards
+          cards={calcularBICards({
+            herds,
+            paddocks,
+            plans,
+            farmEvents,
+            weather,
+          })}
+        />
+      </section>
+
       {/* Insight cards grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {cards.map(card => (
-          <InsightCardComponent key={card.id} card={card} />
-        ))}
-      </div>
+      <section>
+        <h2 className="text-xs font-black text-gray-800 uppercase tracking-widest mb-3">Métricas de manejo</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {cards.map(card => (
+            <InsightCardComponent key={card.id} card={card} />
+          ))}
+        </div>
+      </section>
 
       {/* Paddock capacity table */}
       {paddockCapacities.length > 0 && (
