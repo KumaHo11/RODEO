@@ -264,7 +264,7 @@ const CATEGORIA_ABBR: Record<string, string> = {
 
 
 // ── Herd Card ─────────────────────────────────────────────────────────────────
-function HerdCard({ herd, consumptionAdj, energyAdj, viewMode = 'grid' }: any) {
+function HerdCard({ herd, consumptionAdj, energyAdj, viewMode = 'grid', movements = [] }: any) {
   const catKey     = herd.categoria as CategoriaComercial | null
   const colors     = catKey ? CATEGORIA_COLORS[catKey] : null
   const catDisp    = catKey ? (CATEGORIA_LABEL_RAE[catKey] ?? catKey) : herd.species
@@ -399,6 +399,32 @@ function HerdCard({ herd, consumptionAdj, energyAdj, viewMode = 'grid' }: any) {
             )}
           </div>
         </div>
+
+        {/* Histórico de Mediciones (solo en Grid) */}
+        <div className="flex-1 overflow-y-auto mb-4 border-t border-gray-50 pt-2 min-h-[100px] max-h-[150px] pr-1 space-y-1.5 scrollbar-thin scrollbar-thumb-gray-200 mt-2">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest sticky top-0 bg-white z-10 pb-1">Histórico de mediciones y clima</p>
+          {movements.length === 0 ? (
+            <p className="text-[10px] text-gray-400 italic">No hay mediciones.</p>
+          ) : (
+            movements.map((m: any, i: number) => {
+              const dateObj = new Date(m.occurred_at || new Date())
+              const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('es-AR') : ''
+              const score = m.bcs_score || (m.metadata?.bcs_score)
+              const scoreStr = score ? `${Number(score).toFixed(1)} CC` : 'Registro'
+              return (
+                <div key={i} className="flex flex-col p-1.5 bg-gray-50 rounded-lg text-[10px] border border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-gray-800">{dateStr}</span>
+                    <span className="text-emerald-700 font-bold">{scoreStr}</span>
+                  </div>
+                  {m.notes && (
+                    <p className="text-[9px] text-gray-500 mt-0.5 line-clamp-1">{m.notes}</p>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
     </div>
   )
@@ -409,15 +435,28 @@ function HerdCard({ herd, consumptionAdj, energyAdj, viewMode = 'grid' }: any) {
 function TabRodeos() {
   const { current, isLoading } = useWeather()
   const [herds, setHerds] = useState<any[]>([])
+  const [movements, setMovements] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   useEffect(() => {
-    apiFetch('/api/herds')
-      .then(r => r.ok ? r.json() : { herds: [] })
-      .then(d => setHerds(d.herds ?? []))
+    Promise.all([
+      apiFetch('/api/herds').then(r => r.ok ? r.json() : { herds: [] }),
+      apiFetch('/api/movements?entity_type=herd').then(r => r.ok ? r.json() : { movements: [] })
+    ])
+      .then(([hData, mData]) => {
+        setHerds(hData.herds ?? [])
+        setMovements(mData.movements ?? [])
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
+
+    const handleRefresh = () => {
+      apiFetch('/api/movements?entity_type=herd').then(r => r.ok ? r.json() : null)
+        .then(d => d && setMovements(d.movements ?? []))
+    }
+    window.addEventListener('refresh-events', handleRefresh)
+    return () => window.removeEventListener('refresh-events', handleRefresh)
   }, [])
 
   const thi = useMemo(() => {
@@ -493,6 +532,7 @@ function TabRodeos() {
                 consumptionAdj={consumptionAdj}
                 energyAdj={energyAdj}
                 viewMode={viewMode}
+                movements={movements.filter(m => m.entity_id === herd.id)}
               />
             ))}
           </div>
