@@ -27,14 +27,16 @@ export function ForageBalanceWidget({ avgGrowthRate }: { avgGrowthRate: number |
 
   // Calculate climate multiplier using THI (heat stress) and cold stress logic
   // Similar to GanttClimatePanel
-  const dp = current.tempC - ((100 - current.humidityPct) / 5)
-  const thi = parseFloat((current.tempC + 0.36 * dp + 41.5).toFixed(1))
-  
   let climateMultiplier = 1.0
-  if (thi > 72) {
-    climateMultiplier = 0.9 // Heat stress reduces intake
-  } else if (current.tempC < 5) {
-    climateMultiplier = 1.15 // Cold stress increases energy demand
+  if (current) {
+    const dp = current.tempC - ((100 - current.humidityPct) / 5)
+    const thi = parseFloat((current.tempC + 0.36 * dp + 41.5).toFixed(1))
+    
+    if (thi > 72) {
+      climateMultiplier = 0.9 // Heat stress reduces intake
+    } else if (current.tempC < 5) {
+      climateMultiplier = 1.15 // Cold stress increases energy demand
+    }
   }
 
   const adjustedDemandPerHa = baseDemandPerHa * climateMultiplier
