@@ -65,9 +65,27 @@ export function useWeatherEvents() {
     }
   }, [user])
 
+  const deleteEvent = useCallback(async (id: string): Promise<boolean> => {
+    if (!user) return false
+    try {
+      const token = await user.getIdToken()
+      const res = await fetch(`/api/weather/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return false
+      // Optimistic removal
+      setEvents(prev => prev.filter(e => e.id !== id))
+      setTotal(prev => Math.max(0, prev - 1))
+      return true
+    } catch {
+      return false
+    }
+  }, [user])
+
   useEffect(() => { fetchEvents() }, [fetchEvents])
 
-  return { events, total, isLoading, isSaving, error, createEvent, refetch: fetchEvents }
+  return { events, total, isLoading, isSaving, error, createEvent, deleteEvent, refetch: fetchEvents }
 }
 
 // ── useWeatherInsights ─────────────────────────────────────────────────────────

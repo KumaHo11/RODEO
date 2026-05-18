@@ -18,7 +18,8 @@ import CowIcon from '@/components/CowIcon'
 import { FeatureWidget } from '@/components/FeatureWidget'
 import { AppHeader } from '@/components/AppHeader'
 import { MarketWidget } from '@/components/MarketWidget'
-import ForageVigorMonitor from '@/components/ForageVigorMonitor'
+import nextDynamic from 'next/dynamic'
+const ForageVigorMonitor = nextDynamic(() => import('@/components/ForageVigorMonitor'), { ssr: false })
 import { toast } from 'sonner'
 
 const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 51: '🌦️', 61: '🌧️', 80: '🌩️', 95: '⛈️' }
@@ -328,7 +329,7 @@ export default function DashboardOverview() {
   const isHeatStress = currentTemp > 30
 
   return (
-    <div className="flex flex-col h-full gap-5 overflow-y-auto pb-8">
+    <div className="flex flex-col h-full gap-5 overflow-y-auto pb-24 md:pb-8">
       {/* ══ HEADER ══ */}
       <AppHeader
         title="Panel principal"
@@ -569,36 +570,6 @@ export default function DashboardOverview() {
           onAction={refreshAllNdvi}
           className="lg:col-span-2"
         >
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-orange-50 rounded-xl p-3 border border-orange-100 relative overflow-hidden">
-              <Sun className="absolute -bottom-4 -right-4 w-16 h-16 text-orange-200/50" />
-              <p className="text-[9px] font-black text-orange-700/70 uppercase tracking-widest mb-1 relative z-10">ITH Animal</p>
-              <p className="text-3xl font-black text-orange-950 leading-none relative z-10">
-                {weatherCurrent ? (() => {
-                  const dp = weatherCurrent.tempC - (100 - weatherCurrent.humidityPct) / 5;
-                  return (weatherCurrent.tempC + 0.36 * dp + 41.5).toFixed(1);
-                })() : '—'}
-              </p>
-              <p className="text-[10px] text-orange-600 font-bold mt-1 relative z-10">índice térmico</p>
-            </div>
-            <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100 relative overflow-hidden">
-              <TrendingUp className="absolute -bottom-4 -right-4 w-16 h-16 text-emerald-200/50" />
-              <p className="text-[9px] font-black text-emerald-700/70 uppercase tracking-widest mb-1 relative z-10">Crecimiento</p>
-              <p className="text-3xl font-black text-emerald-950 leading-none relative z-10">{avgGrowthRate !== null ? avgGrowthRate.toFixed(1) : '—'}</p>
-              <p className="text-[10px] text-emerald-600 font-bold mt-1 relative z-10">kg MS/ha/d</p>
-            </div>
-            <div className="bg-blue-50 rounded-xl p-3 border border-blue-100 relative overflow-hidden">
-              <Satellite className="absolute -bottom-4 -right-4 w-16 h-16 text-blue-200/50" />
-              <p className="text-[9px] font-black text-blue-700/70 uppercase tracking-widest mb-1 relative z-10">NDVI Promedio</p>
-              <p className="text-3xl font-black text-blue-950 leading-none relative z-10">
-                {paddocks.filter(p => Number(p.current_ndvi) > 0).length > 0
-                  ? (paddocks.filter(p => Number(p.current_ndvi) > 0).reduce((s, p) => s + Number(p.current_ndvi), 0) / paddocks.filter(p => Number(p.current_ndvi) > 0).length).toFixed(3)
-                  : '—'}
-              </p>
-              <p className="text-[10px] text-blue-600 font-bold mt-1 relative z-10">vigor fotosintético</p>
-            </div>
-          </div>
-          
           <div className="rounded-xl relative">
              <ForageVigorMonitor className="min-h-[260px] h-full" />
           </div>

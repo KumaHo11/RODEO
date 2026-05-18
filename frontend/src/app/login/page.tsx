@@ -35,7 +35,7 @@ function LoginContent() {
     }
   }, [user, isLoading, loading, profile])
 
-  const redirectAfterAuth = () => {
+  function redirectAfterAuth() {
     if (nextPath && nextPath !== '/login') {
       router.replace(nextPath)
       return
@@ -106,12 +106,11 @@ function LoginContent() {
   return (
     <div className="flex min-h-screen bg-white">
       {/* Visual Side */}
-      <div className="hidden lg:flex w-1/2 bg-green-700 items-center justify-center relative overflow-hidden p-24 shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)]">
-        <div className="relative z-10 text-center flex flex-col items-center gap-4">
+      <div className="hidden lg:flex w-1/2 bg-green-700 items-center justify-center relative overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)]">
+        <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+        <div className="relative z-10">
           <RodeoLogo variant="dark" size="xl" showTagline={true} />
-          <p className="text-green-200 font-medium mt-3 text-sm tracking-wide">Gestión ganadera inteligente</p>
         </div>
-        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
       </div>
 
       {/* Form Side */}

@@ -1,10 +1,4 @@
 'use client'
-/**
- * RodeoLogo — Solo Wordmark (Sin isotipo)
- * 
- * Basado en la última instrucción: "solo deja la palabra Rodeo".
- * Se eliminó el isotipo circular para mantener la máxima simplicidad.
- */
 
 import React from 'react'
 
@@ -16,12 +10,12 @@ interface RodeoLogoProps {
   className?: string
 }
 
-const SIZES: Record<string, number> = {
-  xs: 18,
-  sm: 24,
-  md: 32,
-  lg: 44,
-  xl: 64,
+const SIZES: Record<string, { name: number; tagline: number }> = {
+  xs: { name: 13, tagline: 8  },
+  sm: { name: 16, tagline: 9  },
+  md: { name: 20, tagline: 10 },
+  lg: { name: 28, tagline: 12 },
+  xl: { name: 40, tagline: 14 },
 }
 
 export default function RodeoLogo({
@@ -31,26 +25,25 @@ export default function RodeoLogo({
   iconOnly = false,
   className = '',
 }: RodeoLogoProps) {
-  const isDark = variant === 'dark'
-  const fontSize = SIZES[size] ?? 32
+  const isDark   = variant === 'dark'
+  const nameColor    = isDark ? '#ffffff' : '#16a34a'   // white on dark bg, green-600 on light
+  const taglineColor = isDark ? 'rgba(255,255,255,0.75)' : '#4b7c59'
 
-  const wordColor = isDark ? '#ffffff' : '#14532d'
-  const tagColor  = isDark ? 'rgba(255,255,255,0.7)' : '#16a34a'
+  const { name: namePx, tagline: taglinePx } = SIZES[size] ?? SIZES.md
+
+  const font = "'Nunito', 'Poppins', 'Google Sans', system-ui, sans-serif"
 
   if (iconOnly) {
     return (
       <span
         className={className}
-        role="img"
-        aria-label="RODEO"
         style={{
-          fontFamily: "'Inter', 'Google Sans', system-ui, sans-serif",
-          fontWeight: 900,
-          fontSize: fontSize,
-          letterSpacing: '-0.03em',
-          color: wordColor,
+          fontFamily: font,
+          fontWeight: 800,
+          fontSize: namePx,
+          color: nameColor,
+          letterSpacing: '-0.01em',
           lineHeight: 1,
-          flexShrink: 0,
         }}
       >
         R
@@ -61,34 +54,41 @@ export default function RodeoLogo({
   return (
     <div
       className={`inline-flex flex-col ${className}`}
-      style={{ lineHeight: 1, flexShrink: 0 }}
+      style={{ lineHeight: 1 }}
       role="img"
-      aria-label="RODEO"
+      aria-label="RODEO – Ganadería Regenerativa"
     >
+      {/* ── Brand name ─────────────────────────────── */}
       <span
         style={{
-          fontFamily: "'Inter', 'Google Sans', system-ui, sans-serif",
+          fontFamily: font,
           fontWeight: 800,
-          fontSize: fontSize,
-          letterSpacing: '-0.03em',
-          color: wordColor,
+          fontSize: namePx,
+          letterSpacing: '0.04em',
+          color: nameColor,
           lineHeight: 1,
+          whiteSpace: 'nowrap',
         }}
       >
         RODEO
       </span>
 
+      {/* ── Tagline ─────────────────────────────────── */}
       {showTagline && (
         <span
           style={{
-            fontFamily: "'Inter', 'Google Sans', system-ui, sans-serif",
-            fontWeight: 600,
-            fontSize: Math.max(9, Math.round(fontSize * 0.28)),
-            letterSpacing: '0.12em',
-            color: tagColor,
-            marginTop: Math.round(fontSize * 0.1),
+            fontFamily: font,
+            fontWeight: 300,
+            fontSize: taglinePx,
+            letterSpacing: '0.06em',
+            color: taglineColor,
+            marginTop: 15,
             lineHeight: 1,
             textTransform: 'uppercase',
+            whiteSpace: 'nowrap',
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
           Ganadería regenerativa

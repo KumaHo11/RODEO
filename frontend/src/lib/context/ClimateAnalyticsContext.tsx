@@ -75,13 +75,15 @@ export function ClimateAnalyticsProvider({ children }: { children: React.ReactNo
   }, [fetchSnapshots])
 
   const { latestByPaddock, avgGrowthRate, totalRainfall7d } = useMemo(() => {
+    // Sort DESC so the first entry per paddock_id is always the most recent snapshot
+    const sorted = [...snapshots].sort((a, b) => b.calculated_at.localeCompare(a.calculated_at))
     const map = new Map<string, ClimateSnapshot>()
-    for (const s of snapshots) {
+    for (const s of sorted) {
       if (!map.has(s.paddock_id)) {
-        map.set(s.paddock_id, s)
+        map.set(s.paddock_id, s) // keeps LATEST (sorted desc)
       }
     }
-    
+
     let totalGrowth = 0
     let maxRainfall = 0
     let count = 0
@@ -90,11 +92,12 @@ export function ClimateAnalyticsProvider({ children }: { children: React.ReactNo
       maxRainfall = Math.max(maxRainfall, Number(snap.rainfall_7d_mm) || 0)
       count++
     }
-    
+
     return {
       latestByPaddock: map,
-      avgGrowthRate: count > 0 ? parseFloat((totalGrowth / count).toFixed(1)) : 20, // 20 default
-      totalRainfall7d: maxRainfall, // Using max across paddocks since they usually share weather
+      // 0 when no real data — callers should show '—' when avgGrowthRate === 0
+      avgGrowthRate: count > 0 ? parseFloat((totalGrowth / count).toFixed(1)) : 0,
+      totalRainfall7d: maxRainfall,
     }
   }, [snapshots])
 

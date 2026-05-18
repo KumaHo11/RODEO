@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiFetch } from '@/lib/apiFetch'
-import { RefreshCw, Loader2, Lock, ChevronDown, ChevronUp, Check, TrendingUp, TrendingDown, LayoutGrid, List } from 'lucide-react'
+import { RefreshCw, Loader2, Lock, ChevronDown, ChevronUp, Check, TrendingUp, TrendingDown, LayoutGrid, List, Info } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
 import { useWeather } from '@/lib/context/WeatherContext'
 import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
@@ -273,9 +273,11 @@ function PaddockCard({
                 <span className="text-xs font-bold text-gray-400">kg/d</span>
               </div>
               {growthDiff !== null && (
-                <div className={`text-[10px] font-black mt-1 flex items-center gap-1 ${growthDiff >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
+                <div className={`text-[10px] font-black mt-1 flex items-center gap-1 ${
+                  growthDiff > 0 ? 'text-emerald-600' : growthDiff < 0 ? 'text-orange-600' : 'text-gray-400'
+                }`}>
                   {growthDiff > 0 ? '+' : ''}{growthDiff} kg
-                  {growthDiff >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {growthDiff > 0 ? <TrendingUp className="w-3 h-3" /> : growthDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <span className="text-[9px] font-medium">sin cambio</span>}
                 </div>
               )}
             </div>
@@ -283,12 +285,20 @@ function PaddockCard({
             <div className="pt-3 border-t border-gray-50">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">NDVI Actual</p>
               <div className="flex items-center justify-between">
-                <span className="text-base font-black text-gray-900">{inputSummary.ndvi.toFixed(2)}</span>
+                <span className={`text-base font-black ${inputSummary.ndvi > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
+                  {inputSummary.ndvi > 0 ? inputSummary.ndvi.toFixed(2) : 'Sin NDVI'}
+                </span>
                 <div className={`text-[10px] font-black flex items-center gap-1 ${ndviDiff && ndviDiff >= 0 ? 'text-emerald-600' : ndviDiff && ndviDiff < 0 ? 'text-orange-600' : 'text-gray-500'}`}>
                   {ndviDiff !== null ? (ndviDiff > 0 ? `+${ndviDiff}` : ndviDiff) : '—'}
                   {ndviDiff !== null && (ndviDiff >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
                 </div>
               </div>
+              {inputSummary.ndvi === 0 && (
+                <div className="flex items-start gap-1.5 mt-2 text-[9px] text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 border border-amber-100">
+                  <Info className="w-3 h-3 shrink-0 mt-0.5 text-amber-500" />
+                  Sin datos satelitales. El crecimiento usa el pasto declarado ({Number(inputSummary.forageMsHa).toLocaleString('es-AR')} kg/ha). Georreferenciá el potrero en Mi Campo.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -334,18 +344,23 @@ function PaddockCard({
             </div>
           </div>
           
-          {/* Variable Crecimiento en kg */}
+            {/* Variable Crecimiento en kg */}
           <div className="text-right min-w-[70px]">
             <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Crecimiento MS</p>
             <div className="flex items-center justify-end gap-1">
               <span className="text-sm font-black text-gray-900">
-                {r.grassGrowthRateKgHaDay.toFixed(1)} <span className="text-[10px] font-bold text-gray-400">kg/d</span>
+                {r.grassGrowthRateKgHaDay > 0
+                  ? <>{r.grassGrowthRateKgHaDay.toFixed(1)} <span className="text-[10px] font-bold text-gray-400">kg/d</span></>
+                  : <span className="text-gray-400">—</span>
+                }
               </span>
             </div>
             {growthDiff !== null && (
-              <div className={`text-[9px] font-black mt-0.5 flex items-center justify-end gap-0.5 ${growthDiff >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
-                {growthDiff > 0 ? '+' : ''}{growthDiff}
-                {growthDiff >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
+              <div className={`text-[9px] font-black mt-0.5 flex items-center justify-end gap-0.5 ${
+                growthDiff > 0 ? 'text-emerald-600' : growthDiff < 0 ? 'text-orange-600' : 'text-gray-400'
+              }`}>
+                {growthDiff !== 0 && (growthDiff > 0 ? '+' : '')}{growthDiff !== 0 ? growthDiff : 'igual'}
+                {growthDiff > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : growthDiff < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
               </div>
             )}
           </div>

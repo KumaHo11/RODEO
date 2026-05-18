@@ -33,9 +33,11 @@ export function SliderControl({
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Guardamos el texto crudo para permitir borrar
-    setRawText(e.target.value)
-    const v = parseFloat(e.target.value)
+    // Strip leading zeros (e.g. "020" → "20") while allowing decimals like "0.5"
+    let raw = e.target.value
+    if (/^0\d/.test(raw)) raw = raw.replace(/^0+/, '')
+    setRawText(raw)
+    const v = parseFloat(raw)
     if (!isNaN(v) && isFinite(v)) {
       onChange(Math.min(max, Math.max(min, v)))
     }

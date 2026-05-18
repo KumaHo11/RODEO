@@ -531,7 +531,7 @@ function TabRodeos() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ClimaPage() {
-  const { events, isLoading, createEvent } = useWeatherEvents()
+  const { events, isLoading, createEvent, deleteEvent } = useWeatherEvents()
   const [orgName, setOrgName] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('resumen')
 
@@ -582,7 +582,7 @@ export default function ClimaPage() {
         {activeTab === 'rodeos' && <TabRodeos />}
         {activeTab === 'historial' && (
           <section aria-label="Historial de registros">
-            <WeatherHistoryTable events={events} isLoading={isLoading} />
+            <WeatherHistoryTable events={events} isLoading={isLoading} onDelete={deleteEvent} />
           </section>
         )}
 

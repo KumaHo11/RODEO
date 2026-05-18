@@ -15,6 +15,8 @@ function Num({ label, value, onChange, unit, step = 1, min }: {
       <label className="text-[10px] text-gray-600 font-medium block">{label}</label>
       <div className="relative">
         <input type="number" value={isNaN(value) ? '' : value} step={step} min={min}
+          inputMode="decimal"
+          onFocus={e => e.target.select()}
           onChange={e => onChange(parseFloat(e.target.value) || 0)}
           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition-all pr-10" />
         {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">{unit}</span>}

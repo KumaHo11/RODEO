@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       currentCentroid = { lng: candidates[0].lng, lat: candidates[0].lat }
     }
 
-    let currentDate = new Date(start_date)
+    const currentDate = new Date(start_date)
     const suggestedPlans = []
 
     for (let step = 0; step < limit; step++) {

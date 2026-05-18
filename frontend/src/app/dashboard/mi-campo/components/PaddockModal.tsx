@@ -704,7 +704,7 @@ export default function PaddockModal({
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`flex-1 py-2.5 text-[11px] font-black tracking-wide rounded-t-lg transition-all border-b-2 uppercase ${
+              className={`flex-1 py-2.5 text-[10px] font-black tracking-wide rounded-t-lg transition-all border-b-2 uppercase overflow-hidden whitespace-nowrap text-ellipsis px-1 ${
                 activeTab === id
                   ? 'text-green-700 border-green-600 bg-green-50/50'
                   : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-gray-50'
@@ -716,7 +716,7 @@ export default function PaddockModal({
         </div>
 
         {/* Contenido */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overscroll-y-contain">
 
           {/* ════ TAB 1 — DATOS OPERATIVOS ════ */}
           {activeTab === 'operativo' && (
@@ -740,7 +740,9 @@ export default function PaddockModal({
                   </label>
                   <input
                     type="number" min="0" step="0.1" value={areaHa}
+                    inputMode="decimal"
                     onChange={e => setAreaHa(e.target.value === '' ? '' : Number(e.target.value))}
+                    onFocus={e => e.target.select()}
                     placeholder="Ej: 50"
                     className={INPUT_CLS}
                   />
@@ -752,7 +754,9 @@ export default function PaddockModal({
                   </div>
                   <input
                     type="number" min="0" step="50" value={msHa}
+                    inputMode="decimal"
                     onChange={e => setMsHa(e.target.value === '' ? '' : Number(e.target.value))}
+                    onFocus={e => e.target.select()}
                     placeholder="Ej: 1 200"
                     className={INPUT_CLS}
                   />
@@ -1084,7 +1088,7 @@ export default function PaddockModal({
                               </div>
                             )}
                             {audioUrl && !recording && (
-                              // eslint-disable-next-line jsx-a11y/media-has-caption
+                               
                               <audio controls src={audioUrl} className="w-full rounded-xl" />
                             )}
                           </div>
@@ -1310,7 +1314,7 @@ export default function PaddockModal({
                                 </div>
                                 {hasAudio && (
                                   <div className="px-3 pb-2">
-                                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                                    { }
                                     <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '32px' }} />
                                   </div>
                                 )}

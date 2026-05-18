@@ -126,12 +126,16 @@ export function EvTab() {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-[10px] text-gray-500 font-medium block">Cabezas</label>
-            <input type="number" value={heads} min={1} onChange={e => setHeads(+e.target.value || 1)}
+            <input type="number" value={heads} min={1} inputMode="numeric"
+              onFocus={e => e.target.select()}
+              onChange={e => setHeads(+e.target.value || 1)}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-green-500 outline-none" />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] text-gray-500 font-medium block">Peso vivo prom. (kg)</label>
-            <input type="number" value={weightKg} min={10} onChange={e => setWeightKg(+e.target.value || 10)}
+            <input type="number" value={weightKg} min={10} inputMode="decimal"
+              onFocus={e => e.target.select()}
+              onChange={e => setWeightKg(+e.target.value || 10)}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-green-500 outline-none" />
           </div>
         </div>

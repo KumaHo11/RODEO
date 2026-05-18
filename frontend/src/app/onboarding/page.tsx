@@ -72,6 +72,11 @@ function OnboardingWizard() {
   const paddocksLenRef = useRef(data.paddocks.length)
   useEffect(() => { paddocksLenRef.current = data.paddocks.length }, [data.paddocks.length])
 
+  // -- Paddock naming modal state --------------------------------------------
+  const [pendingShape, setPendingShape] = useState<{ id?: number; geojson: any; area_ha: number; layer: any } | null>(null)
+  const [paddockModalName, setPaddockModalName]   = useState('')
+  const [paddockModalForraje, setPaddockModalForraje] = useState<string>('')
+
   const handleShapeDrawn = useCallback((shape: DrawnShape) => {
     if (fieldBoundaryRef.current) {
       // Already has field → open paddock naming modal
@@ -86,10 +91,6 @@ function OnboardingWizard() {
   }, [updateData])
 
   // -- Paddock naming modal state --------------------------------------------
-  const [pendingShape, setPendingShape] = useState<{ id?: number; geojson: any; area_ha: number; layer: any } | null>(null)
-  const [paddockModalName, setPaddockModalName]   = useState('')
-  const [paddockModalForraje, setPaddockModalForraje] = useState<string>('')
-
   const commitPaddock = useCallback(() => {
     if (!pendingShape || !paddockModalName.trim()) return
     const updated = [...data.paddocks, {

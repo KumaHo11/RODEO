@@ -120,12 +120,11 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-screen flex-col lg:flex-row bg-white font-sans text-gray-900">
       {/* Visual Side */}
-      <div className="hidden lg:flex lg:w-1/2 bg-green-700 items-center justify-center p-12 overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)] relative">
-        <div className="relative z-10 flex flex-col items-center gap-4">
+      <div className="hidden lg:flex lg:w-1/2 bg-green-700 items-center justify-center overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)] relative">
+        <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+        <div className="relative z-10">
           <RodeoLogo variant="dark" size="xl" showTagline={true} />
-          <p className="text-green-200 font-medium text-sm tracking-wide text-center">La plataforma de ganadería de precisión</p>
         </div>
-        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
       </div>
 
       {/* Form Side */}

@@ -279,7 +279,7 @@ export default function CalculadoraPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
 
         {/* ── Panel de controles ──────────────────────────────────────────── */}
-        <div className="space-y-5">
+        <div className="space-y-5 order-2 lg:order-1">
 
           {/* Bloque: Campo */}
           <Section title="Campo y superficie">
@@ -467,7 +467,7 @@ export default function CalculadoraPage() {
         </div>
 
         {/* ── Panel de resultados ─────────────────────────────────────────── */}
-        <div className="space-y-4 lg:sticky lg:top-4">
+        <div className="space-y-4 order-1 lg:order-2 lg:sticky lg:top-4">
 
           {/* Medidor principal */}
           <div className="bg-white border border-gray-100 rounded-xl p-5 flex flex-col items-center gap-2">

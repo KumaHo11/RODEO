@@ -566,7 +566,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         <div className="flex border-b border-gray-100 shrink-0 px-2 pt-2">
           {TABS.map(({ id, label }) => (
             <button key={id} onClick={() => setTab(id)}
-              className={`flex-1 py-2.5 text-[11px] font-black tracking-wide rounded-t-lg transition-all border-b-2 uppercase ${
+              className={`flex-1 py-2.5 text-[10px] font-black tracking-wide rounded-t-lg transition-all border-b-2 uppercase overflow-hidden whitespace-nowrap text-ellipsis px-1 ${
                 tab === id
                   ? 'text-green-700 border-green-600 bg-green-50/50'
                   : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-gray-50'
@@ -577,7 +577,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overscroll-y-contain">
 
           {/* ════ TAB 1 — DATOS OPERATIVOS ════ */}
           {tab === 'operativo' && (
@@ -618,7 +618,9 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                 <div className="space-y-1.5">
                   <label className={`${LABEL} flex items-center gap-1.5`}><Hash className="w-3 h-3 text-gray-400" /> Stock</label>
                   <input type="number" min="1" value={count}
+                    inputMode="numeric"
                     onChange={e => setCount(e.target.value === '' ? '' : Number(e.target.value))}
+                    onFocus={e => e.target.select()}
                     placeholder="Cabezas" className={INPUT} />
                 </div>
                 <div className="space-y-1.5">
@@ -630,7 +632,9 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               <div className="space-y-1.5">
                 <label className={`${LABEL} flex items-center gap-1.5`}><Scale className="w-3 h-3 text-gray-400" /> Peso promedio (kg)</label>
                 <input type="number" min="0" value={weight}
+                  inputMode="decimal"
                   onChange={e => setWeight(e.target.value === '' ? '' : Number(e.target.value))}
+                  onFocus={e => e.target.select()}
                   placeholder={currentRef ? `Ej: ${currentRef.hintPeso}` : 'Ej: 300'} className={INPUT} />
                 {currentRef && (
                   <p className="text-[10px] text-gray-400 italic flex items-center gap-1">

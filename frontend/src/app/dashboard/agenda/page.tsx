@@ -160,34 +160,65 @@ export default function AgendaPage() {
     try {
       if (editingEvent) {
         await apiFetch(`/api/farm-events/${editingEvent.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-      } else {
-        await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify(payload) })
 
-        // Auto-create temporary toro herd in the Gantt when it's a servicio with bulls
+        // Al editar un evento de servicio, sincronizar el rodeo temporal de toros
         if (payload.event_type === 'servicio' && payload.bulls_count && payload.bulls_count > 0) {
-          const startDate = payload.event_date
-          const endDate   = payload.end_date || payload.event_date
+          const bullWeightKg = payload.bulls_weight || 600
+          const bullCount    = payload.bulls_count
+          const evPerAnimal  = parseFloat((Math.pow(bullWeightKg / 450, 0.75) * 1.25).toFixed(3))
+          const totalEv      = parseFloat((evPerAnimal * bullCount).toFixed(1))
 
-          // Build a descriptive name: "Toros Servicio mes/año"
-          const startD = new Date(startDate + 'T00:00:00')
-          const endD   = new Date(endDate   + 'T00:00:00')
-          const startLabel = startD.toLocaleDateString('es', { month: 'short', year: '2-digit' })
-          const endLabel   = endD.toLocaleDateString(  'es', { month: 'short', year: '2-digit' })
-          const herdName = startLabel === endLabel
-            ? `Toros servicio ${startLabel}`
-            : `Toros servicio ${startLabel}–${endLabel}`
+          // Buscar el rodeo temporal creado por este evento (por nombre del título anterior)
+          const bullsHerd = herds.find((h: any) =>
+            h.is_temporary &&
+            (h.name === editingEvent.title || h.name === payload.title)
+          )
+
+          if (bullsHerd) {
+            await apiFetch(`/api/herds/${bullsHerd.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                name:          payload.title,      // sincronizar nombre con el título del evento
+                head_count:    bullCount,
+                avg_weight_kg: bullWeightKg,
+                total_ev:      totalEv,
+                admission_date: payload.event_date,
+                exit_date:     payload.end_date || payload.event_date,
+              }),
+            }).catch(e => console.warn('No se pudo actualizar rodeo temporal:', e))
+          }
+        }
+      } else {
+        const res = await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify(payload) })
+        const { id: savedEventId } = res.ok ? await res.json() : {}
+
+        // Auto-crear rodeo temporal de toros en el Gantt cuando es servicio con toros
+        if (payload.event_type === 'servicio' && payload.bulls_count && payload.bulls_count > 0) {
+          const startDate    = payload.event_date
+          const endDate      = payload.end_date || payload.event_date
+          const bullWeightKg = payload.bulls_weight || 600
+          const bullCount    = payload.bulls_count
+
+          // Fórmula metabólica canónica INTA: EV = (PV/450)^0.75 × 1.25 (toro)
+          const evPerAnimal = parseFloat((Math.pow(bullWeightKg / 450, 0.75) * 1.25).toFixed(3))
+          const totalEv     = parseFloat((evPerAnimal * bullCount).toFixed(1))
+
+          // El nombre del rodeo usa el título del evento directamente
+          const herdName = payload.title
 
           await apiFetch('/api/herds', {
             method: 'POST',
             body: JSON.stringify({
-              name: herdName,
-              categoria: 'TORO',
-              head_count: payload.bulls_count,
-              weight: payload.bulls_weight || 600,
-              is_temporary: true,
+              name:           herdName,
+              categoria:      'TOROS',
+              head_count:     bullCount,
+              avg_weight_kg:  bullWeightKg,
+              weight:         bullWeightKg,
+              total_ev:       totalEv,
+              is_temporary:   true,
               admission_date: startDate,
-              exit_date: endDate,
-              notes: `Creado automáticamente desde Agenda — Servicio`,
+              exit_date:      endDate,
+              notes: `Agenda — Servicio. farm_event_id:${savedEventId ?? ''}. Peso: ${bullWeightKg} kg/animal. EV: ${evPerAnimal} × ${bullCount} = ${totalEv} EV.`,
             }),
           }).catch(e => console.warn('No se pudo crear rodeo temporal:', e))
         }
@@ -645,36 +676,88 @@ export default function AgendaPage() {
               </div>
 
               {/* Solo si es Servicio: agregar toros como temporales */}
-              {form.event_type === 'servicio' && (
-                <div className="space-y-3 bg-amber-50/50 border border-amber-100 rounded-xl p-4">
-                  <div>
-                    <label className="text-[10px] font-black text-amber-800 tracking-widest uppercase">Toros (servicio)</label>
-                    <p className="text-[10px] text-amber-700/70 font-medium">Agregados como rodeo temporal en el planificador durante las fechas configuradas.</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <input
-                        type="number"
-                        min="0"
-                        value={form.bulls_count}
-                        onChange={e => setForm({ ...form, bulls_count: e.target.value })}
-                        placeholder="Cantidad"
-                        className="w-full bg-white border border-amber-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
-                      />
+              {form.event_type === 'servicio' && (() => {
+                const bullCount  = Number(form.bulls_count)  || 0
+                const bullWeight = Number(form.bulls_weight) || 0
+                // Metabolic EV for TOROS: (PV/450)^0.75 × 1.25
+                const evPerAnimal = bullCount > 0 && bullWeight > 0
+                  ? parseFloat((Math.pow(bullWeight / 450, 0.75) * 1.25).toFixed(2))
+                  : 0
+                const totalEv = parseFloat((evPerAnimal * bullCount).toFixed(1))
+                const consumoEstKgDia = Math.round(totalEv * 11)
+
+                return (
+                  <div className="space-y-3 bg-amber-50/50 border border-amber-100 rounded-xl p-4">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <label className="text-[10px] font-black text-amber-800 tracking-widest uppercase">Toros de Servicio</label>
+                        <p className="text-[10px] text-amber-700/70 font-medium mt-0.5">
+                          Se crea un rodeo temporal en el planificador. El EV se calcula con la fórmula metabólica.
+                        </p>
+                      </div>
+                      <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[8px] font-black bg-amber-100 text-amber-800 border border-amber-200">
+                        TOROS · Cañuelas
+                      </span>
                     </div>
-                    <div className="flex-1">
-                      <input
-                        type="number"
-                        min="0"
-                        value={form.bulls_weight}
-                        onChange={e => setForm({ ...form, bulls_weight: e.target.value })}
-                        placeholder="Peso (kg) ej: 600"
-                        className="w-full bg-white border border-amber-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
-                      />
+
+                    {/* Inputs */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-amber-800/60 uppercase tracking-widest">Cabezas</label>
+                        <input
+                          type="number" min="0"
+                          inputMode="numeric"
+                          onFocus={e => e.target.select()}
+                          value={form.bulls_count}
+                          onChange={e => setForm({ ...form, bulls_count: e.target.value })}
+                          placeholder="Ej: 3"
+                          className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-amber-800/60 uppercase tracking-widest">Peso prom. (kg)</label>
+                        <input
+                          type="number" min="0"
+                          inputMode="decimal"
+                          onFocus={e => e.target.select()}
+                          value={form.bulls_weight}
+                          onChange={e => setForm({ ...form, bulls_weight: e.target.value })}
+                          placeholder="600 kg (ref. Cañuelas)"
+                          className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
+                        />
+                      </div>
                     </div>
+
+                    {/* Live EV preview */}
+                    {bullCount > 0 && bullWeight > 0 ? (
+                      <div className="bg-white border border-amber-200 rounded-xl px-4 py-3 space-y-2">
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="text-center">
+                            <p className="text-[8px] font-black text-amber-600/60 uppercase tracking-widest">EV / animal</p>
+                            <p className="text-lg font-black text-amber-900 tabular-nums">{evPerAnimal}</p>
+                          </div>
+                          <div className="text-center border-x border-amber-100">
+                            <p className="text-[8px] font-black text-amber-600/60 uppercase tracking-widest">EV total</p>
+                            <p className="text-lg font-black text-amber-900 tabular-nums">{totalEv} EV</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[8px] font-black text-amber-600/60 uppercase tracking-widest">Consumo est.</p>
+                            <p className="text-lg font-black text-amber-900 tabular-nums">{consumoEstKgDia} <span className="text-[9px] font-medium">kg MS/d</span></p>
+                          </div>
+                        </div>
+                        <p className="text-[8px] text-amber-500 text-center">
+                          ({bullWeight}/450)^0.75 × 1.25 = {evPerAnimal} EV/animal × {bullCount} cab. = {totalEv} EV
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-amber-600/50 italic text-center">
+                        Ingresá cantidad y peso para ver el cálculo de EV en tiempo real
+                      </p>
+                    )}
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* Description */}
               <div className="space-y-1.5">

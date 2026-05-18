@@ -387,7 +387,7 @@ export default function MiCampoPage() {
     <div className="flex flex-col md:flex-row md:h-full md:overflow-hidden bg-gray-100 md:p-4 md:gap-4">
 
       {/* ── Map panel — mobile sticky top, desktop right 65% ────────────────── */}
-      <div className="order-1 md:order-2 w-full md:w-[65%] flex flex-col h-[55vw] max-h-[320px] md:h-full md:max-h-none rounded-none md:rounded-2xl overflow-hidden shadow-none md:shadow-md border-0 md:border md:border-gray-200 relative min-h-[220px] sticky top-0 z-[400] md:static md:z-auto">
+      <div className="order-1 md:order-2 w-full md:w-[65%] flex flex-col h-[70vw] max-h-[420px] md:h-full md:max-h-none rounded-none md:rounded-2xl overflow-hidden shadow-none md:shadow-md border-0 md:border md:border-gray-200 relative min-h-[260px] sticky top-0 z-[400] md:static md:z-auto">
 
         {/* View toggle — always visible when fieldImg exists OR always available as overlay */}
         <div className="flex border-b border-gray-200 bg-white shrink-0 z-[500] relative">

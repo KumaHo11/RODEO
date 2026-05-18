@@ -16,7 +16,8 @@ import {
 import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
 import { DashboardMetricsBar, DashboardMetricsData } from '@/design-system/molecules/DashboardMetricsBar'
 import SeasonPlanModal from './SeasonPlanModal'
-import ExcelImporter from './ExcelImporter'
+import dynamic from 'next/dynamic'
+const ExcelImporter = dynamic(() => import('./ExcelImporter'), { ssr: false })
 import RawDataModal from './RawDataModal'
 import { HOLISTIC_TOOLTIPS, HoverTooltip } from '@/components/ui/atoms/UsageRing'
 import { calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
@@ -110,6 +111,8 @@ export { calculateDynamicHeadcount, getDynamicHerdEV } from '@/lib/grazing/evPro
 import {
   calculateDynamicHeadcount as _calculateDynamicHeadcount,
   getDynamicHerdEV as _getDynamicHerdEV,
+  EV_BASE,
+  calculateBaseEV,
 } from '@/lib/grazing/evProjection'
 
 // Calculate dynamic headcount — wrapper local para uso en callbacks del Gantt
@@ -499,7 +502,7 @@ function InteractiveGantt({
 
     const targetDays = windowDays <= 90 ? [1, 8, 15, 22] : windowDays <= 180 ? [1, 15] : [1]
 
-    let currentMonth = new Date(startDt.getFullYear(), startDt.getMonth(), 1)
+    const currentMonth = new Date(startDt.getFullYear(), startDt.getMonth(), 1)
     
     while (currentMonth < endDt) {
       for (const targetDay of targetDays) {
@@ -1726,12 +1729,12 @@ function InteractiveGantt({
                             const headCount = herdActiveThisMonth ? getDynamicHeadcount(herd.id, currentHeadCount, m.startDate) : 0
                             const peso = Number(herd.avg_weight_kg) || 0
                             const catKey = herd.categoria as string
-                            const factor = CATEGORIA_DEMAND_FACTOR[catKey as keyof typeof CATEGORIA_DEMAND_FACTOR] ?? 1.0
-                            // Use stored weight; if missing, fall back to category default (e.g. TOROS=600kg)
-                            // This prevents dividing a wrong total_ev by head_count (which gave 0.12 for bulls)
-                            const pesoDefault = CATEGORIA_PESO_DEFAULT[catKey as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 400
+                            // ── Fórmula canónica INTA: EV_BASE[cat] × (peso/450)^0.75 ──────────────
+                            // Reemplaza la fórmula incorrecta (base 400 × CATEGORIA_DEMAND_FACTOR)
+                            // que producía 2.17 para TOROS en lugar del correcto ~1.55 a 600 kg.
+                            const pesoDefault = CATEGORIA_PESO_DEFAULT[catKey as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450
                             const effectivePeso = peso > 0 ? peso : pesoDefault
-                            const evPerHead = Math.pow(effectivePeso / 400, 0.75) * factor
+                            const evPerHead = (EV_BASE[catKey] ?? 1.0) * Math.pow(effectivePeso / 450, 0.75)
                             const ev = headCount > 0 ? headCount * evPerHead : 0
                             const active = monthPlansForHerd.length > 0 && herdActiveThisMonth
                             return (
@@ -2179,10 +2182,14 @@ function InteractiveGantt({
                           if (!herdActiveThisMonth) {
                             return <td colSpan={4} key={m.key} className="py-3 px-1 text-xs text-gray-200 text-center border-r border-gray-200">—</td>
                           }
+                          // ── Fórmula canónica: recalcular siempre desde peso y categoría ──
                           const headCount = getDynamicHeadcount(herd.id, currentHeadCount, m.startDate)
-                          const totalEv0 = Number(herd.total_ev) || 0
-                          const ev = currentHeadCount > 0 ? (totalEv0 / currentHeadCount) * headCount : 0
-                          const eqPct = currentHeadCount > 0 && headCount > 0 ? (ev / headCount).toFixed(2) : '—'
+                          const catU = herd.categoria?.toUpperCase() || 'VACAS'
+                          const pesoForCalc = peso > 0 ? peso
+                            : (CATEGORIA_PESO_DEFAULT[catU as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450)
+                          const evPerH = (EV_BASE[catU] ?? 1.0) * Math.pow(pesoForCalc / 450, 0.75)
+                          const ev = evPerH * headCount
+                          const eqPct = ev > 0 && headCount > 0 ? evPerH.toFixed(2) : '—'
                           return (
                             <React.Fragment key={m.key}>
                               <td className="py-1 px-1 text-center">
@@ -3107,7 +3114,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       // Each block in the cycle knows its own herd (herd_ids = [thisHerd]) but the
       // ai_analysis.cycle_all_herd_ids and cycle_all_paddock_ids hold the full selection.
       let resolvedHerdIds: string[]
-      let resolvedPaddockId: string = plan.paddock_id
+      const resolvedPaddockId: string = plan.paddock_id
 
       if (isSuggestedPlan && Array.isArray(plan.ai_analysis?.cycle_all_herd_ids) && plan.ai_analysis.cycle_all_herd_ids.length > 0) {
         // Show ALL herds of the cycle — this plan's herd is the one actively grazing in this block
@@ -3253,7 +3260,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       const cycleId = formData.ai_analysis?.cycle_id as string | undefined
       const isSuggestedWithExtras = cycleId && tempAnimals.length > 0 && formData.paddock_id && formData.entry_date && formData.exit_date
 
-      let cascadeUpdates: Array<{ id: string; entry_date: string; exit_date: string }> = []
+      const cascadeUpdates: Array<{ id: string; entry_date: string; exit_date: string }> = []
 
       if (isSuggestedWithExtras) {
         // ── Step 1: Compute NEW exit_date for this plan with extra animal EV included ──
