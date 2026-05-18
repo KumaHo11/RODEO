@@ -319,7 +319,7 @@ function InteractiveGantt({
   droughtThresholdMm, onDroughtThresholdChange,
   targetRemnant, dailyAllocationKg,
   climateViewEnabled = false, paddockCAdj = {},
-  isDrawingMode = false, onDrawEnd, onHerdUpdate, onEditEvent, onAddHerd, onHerdClick,
+  isDrawingMode = false, onDrawEnd, onHerdUpdate, onEditEvent, onDeleteEvent, onAddHerd, onHerdClick,
   paddockOrder = [],
   seasonPlanColorMap = {},
   seasonPlanNames = {},
@@ -353,6 +353,7 @@ function InteractiveGantt({
   onDrawEnd?: (paddockId: string, startDate: string, endDate: string) => void
   onHerdUpdate?: (herdId: string, updates: Record<string, any>) => void
   onEditEvent?: (evt: any) => void
+  onDeleteEvent?: (evt: any) => void
   onAddHerd?: (tipo?: 'permanente' | 'temporal') => void
   onHerdClick?: (herd: any) => void
   /** Optional ordered paddock IDs — when provided, rows are rendered in this sequence */
@@ -854,7 +855,7 @@ function InteractiveGantt({
             <button
               className="flex-1 py-1.5 bg-red-50 text-red-700 rounded-xl text-[10px] font-bold border border-red-200 hover:bg-red-100 transition-all"
               onClick={() => {
-                setEventToDelete(selectedEvent);
+                onDeleteEvent?.(selectedEvent);
                 setSelectedEvent(null);
                 setPopupPos(null);
               }}
@@ -4382,6 +4383,11 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             movements={movements}
             windowStart={ganttWindow}
             windowDays={WINDOW_DAYS}
+            onEditEvent={evt => {
+              setEditingEventId(evt.id)
+              setShowNewEventModal(true)
+            }}
+            onDeleteEvent={setEventToDelete}
             onBlockClick={(plan, evt) => {
               if (evt) {
                 const rect = (evt.currentTarget as HTMLElement).getBoundingClientRect()

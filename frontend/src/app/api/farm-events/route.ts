@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { queryOne, query, mutate } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 async function getOrgId(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
