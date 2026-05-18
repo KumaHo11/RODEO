@@ -447,6 +447,28 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     if (patchRes.ok) { 
       setBcsSaved(true)
       setSessionNoteCount(c => c + 1)
+      
+      // Update local state immediately so it shows in Historial without reopening
+      setAgendaEvents(prev => [{
+        id: `temp-${Date.now()}`,
+        title: `Condición Corporal registrada: ${bcsScore}/5 — ${label}`,
+        event_type: 'medicion',
+        event_date: todayISO(),
+        herd_id: herd.id,
+        herd_ids: [herd.id],
+        description: `BCS: ${bcsScore}/5`,
+        status: 'completado',
+      }, ...prev])
+
+      // Global refresh
+      window.dispatchEvent(new Event('refresh-farm-events'))
+      window.dispatchEvent(new Event('refresh-events'))
+      window.dispatchEvent(new Event('refresh-herds'))
+
+      import('sonner').then(({ toast }) => {
+        toast.success('Condición corporal guardada en el historial')
+      })
+
       setTimeout(() => {
         setBcsSaved(false)
         setBcsPhotoFile(null)

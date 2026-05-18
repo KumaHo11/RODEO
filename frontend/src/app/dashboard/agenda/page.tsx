@@ -239,9 +239,15 @@ export default function AgendaPage() {
     }
   }
 
+  const [eventToDelete, setEventToDelete] = useState<any | null>(null)
+  const [savingDelete, setSavingDelete] = useState(false)
+
   const handleDelete = async (id: string) => {
     await apiFetch(`/api/farm-events/${id}`, { method: 'DELETE' })
     setEvents(prev => prev.filter(e => e.id !== id))
+    window.dispatchEvent(new Event('refresh-farm-events'))
+    window.dispatchEvent(new Event('refresh-events'))
+    window.dispatchEvent(new Event('refresh-herds'))
   }
 
   const filtered = events.filter(e => {
@@ -581,7 +587,7 @@ export default function AgendaPage() {
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => handleDelete(event.id)}
+                              onClick={() => setEventToDelete(event)}
                               className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -837,6 +843,50 @@ export default function AgendaPage() {
         </div>
       )}
     </div>
+
+      {/* ─── MODAL: Confirmación de borrado de Evento ───────────────────────── */}
+      {eventToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 pt-6 pb-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-7 h-7 text-red-600" />
+              </div>
+              <h3 className="text-lg font-black text-gray-950 mb-1">¿Eliminar este evento?</h3>
+              <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                Estás a punto de eliminar el evento <span className="font-black text-red-600">"{eventToDelete.title}"</span>. Esta acción <strong>no se puede deshacer</strong>.
+              </p>
+            </div>
+            <div className="px-6 pb-6 flex flex-col gap-2">
+              <button
+                disabled={savingDelete}
+                onClick={async () => {
+                  setSavingDelete(true)
+                  try {
+                    await handleDelete(eventToDelete.id);
+                    import('sonner').then(({ toast }) => toast.success('Evento eliminado correctamente'))
+                  } catch (err) {
+                    import('sonner').then(({ toast }) => toast.error('Error al eliminar el evento'))
+                  } finally {
+                    setSavingDelete(false)
+                    setEventToDelete(null)
+                  }
+                }}
+                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-sm transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {savingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Sí, eliminar evento
+              </button>
+              <button
+                onClick={() => setEventToDelete(null)}
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </FeatureGate>
   )
 }

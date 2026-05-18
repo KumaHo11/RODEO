@@ -853,22 +853,10 @@ function InteractiveGantt({
             )}
             <button
               className="flex-1 py-1.5 bg-red-50 text-red-700 rounded-xl text-[10px] font-bold border border-red-200 hover:bg-red-100 transition-all"
-              onClick={async () => {
-                if (!confirm('¿Seguro que deseas eliminar este evento?')) return;
-                try {
-                  const url = selectedEvent.isMovement ? `/api/movements/${selectedEvent.id}` : `/api/farm-events/${selectedEvent.id}`;
-                  const res = await apiFetch(url, { method: 'DELETE' });
-                  if (res.ok) {
-                    toast.success('Evento eliminado correctamente');
-                    setSelectedEvent(null); setPopupPos(null);
-                    window.dispatchEvent(new Event('refresh-farm-events'));
-                    window.dispatchEvent(new Event('refresh-herds'));
-                  } else {
-                    toast.error('Error al eliminar el evento');
-                  }
-                } catch {
-                  toast.error('Error de conexión');
-                }
+              onClick={() => {
+                setEventToDelete(selectedEvent);
+                setSelectedEvent(null);
+                setPopupPos(null);
               }}
             >
               Eliminar
@@ -2448,6 +2436,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [editingGanttHerd, setEditingGanttHerd] = useState<HerdData | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [drawingMode, setDrawingMode] = useState(false)
+  const [eventToDelete, setEventToDelete] = useState<any | null>(null)
   /** IDs de rodeos seleccionados para el modo de dibujo continuo */
   const [drawingHerdIds, setDrawingHerdIds] = useState<string[]>([])
   /** Muestra el selector de rodeos antes de activar el modo dibujo */
@@ -5478,6 +5467,59 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           </div>
         )
       })()}
+
+      {/* ─── MODAL: Confirmación de borrado de Evento ───────────────────────── */}
+      {eventToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 pt-6 pb-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-7 h-7 text-red-600" />
+              </div>
+              <h3 className="text-lg font-black text-gray-950 mb-1">¿Eliminar este evento?</h3>
+              <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                Estás a punto de eliminar el evento <span className="font-black text-red-600">"{eventToDelete.title}"</span> del {fmt(eventToDelete.event_date)}. Esta acción <strong>no se puede deshacer</strong>.
+              </p>
+            </div>
+            <div className="px-6 pb-6 flex flex-col gap-2">
+              <button
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true)
+                  try {
+                    const url = eventToDelete.isMovement ? `/api/movements/${eventToDelete.id}` : `/api/farm-events/${eventToDelete.id}`;
+                    const res = await apiFetch(url, { method: 'DELETE' });
+                    if (res.ok) {
+                      toast.success('Evento eliminado correctamente');
+                      setEventToDelete(null);
+                      window.dispatchEvent(new Event('refresh-farm-events'));
+                      window.dispatchEvent(new Event('refresh-herds'));
+                      window.dispatchEvent(new Event('refresh-events'));
+                    } else {
+                      toast.error('Error al eliminar el evento. Intentá nuevamente.')
+                    }
+                  } catch(err) {
+                    console.error(err)
+                    toast.error('Error de conexión.')
+                  } finally {
+                    setSaving(false)
+                  }
+                }}
+                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-sm transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Sí, eliminar evento
+              </button>
+              <button
+                onClick={() => setEventToDelete(null)}
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── HERD SELECTOR PANEL ─────────────────────────────────────────── */}
       {showHerdSelector && (
