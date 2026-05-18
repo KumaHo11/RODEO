@@ -295,7 +295,9 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const bcsCameraRef = useRef<HTMLInputElement>(null)
   const [showNote,      setShowNote]      = useState(false)
   const [quickNote,     setQuickNote]     = useState('')
-  const [noteMode,      setNoteMode]      = useState<'text' | 'audio' | null>(null)
+  const [noteMode,      setNoteMode]      = useState<'text' | 'audio' | 'photo' | null>(null)
+  const [notePhoto,     setNotePhoto]     = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [noteExpanded,  setNoteExpanded]  = useState(false)
   const [noteSaving,    setNoteSaving]    = useState(false)
   const [noteSaved,     setNoteSaved]     = useState(false)
@@ -318,7 +320,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [evSaved,      setEvSaved]      = useState(false)
 
   const { listening: micOn, toggle: toggleMic } = useSpeech(text => {
-    setNewEvTitle(prev => (prev ? prev + ' ' + text : text))
+    setQuickNote(prev => (prev ? prev + ' ' + text : text))
   })
 
   const loadData = useCallback(async () => {
@@ -429,6 +431,17 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           metadata: { bcs_label: label, head_count: herd.head_count, ev: herd.total_ev, photo_url },
         }),
       }),
+      // Guardar también como evento en la agenda para que aparezca en el historial del modal
+      apiFetch('/api/farm-events', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: `Condición Corporal registrada: ${bcsScore}/5 — ${label}`,
+          event_type: 'medicion',
+          event_date: todayISO(),
+          herd_id: herd.id, herd_ids: [herd.id],
+          description: `BCS: ${bcsScore}/5`, status: 'completado',
+        }),
+      }),
     ])
     setBcsSaving(false)
     if (patchRes.ok) { 
@@ -443,20 +456,33 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   }
 
   const saveNote = async () => {
-    if (!quickNote.trim() || !herd?.id) return
+    if (!quickNote.trim() && !notePhoto) return
+    if (!herd?.id) return
     setNoteSaving(true)
-    // Store as a herd note event
+
+    let photo_url: string | null = null
+    if (notePhoto) {
+      const fd = new FormData()
+      fd.append('file', notePhoto)
+      fd.append('folder', 'herd-notes')
+      const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+      if (up.ok) ({ url: photo_url } = await up.json())
+    }
+
+    const titleStr = quickNote.trim() ? `Nota: ${quickNote.trim().slice(0, 60)}` : (photo_url ? 'Nota visual agregada' : 'Nota de rodeo')
+
     await apiFetch('/api/farm-events', {
       method: 'POST',
       body: JSON.stringify({
-        title: `Nota: ${quickNote.trim().slice(0, 60)}`,
+        title: titleStr,
         event_type: 'servicio',
         event_date: todayISO(),
         herd_id: herd.id, herd_ids: [herd.id],
-        description: quickNote.trim(), status: 'completado',
+        description: (quickNote.trim() + (photo_url ? `\n\n[Foto Adjunta](${photo_url})` : '')).trim(),
+        status: 'completado',
       }),
     })
-    setNoteSaving(false); setNoteSaved(true); setQuickNote('')
+    setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null)
     setTimeout(() => setNoteSaved(false), 3000)
     loadData()
   }
@@ -860,12 +886,12 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         ) : null}
                         {/* Camera */}
                         <button type="button"
-                          onClick={() => { if (noteExpanded && noteMode === 'text') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('text') } }}
+                          onClick={() => { fileInputRef.current?.click(); setNoteExpanded(true); setNoteMode('photo') }}
                           className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
-                            noteMode === 'text' && noteExpanded ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'
+                            noteMode === 'photo' && noteExpanded ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'
                           }`}>
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'text' && noteExpanded ? 'bg-green-500 shadow-md shadow-green-200' : 'bg-green-100'}`}>
-                            <Camera className={`w-4 h-4 ${noteMode === 'text' && noteExpanded ? 'text-white' : 'text-green-600'}`} />
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'photo' && noteExpanded ? 'bg-green-500 shadow-md shadow-green-200' : 'bg-green-100'}`}>
+                            <Camera className={`w-4 h-4 ${noteMode === 'photo' && noteExpanded ? 'text-white' : 'text-green-600'}`} />
                           </div>
                           <span className="text-[9px] font-black text-gray-600 tracking-wide">FOTO</span>
                         </button>
@@ -897,18 +923,33 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                               <span className="text-[9px] font-black text-red-600 tracking-widest uppercase">Escuchando…</span>
                             </div>
                           )}
+                          {noteMode === 'photo' && (
+                            <div className="flex flex-col gap-2">
+                              {notePhoto ? (
+                                <div className="relative w-full h-32 rounded-xl overflow-hidden border border-gray-200">
+                                  <img src={URL.createObjectURL(notePhoto)} className="w-full h-full object-cover" />
+                                  <button type="button" onClick={() => setNotePhoto(null)} className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full text-white hover:bg-black/70 transition-all"><X className="w-4 h-4"/></button>
+                                </div>
+                              ) : (
+                                <p className="text-[10px] text-gray-500 font-bold text-center py-5 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 uppercase tracking-widest">
+                                  Esperando imagen...
+                                </p>
+                              )}
+                              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => { if(e.target.files?.[0]) { setNotePhoto(e.target.files[0]); setNoteMode('photo'); setNoteExpanded(true) } }} />
+                            </div>
+                          )}
                           <textarea value={quickNote} onChange={e => setQuickNote(e.target.value)} rows={3}
-                            placeholder={noteMode === 'audio' ? 'El dictado aparecerá aquí…' : 'Observación, evento o nota…'}
+                            placeholder={noteMode === 'audio' ? 'El dictado aparecerá aquí…' : noteMode === 'photo' ? 'Descripción de la foto (opcional)…' : 'Observación, evento o nota…'}
                             className={TEXTAREA} autoFocus={noteMode !== 'audio'} />
                           <div className="flex gap-2">
                             <button type="button"
                               onClick={async () => { await saveNote(); setSessionNoteCount(c => c + 1); setNoteExpanded(false); setNoteMode(null) }}
-                              disabled={noteSaving || !quickNote.trim()}
+                              disabled={noteSaving || (!quickNote.trim() && !notePhoto)}
                               className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all">
                               {noteSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                               {noteSaved ? '¡Guardado!' : 'Guardar nota'}
                             </button>
-                            <button type="button" onClick={() => { setNoteExpanded(false); setNoteMode(null); setQuickNote('') }}
+                            <button type="button" onClick={() => { setNoteExpanded(false); setNoteMode(null); setQuickNote(''); setNotePhoto(null) }}
                               className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700">Cancelar</button>
                           </div>
                         </div>

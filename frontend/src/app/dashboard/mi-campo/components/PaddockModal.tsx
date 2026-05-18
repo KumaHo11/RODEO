@@ -639,20 +639,16 @@ export default function PaddockModal({
       const { paddock: geo } = await geoRes.json()
       if (!geo?.boundary) return
 
-      // Deduplicate snapshots by date
-      const todayStr = new Date().toLocaleDateString('es-AR', {
-        year: 'numeric', month: 'long', day: 'numeric'
-      });
+      // Deduplicate snapshots by 5 days
       const snapshots = geo?.technical_data?.historical_snapshots || [];
-      const hasTodaySnapshot = snapshots.some((snap: any) => {
-        const snapDate = new Date(snap.date).toLocaleDateString('es-AR', {
-          year: 'numeric', month: 'long', day: 'numeric'
-        });
-        return snapDate === todayStr;
+      const hasRecentSnapshot = snapshots.some((snap: any) => {
+        const snapTime = new Date(snap.date).getTime();
+        const diffDays = (Date.now() - snapTime) / 86400000;
+        return diffDays < 5;
       });
 
-      if (hasTodaySnapshot) {
-        toast.info(`Ya hay una actualización de NDVI registrada para el día de hoy.`);
+      if (hasRecentSnapshot) {
+        toast.info(`El NDVI se actualiza cada 5 días. Ya existe una medición reciente.`);
         setNdviRefreshing(false);
         return;
       }

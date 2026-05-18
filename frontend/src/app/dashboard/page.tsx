@@ -183,10 +183,13 @@ export default function DashboardOverview() {
     
     const todayStr = new Date().toISOString().split('T')[0]
     
-    // Check if ALL eligible paddocks (with boundary) are already updated today
+    // Check if ALL eligible paddocks (with boundary) are already updated recently (last 5 days)
     const eligiblePaddocks = paddocks.filter(p => p.boundary)
-    if (eligiblePaddocks.length > 0 && eligiblePaddocks.every(p => p.previous_ndvi_date && p.previous_ndvi_date.startsWith(todayStr))) {
-      toast.info(`La actualización ya se realizó el ${todayStr}. Volvé a intentar mañana.`)
+    if (eligiblePaddocks.length > 0 && eligiblePaddocks.every(p => {
+      if (!p.previous_ndvi_date) return false
+      return (Date.now() - new Date(p.previous_ndvi_date).getTime()) / 86400000 < 5
+    })) {
+      toast.info(`El NDVI se actualiza cada 5 días. Los potreros ya están al día.`)
       return
     }
 
@@ -205,11 +208,13 @@ export default function DashboardOverview() {
             setNdviStatus(`Procesando ${processed}/${toProcess.length} potreros...`)
             return
           }
-          
-          if (p.previous_ndvi_date && p.previous_ndvi_date.startsWith(todayStr)) {
-            processed++
-            setNdviStatus(`Procesando ${processed}/${toProcess.length} potreros...`)
-            return
+          if (p.previous_ndvi_date) {
+            const daysSince = (Date.now() - new Date(p.previous_ndvi_date).getTime()) / 86400000
+            if (daysSince < 5) {
+              processed++
+              setNdviStatus(`Procesando ${processed}/${toProcess.length} potreros...`)
+              return
+            }
           }
 
           const resp = await apiFetch('/api/ndvi', {
