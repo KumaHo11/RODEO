@@ -468,8 +468,21 @@ function InteractiveGantt({
         title = `Se retiraron ${qty} animales`
       } else if (m.event_type === 'ajuste') {
         title = `Ajuste de stock: ${qty > 0 ? '+' : ''}${qty} animales`
+      } else if (m.event_type === 'bcs') {
+        title = `Condición Corporal (BCS)`
+      } else if (m.event_type === 'compra') {
+        title = `Compra: ${qty} animales`
+      } else if (m.event_type === 'venta') {
+        title = `Venta: ${qty} animales`
+      } else if (m.event_type === 'mortandad') {
+        title = `Mortandad: ${qty} bajas`
+      } else if (m.event_type === 'paricion' || m.event_type === 'nacimiento') {
+        title = `Nacimientos: ${qty} animales`
+      } else if (m.event_type === 'destete') {
+        title = `Destete: ${qty} animales`
       } else {
-        title = `${m.event_type.toUpperCase()}: ${qty} cabezas`
+        const typeLabel = m.event_type.charAt(0).toUpperCase() + m.event_type.slice(1).toLowerCase()
+        title = `${typeLabel}: ${qty} cabezas`
       }
       return {
         id: m.id,
@@ -825,18 +838,42 @@ function InteractiveGantt({
               {selectedEvent.description}
             </p>
           )}
-          {/* Edit event button — opens edit modal */}
-          {!selectedEvent.isMovement && (
+          {/* Edit / Delete buttons */}
+          <div className="mt-3 flex items-center gap-2">
+            {!selectedEvent.isMovement && (
+              <button
+                className="flex-1 py-1.5 bg-sky-50 text-sky-700 rounded-xl text-[10px] font-bold border border-sky-200 hover:bg-sky-100 transition-all"
+                onClick={() => {
+                  setSelectedEvent(null); setPopupPos(null)
+                  onEditEvent?.({ ...selectedEvent })
+                }}
+              >
+                Editar
+              </button>
+            )}
             <button
-              className="mt-3 w-full py-1.5 bg-sky-50 text-sky-700 rounded-xl text-[10px] font-bold border border-sky-200 hover:bg-sky-100 transition-all"
-              onClick={() => {
-                setSelectedEvent(null); setPopupPos(null)
-                onEditEvent?.({ ...selectedEvent })
+              className="flex-1 py-1.5 bg-red-50 text-red-700 rounded-xl text-[10px] font-bold border border-red-200 hover:bg-red-100 transition-all"
+              onClick={async () => {
+                if (!confirm('¿Seguro que deseas eliminar este evento?')) return;
+                try {
+                  const url = selectedEvent.isMovement ? `/api/movements/${selectedEvent.id}` : `/api/farm-events/${selectedEvent.id}`;
+                  const res = await apiFetch(url, { method: 'DELETE' });
+                  if (res.ok) {
+                    toast.success('Evento eliminado correctamente');
+                    setSelectedEvent(null); setPopupPos(null);
+                    window.dispatchEvent(new Event('refresh-farm-events'));
+                    window.dispatchEvent(new Event('refresh-herds'));
+                  } else {
+                    toast.error('Error al eliminar el evento');
+                  }
+                } catch {
+                  toast.error('Error de conexión');
+                }
               }}
             >
-              Editar evento
+              Eliminar
             </button>
-          )}
+          </div>
         </div>
       </>
     )

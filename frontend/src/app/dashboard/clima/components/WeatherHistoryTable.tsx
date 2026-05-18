@@ -71,16 +71,36 @@ export function WeatherHistoryTable({ events, isLoading, onDelete }: WeatherHist
   const [filter, setFilter] = useState<'all' | 'manual' | 'auto'>('all')
   const [expandedSnap, setExpandedSnap] = useState<string | null>(null)
 
-  // Take one latest snapshot per paddock per day
-  const latestSnaps = useMemo(() => {
-    const byKey = new Map<string, any>()
+  // Group snapshots by week to show a single field average per week
+  const fieldSnaps = useMemo(() => {
+    const byWeek = new Map<string, any[]>()
     for (const s of snapshots) {
-      const day = s.calculated_at.slice(0, 10)
-      const key = `${s.paddock_id}__${day}`
-      const existing = byKey.get(key)
-      if (!existing || s.calculated_at > existing.calculated_at) byKey.set(key, s)
+      if (!s.calculated_at) continue;
+      const d = new Date(s.calculated_at)
+      const day = d.getDay()
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+      const monday = new Date(d.setDate(diff)).toISOString().slice(0, 10)
+      if (!byWeek.has(monday)) byWeek.set(monday, [])
+      byWeek.get(monday)!.push(s)
     }
-    return Array.from(byKey.values())
+
+    return Array.from(byWeek.entries()).map(([weekDate, snaps]) => {
+      let totalGrowth = 0, totalNdvi = 0, maxRainfall = 0, climateMulti = 0
+      for (const snap of snaps) {
+         totalGrowth += Number(snap.grass_growth_rate) || 0
+         totalNdvi += Number(snap.ndvi) || 0
+         maxRainfall = Math.max(maxRainfall, Number(snap.rainfall_7d_mm) || 0)
+         climateMulti += Number(snap.climate_multiplier) || 1
+      }
+      return {
+        calculated_at: weekDate + 'T00:00:00Z',
+        grass_growth_rate: totalGrowth / snaps.length,
+        ndvi: totalNdvi / snaps.length,
+        rainfall_7d_mm: maxRainfall,
+        climate_multiplier: climateMulti / snaps.length,
+        paddock_name: `Promedio General (${snaps.length} mediciones)`,
+      }
+    })
   }, [snapshots])
 
   // Build combined timeline
@@ -90,7 +110,7 @@ export function WeatherHistoryTable({ events, isLoading, onDelete }: WeatherHist
       date: ev.date,
       ev,
     }))
-    const snapRows: SnapshotRow[] = latestSnaps.map(s => ({
+    const snapRows: SnapshotRow[] = fieldSnaps.map(s => ({
       kind: 'snapshot',
       date: s.calculated_at.slice(0, 10),
       snap: s,
@@ -100,7 +120,7 @@ export function WeatherHistoryTable({ events, isLoading, onDelete }: WeatherHist
     if (filter === 'manual') return all.filter(r => r.kind === 'manual')
     if (filter === 'auto')   return all.filter(r => r.kind === 'snapshot')
     return all
-  }, [events, latestSnaps, filter])
+  }, [events, fieldSnaps, filter])
 
   const handleDelete = async (id: string) => {
     if (!onDelete) return

@@ -132,7 +132,7 @@ function PaddockWeatherForm({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const isValid = Number(value) > 0 && !!date
+  const isValid = value.trim() !== '' && !!date
 
   const handleSubmit = async () => {
     if (!isValid || !onSave) return
@@ -282,26 +282,44 @@ function PaddockCard({
               )}
             </div>
 
-            <div className="pt-3 border-t border-gray-50">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">NDVI Actual</p>
-              <div className="flex items-center justify-between">
-                <span className={`text-base font-black ${inputSummary.ndvi > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
-                  {inputSummary.ndvi > 0 ? inputSummary.ndvi.toFixed(2) : 'Sin NDVI'}
-                </span>
-                <div className={`text-[10px] font-black flex items-center gap-1 ${ndviDiff && ndviDiff >= 0 ? 'text-emerald-600' : ndviDiff && ndviDiff < 0 ? 'text-orange-600' : 'text-gray-500'}`}>
-                  {ndviDiff !== null ? (ndviDiff > 0 ? `+${ndviDiff}` : ndviDiff) : '—'}
-                  {ndviDiff !== null && (ndviDiff >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
-                </div>
+          <div className="pt-3 border-t border-gray-50">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">NDVI Actual</p>
+            <div className="flex items-center justify-between">
+              <span className={`text-base font-black ${inputSummary.ndvi > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
+                {inputSummary.ndvi > 0 ? inputSummary.ndvi.toFixed(2) : 'Sin NDVI'}
+              </span>
+              <div className={`text-[10px] font-black flex items-center gap-1 ${ndviDiff && ndviDiff >= 0 ? 'text-emerald-600' : ndviDiff && ndviDiff < 0 ? 'text-orange-600' : 'text-gray-500'}`}>
+                {ndviDiff !== null ? (ndviDiff > 0 ? `+${ndviDiff}` : ndviDiff) : '—'}
+                {ndviDiff !== null && (ndviDiff >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
               </div>
-              {inputSummary.ndvi === 0 && (
-                <div className="flex items-start gap-1.5 mt-2 text-[9px] text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 border border-amber-100">
-                  <Info className="w-3 h-3 shrink-0 mt-0.5 text-amber-500" />
-                  Sin datos satelitales. El crecimiento usa el pasto declarado ({Number(inputSummary.forageMsHa).toLocaleString('es-AR')} kg/ha). Georreferenciá el potrero en Mi Campo.
-                </div>
-              )}
             </div>
+            {inputSummary.ndvi === 0 && (
+              <div className="flex items-start gap-1.5 mt-2 text-[9px] text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 border border-amber-100">
+                <Info className="w-3 h-3 shrink-0 mt-0.5 text-amber-500" />
+                Sin datos satelitales. El crecimiento usa el pasto declarado ({Number(inputSummary.forageMsHa).toLocaleString('es-AR')} kg/ha). Georreferenciá el potrero en Mi Campo.
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Histórico en Grid View */}
+        <div className="flex-1 overflow-y-auto mb-4 border-t border-gray-50 pt-2 min-h-[100px] max-h-[150px] pr-1 space-y-1.5 scrollbar-thin scrollbar-thumb-gray-200">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest sticky top-0 bg-white z-10 pb-1">Histórico</p>
+          {sortedSnaps.length === 0 ? (
+            <p className="text-[10px] text-gray-400 italic">No hay mediciones.</p>
+          ) : (
+            sortedSnaps.slice().reverse().map((snap, i) => (
+              <div key={i} className="flex items-center justify-between p-1.5 bg-gray-50 rounded-lg text-[10px] border border-gray-100">
+                <span className="font-bold text-gray-800">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-700 font-bold" title="NDVI">NDVI: {Number(snap.ndvi).toFixed(3)}</span>
+                  <span className="text-gray-900 font-black" title="Crecimiento">{Number(snap.grass_growth_rate).toFixed(1)} kg/d</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
         
         <PaddockWeatherForm
           paddockId={paddock.id}
