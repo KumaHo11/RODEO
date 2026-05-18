@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify } from 'lucide-react'
+import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify, Loader2 } from 'lucide-react'
 import { FeatureGate } from '@/components/FeatureGate'
 
 const EVENT_TYPES = [

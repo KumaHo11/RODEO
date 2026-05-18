@@ -4383,10 +4383,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             movements={movements}
             windowStart={ganttWindow}
             windowDays={WINDOW_DAYS}
-            onEditEvent={evt => {
-              setEditingEventId(evt.id)
-              setShowNewEventModal(true)
-            }}
+
             onDeleteEvent={setEventToDelete}
             onBlockClick={(plan, evt) => {
               if (evt) {

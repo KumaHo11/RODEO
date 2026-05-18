@@ -175,7 +175,7 @@ export function WeatherHistoryTable({ events, isLoading, onDelete }: WeatherHist
             {rows.length} registros
           </span>
           <button
-            onClick={() => exportToCSV(events, latestSnaps)}
+            onClick={() => exportToCSV(events, fieldSnaps)}
             disabled={rows.length === 0}
             title="Exportar a CSV"
             className={clsx(

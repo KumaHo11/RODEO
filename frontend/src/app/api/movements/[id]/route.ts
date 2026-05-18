@@ -17,13 +17,14 @@ async function getAuth(req: NextRequest) {
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
     const auth = await getAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const id = params.id
+    const resolvedParams = await Promise.resolve(context.params)
+    const id = resolvedParams.id
     if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
     const res = await mutate(
