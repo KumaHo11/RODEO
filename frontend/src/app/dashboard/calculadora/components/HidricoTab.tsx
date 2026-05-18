@@ -110,33 +110,33 @@ export function HidricoTab() {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-[10px] text-gray-500 font-medium block">Cantidad de animales</label>
-            <input type="number" value={heads} min={1} inputMode="numeric"
+            <input type="number" value={isNaN(heads) ? '' : heads} min={1} inputMode="numeric"
               onFocus={e => e.target.select()}
-              onChange={e => setHeads(+e.target.value || 1)}
+              onChange={e => setHeads(e.target.value === '' ? NaN : parseFloat(e.target.value))}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-green-500 outline-none" />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] text-gray-500 font-medium block">Temperatura máx. esperada (°C)</label>
-            <input type="number" value={temp} min={0} max={50} inputMode="decimal"
+            <input type="number" value={isNaN(temp) ? '' : temp} min={0} max={50} inputMode="decimal"
               onFocus={e => e.target.select()}
-              onChange={e => setTemp(+e.target.value || 0)}
+              onChange={e => setTemp(e.target.value === '' ? NaN : parseFloat(e.target.value))}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-green-500 outline-none" />
           </div>
           {cat.needsPV && (
             <div className="space-y-1.5">
               <label className="text-[10px] text-gray-500 font-medium block">Peso vivo promedio (kg)</label>
-              <input type="number" value={pv} min={1} inputMode="decimal"
+              <input type="number" value={isNaN(pv) ? '' : pv} min={1} inputMode="decimal"
                 onFocus={e => e.target.select()}
-                onChange={e => setPv(+e.target.value || 1)}
+                onChange={e => setPv(e.target.value === '' ? NaN : parseFloat(e.target.value))}
                 className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-green-500 outline-none" />
             </div>
           )}
           {cat.extraLabel && (
             <div className="space-y-1.5">
               <label className="text-[10px] text-gray-500 font-medium block">{cat.extraLabel}</label>
-              <input type="number" value={extra} min={0} step={0.1} inputMode="decimal"
+              <input type="number" value={isNaN(extra) ? '' : extra} min={0} step={0.1} inputMode="decimal"
                 onFocus={e => e.target.select()}
-                onChange={e => setExtra(+e.target.value || 0)}
+                onChange={e => setExtra(e.target.value === '' ? NaN : parseFloat(e.target.value))}
                 className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-green-500 outline-none" />
             </div>
           )}
