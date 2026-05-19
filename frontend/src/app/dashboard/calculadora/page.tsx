@@ -72,7 +72,7 @@ export default function CalculadoraPage() {
   const [realSources, setRealSources] = useState<Partial<Record<keyof CalculatorInput, boolean>>>({})
   const [scenario, setScenario] = useState<ScenarioMode>('base')
   const [showComparison, setShowComparison] = useState(false)
-  type MainTab = 'proyecciones' | 'formulas' | 'ev' | 'agua'
+  type MainTab = 'proyecciones' | 'formulas'
   const [activeTab, setActiveTab] = useState<MainTab>('proyecciones')
   const [loadingField, setLoadingField] = useState(true)
   const comparisonRef = useRef<HTMLDivElement>(null)
@@ -188,38 +188,48 @@ export default function CalculadoraPage() {
   return (
     <div className="flex flex-col gap-6 pb-10">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="pb-1">
+      {/* ── Encabezado ───────────────────────────────────────────────────── */}
+      <div>
         <h1 className="text-xl sm:text-2xl font-black tracking-tight text-gray-950">Calculadora</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          Proyecciones del campo, fórmulas técnicas y herramientas de EV y agua.
-          Las fórmulas con{' '}
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-green-100 text-green-700 border border-green-200 align-middle">✦ Rodeo</span>
-          {' '}son las que usa la app internamente.
+        <p className="text-sm text-gray-400 mt-1 max-w-2xl">
+          Simulación de carga animal y autonomía forrajera en tiempo real,
+          más herramientas de cálculo técnico para EV, balance hídrico y gestión del pastoreo.
         </p>
       </div>
 
-      {/* ── Navegación plana — 4 items, sin sub-niveles ─────────────────────── */}
-      <div className="flex gap-6 border-b border-gray-100">
-        {([
-          { id: 'proyecciones', label: 'Proyecciones' },
-          { id: 'formulas',     label: 'Fórmulas' },
-          { id: 'ev',           label: 'EV por especie' },
-          { id: 'agua',         label: 'Balance hídrico' },
-        ] as { id: MainTab; label: string }[]).map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={clsx(
-              'pb-3 text-sm font-bold transition-colors border-b-2 whitespace-nowrap',
-              activeTab === id
-                ? 'border-gray-900 text-gray-900'
-                : 'border-transparent text-gray-400 hover:text-gray-600'
-            )}
-          >
-            {label}
-          </button>
-        ))}
+      {/* ── Tabs principales ────────────────────────────────────────────────── */}
+      <div className="flex items-end gap-1 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('proyecciones')}
+          className={clsx(
+            'px-4 py-2.5 text-sm font-semibold rounded-t-lg transition-all border border-b-0 flex items-center gap-2',
+            activeTab === 'proyecciones'
+              ? 'bg-white border-gray-200 text-gray-900 -mb-px relative z-10 shadow-sm'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          )}
+        >
+          Proyecciones
+          <span className={clsx(
+            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-all',
+            activeTab === 'proyecciones'
+              ? 'bg-green-100 text-green-700 border border-green-200'
+              : 'bg-gray-100 text-gray-400'
+          )}>
+            <span className={clsx('w-1.5 h-1.5 rounded-full', activeTab === 'proyecciones' ? 'bg-green-500 animate-pulse' : 'bg-gray-300')} />
+            En vivo
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('formulas')}
+          className={clsx(
+            'px-4 py-2.5 text-sm font-semibold rounded-t-lg transition-all border border-b-0',
+            activeTab === 'formulas'
+              ? 'bg-white border-gray-200 text-gray-900 -mb-px relative z-10 shadow-sm'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          )}
+        >
+          Fórmulas
+        </button>
       </div>
 
       {activeTab === 'proyecciones' && (
@@ -563,9 +573,7 @@ export default function CalculadoraPage() {
         </>
       )}
 
-      {activeTab === 'formulas'  && <FormulasTab />}
-      {activeTab === 'ev'        && <EvTab />}
-      {activeTab === 'agua'      && <HidricoTab />}
+      {activeTab === 'formulas' && <FormulasTab />}
 
     </div>
   )
