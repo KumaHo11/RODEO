@@ -8,6 +8,8 @@ import { MetricCard } from './components/MetricCard'
 import { ForageGauge } from './components/ForageGauge'
 import { ScenarioComparison } from './components/ScenarioComparison'
 import { FormulasTab } from './components/FormulasTab'
+import { EvTab }        from './components/EvTab'
+import { HidricoTab }   from './components/HidricoTab'
 import {
   runCalculator, getScenarioOverrides,
   type CalculatorInput, type CategoriaAnimal,
@@ -70,7 +72,8 @@ export default function CalculadoraPage() {
   const [realSources, setRealSources] = useState<Partial<Record<keyof CalculatorInput, boolean>>>({})
   const [scenario, setScenario] = useState<ScenarioMode>('base')
   const [showComparison, setShowComparison] = useState(false)
-  const [activeTab, setActiveTab] = useState<'formulas' | 'proyecciones'>('formulas')
+  type MainTab = 'proyecciones' | 'formulas' | 'ev' | 'agua'
+  const [activeTab, setActiveTab] = useState<MainTab>('proyecciones')
   const [loadingField, setLoadingField] = useState(true)
   const comparisonRef = useRef<HTMLDivElement>(null)
 
@@ -185,43 +188,41 @@ export default function CalculadoraPage() {
   return (
     <div className="flex flex-col gap-6 pb-10">
 
-      {/* ── Encabezado ──────────────────────────────────────────────────────── */}
-      <div className="pb-2">
-        <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-tight text-gray-950">Calculadora de proyecciones</h1>
-        <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-          Modificá las variables del campo y observá en tiempo real cómo cambia la carga animal,
-          el consumo de materia seca y la autonomía forrajera.
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="pb-1">
+        <h1 className="text-xl sm:text-2xl font-black tracking-tight text-gray-950">Calculadora</h1>
+        <p className="text-sm text-gray-400 mt-1">
+          Proyecciones del campo, fórmulas técnicas y herramientas de EV y agua.
+          Las fórmulas con{' '}
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-green-100 text-green-700 border border-green-200 align-middle">✦ Rodeo</span>
+          {' '}son las que usa la app internamente.
         </p>
-        {!loadingField && (
-          <p className="text-[10px] text-gray-400 mt-1.5">
-            Los valores iniciales fueron tomados de los datos reales del campo. Podés ajustar cualquiera con el slider o escribiendo directamente.
-          </p>
-        )}
       </div>
 
-      {/* ── Tabs ────────────────────────────────────────────────────────────── */}
+      {/* ── Navegación plana — 4 items, sin sub-niveles ─────────────────────── */}
       <div className="flex gap-6 border-b border-gray-100">
-        <button
-          onClick={() => setActiveTab('formulas')}
-          className={clsx(
-            'pb-3 text-sm font-bold transition-colors border-b-2',
-            activeTab === 'formulas' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
-          )}
-        >
-          Fórmulas
-        </button>
-        <button
-          onClick={() => setActiveTab('proyecciones')}
-          className={clsx(
-            'pb-3 text-sm font-bold transition-colors border-b-2',
-            activeTab === 'proyecciones' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
-          )}
-        >
-          Proyecciones
-        </button>
+        {([
+          { id: 'proyecciones', label: 'Proyecciones' },
+          { id: 'formulas',     label: 'Fórmulas' },
+          { id: 'ev',           label: 'EV por especie' },
+          { id: 'agua',         label: 'Balance hídrico' },
+        ] as { id: MainTab; label: string }[]).map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={clsx(
+              'pb-3 text-sm font-bold transition-colors border-b-2 whitespace-nowrap',
+              activeTab === id
+                ? 'border-gray-900 text-gray-900'
+                : 'border-transparent text-gray-400 hover:text-gray-600'
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {activeTab === 'proyecciones' ? (
+      {activeTab === 'proyecciones' && (
         <>
           {/* ── Selector de escenario ────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -560,9 +561,11 @@ export default function CalculadoraPage() {
         </div>
       )}
         </>
-      ) : (
-        <FormulasTab />
       )}
+
+      {activeTab === 'formulas'  && <FormulasTab />}
+      {activeTab === 'ev'        && <EvTab />}
+      {activeTab === 'agua'      && <HidricoTab />}
 
     </div>
   )

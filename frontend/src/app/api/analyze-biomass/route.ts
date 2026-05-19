@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 })
     }
 
-    // Use gemini-2.0-flash (stable, supports vision)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    // gemini-2.5-flash — multimodal, supports vision and audio
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `Eres un experto agronómico especializado en pasturas y forraje del cono sur de América Latina.
 Analizá esta foto de pastura/potrero y respondé SOLO con un objeto JSON válido, sin texto adicional, con exactamente estos campos:

@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const { imageBase64, mimeType, species } = await req.json()
     if (!imageBase64) return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 })
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `Eres un veterinario y nutricionista animal experto en ganadería bovina, ovina y equina del Cono Sur de América Latina, especializado en evaluación de condición corporal (CC / BCS - Body Condition Score).
 

@@ -33,7 +33,7 @@ export interface Paddock {
 
 interface Props {
   paddock: Paddock
-  ndviData?: SatelliteData
+  ndviData?: SatelliteData | null
   onClose: () => void
   onSave: (
     paddockId: string,
@@ -43,6 +43,8 @@ interface Props {
     areaHa?: number,
   ) => Promise<void>
   onDelete?: (paddockId: string) => void
+  onAssignPolygon?: (paddockId: string) => void   // Draw new polygon for manual paddock
+  onEditPolygon?: (paddockId: string) => void     // Edit existing polygon vertices on map
   isCreating?: boolean
   user?: any
   paddocks?: Paddock[]
@@ -173,24 +175,37 @@ function SearchableMultiSelect({
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen]   = useState(false)
+  const inputRef          = useRef<HTMLInputElement>(null)
   const containerRef      = useRef<HTMLDivElement>(null)
 
   const allOptions = [...new Set([...options, ...selected.filter(s => !options.includes(s))])]
   const filtered   = query.trim()
     ? allOptions.filter(o => o.toLowerCase().includes(query.toLowerCase()) && !selected.includes(o))
-    : allOptions.filter(o => !selected.includes(o)).slice(0, 8)
-  const canAddCustom = allowCustom && query.trim() && !allOptions.some(o => o.toLowerCase() === query.trim().toLowerCase())
+    : allOptions.filter(o => !selected.includes(o)).slice(0, 12)
+  const canAddCustom = allowCustom && query.trim().length > 0 &&
+    !allOptions.some(o => o.toLowerCase() === query.trim().toLowerCase()) &&
+    !selected.some(s => s.toLowerCase() === query.trim().toLowerCase())
 
-  const add    = (item: string) => { onChange([...selected, item]); setQuery('') }
+  const add = (item: string) => {
+    onChange([...selected, item])
+    setQuery('')
+    // Immediately re-focus input — dropdown stays open because blur never fires
+    inputRef.current?.focus()
+  }
   const remove = (item: string) => onChange(selected.filter(s => s !== item))
 
+  // Close only on outside click
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
     }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
+
+  const showDropdown = open && (filtered.length > 0 || canAddCustom)
 
   return (
     <div className="space-y-1.5">
@@ -202,21 +217,30 @@ function SearchableMultiSelect({
       )}
       <div ref={containerRef} className="relative">
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
+          onBlur={() => {
+            // Delay close so onMouseDown on options fires first
+            setTimeout(() => setOpen(false), 150)
+          }}
           placeholder={placeholder}
           className={INPUT_CLS}
         />
-        {open && (filtered.length > 0 || canAddCustom) && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[10001] max-h-48 overflow-y-auto">
+        {showDropdown && (
+          // onMouseDown preventDefault stops the input blur so the list stays open
+          <div
+            className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[10001] max-h-52 overflow-y-auto"
+            onMouseDown={e => e.preventDefault()}
+          >
             {filtered.map(opt => (
               <button
                 key={opt}
                 type="button"
-                onMouseDown={e => { e.preventDefault(); add(opt) }}
-                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 transition-colors border-b border-gray-50 last:border-0"
+                onClick={() => add(opt)}
+                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 active:bg-green-100 transition-colors border-b border-gray-50 last:border-0"
               >
                 <span className="font-medium">{opt.split(' (')[0]}</span>
                 {opt.includes('(') && (
@@ -227,8 +251,8 @@ function SearchableMultiSelect({
             {canAddCustom && (
               <button
                 type="button"
-                onMouseDown={e => { e.preventDefault(); add(query.trim()); setOpen(false) }}
-                className="w-full text-left px-4 py-2.5 text-sm text-green-700 hover:bg-green-50 transition-colors font-bold"
+                onClick={() => { add(query.trim()); setOpen(false) }}
+                className="w-full text-left px-4 py-2.5 text-sm text-green-700 hover:bg-green-50 transition-colors font-bold border-t border-gray-100"
               >
                 + Agregar &ldquo;{query.trim()}&rdquo;
               </button>
@@ -277,7 +301,7 @@ function Collapsible({ title, children, defaultOpen = false, accent }: {
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function PaddockModal({
-  paddock, ndviData, onClose, onSave, onDelete, isCreating = false, user, paddocks = [], herds = [], planningDefaults,
+  paddock, ndviData, onClose, onSave, onDelete, onAssignPolygon, onEditPolygon, isCreating = false, user, paddocks = [], herds = [], planningDefaults,
 }: Props) {
   const { confirm, ConfirmModal } = useConfirm()
   const { hasFeature } = usePlan()
@@ -300,13 +324,19 @@ export default function PaddockModal({
 
   // Tab 1
   const [name, setName]             = useState(paddock.name)
-  const [areaHa, setAreaHa]         = useState<number | ''>(paddock.area_ha ?? '')
-  const [msHa, setMsHa]             = useState<number | ''>(paddock.dry_matter_kg_ha ?? '')
+  // Store as string to avoid browser '09' concatenation bug with type=number
+  const [areaHa, setAreaHa]         = useState<string>(
+    paddock.area_ha > 0 ? String(paddock.area_ha) : ''
+  )
+  const [msHa, setMsHa]             = useState<string>(
+    paddock.dry_matter_kg_ha != null && Number(paddock.dry_matter_kg_ha) > 0 ? String(paddock.dry_matter_kg_ha) : ''
+  )
   const [qualityScore, setQuality]  = useState<number>(paddock.technical_data?.quality_score ?? 5)
   const [grassTypes, setGrassTypes] = useState<string[]>(paddock.technical_data?.grass_types ?? [])
   const [weedTypes, setWeedTypes]   = useState<string[]>(paddock.technical_data?.weed_types ?? [])
 
-  const totalMs = areaHa !== '' && msHa !== '' ? Number(areaHa) * Number(msHa) : null
+  const totalMs = areaHa !== '' && msHa !== '' && !isNaN(Number(areaHa)) && !isNaN(Number(msHa))
+    ? Number(areaHa) * Number(msHa) : null
   const isGeo   = Boolean(paddock.boundary || ndviData)
 
   // Tab 2 — Infraestructura
@@ -339,6 +369,7 @@ export default function PaddockModal({
   const [recording, setRecording]             = useState(false)
   const [audioTranscript, setAudioTranscript] = useState('')
   const [audioBlob, setAudioBlob]             = useState<Blob | null>(null)
+  const audioBlobRef                          = useRef<Blob | null>(null)  // sync ref for closure access
   const [audioUrl, setAudioUrl]               = useState<string | null>(null)
   const mediaRecorderRef                      = useRef<MediaRecorder | null>(null)
   const audioChunksRef                        = useRef<Blob[]>([])
@@ -413,26 +444,31 @@ export default function PaddockModal({
     setAudioBlob(null); setAudioUrl(null)
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (SR) {
-      const rec = new SR()
-      rec.continuous = true; rec.interimResults = true; rec.lang = 'es-AR'
-      rec.onresult = (e: any) => {
-        let full = ''
-        for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript
-        setAudioTranscript(full)
-        // Do NOT write to noteTitle from here — user controls the title field
-      }
-      rec.start()
-      speechRef.current = rec
+      try {
+        const rec = new SR()
+        rec.continuous = true; rec.interimResults = true; rec.lang = 'es-AR'
+        rec.onresult = (e: any) => {
+          let full = ''
+          for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript
+          setAudioTranscript(full)
+        }
+        rec.start()
+        speechRef.current = rec
+      } catch { /* SpeechRecognition not available on this device */ }
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream)
+      // Pick best supported MIME type (webm for Chrome/Android, mp4 for Safari/iOS)
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', '']
+        .find(m => !m || MediaRecorder.isTypeSupported(m)) ?? ''
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
       audioChunksRef.current = []
       mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       mr.onstop = () => {
         stream.getTracks().forEach(t => t.stop())
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-        setAudioBlob(blob)
+        const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' })
+        audioBlobRef.current = blob        // sync ref — always up to date
+        setAudioBlob(blob)                 // trigger re-render
         setAudioUrl(URL.createObjectURL(blob))
       }
       mr.start()
@@ -454,6 +490,7 @@ export default function PaddockModal({
     setAudioTranscript('')
     setAudioBlob(null)
     setAudioUrl(null)
+    audioBlobRef.current = null
     setNoteImage(null)
     setNoteImagePreview(null)
     setNoteResult(null)
@@ -466,17 +503,40 @@ export default function PaddockModal({
 
   // ── Guardar nota ───────────────────────────────────────────────────────────
   const saveQuickNote = useCallback(async () => {
+    // If still recording, stop first and wait for onstop to complete
+    let effectiveBlob: Blob | null = audioBlobRef.current
+
+    if (recording && mediaRecorderRef.current?.state !== 'inactive') {
+      setNoteSaving(true)
+      // Stop SpeechRecognition immediately
+      speechRef.current?.stop()
+      // Wait for MediaRecorder.onstop to fire and blob to be available
+      effectiveBlob = await new Promise<Blob | null>((resolve) => {
+        const mr = mediaRecorderRef.current
+        if (!mr || mr.state === 'inactive') { resolve(audioBlobRef.current); return }
+        const origOnStop = mr.onstop
+        mr.onstop = (ev) => {
+          if (typeof origOnStop === 'function') origOnStop.call(mr, ev)
+          setTimeout(() => resolve(audioBlobRef.current), 50)
+        }
+        mr.stop()
+      })
+      setRecording(false)
+    }
+
     const content = noteText || audioTranscript
-    if (!content && !noteImage && !audioBlob) return
+    if (!content && !noteImage && !effectiveBlob) {
+      setNoteSaving(false)
+      return
+    }
+
     setNoteSaving(true)
     const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
-    const finalContent = noteText || audioTranscript
-    const title = noteTitle.trim() || finalContent?.slice(0, 60) || noteImage?.name || (audioBlob ? `Audio · ${timestamp}` : 'Nota de campo')
 
     // ── Offline Path ──
     if (!navigator.onLine) {
       const offlineId = crypto.randomUUID()
-      if (!audioBlob && !noteImage) {
+      if (!effectiveBlob && !noteImage) {
         import('@/components/OfflineIndicator').then(({ addToOfflineQueue }) => {
           addToOfflineQueue({
             type: 'field_note',
@@ -484,23 +544,23 @@ export default function PaddockModal({
               paddock_id: paddock.id,
               category: noteResult ? 'BIOMASA' : 'GENERAL',
               tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-              title,
-              content: finalContent || null,
+              title: noteTitle.trim() || (noteText || audioTranscript).slice(0, 60) || 'Nota de campo',
+              content: noteText || audioTranscript || null,
               sync_status: 'PENDING',
               analysis_result: noteResult || null,
             },
             timestamp: Date.now(),
           })
         })
-      } else if (audioBlob) {
+      } else if (effectiveBlob) {
         import('@/lib/audioOfflineStore').then(({ savePendingAudio }) => {
           savePendingAudio({
             id: offlineId,
-            blob: audioBlob,
-            durationSecs: 0, // we don't have accurate duration here
+            blob: effectiveBlob!,
+            durationSecs: 0,
             lat: null, lng: null,
             createdAt: new Date().toISOString(),
-            title,
+            title: noteTitle.trim() || `Audio · ${timestamp}`,
             transcript: audioTranscript
           })
         })
@@ -512,7 +572,7 @@ export default function PaddockModal({
             blob: noteImage,
             lat: null, lng: null,
             createdAt: new Date().toISOString(),
-            title
+            title: noteTitle.trim() || noteImage.name,
           })
         })
         toast.success('Foto guardada offline. Se sincronizará automáticamente.')
@@ -521,6 +581,7 @@ export default function PaddockModal({
       setNoteSaved(true)
       setTimeout(() => setNoteSaved(false), 3000)
       resetNoteCapture()
+      audioBlobRef.current = null
       return
     }
 
@@ -532,50 +593,81 @@ export default function PaddockModal({
       fd.append('folder', 'field-notes')
       const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
       if (up.ok) ({ url: photo_url } = await up.json())
+      else console.warn('[saveQuickNote] photo upload failed:', up.status)
     }
 
+    // 1. Upload audio file (use ref blob for reliability)
     let audio_url: string | null = null
-    if (audioBlob) {
+    let finalTranscript = audioTranscript
+    if (effectiveBlob) {
+      const blobType = effectiveBlob.type || 'audio/webm'
+      const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
       const fd = new FormData()
-      fd.append('file', new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
+      fd.append('file', new File([effectiveBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
       fd.append('folder', 'field-notes-audio')
       const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-      if (up.ok) ({ url: audio_url } = await up.json())
+      if (up.ok) {
+        const upData = await up.json()
+        audio_url = upData.url || null
+        console.log('[saveQuickNote] audio uploaded:', audio_url)
+      } else {
+        const errTxt = await up.text().catch(() => String(up.status))
+        console.warn('[saveQuickNote] audio upload failed:', errTxt)
+        toast.error('No se pudo subir el audio. Se guardará la nota sin audio.')
+      }
 
-      // Transcribe with Gemini for better accuracy (enhances Web Speech transcript)
+      // 2. Transcribe with Gemini (best effort — don't block save on failure)
       try {
         const tf = new FormData()
-        tf.append('file', new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
+        tf.append('file', new File([effectiveBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
         const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
         if (tr.ok) {
           const d = await tr.json()
           if (d.transcript && d.transcript !== '[Sin voz detectable]') {
-            setAudioTranscript(d.transcript) // update for title fallback below
+            finalTranscript = d.transcript
+            setAudioTranscript(d.transcript)
           }
         }
-      } catch { /* keep Web Speech transcript */ }
+      } catch { /* keep live Web Speech transcript */ }
     }
 
-    await apiFetch('/api/field-notes', {
+    // 3. Build content AFTER transcript resolved
+    const resolvedContent = noteText || finalTranscript || null
+    const resolvedTitle = noteTitle.trim() ||
+      resolvedContent?.slice(0, 60) ||
+      noteImage?.name ||
+      (effectiveBlob ? `Audio · ${timestamp}` : 'Nota de campo')
+
+    // 4. Save note
+    const saveRes = await apiFetch('/api/field-notes', {
       method: 'POST',
       body: JSON.stringify({
         paddock_id: paddock.id,
         category: noteResult ? 'BIOMASA' : 'GENERAL',
         tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-        title,
-        content: finalContent || null,
+        title: resolvedTitle,
+        content: resolvedContent,
         photo_url,
         audio_url,
         analysis_result: noteResult || null,
       }),
     })
 
+    if (!saveRes.ok) {
+      const errData = await saveRes.json().catch(() => ({}))
+      console.error('[saveQuickNote] POST failed:', errData)
+      toast.error('No se pudo guardar el registro. Intentá de nuevo.')
+      setNoteSaving(false)
+      return
+    }
+
     setNoteSaving(false)
     setNoteSaved(true)
     setTimeout(() => setNoteSaved(false), 3000)
-    resetNoteCapture() // ← Full reset: clears ALL state for next capture
+    audioBlobRef.current = null
+    resetNoteCapture()
     loadNotes()
-  }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes, noteTitle, audioBlob, resetNoteCapture])
+  }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes, noteTitle, recording, resetNoteCapture])
 
   // ── Eliminar nota (solo creador) ─────────────────────────────────────────────
   const deleteNote = useCallback(async (noteId: string) => {
@@ -601,19 +693,29 @@ export default function PaddockModal({
         reader.onerror = rej
         reader.readAsDataURL(noteImage)
       })
-      // Use apiFetch so Firebase auth token is included
       const resp = await apiFetch('/api/analyze-biomass', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: b64, mimeType: noteImage.type, area_ha: areaHa })
       })
-      const data = resp.ok ? await resp.json() : null
-      if (data?.success && data?.data) {
-        setNoteResult(data.data)
-      } else if (data?.dry_matter_kg_ha) {
-        // legacy shape
-        setNoteResult(data)
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        toast.error(err.error || 'Error al analizar la imagen')
+        setNoteAnalyzing(false)
+        return
       }
-    } catch (e) { console.error('analyzeNoteImage error:', e) }
+      const data = await resp.json()
+      // API returns { success: true, data: { dry_matter_kg_ha, ... } }
+      const result = data?.data ?? data
+      if (result?.dry_matter_kg_ha) {
+        setNoteResult(result)
+      } else {
+        toast.error('La IA no pudo determinar la biomasa de esta imagen')
+      }
+    } catch (e: any) {
+      console.error('analyzeNoteImage error:', e)
+      toast.error('Error de conexión al analizar')
+    }
     setNoteAnalyzing(false)
   }, [noteImage, areaHa])
 
@@ -624,10 +726,17 @@ export default function PaddockModal({
       const reader = new FileReader()
       const b64: string = await new Promise((res, rej) => { reader.onload = () => res((reader.result as string).split(',')[1]); reader.onerror = rej; reader.readAsDataURL(bioPhoto) })
       const resp = await apiFetch('/api/analyze-biomass', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: b64, mimeType: bioPhoto.type, area_ha: areaHa }) })
-      const data = resp.ok ? await resp.json() : null
-      if (data?.dry_matter_kg_ha) { setBioResult(data); setMsHa(Math.round(data.dry_matter_kg_ha)) }
-      else setBioError('No se pudo analizar la imagen.')
-    } catch (e: any) { setBioError(e.message) }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        setBioError(err.error || 'No se pudo analizar la imagen.')
+      } else {
+        const data = await resp.json()
+        // API returns { success: true, data: { dry_matter_kg_ha, ... } }
+        const result = data?.data ?? data
+        if (result?.dry_matter_kg_ha) { setBioResult(result); setMsHa(String(Math.round(result.dry_matter_kg_ha))) }
+        else setBioError('La IA no pudo determinar la biomasa de esta imagen.')
+      }
+    } catch (e: any) { setBioError(e.message || 'Error de conexión') }
     setBioAnalyzing(false)
   }, [bioPhoto, areaHa])
 
@@ -667,10 +776,10 @@ export default function PaddockModal({
   const ndviStatus = (v: number) => v >= 0.6 ? 'Óptimo' : v >= 0.4 ? 'Bueno' : v >= 0.2 ? 'Regular' : 'Bajo'
 
   const tabs = [
-    { id: 'operativo',       label: 'Datos operativos' },
-    { id: 'infraestructura', label: 'Infraestructura'  },
-    { id: 'registros',       label: 'Registros'        },
-    { id: 'historico',       label: 'Histórico'        },
+    { id: 'operativo',       label: 'Datos operativos', disabled: false },
+    { id: 'infraestructura', label: 'Infraestructura',   disabled: false },
+    { id: 'registros',       label: 'Registros',         disabled: isCreating },
+    { id: 'historico',       label: 'NDVI histórico',    disabled: isCreating },
   ] as const
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -696,17 +805,21 @@ export default function PaddockModal({
 
         {/* Tabs — verde institucional */}
         <div className="flex border-b border-gray-100 shrink-0 px-2 pt-2">
-          {tabs.map(({ id, label }) => (
+          {tabs.map(({ id, label, disabled }) => (
             <button
               key={id}
-              onClick={() => setActiveTab(id)}
+              onClick={() => !disabled && setActiveTab(id)}
+              disabled={disabled}
+              title={disabled ? 'Guardá el potrero primero para acceder' : undefined}
               className={`flex-1 py-2.5 text-[10px] font-black tracking-wide rounded-t-lg transition-all border-b-2 uppercase overflow-hidden whitespace-nowrap text-ellipsis px-1 ${
-                activeTab === id
+                disabled
+                  ? 'text-gray-300 border-transparent cursor-not-allowed'
+                  : activeTab === id
                   ? 'text-green-700 border-green-600 bg-green-50/50'
                   : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-gray-50'
               }`}
             >
-              {label}
+              {disabled ? <Lock className="w-3 h-3 mx-auto" /> : label}
             </button>
           ))}
         </div>
@@ -731,13 +844,28 @@ export default function PaddockModal({
               {/* Superficie + MS */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className={LABEL_CLS}>
-                    Superficie (ha){isGeo && <span className="ml-1 normal-case font-medium tracking-normal">· auto</span>}
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className={LABEL_CLS}>
+                      Superficie (ha){isGeo && <span className="ml-1 normal-case font-medium tracking-normal">· calculado</span>}
+                    </label>
+                    {isGeo && onEditPolygon && (
+                      <button
+                        type="button"
+                        onClick={() => { onEditPolygon(paddock.id); onClose() }}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                      >
+                        <MapPin className="w-3 h-3" /> Editar polígono
+                      </button>
+                    )}
+                  </div>
                   <input
-                    type="number" min="0" step="0.1" value={areaHa}
+                    type="text"
                     inputMode="decimal"
-                    onChange={e => setAreaHa(e.target.value === '' ? '' : Number(e.target.value))}
+                    value={areaHa}
+                    onChange={e => {
+                      const v = e.target.value.replace(',', '.')
+                      if (v === '' || /^\d*\.?\d*$/.test(v)) setAreaHa(v)
+                    }}
                     onFocus={e => e.target.select()}
                     placeholder="Ej: 50"
                     className={INPUT_CLS}
@@ -749,9 +877,13 @@ export default function PaddockModal({
                     <Tooltip text="Kilos de pasto seco por hectárea. Es la 'comida real' sin el agua. Más de 1500 kg MS/ha = bueno. Menos de 800 = bajo. Solo usaremos el 50% para no dañar el suelo." />
                   </div>
                   <input
-                    type="number" min="0" step="50" value={msHa}
+                    type="text"
                     inputMode="decimal"
-                    onChange={e => setMsHa(e.target.value === '' ? '' : Number(e.target.value))}
+                    value={msHa}
+                    onChange={e => {
+                      const v = e.target.value.replace(',', '.')
+                      if (v === '' || /^\d*\.?\d*$/.test(v)) setMsHa(v)
+                    }}
                     onFocus={e => e.target.select()}
                     placeholder="Ej: 1 200"
                     className={INPUT_CLS}
@@ -836,7 +968,7 @@ export default function PaddockModal({
                   options={GRASS_TYPES}
                   selected={grassTypes}
                   onChange={setGrassTypes}
-                  placeholder="Buscar tipo de pasto…"
+                  placeholder="Buscar o agregar tu tipo de pasto…"
                   allowCustom
                 />
                 <SearchableMultiSelect
@@ -844,7 +976,7 @@ export default function PaddockModal({
                   options={WEED_TYPES}
                   selected={weedTypes}
                   onChange={setWeedTypes}
-                  placeholder="Buscar maleza…"
+                  placeholder="Buscar o agregar maleza…"
                   allowCustom
                 />
               </div>
@@ -1248,10 +1380,10 @@ export default function PaddockModal({
                   </div>
                 )}
 
-                {/* ══ HISTORIAL DE EVIDENCIAS ══ */}
+                {/* ══ HISTORIAL DE REGISTROS ══ */}
                 <div>
                   <div className="flex items-center justify-between mb-2.5">
-                    <p className={LABEL_CLS}>Historial de evidencias</p>
+                    <p className={LABEL_CLS}>Historial de registros</p>
                     {notesLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
                   </div>
 
@@ -1387,21 +1519,33 @@ export default function PaddockModal({
         {/* Footer — con contador de sesión */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between shrink-0">
           {!isCreating ? (
-            <button
-              type="button"
-                          onClick={async () => {
-                const ok = await confirm({
-                  title: `¿Eliminar el potrero "${paddock.name}"?`,
-                  description: 'Esta acción eliminará el potrero y todos sus registros asociados.',
-                  confirmLabel: 'Eliminar potrero',
-                  variant: 'danger',
-                })
-                if (ok) { onDelete?.(paddock.id); onClose() }
-              }}
-              className="text-sm font-bold text-red-500 hover:text-red-700 flex items-center gap-1.5 transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Eliminar
-            </button>
+            <div className="flex flex-col gap-1.5">
+              {/* Assign polygon — solo para potreros manuales sin georreferencia */}
+              {!isGeo && onAssignPolygon && (
+                <button
+                  type="button"
+                  onClick={() => { onAssignPolygon(paddock.id); onClose() }}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 transition-colors"
+                >
+                  <MapPin className="w-3.5 h-3.5" /> Asignar polígono en mapa
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `¿Eliminar el potrero "${paddock.name}"?`,
+                    description: 'Esta acción eliminará el potrero y todos sus registros asociados.',
+                    confirmLabel: 'Eliminar potrero',
+                    variant: 'danger',
+                  })
+                  if (ok) { onDelete?.(paddock.id); onClose() }
+                }}
+                className="text-sm font-bold text-red-500 hover:text-red-700 flex items-center gap-1.5 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Eliminar
+              </button>
+            </div>
           ) : <div />}
 
           <div className="flex gap-3 items-center">

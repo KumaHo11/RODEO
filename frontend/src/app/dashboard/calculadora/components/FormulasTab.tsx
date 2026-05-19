@@ -136,13 +136,6 @@ function TodasFormulas() {
 
   return (
     <div className="space-y-6">
-      {/* Banner fórmulas propias */}
-      <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex items-start gap-3">
-        <RodeoBadge />
-        <p className="text-xs text-green-800 leading-relaxed">
-          Las fórmulas marcadas con <strong>✦ Rodeo</strong> son las que utiliza internamente la aplicación para calcular métricas de planificación, EV, carga animal y balance forrajero.
-        </p>
-      </div>
 
       {/* Encabezado módulo Holístico */}
       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Manejo holístico — Allan Savory</p>
@@ -297,45 +290,10 @@ function TodasFormulas() {
 
 // ─── Tab principal ────────────────────────────────────────────────────────────
 
-type FTab = 'formulas' | 'ev' | 'hidrico'
-
 export function FormulasTab() {
-  const [tab, setTab] = useState<FTab>('formulas')
-
-  const TABS: { key: FTab; label: string }[] = [
-    { key: 'formulas', label: 'Fórmulas técnicas' },
-    { key: 'ev',       label: 'EV por especie y estadio' },
-    { key: 'hidrico',  label: 'Balance hídrico' },
-  ]
-
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      {/* Banner */}
-      <div className="bg-white border border-gray-100 rounded-xl p-5">
-        <p className="text-xs font-bold text-gray-800 tracking-widest uppercase border-b border-gray-100 pb-3">Calculadora agrotecnológica — motor de precisión</p>
-        <p className="text-xs text-gray-500 mt-3 max-w-3xl leading-relaxed">
-          16 fórmulas técnicas · Calculadora de EV por especie y estadio · Balance hídrico y dimensionamiento de bebederos. Ingresá valores para ver resultados en tiempo real.
-        </p>
-      </div>
-
-      {/* Tabs internos */}
-      <div className="flex gap-2 flex-wrap">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={clsx(
-              'px-4 py-2 rounded-lg text-xs font-bold transition-colors border',
-              tab === t.key
-                ? 'bg-gray-900 text-white border-gray-900'
-                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700'
-            )}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'formulas' && <TodasFormulas />}
-      {tab === 'ev'      && <EvTab />}
-      {tab === 'hidrico' && <HidricoTab />}
+    <div className="animate-in fade-in duration-300">
+      <TodasFormulas />
     </div>
   )
 }

@@ -74,8 +74,8 @@ export async function POST(req: NextRequest) {
 
     const { rows } = await mutate(
       `INSERT INTO field_notes
-         (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, audio_url, analysis_result, audio_duration_secs)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, audio_url, analysis_result)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
         auth.orgId, auth.profileId,
@@ -89,7 +89,6 @@ export async function POST(req: NextRequest) {
         photo_url || null,
         audio_url || null,
         analysis_result ? JSON.stringify(analysis_result) : null,
-        body.audio_duration_secs || null,
       ]
     )
 

@@ -59,6 +59,8 @@ export default function MiCampoPage() {
   // -- Map draw modes ─────────────────────────────────────────────────────────
   const [drawModeActive, setDrawModeActive]           = useState(false)
   const [fieldBoundaryDrawMode, setFieldBoundaryDrawMode] = useState(false)
+  const [pendingAssignPaddockId, setPendingAssignPaddockId] = useState<string | null>(null)
+  const [editPolygonPaddockId, setEditPolygonPaddockId] = useState<string | null>(null)
 
   // -- Map view toggle (satellite | image) ────────────────────────────────────
   const [mapView, setMapView] = useState<'satellite' | 'image'>('satellite')
@@ -168,10 +170,11 @@ export default function MiCampoPage() {
       paddocks.map(async (p) => {
         try {
           const ndvi = await getPaddockNDVI(p.boundary, p.id, Number(p.area_ha))
+          // Skip null (manual paddock without polygon)
+          if (!ndvi) return
           results[p.id] = ndvi
           // Only auto-update NDVI-derived dry matter if paddock has no user-entered value
           if (!p.dry_matter_kg_ha && ndvi.estimatedAvailableDryMatterHa) {
-            // Store NDVI in paddock but NOT override dry_matter_kg_ha
             await apiFetch(`/api/paddocks/${p.id}`, {
               method: 'PATCH',
               body: JSON.stringify({ current_ndvi: ndvi.averageNdvi }),
@@ -196,11 +199,44 @@ export default function MiCampoPage() {
   const handlePaddockGeomUpdated = async () => { await loadData() }
 
   // ── Creation via map draw ────────────────────────────────────────────────────
-  const handleNewPaddockDrawn = useCallback((geojson: any, areaHa: number) => {
+  const handleNewPaddockDrawn = useCallback(async (geojson: any, areaHa: number) => {
     setDrawModeActive(false)
+    if (pendingAssignPaddockId) {
+      try {
+        const { area: turfArea } = await import('@turf/area')
+        const geom = geojson.type === 'Feature' ? geojson.geometry : geojson
+        const calcArea = parseFloat((turfArea({ type: 'Feature', geometry: geom, properties: {} }) / 10000).toFixed(2))
+        await apiFetch(`/api/paddocks/${pendingAssignPaddockId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ geojson, area_ha: calcArea }),
+        })
+        toast.success('Polígono asignado correctamente')
+        await loadData()
+      } catch {
+        toast.error('Error al asignar el polígono')
+      }
+      setPendingAssignPaddockId(null)
+      return
+    }
     setCreationGeom(geojson)
     setCreationAreaHa(areaHa)
     setCreationModal(true)
+  }, [pendingAssignPaddockId, loadData])
+
+  // ── Assign polygon to existing manual paddock ────────────────────────────────
+  const handleAssignPolygon = useCallback((paddockId: string) => {
+    setPendingAssignPaddockId(paddockId)
+    setDrawModeActive(true)
+    setMapView('satellite')
+    toast.info('Dibujá el polígono en el mapa para asignarlo a este potrero', { duration: 5000 })
+  }, [])
+
+  // ── Activate edit mode on existing paddock polygon ──────────────────────────
+  const handleEditPolygon = useCallback((paddockId: string) => {
+    setEditPolygonPaddockId(paddockId)
+    setSelectedPaddockId(paddockId)
+    setMapView('satellite')
+    toast.info('Activá el modo edición (✏️) en el mapa y arrastá los vértices del polígono', { duration: 6000 })
   }, [])
 
   // ── Field boundary drawn from map ────────────────────────────────────────────
@@ -480,10 +516,10 @@ export default function MiCampoPage() {
           <div className="absolute bottom-5 right-5 z-[1000] flex flex-col items-end gap-2">
             {drawModeActive && (
               <button
-                onClick={() => setDrawModeActive(false)}
+                onClick={() => { setDrawModeActive(false); setPendingAssignPaddockId(null) }}
                 className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-xs font-black rounded-xl shadow-lg hover:bg-red-600 transition-all animate-pulse"
               >
-                <X className="w-3.5 h-3.5" /> Cancelar dibujo
+                <X className="w-3.5 h-3.5" /> {pendingAssignPaddockId ? 'Cancelar asignación' : 'Cancelar dibujo'}
               </button>
             )}
             <button
@@ -528,6 +564,8 @@ export default function MiCampoPage() {
           onSetupField={openSetupModal}
           onFieldImageUploaded={(url) => { setMapView('image') }}
           onManualPaddockCreate={openManualCreation}
+          onAssignPolygon={handleAssignPolygon}
+          onEditPolygon={handleEditPolygon}
           defaultEditPaddockId={editPaddockId || undefined}
           onDeletePaddock={async (id) => {
             try {

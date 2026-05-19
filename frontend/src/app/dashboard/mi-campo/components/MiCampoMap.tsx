@@ -230,14 +230,20 @@ function MapController({
       layer.on('pm:edit', async (e: any) => {
         const editedLayer = e.layer || e.target
         const updatedGeoJSON = editedLayer.toGeoJSON()
-        const areaHa = area(updatedGeoJSON) / 10000
+        const geom = updatedGeoJSON.geometry || updatedGeoJSON
+        const areaHa = parseFloat((area(updatedGeoJSON) / 10000).toFixed(2))
         try {
           await apiFetch(`/api/paddocks/${paddock.id}`, {
             method: 'PATCH',
-            body: JSON.stringify({ area_ha: parseFloat(areaHa.toFixed(2)) }),
+            body: JSON.stringify({
+              geojson: geom,
+              area_ha: areaHa,
+            }),
           })
-        } catch {}
-        onPaddockGeomUpdated(paddock.id, updatedGeoJSON.geometry || updatedGeoJSON, areaHa)
+        } catch (err) {
+          console.error('Error saving edited polygon:', err)
+        }
+        onPaddockGeomUpdated(paddock.id, geom, areaHa)
       })
 
       layer.on('pm:remove', () => {

@@ -21,15 +21,15 @@ export async function getPaddockNDVI(
   geojsonPolygon: any,
   paddock_id: string,
   area_ha: number
-): Promise<SatelliteData> {
+): Promise<SatelliteData | null> {
   // Return cached result if available
   if (ndviCache.has(paddock_id)) {
     return ndviCache.get(paddock_id)!
   }
 
-  // If no geometry, return deterministic estimate based on area + id
+  // If no geometry, return null — manual paddocks have no satellite footprint
   if (!geojsonPolygon) {
-    return deterministicFallback(paddock_id, area_ha)
+    return null
   }
 
   try {
@@ -57,8 +57,8 @@ export async function getPaddockNDVI(
     ndviCache.set(paddock_id, result)
     return result
   } catch (err) {
-    console.warn('[Satellite] Falling back to estimate:', err)
-    return deterministicFallback(paddock_id, area_ha)
+    console.warn('[Satellite] NDVI unavailable:', err)
+    return null
   }
 }
 

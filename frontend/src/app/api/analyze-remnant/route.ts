@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg'
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-lite-latest' })
 
     const prompt = `Sos un experto en manejo holístico de pasturas y ganadería regenerativa.
 Analizá esta foto de un potrero luego de un pastoreo rotacional.

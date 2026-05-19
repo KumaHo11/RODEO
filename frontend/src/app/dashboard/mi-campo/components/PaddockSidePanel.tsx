@@ -53,6 +53,8 @@ interface Props {
   onDeleteField?: () => void
   onDataRefresh?: () => void
   onFieldImageUploaded?: (url: string) => void
+  onAssignPolygon?: (paddockId: string) => void
+  onEditPolygon?: (paddockId: string) => void
   defaultEditPaddockId?: string
   planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
 }
@@ -75,7 +77,7 @@ export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0,
   onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField, onDataRefresh,
-  onFieldImageUploaded, defaultEditPaddockId, planningDefaults,
+  onFieldImageUploaded, onAssignPolygon, onEditPolygon, defaultEditPaddockId, planningDefaults,
 }: Props) {
   const [search, setSearch]     = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -518,7 +520,7 @@ export default function PaddockSidePanel({
 
         {/* ── Footer — sin botón "Configurar campo" ────────────────────────── */}
         {paddocks.length > 0 && (
-          <div className="px-5 py-3 border-t border-gray-100 shrink-0">
+          <div className="px-5 py-3 pb-8 md:pb-3 border-t border-gray-100 shrink-0">
             <p className="text-[10px] text-gray-400 font-medium">
               {paddocks.filter(p => {
                 const d = p.technical_data || {}
@@ -543,6 +545,8 @@ export default function PaddockSidePanel({
           onClose={() => { setModalOpen(false); setEditingPaddock(null) }}
           onSave={handleModalSave}
           onDelete={onDeletePaddock}
+          onAssignPolygon={onAssignPolygon}
+          onEditPolygon={onEditPolygon}
           paddocks={paddocks}
           herds={herds}
           planningDefaults={planningDefaults}
