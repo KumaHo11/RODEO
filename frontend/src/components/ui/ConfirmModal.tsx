@@ -16,7 +16,7 @@
  */
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, Trash2, X, Plus } from 'lucide-react'
+import { AlertTriangle, Trash2, X, Plus, CheckCircle2 } from 'lucide-react'
 
 export type ConfirmOptions = {
   title: string
@@ -83,7 +83,7 @@ export function useConfirm() {
       ? 'bg-amber-600 hover:bg-amber-700'
       : 'bg-red-600 hover:bg-red-700'
 
-    return (
+    const modalContent = (
       <div
         className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pb-20 md:pb-4"
         style={{ backdropFilter: 'blur(4px)', backgroundColor: 'rgba(0,0,0,0.45)' }}
@@ -99,13 +99,13 @@ export function useConfirm() {
               {isPrimary ? (
                 <Plus className={`w-5 h-5 ${iconColor}`} />
               ) : isInfo ? (
-                <AlertTriangle className={`w-5 h-5 ${iconColor}`} />
+                <CheckCircle2 className={`w-5 h-5 ${iconColor}`} />
               ) : (
-                <Trash2 className={`w-5 h-5 ${iconColor}`} />
+                <AlertTriangle className={`w-5 h-5 ${iconColor}`} />
               )}
             </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-black text-gray-900 leading-snug">{options.title}</h3>
+            <div className="flex-1 pt-1">
+              <h3 className="text-base font-black text-gray-900 leading-none">{options.title}</h3>
               {options.description && (
                 <p className="text-xs text-gray-500 mt-1 leading-relaxed">{options.description}</p>
               )}
