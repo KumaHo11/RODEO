@@ -212,6 +212,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   // ── Tab 2: Actividades ────────────────────────────────────────────────────
   const [actId,      setActId]      = useState<ActivityId | null>(null)
   const [actCount,   setActCount]   = useState<number | ''>(1)
+  const [actWeight,  setActWeight]  = useState<number | ''>('')   // peso de animales que ENTRAN
   const [actDate,    setActDate]    = useState<string>(todayISO())
   const [actNote,    setActNote]    = useState('')
   const [actSaving,  setActSaving]  = useState(false)
@@ -226,35 +227,76 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     const n     = Number(actCount)
     const isAdd = ACTIVITY_ADDS.has(actId)
     try {
-      const newCount = isAdd
-        ? (herd.head_count || 0) + n
-        : Math.max((herd.head_count || 0) - n, 0)
+      const currentCount = herd.head_count || 0
+      const currentWeight = Number(herd.avg_weight_kg || weight || 400)
+      const newCount = isAdd ? currentCount + n : Math.max(currentCount - n, 0)
 
-      // Recalculate EV with updated head count
-      const newEV = calculateBaseEV(catKey, Number(herd.avg_weight_kg || weight || 400), newCount)
+      // For additions (paricion/compra): recalculate weighted-average weight and add EV for new animals
+      let newWeight = currentWeight
+      let newEV: number
+      if (isAdd && actWeight !== '' && Number(actWeight) > 0) {
+        const newAnimalsWeight = Number(actWeight)
+        // Weighted average: (currentTotal + newTotal) / newCount
+        const totalKg = currentCount * currentWeight + n * newAnimalsWeight
+        newWeight = newCount > 0 ? Math.round(totalKg / newCount) : newAnimalsWeight
+        // EV = existing EV + EV of new animals at their weight
+        const existingEV = Number(herd.total_ev) || calculateBaseEV(catKey, currentWeight, currentCount)
+        const newAnimalsEV = calculateBaseEV(catKey, newAnimalsWeight, n)
+        newEV = parseFloat((existingEV + newAnimalsEV).toFixed(2))
+      } else {
+        newEV = calculateBaseEV(catKey, currentWeight, newCount)
+      }
+
+      const patchPayload: Record<string, any> = { head_count: newCount, total_ev: newEV }
+      if (isAdd && actWeight !== '' && Number(actWeight) > 0) patchPayload.avg_weight_kg = newWeight
 
       const patchRes = await apiFetch(`/api/herds/${herd.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ head_count: newCount, total_ev: newEV }),
+        body: JSON.stringify(patchPayload),
       })
       if (!patchRes.ok) throw new Error('No se pudo actualizar el stock')
 
-      await apiFetch('/api/farm-events', {
+      const evTitle = `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${herd.name}${
+        isAdd && actWeight !== '' ? ` · ${Number(actWeight)} kg/cab` : ''
+      }`
+      const evDesc = [
+        actNote || null,
+        isAdd && actWeight !== '' ? `Peso ingresado: ${Number(actWeight)} kg/cab · Peso promedio nuevo: ${newWeight} kg` : null,
+        `EV resultante: ${newEV.toFixed(0)}`,
+      ].filter(Boolean).join(' · ')
+
+      const evRes = await apiFetch('/api/farm-events', {
         method: 'POST',
         body: JSON.stringify({
-          title: `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${herd.name}`,
+          title: evTitle,
           event_type: actId,
           event_date: actDate,
           herd_id: herd.id, herd_ids: [herd.id],
-          description: actNote || null, status: 'pendiente',
+          description: evDesc || null,
+          status: 'completado',
         }),
       })
+
+      // Update historial local immediately
+      if (evRes.ok) {
+        const saved = await evRes.json().catch(() => null)
+        setAgendaEvents(prev => [{
+          id: saved?.event?.id ?? `temp-${Date.now()}`,
+          title: evTitle,
+          event_type: actId,
+          event_date: actDate,
+          herd_id: herd.id,
+          herd_ids: [herd.id],
+          description: evDesc || null,
+          status: 'completado',
+        }, ...prev])
+      }
 
       // Destete: auto-create child herd
       if (actId === 'destete' && n > 0) {
         setActSaving(false)
         setWeanLoading(true)
-        const childEV = calculateBaseEV('TERNEROS', 180, n) // peso referencia ternero destetado
+        const childEV = calculateBaseEV('TERNEROS', 180, n)
         const childRes = await apiFetch('/api/herds', {
           method: 'POST',
           body: JSON.stringify({
@@ -275,8 +317,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         }
       }
 
-      setActSuccess(`${isAdd ? '+' : '-'}${n} cabezas · EV actualizado a ${newEV.toFixed(2)}`)
-      setActCount(1); setActNote(''); setActId(null)
+      setActSuccess(`${isAdd ? '+' : '-'}${n} cab · Stock: ${newCount} · EV: ${newEV.toFixed(0)}`)
+      setActCount(1); setActWeight(''); setActNote(''); setActId(null)
       setTimeout(() => setActSuccess(null), 3500)
       onSaved()
     } catch (e: any) {
@@ -292,6 +334,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [bcsSaved,      setBcsSaved]      = useState(false)
   const [bcsPhotoFile,  setBcsPhotoFile]  = useState<File | null>(null)
   const [bcsPhotoPreview, setBcsPhotoPreview] = useState<string | null>(null)
+  const [bcsAnalyzing,  setBcsAnalyzing]  = useState(false)
+  const [bcsAiResult,   setBcsAiResult]   = useState<string | null>(null)
   const bcsCameraRef = useRef<HTMLInputElement>(null)
   const [showNote,      setShowNote]      = useState(false)
   const [quickNote,     setQuickNote]     = useState('')
@@ -391,6 +435,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         setBcsSaved(false)
         setBcsPhotoFile(null)
         setBcsPhotoPreview(null)
+        setBcsAiResult(null)
       }, 3000)
       import('sonner').then(({ toast }) => {
         toast.success('Condición corporal guardada offline. Se sincronizará al conectar.')
@@ -408,12 +453,15 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       if (up.ok) ({ url: photo_url } = await up.json())
     }
 
+    const eventTitle = `Condición Corporal registrada: ${bcsScore}/5 — ${label}`
+    const eventDesc  = [`BCS: ${bcsScore}/5`, bcsAiResult ? `IA: ${bcsAiResult}` : ''].filter(Boolean).join(' · ')
+
     const [patchRes] = await Promise.all([
       apiFetch(`/api/herds/${herd.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ bcs_score: bcsScore, bcs_label: label }),
       }),
-      // Log to historical movements
+      // Log to historical movements — incluye photo_url
       apiFetch('/api/movements', {
         method: 'POST',
         body: JSON.stringify({
@@ -427,19 +475,22 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           categoria: herd.categoria,
           breed: herd.breed,
           admission_date: herd.admission_date,
-          notes: `Condición Corporal registrada: ${bcsScore}/5 — ${label}`,
-          metadata: { bcs_label: label, head_count: herd.head_count, ev: herd.total_ev, photo_url },
+          notes: `${eventTitle}${bcsAiResult ? ' · IA: ' + bcsAiResult : ''}`,
+          photo_url,
+          metadata: { bcs_label: label, head_count: herd.head_count, ev: herd.total_ev, photo_url, ai_result: bcsAiResult },
         }),
       }),
-      // Guardar también como evento en la agenda para que aparezca en el historial del modal
+      // Guardar como farm-event para historial del modal
       apiFetch('/api/farm-events', {
         method: 'POST',
         body: JSON.stringify({
-          title: `Condición Corporal registrada: ${bcsScore}/5 — ${label}`,
+          title: eventTitle,
           event_type: 'medicion',
           event_date: todayISO(),
           herd_id: herd.id, herd_ids: [herd.id],
-          description: `BCS: ${bcsScore}/5`, status: 'completado',
+          description: eventDesc,
+          photo_url,
+          status: 'completado',
         }),
       }),
     ])
@@ -448,19 +499,19 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       setBcsSaved(true)
       setSessionNoteCount(c => c + 1)
       
-      // Update local state immediately so it shows in Historial without reopening
+      // Actualizar historial local inmediatamente sin recargar
       setAgendaEvents(prev => [{
         id: `temp-${Date.now()}`,
-        title: `Condición Corporal registrada: ${bcsScore}/5 — ${label}`,
+        title: eventTitle,
         event_type: 'medicion',
         event_date: todayISO(),
         herd_id: herd.id,
         herd_ids: [herd.id],
-        description: `BCS: ${bcsScore}/5`,
+        description: eventDesc,
+        photo_url,
         status: 'completado',
       }, ...prev])
 
-      // Global refresh
       window.dispatchEvent(new Event('refresh-farm-events'))
       window.dispatchEvent(new Event('refresh-events'))
       window.dispatchEvent(new Event('refresh-herds'))
@@ -473,8 +524,48 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         setBcsSaved(false)
         setBcsPhotoFile(null)
         setBcsPhotoPreview(null)
+        setBcsAiResult(null)
       }, 3000) 
     }
+  }
+
+  const analyzeBcs = async () => {
+    if (!bcsPhotoFile) return
+    setBcsAnalyzing(true)
+    setBcsAiResult(null)
+    try {
+      const reader = new FileReader()
+      const b64: string = await new Promise((res, rej) => {
+        reader.onload = () => res((reader.result as string).split(',')[1])
+        reader.onerror = rej
+        reader.readAsDataURL(bcsPhotoFile)
+      })
+      const resp = await apiFetch('/api/analyze-body-condition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: b64, mimeType: bcsPhotoFile.type, species: catKey ? catKey.toLowerCase() : 'bovino' }),
+      })
+      if (resp.ok) {
+        const json = await resp.json()
+        const data = json?.data ?? json
+        const score = data?.bcs_score
+        const condLabel = data?.condition_label ?? data?.label ?? ''
+        const recommendation = data?.recommendation ?? ''
+        if (score) {
+          const roundedScore = Math.min(5, Math.max(1, Math.round(score)))
+          setBcsScore(roundedScore)
+          setBcsAiResult(`${score}/5 — ${condLabel}${recommendation ? ' · ' + recommendation.slice(0, 80) : ''}`)
+          import('sonner').then(({ toast }) => toast.success(`IA detectó BCS ${score}/5 — ${condLabel}`))
+        } else {
+          import('sonner').then(({ toast }) => toast.error('La IA no pudo determinar la condición corporal'))
+        }
+      } else {
+        import('sonner').then(({ toast }) => toast.error('No se pudo analizar la imagen con IA'))
+      }
+    } catch (e: any) {
+      import('sonner').then(({ toast }) => toast.error('Error al analizar: ' + e.message))
+    }
+    setBcsAnalyzing(false)
   }
 
   const saveNote = async () => {
@@ -491,28 +582,52 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       if (up.ok) ({ url: photo_url } = await up.json())
     }
 
-    const titleStr = quickNote.trim() ? `Nota: ${quickNote.trim().slice(0, 60)}` : (photo_url ? 'Nota visual agregada' : 'Nota de rodeo')
+    const isAudioNote = noteMode === 'audio'
+    const titleStr = isAudioNote
+      ? `🎙️ Nota de audio: ${quickNote.trim().slice(0, 60) || 'Audio transcripto'}`
+      : quickNote.trim()
+        ? `Nota: ${quickNote.trim().slice(0, 60)}`
+        : (photo_url ? 'Nota visual agregada' : 'Nota de rodeo')
 
-    await apiFetch('/api/farm-events', {
+    const description = [quickNote.trim(), photo_url ? `[Foto](${photo_url})` : ''].filter(Boolean).join('\n\n')
+
+    const res = await apiFetch('/api/farm-events', {
       method: 'POST',
       body: JSON.stringify({
         title: titleStr,
         event_type: 'servicio',
         event_date: todayISO(),
         herd_id: herd.id, herd_ids: [herd.id],
-        description: (quickNote.trim() + (photo_url ? `\n\n[Foto Adjunta](${photo_url})` : '')).trim(),
+        description: description || null,
+        photo_url,
         status: 'completado',
       }),
     })
+
+    // Update historial local immediately — no need to reload
+    if (res.ok) {
+      const saved = await res.json().catch(() => null)
+      setAgendaEvents(prev => [{
+        id: saved?.event?.id ?? `temp-${Date.now()}`,
+        title: titleStr,
+        event_type: 'servicio',
+        event_date: todayISO(),
+        herd_id: herd.id,
+        herd_ids: [herd.id],
+        description: description || null,
+        photo_url,
+        status: 'completado',
+      }, ...prev])
+    }
+
     setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null)
     setTimeout(() => setNoteSaved(false), 3000)
-    loadData()
   }
 
   const saveEvent = async () => {
     if (!newEvTitle.trim() || !herd?.id) return
     setEvSaving(true)
-    await apiFetch('/api/farm-events', {
+    const res = await apiFetch('/api/farm-events', {
       method: 'POST',
       body: JSON.stringify({
         title: newEvTitle.trim(),
@@ -525,10 +640,23 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         assigned_to: newEvAssignee || null,
       }),
     })
+    if (res.ok) {
+      const saved = await res.json().catch(() => null)
+      setAgendaEvents(prev => [{
+        id: saved?.event?.id ?? `temp-${Date.now()}`,
+        title: newEvTitle.trim(),
+        event_type: newEvType,
+        event_date: newEvDate,
+        end_date: newEvEndDate || null,
+        description: newEvDesc.trim() || null,
+        herd_id: herd.id,
+        herd_ids: [herd.id],
+        status: 'pendiente',
+      }, ...prev])
+    }
     setEvSaving(false); setEvSaved(true)
     setNewEvTitle(''); setNewEvDate(todayISO()); setNewEvEndDate(''); setNewEvDesc(''); setNewEvAssignee('')
     setTimeout(() => setEvSaved(false), 3000)
-    loadData()
   }
 
   const [eventToDelete, setEventToDelete] = useState<any>(null)
@@ -679,9 +807,9 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
               <div className="space-y-1.5">
                 <label className={`${LABEL} flex items-center gap-1.5`}><Scale className="w-3 h-3 text-gray-400" /> Peso promedio (kg)</label>
-                <input type="number" min="0" value={weight}
-                  inputMode="decimal"
-                  onChange={e => setWeight(e.target.value === '' ? '' : Number(e.target.value))}
+                <input type="number" min="0" step="1" value={weight}
+                  inputMode="numeric"
+                  onChange={e => setWeight(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                   onFocus={e => e.target.select()}
                   placeholder={currentRef ? `Ej: ${currentRef.hintPeso}` : 'Ej: 300'} className={INPUT} />
                 {currentRef && (
@@ -692,21 +820,12 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               </div>
 
               <div className="space-y-1.5">
-                <label className={`${LABEL} flex items-center gap-1.5`}><Clock className="w-3 h-3 text-gray-400" /> Edad</label>
-                <div className="flex items-center gap-2">
-                  <div className="flex shrink-0 bg-gray-100 rounded-lg p-0.5">
-                    {(['months', 'years'] as const).map(u => (
-                      <button key={u} type="button" onClick={() => setAgeUnit(u)}
-                        className={`px-3 py-1.5 text-[10px] font-black rounded-md transition-all ${ageUnit === u ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                        {u === 'months' ? 'Meses' : 'Años'}
-                      </button>
-                    ))}
-                  </div>
-                  <input type="number" min="0" step={ageUnit === 'years' ? 0.5 : 1}
-                    value={ageValue}
-                    onChange={e => setAgeValue(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder={ageUnit === 'months' ? 'Ej: 8' : 'Ej: 2'} className={`flex-1 ${INPUT}`} />
-                </div>
+                <label className={`${LABEL} flex items-center gap-1.5`}><Clock className="w-3 h-3 text-gray-400" /> Edad (meses)</label>
+                <input type="number" min="0" step={1}
+                  value={ageValue}
+                  onChange={e => setAgeValue(e.target.value === '' ? '' : Number(e.target.value))}
+                  onFocus={e => e.target.select()}
+                  placeholder="Ej: 8" className={INPUT} />
                 {currentRef && (
                   <p className="text-[10px] text-gray-400 italic flex items-center gap-1">
                     <Info className="w-3 h-3 shrink-0" /> Referencia: {currentRef.hintEdad}
@@ -837,6 +956,20 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                             <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
                           </div>
                         </div>
+                        {/* Peso — solo para actividades que agregan animales */}
+                        {ACTIVITY_ADDS.has(actId as ActivityId) && (
+                          <div className="space-y-1.5">
+                            <label className={`${LABEL} flex items-center gap-1`}>
+                              <Scale className="w-3 h-3 text-gray-400" /> Peso de los animales que ingresan (kg/cab)
+                            </label>
+                            <input type="number" min="0" step="1" value={actWeight}
+                              inputMode="numeric"
+                              onChange={e => setActWeight(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                              onFocus={e => e.target.select()}
+                              placeholder="Ej: 320" className={INPUT} />
+                            <p className="text-[10px] text-gray-400 italic">Se recalcularán el peso promedio y el EV del rodeo</p>
+                          </div>
+                        )}
                         <div className="space-y-1.5">
                           <label className={LABEL}>Nota (opcional)</label>
                           <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
@@ -1030,14 +1163,32 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           <div className="relative animate-in zoom-in-95 duration-200">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={bcsPhotoPreview!} alt="BCS" className="w-full max-h-48 object-cover rounded-xl border border-gray-200 shadow-sm" />
-                            <button type="button" onClick={() => { setBcsPhotoFile(null); setBcsPhotoPreview(null) }}
+                            <button type="button" onClick={() => { setBcsPhotoFile(null); setBcsPhotoPreview(null); setBcsAiResult(null) }}
                               className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-black/50 hover:bg-black/70 backdrop-blur-md text-white rounded-full transition-all">
                               <X className="w-4 h-4" />
                             </button>
                           </div>
                         )}
+                        {/* Botón análisis IA — visible cuando hay foto */}
+                        {bcsPhotoFile && (
+                          <button type="button" onClick={analyzeBcs} disabled={bcsAnalyzing}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50 transition-all">
+                            {bcsAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>✨</span>}
+                            {bcsAnalyzing ? 'Analizando con IA…' : 'Analizar condición con IA'}
+                          </button>
+                        )}
+                        {/* Resultado IA */}
+                        {bcsAiResult && (
+                          <div className="bg-violet-50 px-3 py-2 rounded-xl border border-violet-200 flex items-center gap-2">
+                            <span className="text-lg">🤖</span>
+                            <div>
+                              <p className="text-[9px] font-black text-violet-500 tracking-widest uppercase">Resultado IA · Gemini</p>
+                              <p className="text-sm font-black text-violet-900">{bcsAiResult}</p>
+                            </div>
+                          </div>
+                        )}
                         <input ref={bcsCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                          onChange={e => { const f = e.target.files?.[0]; if (f) { setBcsPhotoFile(f); setBcsPhotoPreview(URL.createObjectURL(f)) } }} />
+                          onChange={e => { const f = e.target.files?.[0]; if (f) { setBcsPhotoFile(f); setBcsPhotoPreview(URL.createObjectURL(f)); setBcsAiResult(null) } }} />
                       </div>
 
                       {bcsSaved && (
@@ -1077,15 +1228,24 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                             <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0 z-10">
                               <span className={`w-2 h-2 rounded-full ${dot}`} />
                             </div>
-                            <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2 hover:shadow-sm transition-all flex items-start justify-between">
-                              <div>
-                                <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
-                                <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
+                            <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
+                              <div className="px-3 py-2 flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
+                                  <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
+                                  {ev.description && !ev.description.startsWith('[Foto]') && (
+                                    <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{ev.description}</p>
+                                  )}
+                                </div>
+                                <button type="button" onClick={() => setEventToDelete(ev)}
+                                  className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all shrink-0">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
-                              <button type="button" onClick={() => setEventToDelete(ev)}
-                                className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {ev.photo_url && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-28 object-cover" />
+                              )}
                             </div>
                           </div>
                         )

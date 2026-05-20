@@ -8,12 +8,12 @@ type Cat = { label: string; cbi: (pv: number, extra: number) => number; needsPV:
 const CATS: Record<Sp, Cat[]> = {
   Bovinos: [
     { label: 'Ternero',              needsPV: true,  cbi: (pv) => pv * 0.085 },
-    { label: 'Novillo / vaquillona', needsPV: true,  cbi: (pv) => pv * 0.10 },
+    { label: 'Novillo / vaquillona', needsPV: true,  cbi: (pv) => pv * 0.025 * 4.0 },
     { label: 'Vaca vacía',           needsPV: true,  cbi: (pv) => pv * 0.08 },
-    { label: 'Vaca gestante',        needsPV: true,  cbi: (pv) => pv * 0.104 },
-    { label: 'Vaca lactante',        needsPV: true,  extraLabel: 'Litros leche/día', cbi: (pv, lt) => (pv * 0.08) + (1.5 * lt) },
+    { label: 'Vaca gestante',        needsPV: true,  cbi: (pv) => (pv * 0.08) * 1.3 },
+    { label: 'Vaca lactante',        needsPV: true,  extraLabel: 'Litros de leche', cbi: (pv, lt) => (pv * 0.08) + (1.5 * lt) },
     { label: 'Toro',                 needsPV: true,  cbi: (pv) => pv * 0.07 },
-    { label: 'Toro en servicio',     needsPV: true,  cbi: (pv) => pv * 0.098 },
+    { label: 'Toro en servicio',     needsPV: true,  cbi: (pv) => (pv * 0.07) * 1.4 },
   ],
   Equinos: [
     { label: 'Caballo / yegua (reposo)', needsPV: true, cbi: (pv) => pv * 0.06 },
@@ -173,17 +173,17 @@ export function HidricoTab() {
             </div>
           </div>
 
-          {/* Alerta térmica o nota */}
-          {temp > 30 ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
-              ⚠️ <strong>Estrés térmico</strong> — Ft = 1.4 aplicado (+40 % consumo base). Temperatura &gt; 30 °C.
-            </div>
-          ) : (
-            <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs text-gray-500 space-y-0.5">
-              <p>CTL = {cri} L × {heads} animales = <strong>{ctl.toLocaleString('es')} L/día</strong></p>
-              <p>Bebedero = CTL × 1.20 (margen evaporación) = <strong>{ri.toLocaleString('es')} L/día</strong></p>
-            </div>
-          )}
+          {/* Fórmulas y desglose */}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs text-gray-500 space-y-1.5">
+            {temp > 30 && (
+              <div className="text-amber-800 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-200 mb-2 font-medium">
+                ⚠️ Estrés térmico: factor Ft = 1.4 aplicado al consumo base (+40%).
+              </div>
+            )}
+            <p>CRI = CBI × F<sub>t</sub> = <strong>{cri.toFixed(1)} L/día</strong></p>
+            <p>CTL = CRI × {isNaN(heads) ? 0 : heads} animales = <strong>{ctl.toLocaleString('es')} L/día</strong></p>
+            <p>Bebedero (RI) = CTL × 1.20 (margen infraestructura) = <strong>{ri.toLocaleString('es')} L/día</strong></p>
+          </div>
         </div>
       </div>
     </div>

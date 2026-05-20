@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import PaddockSidePanel from './components/PaddockSidePanel'
 import PaddockModal from './components/PaddockModal'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
@@ -715,7 +716,7 @@ function FieldSetupModalInline({
 
   const currentImg = setupImgUrl || fieldImg
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
 
@@ -867,4 +868,7 @@ function FieldSetupModalInline({
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }

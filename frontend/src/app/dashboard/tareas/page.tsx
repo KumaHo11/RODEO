@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { FeatureGate } from '@/components/FeatureGate'
@@ -404,8 +405,8 @@ function TareasContent({ user }: { user: any }) {
       )}
 
       {/* ── Create Task Modal ── */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      {modalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-3xl">
               <h2 className="text-xl font-black text-gray-900">Nueva tarea</h2>
@@ -491,7 +492,7 @@ function TareasContent({ user }: { user: any }) {
             </form>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   )
 }
