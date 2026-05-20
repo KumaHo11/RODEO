@@ -158,6 +158,23 @@ export default function PaddockSidePanel({
     if (areaHa    !== undefined) updates.area_ha = areaHa
     await apiFetch(`/api/paddocks/${paddockId}`, { method: 'PATCH', body: JSON.stringify(updates) })
     await onSaveTechnicalData(paddockId, technicalData, dryMatter)
+
+    // Recalculate total field area if the paddock area was edited
+    if (areaHa !== undefined) {
+      // Build the new total using the updated area for this paddock
+      const newTotal = paddocks.reduce((sum, p) => {
+        const ha = p.id === paddockId ? areaHa : Number(p.area_ha) || 0
+        return sum + ha
+      }, 0)
+      // Only update if different from current org total
+      if (Math.abs(newTotal - (Number(org?.total_area_ha) || 0)) > 0.01) {
+        await apiFetch('/api/organizations', {
+          method: 'PATCH',
+          body: JSON.stringify({ total_area_ha: parseFloat(newTotal.toFixed(2)) }),
+        })
+      }
+    }
+
     onDataRefresh?.()
   }
 
@@ -502,7 +519,7 @@ export default function PaddockSidePanel({
                         </div>
                         <button
                           onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                          className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-sm shrink-0"
+                          className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all shrink-0"
                         >
                           Gestionar
                         </button>

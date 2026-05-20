@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { usePermissions } from '@/lib/usePermissions'
@@ -624,7 +625,7 @@ export default function EquipoPage() {
       )}
 
       {/* ── Edit permissions drawer ───────────────────────────────────────────── */}
-      {editMember && (
+      {editMember && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             <div className="sticky top-0 bg-white/98 backdrop-blur px-6 py-5 border-b border-gray-100 flex items-center justify-between rounded-t-3xl z-10 shrink-0">
@@ -639,7 +640,7 @@ export default function EquipoPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-5 flex-1 overflow-y-auto">
               {/* Role selector */}
               <div>
                 <label className="block text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">Rol</label>
@@ -706,10 +707,10 @@ export default function EquipoPage() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* ── Invite Modal ──────────────────────────────────────────────────────── */}
-      {modalOpen && (
+      {modalOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 flex flex-col max-h-[92vh]">
 
@@ -866,7 +867,7 @@ export default function EquipoPage() {
             )}
           </div>
         </div>
-      )}
+      , document.body)}
 
 
 

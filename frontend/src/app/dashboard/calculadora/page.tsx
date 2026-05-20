@@ -186,7 +186,7 @@ export default function CalculadoraPage() {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-6 pb-10">
+    <div className="flex flex-col gap-6 pb-32 lg:pb-12">
 
       {/* ── Encabezado ───────────────────────────────────────────────────── */}
       <div>

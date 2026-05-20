@@ -494,6 +494,16 @@ export default function HerdsPage() {
                           </>
                         )}
                       </div>
+
+                      {/* ── Botón Gestionar ── */}
+                      <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-end">
+                        <button
+                          onClick={e => { e.stopPropagation(); openEdit(herd) }}
+                          className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all shrink-0"
+                        >
+                          Gestionar
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 )
@@ -514,7 +524,7 @@ export default function HerdsPage() {
             <p className="text-sm font-bold text-gray-400">No hay rodeos que mostrar</p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-24 sm:mb-10">
             <table className="w-full">
               <thead className="border-b border-gray-100 bg-gray-50/70">
                 <tr>
@@ -540,7 +550,7 @@ export default function HerdsPage() {
                       </span>
                     </th>
                   ))}
-                  <th className="px-4 py-3 w-20" />
+                  <th className="px-4 py-3 w-32" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -575,11 +585,18 @@ export default function HerdsPage() {
                       <td className="px-4 py-3 text-sm text-gray-600">{fmtDate(herd.admission_date)}</td>
                       <td className="px-4 py-3 text-sm font-black text-gray-950">{Math.round(ev).toLocaleString('es-AR')}</td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={e => { e.stopPropagation(); handleDelete(herd.id!) }}
-                          className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1 justify-end">
+                          <button
+                            onClick={e => { e.stopPropagation(); openEdit(herd) }}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all opacity-0 group-hover:opacity-100">
+                            Gestionar
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleDelete(herd.id!) }}
+                            className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )

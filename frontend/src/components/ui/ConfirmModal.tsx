@@ -14,7 +14,8 @@
  *   // En render: <ConfirmModal />
  *   // En handler: const ok = await confirm({ title: '...', description: '...' })
  */
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, Trash2, X, Plus } from 'lucide-react'
 
 export type ConfirmOptions = {
@@ -60,8 +61,13 @@ export function useConfirm() {
     resolveRef.current?.(false)
   }, [])
 
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const ConfirmModal = useCallback(() => {
-    if (!open) return null
+    if (!open || !mounted) return null
 
     const isWarning = options.variant === 'warning'
     const isInfo = options.variant === 'info'
@@ -130,7 +136,10 @@ export function useConfirm() {
         </div>
       </div>
     )
-  }, [open, options, handleConfirm, handleCancel])
+    
+    if (typeof document === 'undefined') return null
+    return createPortal(modalContent, document.body)
+  }, [open, options, handleConfirm, handleCancel, mounted])
 
   return { confirm, ConfirmModal }
 }

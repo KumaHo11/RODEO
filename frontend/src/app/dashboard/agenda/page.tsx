@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify, Loader2 } from 'lucide-react'
@@ -464,7 +465,7 @@ export default function AgendaPage() {
         })
         const dayDate = new Date(selectedDay + 'T00:00:00')
         return (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setDayModalOpen(false)}>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center p-4" onClick={() => setDayModalOpen(false)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
               {/* Modal header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
@@ -605,8 +606,8 @@ export default function AgendaPage() {
       )}
 
       {/* Create / Edit Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
+      {modalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <div>
@@ -796,7 +797,7 @@ export default function AgendaPage() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Conflict Modal */}
       {conflictModalOpen && (

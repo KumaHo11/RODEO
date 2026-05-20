@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
@@ -3879,29 +3880,30 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           <div className="relative">
             <button
               onClick={() => setShowGanttModeDropdown(v => !v)}
-              className="group flex flex-col items-start text-left transition-all duration-200"
+              className="group flex items-center justify-between gap-4 px-4 py-2.5 bg-white border border-gray-200 shadow-sm hover:shadow hover:border-gray-300 rounded-2xl transition-all duration-200"
             >
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-tight text-gray-950 max-w-[200px] sm:max-w-none line-clamp-2 sm:line-clamp-none">
-                  {activeGanttTab === 'suggested' ? 'Planificación de pastoreo Sugerida' : (
-                    <>
-                      <span className="sm:hidden">Pastoreo Manual</span>
-                      <span className="hidden sm:inline">Planificación de pastoreo Manual</span>
-                    </>
-                  )}
+              <div className="flex flex-col items-start text-left">
+                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                  <Layers className="w-3 h-3" />
+                  Modo de planificación
+                </span>
+                <h1 className="text-base sm:text-lg font-black tracking-tight text-gray-950 leading-none">
+                  {activeGanttTab === 'suggested' ? 'Planificación Sugerida' : 'Planificación Manual'}
                 </h1>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-gray-100 flex items-center justify-center shrink-0 border border-gray-100 transition-colors">
                 <svg
-                  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                  className={`transition-transform duration-200 shrink-0 text-gray-400 ${showGanttModeDropdown ? 'rotate-180' : ''}`}
+                  width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+                  className={`transition-transform duration-200 text-gray-700 ${showGanttModeDropdown ? 'rotate-180' : ''}`}
                 ><path d="m6 9 6 6 6-6"/></svg>
               </div>
-              {/* Show the active plan name directly below the title, as requested */}
-              {activeSeasonPlanId && viewMode === 'gantt' && (
-                <p className="text-sm font-bold text-gray-500 mt-0.5">
-                  {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan activo'}
-                </p>
-              )}
             </button>
+            {/* Show the active plan name directly below the title, as requested */}
+            {activeSeasonPlanId && viewMode === 'gantt' && (
+              <p className="text-sm font-bold text-gray-500 mt-2 px-2">
+                {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan activo'}
+              </p>
+            )}
 
             {showGanttModeDropdown && (
               <>
@@ -5525,8 +5527,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       )}
 
       {/* ─── HERD SELECTOR PANEL ─────────────────────────────────────────── */}
-      {showHerdSelector && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-end sm:items-center justify-center p-4">
+      {showHerdSelector && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-200">
             <div className="px-6 pt-6 pb-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
@@ -5586,7 +5588,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* ─── ALERTA: Riesgo de Sobrepastoreo ─────────────────────────────── */}
       {overgrazingRisk && (
