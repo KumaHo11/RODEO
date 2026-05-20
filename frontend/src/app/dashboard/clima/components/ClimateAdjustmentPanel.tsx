@@ -50,6 +50,26 @@ interface Snapshot {
 
 // ─── Mini growth chart (dentro del expand del potrero) ───────────────────────
 
+function MiniTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  const kg = payload.find((p: any) => p.dataKey === 'kg')
+  const hasRainDot = payload.find((p: any) => p.dataKey === 'lluvia' && p.value != null)
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-lg text-xs">
+      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{label}</p>
+      {kg && (
+        <p className="font-black text-gray-900">
+          {Number(kg.value).toFixed(1)} <span className="font-medium text-gray-400">kg MS/ha/d</span>
+          <span className="ml-1 text-[10px] text-emerald-600 font-medium">Crecimiento</span>
+        </p>
+      )}
+      {hasRainDot && (
+        <p className="text-blue-500 font-medium mt-0.5 text-[10px]">Lluvia registrada</p>
+      )}
+    </div>
+  )
+}
+
 function PaddockGrowthMini({ data }: { data: Snapshot[] }) {
   if (data.length < 2) return (
     <div className="h-28 flex items-center justify-center text-xs text-gray-300">
@@ -63,26 +83,6 @@ function PaddockGrowthMini({ data }: { data: Snapshot[] }) {
     lluvia: Number(d.climate_multiplier) > 1.05 ? parseFloat(Number(d.grass_growth_rate).toFixed(1)) : null,
   }))
   const avg = chartData.reduce((s, d) => s + d.kg, 0) / chartData.length
-
-  function MiniTooltip({ active, payload, label }: any) {
-    if (!active || !payload?.length) return null
-    const kg = payload.find((p: any) => p.dataKey === 'kg')
-    const hasRainDot = payload.find((p: any) => p.dataKey === 'lluvia' && p.value != null)
-    return (
-      <div className="bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-lg text-xs">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{label}</p>
-        {kg && (
-          <p className="font-black text-gray-900">
-            {Number(kg.value).toFixed(1)} <span className="font-medium text-gray-400">kg MS/ha/d</span>
-            <span className="ml-1 text-[10px] text-emerald-600 font-medium">Crecimiento</span>
-          </p>
-        )}
-        {hasRainDot && (
-          <p className="text-blue-500 font-medium mt-0.5 text-[10px]">Lluvia registrada</p>
-        )}
-      </div>
-    )
-  }
 
   return (
     <div className="h-28 w-full mt-2">
