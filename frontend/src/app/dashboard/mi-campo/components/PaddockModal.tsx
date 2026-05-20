@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
 import { SatelliteData } from '@/lib/services/satellite'
@@ -319,7 +320,7 @@ export default function PaddockModal({
   const canVoice     = hasFeature('voice_bitacora') // audio + transcripción IA
   const canAiInsight = hasFeature('ai_insights')    // análisis biomasa IA
   const canNdvi      = hasFeature('ndvi_access')    // NDVI satelital
-  const [activeTab, setActiveTab] = useState<'operativo' | 'infraestructura' | 'registros' | 'historico'>('operativo')
+  const [activeTab, setActiveTab] = useState<'operativo' | 'infraestructura' | 'registros' | 'historial'>('operativo')
   const [saving, setSaving]       = useState(false)
 
   // Tab 1
@@ -391,7 +392,7 @@ export default function PaddockModal({
   }, [paddock.id])
 
   useEffect(() => {
-    if (activeTab === 'registros') loadNotes()
+    if (activeTab === 'registros' || activeTab === 'historial') loadNotes()
   }, [activeTab, loadNotes])
 
   const [bioPhoto, setBioPhoto]               = useState<File | null>(null)
@@ -779,11 +780,10 @@ export default function PaddockModal({
     { id: 'operativo',       label: 'Datos operativos', disabled: false },
     { id: 'infraestructura', label: 'Infraestructura',   disabled: false },
     { id: 'registros',       label: 'Registros',         disabled: isCreating },
-    { id: 'historico',       label: 'NDVI histórico',    disabled: isCreating },
+    { id: 'historial',       label: 'Historial',         disabled: isCreating },
   ] as const
 
-  // ─── Render ────────────────────────────────────────────────────────────────
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-[9999] bg-white md:bg-black/40 md:backdrop-blur-sm flex flex-col md:items-center md:justify-center md:p-4 pb-20 md:pb-0">
       <ConfirmModal />
       <div className="bg-white w-full h-full md:rounded-2xl md:shadow-2xl md:w-full md:max-w-2xl md:max-h-[92vh] flex flex-col">
@@ -1276,7 +1276,9 @@ export default function PaddockModal({
                               onClick={async () => {
                                 await saveQuickNote()
                                 setSessionNoteCount(c => c + 1)
-                                // resetNoteCapture() is called inside saveQuickNote — no need here
+                                import('sonner').then(({ toast }) =>
+                                  toast.success('✓ Registro guardado en el historial')
+                                )
                               }}
                               disabled={noteSaving}
                               className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">
@@ -1380,10 +1382,10 @@ export default function PaddockModal({
                   </div>
                 )}
 
-                {/* ══ HISTORIAL DE REGISTROS ══ */}
+                {/* ══ HISTORIAL DE REGISTROS (sólo en Tab Registros — resumen rápido) ══ */}
                 <div>
                   <div className="flex items-center justify-between mb-2.5">
-                    <p className={LABEL_CLS}>Historial de registros</p>
+                    <p className={LABEL_CLS}>Últimos registros</p>
                     {notesLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
                   </div>
 
@@ -1398,118 +1400,193 @@ export default function PaddockModal({
                   )}
 
                   {notes.length > 0 && (
-                    <div className="relative">
-                      <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
-                      <div className="space-y-3">
-                        {notes.map(note => {
-                          if (deletedNotes[note.id]) {
-                            return (
-                              <div key={note.id} className="flex items-center gap-3 pl-10 opacity-30">
-                                <p className="text-[9px] text-gray-400 italic">Registro eliminado</p>
-                              </div>
-                            )
-                          }
-                          const { tags, primary } = getCat(note)
-                          const { Icon: CatIcon } = primary
-                          const isOwner = !user || note.created_by === user?.id || note.created_by === user?.uid
-                          const hasAudio = !!note.audio_url
-                          const hasPhoto = !!note.photo_url
-                          const hasAI    = !!note.analysis_result?.dry_matter_kg_ha
-
-                          return (
-                            <div key={note.id} className="flex gap-2.5 group">
-                              {/* Timeline node */}
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 z-10 border ${hasAudio ? 'bg-red-50 border-red-200' : hasPhoto ? 'bg-green-50 border-green-200' : `${primary.bg} ${primary.border}`}`}>
-                                {hasAudio ? <Mic className="w-3.5 h-3.5 text-red-500" /> : hasPhoto ? <Camera className="w-3.5 h-3.5 text-green-600" /> : <CatIcon className="w-3.5 h-3.5" style={{ color: primary.color }} />}
-                              </div>
-                              {/* Card */}
-                              <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
-                                <div className="px-3 pt-2.5 pb-2 flex items-start justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex flex-wrap gap-1 mb-1">
-                                      {tags.map(t => { const c = CAT_CONFIG[t] || CAT_CONFIG.GENERAL; return <span key={t} className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${c.badge}`}>{c.label}</span> })}
-                                      {hasAudio && <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 uppercase">Audio</span>}
-                                      {hasAI && <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase">IA</span>}
-                                    </div>
-                                    <h4 className="text-[11px] font-black text-gray-900 leading-tight">{note.title}</h4>
-                                  </div>
-                                  {isOwner && (
-                                    <button type="button" onClick={() => deleteNote(note.id)}
-                                      className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-gray-300 hover:text-red-500 rounded-md transition-all shrink-0">
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                </div>
-                                {hasAudio && (
-                                  <div className="px-3 pb-2">
-                                    { }
-                                    <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '32px' }} />
-                                  </div>
-                                )}
-                                {hasPhoto && (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={note.photo_url} alt="Evidencia" className="w-full max-h-32 object-cover" />
-                                )}
-                                {note.content && (
-                                  <div className="px-3 pb-2">
-                                    <p className="text-[10px] text-gray-500 leading-relaxed line-clamp-3">{note.content}</p>
-                                  </div>
-                                )}
-                                {hasAI && (
-                                  <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
-                                    {[
-                                      { l: 'MS/ha', v: `${note.analysis_result.dry_matter_kg_ha} kg` },
-                                      { l: 'Alt.', v: `${note.analysis_result.grass_height_cm ?? '—'} cm` },
-                                      { l: 'Cob.', v: `${note.analysis_result.coverage_pct ?? '—'}%` },
-                                    ].map(item => (
-                                      <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
-                                        <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
-                                        <p className="text-[10px] font-black text-violet-800">{item.v}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <div className="px-3 pb-2">
-                                  <p className="text-[8px] text-gray-300 font-medium">{fmtDate(note.created_at)}</p>
-                                </div>
-                              </div>
+                    <div className="space-y-2">
+                      {notes.slice(0, 3).map(note => {
+                        if (deletedNotes[note.id]) return null
+                        const { tags, primary } = getCat(note)
+                        const { Icon: CatIcon } = primary
+                        const hasAudio = !!note.audio_url
+                        const hasPhoto = !!note.photo_url
+                        const hasAI    = !!note.analysis_result?.dry_matter_kg_ha
+                        return (
+                          <div key={note.id} className="flex gap-2.5">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${hasAudio ? 'bg-red-50 border-red-200' : hasPhoto ? 'bg-green-50 border-green-200' : `${primary.bg} ${primary.border}`}`}>
+                              {hasAudio ? <Mic className="w-3 h-3 text-red-500" /> : hasPhoto ? <Camera className="w-3 h-3 text-green-600" /> : <CatIcon className="w-3 h-3" style={{ color: primary.color }} />}
                             </div>
-                          )
-                        })}
-                      </div>
+                            <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2">
+                              <div className="flex flex-wrap gap-1 mb-0.5">
+                                {tags.map(t => { const c = CAT_CONFIG[t] || CAT_CONFIG.GENERAL; return <span key={t} className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${c.badge}`}>{c.label}</span> })}
+                                {hasAI && <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase">IA</span>}
+                              </div>
+                              <p className="text-[11px] font-black text-gray-900 leading-tight">{note.title}</p>
+                              <p className="text-[8px] text-gray-300 font-medium mt-0.5">{fmtDate(note.created_at)}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {notes.length > 3 && (
+                        <button type="button" onClick={() => setActiveTab('historial')}
+                          className="w-full text-[10px] font-bold text-green-600 hover:text-green-800 py-1.5 text-center transition-colors">
+                          Ver todos los registros ({notes.length}) →
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
           )}
-          {/* ════ TAB 4 — HISTÓRICO ════ */}
-          {activeTab === 'historico' && (
-            <div className="px-6 py-5 space-y-4">
-              <div className="space-y-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">
-                  Historial de mediciones climáticas y de crecimiento
-                </p>
-                {paddockSnapshots.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic text-center py-8">No hay mediciones históricas registradas para este potrero.</p>
-                ) : (
-                  paddockSnapshots.map((snap: any, i: number) => (
-                    <div key={i} className="flex flex-wrap items-center justify-between gap-2 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                      <div>
-                        <p className="text-sm font-black text-gray-900">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">Multiplicador clima: <span className="font-bold">{Number(snap.climate_multiplier || 1).toFixed(2)}x</span></p>
-                      </div>
-                      <div className="flex items-center gap-6 text-right">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">NDVI</p>
-                          <p className="text-sm font-black text-emerald-700">{Number(snap.ndvi).toFixed(3)}</p>
+          {/* ════ TAB 4 — HISTORIAL ════ */}
+          {activeTab === 'historial' && (
+            <div className="px-6 py-5 space-y-5">
+
+              {/* ══ NDVI SATELITAL — diferenciado con badge y estilo esmeralda ══ */}
+              {paddockSnapshots.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">NDVI Satelital</span>
+                    <div className="flex-1 h-px bg-emerald-100" />
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px]">🛰️</span> Cada 5 días
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {paddockSnapshots.map((snap: any, i: number) => {
+                      const ndvi = Number(snap.ndvi)
+                      const ndviBg = ndvi >= 0.6 ? 'bg-emerald-50 border-emerald-200' : ndvi >= 0.4 ? 'bg-green-50 border-green-200' : ndvi >= 0.2 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+                      const ndviTxt = ndvi >= 0.6 ? 'text-emerald-700' : ndvi >= 0.4 ? 'text-green-700' : ndvi >= 0.2 ? 'text-amber-700' : 'text-red-700'
+                      const ndviLabel = ndvi >= 0.6 ? 'Óptimo' : ndvi >= 0.4 ? 'Bueno' : ndvi >= 0.2 ? 'Regular' : 'Bajo'
+                      return (
+                        <div key={i} className={`flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-xl border ${ndviBg}`}>
+                          <div className="flex items-center gap-2">
+                            {/* Distinctive satellite icon for NDVI entries */}
+                            <div className="w-7 h-7 rounded-lg bg-white/70 border border-current/20 flex items-center justify-center text-[13px]" title="Medición satelital Sentinel-2">🛰️</div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border bg-white/60 ${ndviTxt}`}>{ndviLabel}</span>
+                                <span className="text-[8px] font-bold text-gray-400 bg-white/60 border border-gray-200 px-1.5 py-0.5 rounded-full">Sentinel-2</span>
+                              </div>
+                              <p className="text-xs font-bold text-gray-700 mt-0.5">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 text-right">
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">NDVI</p>
+                              <p className={`text-base font-black ${ndviTxt}`}>{ndvi.toFixed(3)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Crecimiento</p>
+                              <p className="text-base font-black text-gray-900">{Number(snap.grass_growth_rate).toFixed(1)} <span className="text-xs font-bold text-gray-400">kg/d</span></p>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Crecimiento</p>
-                          <p className="text-sm font-black text-gray-900">{Number(snap.grass_growth_rate).toFixed(1)} <span className="text-xs font-bold text-gray-400">kg/d</span></p>
-                        </div>
-                      </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ══ REGISTROS DE CAMPO (notas, audios, fotos) ══ */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">Registros de campo</span>
+                  <div className="flex-1 h-px bg-gray-100" />
+                  {notesLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
+                </div>
+
+                {notes.length === 0 && !notesLoading && paddockSnapshots.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed border-gray-200">
+                    <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mb-2.5">
+                      <Mic className="w-5 h-5 text-gray-300" />
                     </div>
-                  ))
+                    <p className="text-xs font-bold text-gray-400">Sin historial aún</p>
+                    <p className="text-[9px] text-gray-300 mt-1">Los registros y mediciones NDVI aparecerán aquí</p>
+                  </div>
+                )}
+
+                {notes.length === 0 && !notesLoading && paddockSnapshots.length > 0 && (
+                  <p className="text-xs text-gray-400 italic text-center py-4">No hay registros de campo para este potrero.</p>
+                )}
+
+                {notes.length > 0 && (
+                  <div className="relative">
+                    <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
+                    <div className="space-y-3">
+                      {notes.map(note => {
+                        if (deletedNotes[note.id]) {
+                          return (
+                            <div key={note.id} className="flex items-center gap-3 pl-10 opacity-30">
+                              <p className="text-[9px] text-gray-400 italic">Registro eliminado</p>
+                            </div>
+                          )
+                        }
+                        const { tags, primary } = getCat(note)
+                        const { Icon: CatIcon } = primary
+                        const isOwner = !user || note.created_by === user?.id || note.created_by === user?.uid
+                        const hasAudio = !!note.audio_url
+                        const hasPhoto = !!note.photo_url
+                        const hasAI    = !!note.analysis_result?.dry_matter_kg_ha
+
+                        return (
+                          <div key={note.id} className="flex gap-2.5 group">
+                            {/* Timeline node */}
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 z-10 border ${hasAudio ? 'bg-red-50 border-red-200' : hasPhoto ? 'bg-green-50 border-green-200' : `${primary.bg} ${primary.border}`}`}>
+                              {hasAudio ? <Mic className="w-3.5 h-3.5 text-red-500" /> : hasPhoto ? <Camera className="w-3.5 h-3.5 text-green-600" /> : <CatIcon className="w-3.5 h-3.5" style={{ color: primary.color }} />}
+                            </div>
+                            {/* Card */}
+                            <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
+                              <div className="px-3 pt-2.5 pb-2 flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap gap-1 mb-1">
+                                    {tags.map(t => { const c = CAT_CONFIG[t] || CAT_CONFIG.GENERAL; return <span key={t} className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${c.badge}`}>{c.label}</span> })}
+                                    {hasAudio && <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 uppercase">Audio</span>}
+                                    {hasAI && <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase">IA</span>}
+                                  </div>
+                                  <h4 className="text-[11px] font-black text-gray-900 leading-tight">{note.title}</h4>
+                                </div>
+                                {isOwner && (
+                                  <button type="button" onClick={() => deleteNote(note.id)}
+                                    className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-gray-300 hover:text-red-500 rounded-md transition-all shrink-0">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                              {hasAudio && (
+                                <div className="px-3 pb-2">
+                                  <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '32px' }} />
+                                </div>
+                              )}
+                              {hasPhoto && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={note.photo_url} alt="Evidencia" className="w-full max-h-32 object-cover" />
+                              )}
+                              {note.content && (
+                                <div className="px-3 pb-2">
+                                  <p className="text-[10px] text-gray-500 leading-relaxed line-clamp-3">{note.content}</p>
+                                </div>
+                              )}
+                              {hasAI && (
+                                <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
+                                  {[
+                                    { l: 'MS/ha', v: `${note.analysis_result.dry_matter_kg_ha} kg` },
+                                    { l: 'Alt.', v: `${note.analysis_result.grass_height_cm ?? '—'} cm` },
+                                    { l: 'Cob.', v: `${note.analysis_result.coverage_pct ?? '—'}%` },
+                                  ].map(item => (
+                                    <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
+                                      <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
+                                      <p className="text-[10px] font-black text-violet-800">{item.v}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="px-3 pb-2">
+                                <p className="text-[8px] text-gray-300 font-medium">{fmtDate(note.created_at)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -1568,4 +1645,7 @@ export default function PaddockModal({
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }
