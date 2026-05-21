@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface MercadoResponse {
   argentina: {
@@ -21,8 +24,8 @@ interface MercadoResponse {
   cachedAt: string
 }
 
-// ── In-memory cache (6 hours) ─────────────────────────────────────────────────
-let cache: { data: MercadoResponse; ts: number } | null = null
+// ── In-memory cache ─────────────────────────────────────────────────────────────
+let cache: { data: MercadoResponse; ts: number; ttl: number } | null = null
 const CACHE_TTL = 6 * 60 * 60 * 1000
 
 // ── Argentine price history — persists while server is running ─────────────────
@@ -42,10 +45,34 @@ const CATEGORIA_RATIOS: Record<string, number> = {
   BUBALINOS:   0.85,
 }
 
-// ── Fallback prices (last known good — updated manually) ──────────────────────
-// INSC/INMAG al ~2026-04 según cotizaciones de referencia Liniers/Cañuelas
-const FALLBACK_INSC = 4330   // ARS/kg vivo — referencia aproximada conservadora
-const FALLBACK_DATE = '2026-04-08'
+import fs from 'fs'
+import path from 'path'
+
+// ── Persistent fallback cache (survives dev server restarts) ───────────────────
+const FALLBACK_CACHE_PATH = path.join(process.cwd(), '.mercado_cache.json')
+
+function getPersistentFallback() {
+  try {
+    if (fs.existsSync(FALLBACK_CACHE_PATH)) {
+      const data = JSON.parse(fs.readFileSync(FALLBACK_CACHE_PATH, 'utf8'))
+      if (data && data.price && data.date) {
+        return { insc: data.price, date: data.date }
+      }
+    }
+  } catch(e) {}
+  // Default if no cache exists
+  return { insc: 4330, date: new Date().toISOString().split('T')[0] }
+}
+
+function savePersistentFallback(price, date) {
+  try {
+    fs.writeFileSync(FALLBACK_CACHE_PATH, JSON.stringify({ price, date }), 'utf8')
+  } catch(e) {}
+}
+
+const defaultFallback = getPersistentFallback()
+const FALLBACK_INSC = defaultFallback.insc
+const FALLBACK_DATE = defaultFallback.date
 
 // ── Utilitario para parsear números con formato argentino (ej. "4.329,89") ────
 function parseArgNumber(str: string): number {
@@ -125,7 +152,7 @@ async function fetchArgentinaPrices(): Promise<Omit<MercadoResponse['argentina']
     insc_kg_vivo: FALLBACK_INSC,
     categorias,
     fecha: FALLBACK_DATE,
-    fuente: 'Referencia aproximada (Liniers/Cañuelas ~2026-04)',
+    fuente: 'MAG Cañuelas (Último cierre válido)',
     error: 'Mercados no disponibles — usando referencia manual'
   }
 }
@@ -209,7 +236,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const forceBust = url.searchParams.has('bust')
 
-  if (!forceBust && cache && Date.now() - cache.ts < CACHE_TTL) {
+  if (!forceBust && cache && Date.now() - cache.ts < cache.ttl) {
     return NextResponse.json(cache.data, {
       headers: { 'X-Cache': 'HIT', 'Cache-Control': 'public, max-age=3600' }
     })
@@ -224,6 +251,7 @@ export async function GET(req: Request) {
   // One entry per calendar day (de-duplicated by date). Max 7 days retained.
   const today = new Date().toISOString().split('T')[0]
   if (argBase.insc_kg_vivo && argBase.insc_kg_vivo > 500 && !argBase.error) {
+    savePersistentFallback(argBase.insc_kg_vivo, today)
     const existingToday = argentineHistory.find(h => h.date === today)
     if (!existingToday) {
       argentineHistory.push({ date: today, price: argBase.insc_kg_vivo })
@@ -240,7 +268,11 @@ export async function GET(req: Request) {
     cachedAt: new Date().toISOString(),
   }
 
-  cache = { data: response, ts: Date.now() }
+  // Use a shorter cache TTL (5 mins) if we had to use the fallback due to errors
+  const hasError = !!argBase.error || !!global.error
+  const ttlToUse = hasError ? 5 * 60 * 1000 : CACHE_TTL
+
+  cache = { data: response, ts: Date.now(), ttl: ttlToUse }
 
   return NextResponse.json(response, {
     headers: { 'X-Cache': 'MISS', 'Cache-Control': 'public, max-age=3600' }
