@@ -96,7 +96,7 @@ type ActivityId = 'paricion' | 'compra' | 'mortandad' | 'venta' | 'destete'
 
 // ── SpeechRecognition hook ────────────────────────────────────────────────────
 
-function useSpeech(onResult: (t: string) => void) {
+function useSpeech(onResult: (t: string) => void, onStart?: () => void) {
   const [listening, setListening] = useState(false)
   const recRef = useRef<any>(null)
 
@@ -104,17 +104,21 @@ function useSpeech(onResult: (t: string) => void) {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) { alert('Tu navegador no soporta reconocimiento de voz'); return }
     if (listening) { recRef.current?.stop(); return }
+    if (onStart) onStart()
     const rec = new SR()
-    rec.lang = 'es-AR'; rec.continuous = false; rec.interimResults = false
+    rec.lang = 'es-AR'; rec.continuous = true; rec.interimResults = true
     rec.onresult = (e: any) => {
-      const t = e.results[0][0].transcript
-      onResult(t)
+      let full = ''
+      for (let i = 0; i < e.results.length; i++) {
+        full += e.results[i][0].transcript
+      }
+      onResult(full)
     }
     rec.onend = () => setListening(false)
     rec.start()
     recRef.current = rec
     setListening(true)
-  }, [listening, onResult])
+  }, [listening, onResult, onStart])
 
   return { listening, toggle }
 }
@@ -363,9 +367,15 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [evSaving,     setEvSaving]     = useState(false)
   const [evSaved,      setEvSaved]      = useState(false)
 
-  const { listening: micOn, toggle: toggleMic } = useSpeech(text => {
-    setQuickNote(prev => (prev ? prev + ' ' + text : text))
-  })
+  const noteBeforeMic = useRef('')
+  const { listening: micOn, toggle: toggleMic } = useSpeech(
+    text => {
+      setQuickNote(noteBeforeMic.current ? noteBeforeMic.current + ' ' + text : text)
+    },
+    () => {
+      noteBeforeMic.current = quickNote
+    }
+  )
 
   const loadData = useCallback(async () => {
     if (!herd?.id) return
@@ -399,34 +409,36 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
     // ── Offline Path ──
     if (!navigator.onLine) {
+      let mediaId: string | undefined
       if (bcsPhotoFile) {
-        import('@/lib/audioOfflineStore').then(({ savePendingPhoto }) => {
-          savePendingPhoto({
-            id: crypto.randomUUID(),
-            blob: bcsPhotoFile,
-            lat: null, lng: null,
-            createdAt: new Date().toISOString(),
-            title: `Condición Corporal: ${bcsScore}/5 — ${label}`
-          })
+        mediaId = crypto.randomUUID()
+        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+        await savePendingPhoto({
+          id: mediaId,
+          blob: bcsPhotoFile,
+          lat: null, lng: null,
+          createdAt: new Date().toISOString(),
+          title: `Condición Corporal: ${bcsScore}/5 — ${label}`
         })
       }
-      import('@/components/OfflineIndicator').then(({ addToOfflineQueue }) => {
-        addToOfflineQueue({
-          type: 'bcs_update',
-          data: {
-            herd_id: herd.id,
-            bcs_score: bcsScore,
-            bcs_label: label,
-            quantity: herd.head_count,
-            weight_kg: herd.avg_weight_kg,
-            categoria: herd.categoria,
-            breed: herd.breed,
-            admission_date: herd.admission_date,
-            herd_name: herd.name,
-            total_ev: herd.total_ev,
-          },
-          timestamp: Date.now()
-        })
+      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      addToOfflineQueue({
+        type: 'bcs_update',
+        data: {
+          herd_id: herd.id,
+          bcs_score: bcsScore,
+          bcs_label: label,
+          quantity: herd.head_count,
+          weight_kg: herd.avg_weight_kg,
+          categoria: herd.categoria,
+          breed: herd.breed,
+          admission_date: herd.admission_date,
+          herd_name: herd.name,
+          total_ev: herd.total_ev,
+        },
+        timestamp: Date.now(),
+        mediaType: mediaId ? 'photo' : undefined,
+        mediaId
       })
       setBcsSaving(false)
       setBcsSaved(true)
@@ -573,6 +585,44 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     if (!herd?.id) return
     setNoteSaving(true)
 
+    const isAudioNote = noteMode === 'audio'
+    const titleStr = isAudioNote
+      ? `🎙️ Nota de audio: ${quickNote.trim().slice(0, 60) || 'Audio transcripto'}`
+      : quickNote.trim()
+        ? `Nota: ${quickNote.trim().slice(0, 60)}`
+        : (notePhoto ? 'Nota visual agregada' : 'Nota de rodeo')
+
+    // ── Offline Path ──
+    if (!navigator.onLine) {
+      let mediaType: 'audio' | 'photo' | undefined
+      let mediaId: string | undefined
+      if (notePhoto) {
+        mediaType = 'photo'
+        mediaId = crypto.randomUUID()
+        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+        await savePendingPhoto({ id: mediaId, blob: notePhoto, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr })
+      }
+      
+      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      addToOfflineQueue({
+        type: 'farm_event',
+        data: {
+          title: titleStr, event_type: 'servicio', event_date: todayISO(),
+          herd_id: herd.id, herd_ids: [herd.id],
+          description: quickNote.trim() || null, status: 'completado'
+        },
+        timestamp: Date.now(),
+        mediaType, mediaId
+      })
+      
+      setAgendaEvents(prev => [{ id: `temp-${Date.now()}`, title: titleStr, event_type: 'servicio', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado' }, ...prev])
+      setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null)
+      setTimeout(() => setNoteSaved(false), 3000)
+      import('sonner').then(({ toast }) => toast.success('Nota guardada offline. Se sincronizará al conectar.'))
+      return
+    }
+
+    // ── Online Path ──
     let photo_url: string | null = null
     if (notePhoto) {
       const fd = new FormData()
@@ -581,13 +631,6 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
       if (up.ok) ({ url: photo_url } = await up.json())
     }
-
-    const isAudioNote = noteMode === 'audio'
-    const titleStr = isAudioNote
-      ? `🎙️ Nota de audio: ${quickNote.trim().slice(0, 60) || 'Audio transcripto'}`
-      : quickNote.trim()
-        ? `Nota: ${quickNote.trim().slice(0, 60)}`
-        : (photo_url ? 'Nota visual agregada' : 'Nota de rodeo')
 
     const description = [quickNote.trim(), photo_url ? `[Foto](${photo_url})` : ''].filter(Boolean).join('\n\n')
 
@@ -1195,6 +1238,49 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         <p className="text-[10px] text-green-600 font-bold mt-2 text-center animate-in fade-in zoom-in duration-300">✓ Guardado en historial de evidencias</p>
                       )}
                     </div>
+                  </div>
+
+                  {/* ══ ÚLTIMOS REGISTROS ══ */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <p className={LABEL}>Últimos registros</p>
+                      {evLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
+                    </div>
+
+                    {agendaEvents.length === 0 && !evLoading && (
+                      <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed border-gray-200">
+                        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mb-2.5">
+                          <Mic className="w-5 h-5 text-gray-300" />
+                        </div>
+                        <p className="text-xs font-bold text-gray-400">Sin registros aún</p>
+                        <p className="text-[9px] text-gray-300 mt-1">Usá los botones de arriba para capturar</p>
+                      </div>
+                    )}
+
+                    {agendaEvents.length > 0 && (
+                      <div className="space-y-2">
+                        {agendaEvents.slice(0, 3).map(ev => {
+                          const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
+                          return (
+                            <div key={ev.id} className="flex gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0">
+                                <span className={`w-2 h-2 rounded-full ${dot}`} />
+                              </div>
+                              <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2">
+                                <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
+                                <p className="text-[8px] text-gray-400 font-medium mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {agendaEvents.length > 3 && (
+                          <button type="button" onClick={() => setTab('historial')}
+                            className="w-full text-[10px] font-bold text-green-600 hover:text-green-800 py-1.5 text-center transition-colors">
+                            Ver todos los registros ({agendaEvents.length}) →
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
