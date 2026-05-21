@@ -415,18 +415,33 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     setMicOn(true)
   }, [])
 
-  const stopRecording = useCallback(() => {
-    speechRef.current?.stop()
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+  const stopRecordingAndWait = (): Promise<Blob | null> => {
+    return new Promise(resolve => {
+      speechRef.current?.stop()
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        setMicOn(false)
+        resolve(audioBlobRef.current || audioBlob)
+        return
+      }
+      mediaRecorderRef.current.onstop = () => {
+        mediaRecorderRef.current?.stream?.getTracks().forEach(t => t.stop())
+        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
+        const blob = new Blob(audioChunksRef.current, { type: mimeType })
+        audioBlobRef.current = blob
+        setAudioBlob(blob)
+        setAudioUrl(URL.createObjectURL(blob))
+        setMicOn(false)
+        resolve(blob)
+      }
       mediaRecorderRef.current.stop()
-    }
-    setMicOn(false)
-  }, [])
+      setMicOn(false)
+    })
+  }
 
   const toggleMic = useCallback(() => {
-    if (micOn) stopRecording()
+    if (micOn) stopRecordingAndWait()
     else startRecording()
-  }, [micOn, startRecording, stopRecording])
+  }, [micOn, startRecording])
 
   const loadData = useCallback(async () => {
     if (!herd?.id) return
@@ -450,7 +465,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     setEvLoading(false)
   }, [herd?.id])
 
-  useEffect(() => { if (tab === 'registros') loadData() }, [tab, loadData])
+  useEffect(() => { if (tab === 'registros' || tab === 'historial') loadData() }, [tab, loadData])
 
   const saveBcs = async () => {
     if (!herd?.id) return
@@ -632,13 +647,18 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   }
 
   const saveNote = async () => {
-    if (!quickNote.trim() && !notePhoto) return
+    let effectiveBlob = audioBlobRef.current || audioBlob
+    if (micOn) {
+      effectiveBlob = await stopRecordingAndWait()
+    }
+
+    if (!quickNote.trim() && !notePhoto && !effectiveBlob) return
     if (!herd?.id) return
     setNoteSaving(true)
 
-    const isAudioNote = noteMode === 'audio'
+    const isAudioNote = noteMode === 'audio' || !!effectiveBlob
     const titleStr = isAudioNote
-      ? `🎙️ Nota de audio: ${quickNote.trim().slice(0, 60) || 'Audio transcripto'}`
+      ? `🎙️ Nota de audio: ${quickNote.trim().slice(0, 60) || 'Audio guardado'}`
       : quickNote.trim()
         ? `Nota: ${quickNote.trim().slice(0, 60)}`
         : (notePhoto ? 'Nota visual agregada' : 'Nota de rodeo')
@@ -652,13 +672,18 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         mediaId = crypto.randomUUID()
         const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
         await savePendingPhoto({ id: mediaId, blob: notePhoto, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr })
+      } else if (effectiveBlob) {
+        mediaType = 'audio'
+        mediaId = crypto.randomUUID()
+        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+        await savePendingAudio({ id: mediaId, blob: effectiveBlob, durationSecs: 0, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: quickNote.trim() })
       }
       
       const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
       addToOfflineQueue({
         type: 'farm_event',
         data: {
-          title: titleStr, event_type: 'servicio', event_date: todayISO(),
+          title: titleStr, event_type: 'nota', event_date: todayISO(),
           herd_id: herd.id, herd_ids: [herd.id],
           description: quickNote.trim() || null, status: 'completado'
         },
@@ -666,8 +691,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         mediaType, mediaId
       } as any)
       
-      setAgendaEvents(prev => [{ id: `temp-${Date.now()}`, title: titleStr, event_type: 'servicio', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado' }, ...prev])
-      setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null)
+      setAgendaEvents(prev => [{ id: `temp-${Date.now()}`, title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado' }, ...prev])
+      setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null); audioBlobRef.current = null;
       setTimeout(() => setNoteSaved(false), 3000)
       import('sonner').then(({ toast }) => toast.success('Nota guardada offline. Se sincronizará al conectar.'))
       return
@@ -684,7 +709,6 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     }
 
     let audio_url: string | null = null
-    const effectiveBlob = audioBlobRef.current || audioBlob
     if (effectiveBlob) {
       const blobType = effectiveBlob.type || 'audio/webm'
       const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
@@ -701,7 +725,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       method: 'POST',
       body: JSON.stringify({
         title: titleStr,
-        event_type: 'servicio',
+        event_type: 'nota',
         event_date: todayISO(),
         herd_id: herd.id, herd_ids: [herd.id],
         description: description || null,
@@ -717,7 +741,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       setAgendaEvents(prev => [{
         id: saved?.event?.id ?? `temp-${Date.now()}`,
         title: titleStr,
-        event_type: 'servicio',
+        event_type: 'nota',
         event_date: todayISO(),
         herd_id: herd.id,
         herd_ids: [herd.id],
@@ -1329,6 +1353,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       <div className="space-y-2">
                         {agendaEvents.slice(0, 3).map(ev => {
                           const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
+                          const isNota = ev.event_type === 'nota' || ev.title.includes('Nota')
                           return (
                             <div key={ev.id} className="flex gap-2.5">
                               <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0">
@@ -1336,7 +1361,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                               </div>
                               <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2">
                                 <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
-                                <p className="text-[8px] text-gray-400 font-medium mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
+                                <p className="text-[8px] text-gray-400 font-medium mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''}{isNota ? '' : ` · ${ev.event_type}`}</p>
+                                {ev.audio_url && (
+                                  <audio controls src={ev.audio_url} className="w-full h-8 mt-2" />
+                                )}
                               </div>
                             </div>
                           )
@@ -1377,6 +1405,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                     <div className="space-y-2">
                       {agendaEvents.map(ev => {
                         const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
+                        const isNota = ev.event_type === 'nota' || ev.title.includes('Nota')
                         return (
                           <div key={ev.id} className="flex gap-2.5 group">
                             <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0 z-10">
@@ -1386,7 +1415,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                               <div className="px-3 py-2 flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
-                                  <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
+                                  <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''}{isNota ? '' : ` · ${ev.event_type}`}</p>
                                   {ev.description && !ev.description.startsWith('[Foto]') && (
                                     <p className="text-[10px] text-gray-500 mt-0.5 whitespace-pre-wrap">{ev.description}</p>
                                   )}
