@@ -367,15 +367,66 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [evSaving,     setEvSaving]     = useState(false)
   const [evSaved,      setEvSaved]      = useState(false)
 
-  const noteBeforeMic = useRef('')
-  const { listening: micOn, toggle: toggleMic } = useSpeech(
-    text => {
-      setQuickNote(noteBeforeMic.current ? noteBeforeMic.current + ' ' + text : text)
-    },
-    () => {
-      noteBeforeMic.current = quickNote
+  // ── Audio con SpeechRecognition + MediaRecorder ────────────────────────────
+  const [micOn, setMicOn] = useState(false)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const speechRef = useRef<any>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<BlobPart[]>([])
+  const audioBlobRef = useRef<Blob | null>(null)
+
+  const startRecording = useCallback(async () => {
+    setQuickNote('')
+    setAudioBlob(null); setAudioUrl(null)
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (SR) {
+      try {
+        const rec = new SR()
+        rec.continuous = true; rec.interimResults = true; rec.lang = 'es-AR'
+        rec.onresult = (e: any) => {
+          let full = ''
+          for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript
+          setQuickNote(full)
+        }
+        rec.start()
+        speechRef.current = rec
+      } catch { /* SpeechRecognition not available */ }
     }
-  )
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', '']
+        .find(m => !m || MediaRecorder.isTypeSupported(m)) ?? ''
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      audioChunksRef.current = []
+      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' })
+        audioBlobRef.current = blob
+        setAudioBlob(blob)
+        setAudioUrl(URL.createObjectURL(blob))
+      }
+      mr.start()
+      mediaRecorderRef.current = mr
+    } catch {
+      import('sonner').then(({ toast }) => toast.error('No se pudo acceder al micrófono.'))
+    }
+    setMicOn(true)
+  }, [])
+
+  const stopRecording = useCallback(() => {
+    speechRef.current?.stop()
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
+    setMicOn(false)
+  }, [])
+
+  const toggleMic = useCallback(() => {
+    if (micOn) stopRecording()
+    else startRecording()
+  }, [micOn, startRecording, stopRecording])
 
   const loadData = useCallback(async () => {
     if (!herd?.id) return
@@ -632,6 +683,18 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       if (up.ok) ({ url: photo_url } = await up.json())
     }
 
+    let audio_url: string | null = null
+    const effectiveBlob = audioBlobRef.current || audioBlob
+    if (effectiveBlob) {
+      const blobType = effectiveBlob.type || 'audio/webm'
+      const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
+      const fd = new FormData()
+      fd.append('file', new File([effectiveBlob], `audio.${ext}`, { type: blobType }))
+      fd.append('folder', 'herd-audio')
+      const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+      if (up.ok) ({ url: audio_url } = await up.json())
+    }
+
     const description = [quickNote.trim(), photo_url ? `[Foto](${photo_url})` : ''].filter(Boolean).join('\n\n')
 
     const res = await apiFetch('/api/farm-events', {
@@ -643,6 +706,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         herd_id: herd.id, herd_ids: [herd.id],
         description: description || null,
         photo_url,
+        audio_url,
         status: 'completado',
       }),
     })
@@ -659,11 +723,12 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         herd_ids: [herd.id],
         description: description || null,
         photo_url,
+        audio_url,
         status: 'completado',
       }, ...prev])
     }
 
-    setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null)
+    setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null); audioBlobRef.current = null;
     setTimeout(() => setNoteSaved(false), 3000)
   }
 
@@ -1118,8 +1183,11 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           {micOn && (
                             <div className="flex items-center justify-center gap-2 py-1">
                               <div className="flex items-end gap-0.5 h-5">{[3,5,4,7,5,6,3,4].map((h, i) => (<div key={i} className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: `${h * 2.5}px`, animationDelay: `${i * 80}ms` }} />))}</div>
-                              <span className="text-[9px] font-black text-red-600 tracking-widest uppercase">Escuchando…</span>
+                              <span className="text-[9px] font-black text-red-600 tracking-widest uppercase">Escuchando y grabando…</span>
                             </div>
+                          )}
+                          {noteMode === 'audio' && audioUrl && !micOn && (
+                            <audio controls src={audioUrl} className="w-full mt-2 rounded-xl" />
                           )}
                           {noteMode === 'photo' && (
                             <div className="flex flex-col gap-2">
@@ -1147,7 +1215,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                               {noteSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                               {noteSaved ? '¡Guardado!' : 'Guardar nota'}
                             </button>
-                            <button type="button" onClick={() => { setNoteExpanded(false); setNoteMode(null); setQuickNote(''); setNotePhoto(null) }}
+                            <button type="button" onClick={() => { setNoteExpanded(false); setNoteMode(null); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null) }}
                               className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700">Cancelar</button>
                           </div>
                         </div>
@@ -1320,7 +1388,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                   <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
                                   <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''} · {ev.event_type}</p>
                                   {ev.description && !ev.description.startsWith('[Foto]') && (
-                                    <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{ev.description}</p>
+                                    <p className="text-[10px] text-gray-500 mt-0.5 whitespace-pre-wrap">{ev.description}</p>
+                                  )}
+                                  {ev.audio_url && (
+                                    <audio controls src={ev.audio_url} className="w-full h-8 mt-2" />
                                   )}
                                 </div>
                                 <button type="button" onClick={() => setEventToDelete(ev)}

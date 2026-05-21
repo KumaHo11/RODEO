@@ -43,10 +43,10 @@ export async function GET(req: NextRequest) {
                 TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
                 TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
                 herd_id, herd_ids, paddock_id, description, status,
-                assigned_to, bulls_count, bulls_weight, created_at
+                assigned_to, bulls_count, bulls_weight, created_at, photo_url, audio_url
          FROM farm_events
          WHERE org_id = $1
-         ORDER BY event_date ASC`,
+         ORDER BY created_at DESC`,
         [auth.orgId]
       )
     } catch {
@@ -57,10 +57,10 @@ export async function GET(req: NextRequest) {
                   TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
                   TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
                   herd_id, herd_ids, paddock_id, description, status,
-                  assigned_to, created_at
+                  assigned_to, created_at, photo_url, audio_url
            FROM farm_events
            WHERE org_id = $1
-           ORDER BY event_date ASC`,
+           ORDER BY created_at DESC`,
           [auth.orgId]
         )
       } catch {
@@ -68,10 +68,10 @@ export async function GET(req: NextRequest) {
           `SELECT id, org_id, title, event_type,
                   TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
                   TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
-                  herd_id, herd_ids, paddock_id, description, status, created_at
+                  herd_id, herd_ids, paddock_id, description, status, created_at, photo_url, audio_url
            FROM farm_events
            WHERE org_id = $1
-           ORDER BY event_date ASC`,
+           ORDER BY created_at DESC`,
           [auth.orgId]
         )
       }
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     const {
       title, event_type, event_date, end_date,
       herd_id, herd_ids, paddock_id, description, status,
-      assigned_to, bulls_count, bulls_weight,
+      assigned_to, bulls_count, bulls_weight, photo_url, audio_url,
     } = body
 
     if (!title || !event_type || !event_date) {
@@ -111,13 +111,13 @@ export async function POST(req: NextRequest) {
     // Step 1: guaranteed INSERT
     const result = await mutate(
       `INSERT INTO farm_events
-         (org_id, title, event_type, event_date, end_date, herd_id, herd_ids, paddock_id, description, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         (org_id, title, event_type, event_date, end_date, herd_id, herd_ids, paddock_id, description, status, photo_url, audio_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING id`,
       [
         auth.orgId, title, event_type, event_date,
         end_date || null, herd_id || null, finalHerdIds, paddock_id || null,
-        description || null, dbStatus,
+        description || null, dbStatus, photo_url || null, audio_url || null,
       ]
     )
     const id = result.rows[0]?.id

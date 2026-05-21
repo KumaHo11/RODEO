@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { Storage } from '@google-cloud/storage'
 
-const BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'rodeo-media'
+const BUCKET_NAME = process.env.GCS_BUCKET_NAME || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'rodeo-media'
 
 // Initialize GCS client
 const getStorage = () => {
