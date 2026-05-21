@@ -175,76 +175,11 @@ export default function BitacoraPage() {
 
   useEffect(() => { refreshPending() }, [refreshPending])
 
-  // ── Sync offline audios when back online ────────────────────────────────────
-  const syncOfflineAudios = useCallback(async () => {
-    if (!navigator.onLine) return
-    const pending = await getAllPendingAudios()
-    const pendingPhotos = await getAllPendingPhotos()
-    if (pending.length === 0 && pendingPhotos.length === 0) return
-
-    for (const pa of pending) {
-      try {
-        const fd = new FormData()
-        fd.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
-        fd.append('folder', 'bitacora-audio')
-        const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd })
-        if (!uploadRes.ok) continue
-        const { url: audio_url } = await uploadRes.json()
-
-        let transcript = pa.transcript || ''
-        if (!transcript) {
-          try {
-            const tf = new FormData()
-            tf.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
-            const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
-            if (tr.ok) { const d = await tr.json(); transcript = d.transcript || '' }
-          } catch { /* transcription optional */ }
-        }
-
-        await apiFetch('/api/field-notes', {
-          method: 'POST',
-          body: JSON.stringify({
-            paddock_id: null, tags: ['GENERAL'], title: pa.title,
-            content: transcript || null, lat: pa.lat, lng: pa.lng,
-            audio_url, audio_duration_secs: pa.durationSecs,
-          }),
-        })
-        await deletePendingAudio(pa.id)
-      } catch (e) {
-        console.warn('Failed to sync offline audio:', e)
-      }
-    }
-
-    // Sync pending photos
-    for (const pp of pendingPhotos) {
-      try {
-        const fd = new FormData()
-        fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
-        fd.append('folder', 'bitacora-photos')
-        const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd })
-        if (!uploadRes.ok) continue
-        const { url: photo_url } = await uploadRes.json()
-        await apiFetch('/api/field-notes', {
-          method: 'POST',
-          body: JSON.stringify({
-            paddock_id: null, tags: ['GENERAL'], title: pp.title,
-            content: null, lat: pp.lat, lng: pp.lng, photo_url,
-          }),
-        })
-        await deletePendingPhoto(pp.id)
-      } catch (e) {
-        console.warn('Failed to sync offline photo:', e)
-      }
-    }
-
-    await refreshPending()
-    loadNotes()
-  }, [loadNotes, refreshPending])
-
   useEffect(() => {
-    window.addEventListener('online', syncOfflineAudios)
-    return () => window.removeEventListener('online', syncOfflineAudios)
-  }, [syncOfflineAudios])
+    const handler = () => refreshPending()
+    window.addEventListener('rodeo_queue_updated', handler)
+    return () => window.removeEventListener('rodeo_queue_updated', handler)
+  }, [refreshPending])
 
   // ── Geo ─────────────────────────────────────────────────────────────────────
   const getLocation = () => {
@@ -345,6 +280,18 @@ export default function BitacoraPage() {
         transcript: liveTranscript,
       }
       await savePendingAudio(pa)
+      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      addToOfflineQueue({
+        type: 'field_note',
+        data: {
+          paddock_id: null, tags: ['GENERAL'], title,
+          content: liveTranscript || null, lat, lng,
+          sync_status: 'PENDING'
+        },
+        timestamp: Date.now(),
+        mediaType: 'audio',
+        mediaId: id
+      } as any)
       await refreshPending()
       flashSaved(); resetCapture(); return
     }
@@ -355,6 +302,18 @@ export default function BitacoraPage() {
       const id = `local-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const blob = new Blob([await photoFile.arrayBuffer()], { type: photoFile.type })
       await savePendingPhoto({ id, blob, lat, lng, createdAt: new Date().toISOString(), title })
+      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      addToOfflineQueue({
+        type: 'field_note',
+        data: {
+          paddock_id: null, tags: ['GENERAL'], title,
+          content: null, lat, lng,
+          sync_status: 'PENDING'
+        },
+        timestamp: Date.now(),
+        mediaType: 'photo',
+        mediaId: id
+      } as any)
       await refreshPending()
       flashSaved(); resetCapture(); return
     }

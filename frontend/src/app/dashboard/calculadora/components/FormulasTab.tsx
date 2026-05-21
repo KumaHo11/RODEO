@@ -18,7 +18,7 @@ function Num({ label, value, onChange, unit, step = 1, min }: {
           inputMode="decimal"
           onFocus={e => e.target.select()}
           onChange={e => onChange(e.target.value === '' ? NaN : parseFloat(e.target.value))}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition-all pr-10" />
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-900 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 outline-none transition-all pr-10" />
         {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-medium">{unit}</span>}
       </div>
     </div>
@@ -67,11 +67,11 @@ function Card({ num, title, desc, formula, result, unit, resultLabel, rodeo, chi
             <h3 className="text-[20px] font-black text-gray-900 leading-tight">
               {title}{rodeo && <RodeoBadge />}
             </h3>
-            <p className="text-xs text-gray-400 mt-1 leading-relaxed font-medium">{desc}</p>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed font-medium">{desc}</p>
           </div>
         </div>
         {/* Fórmula */}
-        <div className="mt-3 bg-gray-50 border border-gray-100 px-3 py-2 rounded-xl font-mono text-[10px] text-gray-500 overflow-x-auto whitespace-nowrap">
+        <div className="mt-3 bg-gray-50 border border-gray-100 px-3 py-2 rounded-xl font-mono text-[10px] text-gray-600 overflow-x-auto whitespace-nowrap">
           {formula}
         </div>
       </div>
@@ -342,10 +342,10 @@ export function FormulasTab() {
                 : 'hover:bg-white/50'
             )}
           >
-            <span className={clsx('text-xs font-black leading-tight', seccion === key ? 'text-gray-900' : 'text-gray-500')}>
+            <span className={clsx('text-xs font-bold leading-tight', seccion === key ? 'text-gray-900' : 'text-gray-500')}>
               {label}
             </span>
-            <span className="text-[10px] text-gray-400 mt-0.5 leading-tight hidden sm:block">{desc}</span>
+            <span className="text-[10px] text-gray-500 mt-0.5 leading-tight hidden sm:block">{desc}</span>
           </button>
         ))}
       </div>

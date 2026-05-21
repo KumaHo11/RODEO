@@ -21,6 +21,7 @@ export interface Herd {
   category?: string          // 'Vaca' | 'Novillo' | 'Vaquillona' | 'Ternero' | 'Toro'
   animal_count: number
   avg_weight_kg?: number
+  ration_kg_day?: number     // Consumo configurado por el usuario
 }
 
 export interface Paddock {
@@ -82,9 +83,6 @@ const MARKET = {
   /** ARS / tonelada de rollo alfalfa */
   rollo_ars_ton: 185_000,
 
-  /** kg MS que consume 1 EV por día */
-  consumo_ev_dia: 11,
-
   /** EV de referencia = vaca 450 kg */
   ev_base_kg: 450,
 } as const
@@ -104,6 +102,14 @@ function semaforo(value: number, okMin: number, alertMin: number): SemaforoEstad
 function calcEV(h: Herd): number {
   const w = h.avg_weight_kg ?? 450
   return h.animal_count * (w / MARKET.ev_base_kg)
+}
+
+function calcDemandaDiariaKg(herds: Herd[]): number {
+  return herds.reduce((s, h) => {
+    if (h.ration_kg_day && h.ration_kg_day > 0) return s + (h.ration_kg_day * h.animal_count)
+    const w = h.avg_weight_kg ?? 450
+    return s + (w * 0.03 * h.animal_count)
+  }, 0)
 }
 
 function daysBetween(a: string, b: string): number {
@@ -163,13 +169,13 @@ function calcEficienciaCosecha(input: BIInput): BIInsightCard {
     : 1_200
 
   // Demanda diaria real (kg MS)
-  const demandaDiariaKg  = totalEV * MARKET.consumo_ev_dia
+  const demandaDiariaKg  = calcDemandaDiariaKg(input.herds)
   // Oferta total disponible al 60 % de aprovechamiento
   const ofertaDisponible = avgMs * totalHa * 0.6
   // Carga teórica óptima para consumir el 100 % en 45 días (rotación)
-  const cargaOptima      = ofertaDisponible / (MARKET.consumo_ev_dia * 45)
+  const cargaOptima      = demandaDiariaKg > 0 ? (ofertaDisponible / (demandaDiariaKg * 45)) * totalEV : 0 // Equivalent calculation based on total demand instead of per EV
   // Excedente de pasto sin cosechar por día (kg MS)
-  const excedenteDiario  = Math.max(0, (cargaOptima - totalEV) * MARKET.consumo_ev_dia)
+  const excedenteDiario  = Math.max(0, (ofertaDisponible / 45) - demandaDiariaKg)
   // Potencial de carne no producido (4 kg MS → 1 kg ganancia viva, novillo referencia)
   const kgCarneNoProducido = excedenteDiario / 4
   // Pérdida económica mensual
@@ -211,7 +217,7 @@ function calcSupplementacion(input: BIInput): BIInsightCard {
     return con.reduce((s, p) => s + (p.dry_matter_kg_ha ?? 0), 0) / con.length
   })()
 
-  const demandaDiariaKg  = totalEV * MARKET.consumo_ev_dia
+  const demandaDiariaKg  = calcDemandaDiariaKg(input.herds)
   const ofertaTotal      = avgMs * totalHa * 0.6
   const diasAutonomia    = demandaDiariaKg > 0
     ? Math.round(ofertaTotal / demandaDiariaKg) : 999

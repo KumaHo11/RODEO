@@ -248,7 +248,12 @@ function InsightsContent({ user, profile }: { user: any; profile: any }) {
   const bestMs = lastBiomassMs || avgPaddockMs
 
   // Daily demand
-  const dailyDemandKg = totalEV * 11 // 11 kg MS/EV/día standard Arg
+  const dailyDemandKg = useMemo(() => herds.reduce((s, h) => {
+    if (Number(h.ration_kg_day) > 0) return s + (Number(h.ration_kg_day) * (Number(h.animal_count) || 0))
+    const avgWeight = Number(h.avg_weight_kg) || 450
+    return s + (avgWeight * 0.03 * (Number(h.animal_count) || 0))
+  }, 0), [herds])
+
   const forecastedDaysAvailable = bestMs && totalHectares && dailyDemandKg > 0
     ? Math.round((bestMs * totalHectares * 0.6) / dailyDemandKg) : null
 
@@ -325,7 +330,7 @@ function InsightsContent({ user, profile }: { user: any; profile: any }) {
       color: 'bg-emerald-50 border-emerald-100',
       badge: forecastedDaysAvailable && forecastedDaysAvailable < 15 ? 'Crítico' : undefined,
       badgeColor: 'bg-red-100 text-red-700',
-      detail: `Con ${totalEV.toFixed(1)} EV y ~11 kg MS/EV/día, tu rodeo consume ${Math.round(dailyDemandKg).toLocaleString()} kg MS por día.`,
+      detail: `Con ${totalEV.toFixed(1)} EV, tu rodeo consume ${Math.round(dailyDemandKg).toLocaleString()} kg MS por día (según la ración configurada o el 3% del peso vivo).`,
       recommendation: forecastedDaysAvailable && forecastedDaysAvailable < 15
         ? 'Autonomía crítica. Evaluá suplementación inmediata.'
         : forecastedDaysAvailable

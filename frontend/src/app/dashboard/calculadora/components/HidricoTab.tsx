@@ -3,56 +3,75 @@ import React, { useState, useMemo } from 'react'
 import clsx from 'clsx'
 
 type Sp = 'Bovinos' | 'Equinos' | 'Ovinos' | 'Caprinos' | 'Porcinos' | 'Aves'
-type Cat = { label: string; cbi: (pv: number, extra: number) => number; needsPV: boolean; extraLabel?: string }
+type Cat = { label: string; cbi: (pv: number, extra: number) => number; defaultPv: number; extraLabel?: string; defaultExtra?: number }
 
 const CATS: Record<Sp, Cat[]> = {
   Bovinos: [
-    { label: 'Ternero',              needsPV: true,  cbi: (pv) => pv * 0.085 },
-    { label: 'Novillo / vaquillona', needsPV: true,  cbi: (pv) => pv * 0.025 * 4.0 },
-    { label: 'Vaca vacía',           needsPV: true,  cbi: (pv) => pv * 0.08 },
-    { label: 'Vaca gestante',        needsPV: true,  cbi: (pv) => (pv * 0.08) * 1.3 },
-    { label: 'Vaca lactante',        needsPV: true,  extraLabel: 'Litros de leche', cbi: (pv, lt) => (pv * 0.08) + (1.5 * lt) },
-    { label: 'Toro',                 needsPV: true,  cbi: (pv) => pv * 0.07 },
-    { label: 'Toro en servicio',     needsPV: true,  cbi: (pv) => (pv * 0.07) * 1.4 },
+    { label: 'Ternero',              defaultPv: 150, cbi: (pv) => pv * 0.085 },
+    { label: 'Novillo / vaquillona', defaultPv: 350, cbi: (pv) => pv * 0.025 * 4.0 },
+    { label: 'Vaca vacía',           defaultPv: 450, cbi: (pv) => pv * 0.08 },
+    { label: 'Vaca gestante',        defaultPv: 450, cbi: (pv) => (pv * 0.08) * 1.3 },
+    { label: 'Vaca lactante',        defaultPv: 450, extraLabel: 'Litros de leche', defaultExtra: 10, cbi: (pv, lt) => (pv * 0.08) + (1.5 * lt) },
+    { label: 'Toro',                 defaultPv: 600, cbi: (pv) => pv * 0.07 },
+    { label: 'Toro en servicio',     defaultPv: 600, cbi: (pv) => (pv * 0.07) * 1.4 },
   ],
   Equinos: [
-    { label: 'Caballo adulto en mantenimiento', needsPV: true, cbi: (pv) => pv * 0.05 },
-    { label: 'Yegua gestante',                  needsPV: false, cbi: () => 45 },
-    { label: 'Yegua en lactancia',              needsPV: false, extraLabel: 'Litros leche/día', cbi: (_, lt) => 50 + (1.1 * lt) },
-    { label: 'Caballo en trabajo/entrenamiento',needsPV: true, cbi: (pv) => pv * 0.05 * 2.0 },
-    { label: 'Padrillo en servicio',            needsPV: false, cbi: () => 50 },
-    { label: 'Potrillo (crecimiento)',          needsPV: false, cbi: () => 20 },
+    { label: 'Caballo adulto en mantenimiento', defaultPv: 500, cbi: (pv) => pv * 0.05 },
+    { label: 'Yegua gestante',                  defaultPv: 500, cbi: (pv) => pv * 0.09 },
+    { label: 'Yegua en lactancia',              defaultPv: 500, extraLabel: 'Litros leche/día', defaultExtra: 10, cbi: (pv, lt) => (pv * 0.1) + (1.1 * lt) },
+    { label: 'Caballo en trabajo/entrenamiento',defaultPv: 500, cbi: (pv) => pv * 0.10 },
+    { label: 'Padrillo en servicio',            defaultPv: 550, cbi: (pv) => pv * 0.09 },
+    { label: 'Potrillo (crecimiento)',          defaultPv: 200, cbi: (pv) => pv * 0.10 },
   ],
   Ovinos: [
-    { label: 'Oveja seca / capón',       needsPV: false, cbi: () => 4 },
-    { label: 'Oveja preñada',            needsPV: false, cbi: () => 7 },
-    { label: 'Oveja en lactancia',       needsPV: false, extraLabel: 'Litros leche/día', cbi: (_, lt) => 4 + (2.5 * lt) },
-    { label: 'Borrego / cordero',        needsPV: false, cbi: () => 3 },
-    { label: 'Carnero en servicio',      needsPV: false, cbi: () => 7 },
+    { label: 'Oveja seca / capón',       defaultPv: 50, cbi: (pv) => pv * 0.08 },
+    { label: 'Oveja preñada',            defaultPv: 60, cbi: (pv) => pv * 0.11 },
+    { label: 'Oveja en lactancia',       defaultPv: 50, extraLabel: 'Litros leche/día', defaultExtra: 1.5, cbi: (pv, lt) => (pv * 0.08) + (2.5 * lt) },
+    { label: 'Borrego / cordero',        defaultPv: 30, cbi: (pv) => pv * 0.10 },
+    { label: 'Carnero en servicio',      defaultPv: 80, cbi: (pv) => pv * 0.087 },
   ],
   Caprinos: [
-    { label: 'Cabra seca',               needsPV: false, cbi: () => 3.8 },
-    { label: 'Cabra preñada',            needsPV: false, cbi: () => 6 },
-    { label: 'Cabra en lactancia',       needsPV: false, cbi: () => 8.5 },
-    { label: 'Chivito (crecimiento)',    needsPV: false, cbi: () => 2.3 },
-    { label: 'Chivato en servicio',      needsPV: false, cbi: () => 5.5 },
+    { label: 'Cabra seca',               defaultPv: 40, cbi: (pv) => pv * 0.095 },
+    { label: 'Cabra preñada',            defaultPv: 45, cbi: (pv) => pv * 0.13 },
+    { label: 'Cabra en lactancia',       defaultPv: 40, cbi: (pv) => pv * 0.21 },
+    { label: 'Chivito (crecimiento)',    defaultPv: 20, cbi: (pv) => pv * 0.115 },
+    { label: 'Chivato en servicio',      defaultPv: 60, cbi: (pv) => pv * 0.09 },
   ],
   Porcinos: [
-    { label: 'Lechón',                   needsPV: false, cbi: () => 2 },
-    { label: 'Cerdo crecimiento/terminación', needsPV: true, extraLabel: 'kg alimento/día', cbi: (_, kg) => kg * 3 },
-    { label: 'Cachorra / cerda vacía',   needsPV: false, cbi: () => 11 },
-    { label: 'Cerda gestante',           needsPV: false, cbi: () => 13.5 },
-    { label: 'Cerda lactante',           needsPV: false, extraLabel: 'Cant. lechones', cbi: (_, lechones) => 15 + (1.5 * lechones) },
-    { label: 'Padrillo en servicio',     needsPV: false, cbi: () => 13.5 },
+    { label: 'Lechón',                   defaultPv: 10, cbi: (pv) => pv * 0.20 },
+    { label: 'Cerdo crecimiento/terminación', defaultPv: 60, extraLabel: 'kg alimento/día', defaultExtra: 2.5, cbi: (_, kg) => kg * 3 },
+    { label: 'Cachorra / cerda vacía',   defaultPv: 120, cbi: (pv) => pv * 0.09 },
+    { label: 'Cerda gestante',           defaultPv: 150, cbi: (pv) => pv * 0.09 },
+    { label: 'Cerda lactante',           defaultPv: 150, extraLabel: 'Cant. lechones', defaultExtra: 10, cbi: (_, lechones) => 15 + (1.5 * lechones) },
+    { label: 'Padrillo en servicio',     defaultPv: 180, cbi: (pv) => pv * 0.075 },
   ],
   Aves: [
-    { label: 'Pollo engorde (Sem. 1)',   needsPV: false, cbi: () => 0.04 },
-    { label: 'Pollo engorde (Sem. 4)',   needsPV: false, cbi: () => 0.175 },
-    { label: 'Pollo engorde (Sem. 6-7)', needsPV: false, cbi: () => 0.35 },
-    { label: 'Gallina ponedora',         needsPV: false, cbi: () => 0.30 },
-    { label: 'Pollita recría',           needsPV: false, cbi: () => 0.14 },
-    { label: 'Gallo reproductor',        needsPV: false, cbi: () => 0.32 },
+    { label: 'Pollo engorde (Sem. 1)',   defaultPv: 0.2, cbi: (pv) => pv * 0.2 },
+    { label: 'Pollo engorde (Sem. 4)',   defaultPv: 1.0, cbi: (pv) => pv * 0.175 },
+    { label: 'Pollo engorde (Sem. 6-7)', defaultPv: 2.5, cbi: (pv) => pv * 0.14 },
+    { label: 'Gallina ponedora',         defaultPv: 1.8, cbi: (pv) => pv * 0.16 },
+    { label: 'Pollita recría',           defaultPv: 1.0, cbi: (pv) => pv * 0.14 },
+    { label: 'Gallo reproductor',        defaultPv: 3.0, cbi: (pv) => pv * 0.10 },
   ],
+}
+
+function Num({ label, value, onChange, unit, step = 1, min }: {
+  label: string; value: number; onChange: (v: number) => void
+  unit?: string; step?: number; min?: number
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] text-gray-500 font-semibold block tracking-wide">{label}</label>
+      <div className="relative">
+        <input type="number" value={isNaN(value) ? '' : value} step={step} min={min}
+          inputMode="decimal"
+          onFocus={e => e.target.select()}
+          onChange={e => onChange(e.target.value === '' ? NaN : parseFloat(e.target.value))}
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-900 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 outline-none transition-all pr-10" />
+        {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-medium">{unit}</span>}
+      </div>
+    </div>
+  )
 }
 
 const SPECIES = Object.keys(CATS) as Sp[]
@@ -91,9 +110,15 @@ export function HidricoTab() {
               {SPECIES.map(s => (
                 <button
                   key={s}
-                  onClick={() => { setSp(s); setCat(0) }}
+                  onClick={() => { 
+                    setSp(s); 
+                    setCat(0);
+                    const firstCat = CATS[s][0];
+                    setPv(firstCat.defaultPv);
+                    setExtra(firstCat.defaultExtra ?? 0);
+                  }}
                   className={clsx(
-                    'px-4 py-2 rounded-xl text-xs font-black transition-all',
+                    'px-4 py-2 rounded-xl text-xs font-bold transition-all',
                     sp === s
                       ? 'bg-white text-gray-900 shadow-sm'
                       : 'text-gray-500 hover:text-gray-700'
@@ -112,9 +137,13 @@ export function HidricoTab() {
               {cats.map((c, i) => (
                 <button
                   key={i}
-                  onClick={() => setCat(i)}
+                  onClick={() => {
+                    setCat(i);
+                    setPv(c.defaultPv);
+                    setExtra(c.defaultExtra ?? 0);
+                  }}
                   className={clsx(
-                    'px-4 py-2 rounded-xl text-xs font-black transition-all',
+                    'px-4 py-2 rounded-xl text-xs font-bold transition-all',
                     catIdx === i
                       ? 'bg-white text-gray-900 shadow-sm'
                       : 'text-gray-500 hover:text-gray-700'
@@ -128,37 +157,11 @@ export function HidricoTab() {
 
           {/* Variables */}
           <div className="px-5 py-4 grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-medium block">Cantidad de animales</label>
-              <input type="number" value={isNaN(heads) ? '' : heads} min={1} inputMode="numeric"
-                onFocus={e => e.target.select()}
-                onChange={e => setHeads(e.target.value === '' ? NaN : parseFloat(e.target.value))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-medium block">Temperatura máx. (°C)</label>
-              <input type="number" value={isNaN(temp) ? '' : temp} min={0} max={50} inputMode="decimal"
-                onFocus={e => e.target.select()}
-                onChange={e => setTemp(e.target.value === '' ? NaN : parseFloat(e.target.value))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none" />
-            </div>
-            {cat.needsPV && (
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-gray-500 font-medium block">Peso vivo prom. (kg)</label>
-                <input type="number" value={isNaN(pv) ? '' : pv} min={1} inputMode="decimal"
-                  onFocus={e => e.target.select()}
-                  onChange={e => setPv(e.target.value === '' ? NaN : parseFloat(e.target.value))}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none" />
-              </div>
-            )}
+            <Num label="Cantidad de animales" value={heads} onChange={setHeads} unit="cab." min={1} />
+            <Num label="Temperatura máx." value={temp} onChange={setTemp} unit="°C" min={0} step={0.5} />
+            <Num label="Peso vivo prom." value={pv} onChange={setPv} unit="kg" min={0.1} step={0.5} />
             {cat.extraLabel && (
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-gray-500 font-medium block">{cat.extraLabel}</label>
-                <input type="number" value={isNaN(extra) ? '' : extra} min={0} step={0.1} inputMode="decimal"
-                  onFocus={e => e.target.select()}
-                  onChange={e => setExtra(e.target.value === '' ? NaN : parseFloat(e.target.value))}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none" />
-              </div>
+              <Num label={cat.extraLabel} value={extra} onChange={setExtra} unit="" min={0} step={0.1} />
             )}
           </div>
         </div>
@@ -186,22 +189,22 @@ export function HidricoTab() {
           </div>
 
           {/* Fórmulas y desglose */}
-          <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs text-gray-500 space-y-2">
+          <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs text-gray-600 space-y-2">
             {temp > 30 && (
               <div className="text-amber-800 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-200 mb-2 font-medium">
                 ⚠️ Estrés térmico: factor Ft = 1.4 aplicado al consumo base (+40%).
               </div>
             )}
-            <ul className="list-disc pl-4 space-y-1 text-[10px] text-gray-400 mb-2">
+            <ul className="list-disc pl-4 space-y-1 text-[10px] text-gray-500 mb-2 font-medium">
               <li><strong>CRI</strong>: Consumo Real Individual</li>
               <li><strong>CBI</strong>: Consumo Base Individual</li>
               <li><strong>F<sub>t</sub></strong>: Factor por estrés térmico</li>
               <li><strong>CTL</strong>: Consumo Total del Lote</li>
               <li><strong>RI</strong>: Requerimiento de Infraestructura (Bebedero)</li>
             </ul>
-            <p>CRI = CBI × F<sub>t</sub> = <strong>{cri.toFixed(1)} L/día</strong></p>
-            <p>CTL = CRI × {isNaN(heads) ? 0 : heads} animales = <strong>{ctl.toLocaleString('es')} L/día</strong></p>
-            <p>Bebedero (RI) = CTL × 1.20 (margen infraestructura) = <strong>{ri.toLocaleString('es')} L/día</strong></p>
+            <p>CRI = CBI × F<sub>t</sub> = <strong className="text-gray-900">{cri.toFixed(1)} L/día</strong></p>
+            <p>CTL = CRI × {isNaN(heads) ? 0 : heads} animales = <strong className="text-gray-900">{ctl.toLocaleString('es')} L/día</strong></p>
+            <p>Bebedero (RI) = CTL × 1.20 (margen infraestructura) = <strong className="text-gray-900">{ri.toLocaleString('es')} L/día</strong></p>
           </div>
         </div>
       </div>

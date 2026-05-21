@@ -490,7 +490,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         timestamp: Date.now(),
         mediaType: mediaId ? 'photo' : undefined,
         mediaId
-      })
+      } as any)
       setBcsSaving(false)
       setBcsSaved(true)
       setSessionNoteCount(c => c + 1)
@@ -664,7 +664,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         },
         timestamp: Date.now(),
         mediaType, mediaId
-      })
+      } as any)
       
       setAgendaEvents(prev => [{ id: `temp-${Date.now()}`, title: titleStr, event_type: 'servicio', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado' }, ...prev])
       setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null)

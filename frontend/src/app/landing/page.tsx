@@ -6,7 +6,7 @@ import Image from 'next/image'
 import {
   Map, Footprints, CalendarDays, Mic, Target, TrendingUp, Sprout,
   ArrowRight, Check, X, ChevronDown, Building2, CheckCircle2,
-  Camera, WifiOff, Brain, BarChart3, Zap, Shield, Loader2,
+  Camera, WifiOff, Brain, BarChart3, Zap, Shield, Loader2, CloudRain, Leaf,
 } from 'lucide-react'
 import RodeoLogo from '@/components/RodeoLogo'
 
@@ -155,6 +155,42 @@ export default function LandingPage() {
       description: 'Visualizá tu cronograma en Gantt anual o por temporada. Obtené recomendaciones inteligentes sobre los próximos movimientos de hacienda basadas en tu historial de materia seca, días de pastoreo y tiempos de recuperación.',
       stats: [{ label: 'Vista Gantt', value: 'Multiescala' }, { label: 'Proyección', value: '12 meses' }],
       accent: 'from-green-600 to-emerald-700',
+    },
+    {
+      Icon: Brain,
+      tag: 'CORE · IA',
+      title: 'Insights — Ayuda en decisiones',
+      subtitle: 'Inteligencia predictiva a tu favor',
+      description: 'Motor predictivo bio-económico que analiza tus datos para recomendar los mejores momentos de suplementación, rotación o venta. Optimizá tu rentabilidad basándote en análisis de datos profundos generados por IA.',
+      stats: [{ label: 'Motor', value: 'Predictivo' }, { label: 'Recomendaciones', value: 'Proactivas' }],
+      accent: 'from-violet-600 to-purple-700',
+    },
+    {
+      Icon: BarChart3,
+      tag: 'NUEVO · HERRAMIENTA',
+      title: 'Calculadoras y proyecciones',
+      subtitle: 'Repositorio centralizado para el productor',
+      description: 'Accedé a herramientas de cálculo de balance hídrico, cálculo de Equivalente Vaca (EV) por especies y proyección forrajera. Todo lo que necesitás para simular escenarios y tomar decisiones asertivas.',
+      stats: [{ label: 'Simulación', value: 'Tiempo Real' }, { label: 'Fórmulas', value: 'Soporte Total' }],
+      accent: 'from-blue-600 to-indigo-700',
+    },
+    {
+      Icon: CloudRain,
+      tag: 'NUEVO · CLIMA',
+      title: 'Ajuste climático y alertas',
+      subtitle: 'Anticipate a las condiciones adversas',
+      description: 'Monitoreo del clima en tiempo real con ajustes automáticos sobre el crecimiento del pasto y la demanda del rodeo. Recibí alertas tempranas de estrés térmico e hídrico para proteger tu capital.',
+      stats: [{ label: 'Pronóstico', value: 'Ajuste dinámico' }, { label: 'Alertas', value: 'Automáticas' }],
+      accent: 'from-cyan-600 to-blue-700',
+    },
+    {
+      Icon: Leaf,
+      tag: 'FUTURO · SOSTENIBILIDAD',
+      title: 'Captura de Carbono',
+      subtitle: 'Potencial de carbono en tu campo',
+      description: 'Trazá y calculá la captura posible de carbono en el suelo mediante el manejo regenerativo. Herramientas de seguimiento para preparar tu campo de cara a las certificaciones de bonos verdes.',
+      stats: [{ label: 'Seguimiento', value: 'MRV' }, { label: 'Impacto', value: 'Regenerativo' }],
+      accent: 'from-green-700 to-emerald-800',
     },
   ]
 

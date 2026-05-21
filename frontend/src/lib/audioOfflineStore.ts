@@ -60,6 +60,16 @@ export async function savePendingAudio(audio: PendingAudio): Promise<void> {
   })
 }
 
+export async function getPendingAudio(id: string): Promise<PendingAudio | undefined> {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly')
+    const req = tx.objectStore(STORE_NAME).get(id)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(tx.error)
+  })
+}
+
 export async function getAllPendingAudios(): Promise<PendingAudio[]> {
   const db = await openDB()
   return new Promise((resolve, reject) => {
@@ -99,6 +109,16 @@ export async function savePendingPhoto(photo: PendingPhoto): Promise<void> {
     tx.objectStore(PHOTO_STORE).put(photo)
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error)
+  })
+}
+
+export async function getPendingPhoto(id: string): Promise<PendingPhoto | undefined> {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readonly')
+    const req = tx.objectStore(PHOTO_STORE).get(id)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(tx.error)
   })
 }
 

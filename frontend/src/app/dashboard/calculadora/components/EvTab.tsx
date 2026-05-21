@@ -61,6 +61,25 @@ export function EvTab() {
   const [heads, setHeads] = useState(100)
   const [weight, setWeight] = useState(450)
 
+  function Num({ label, value, onChange, unit, step = 1, min }: {
+    label: string; value: number; onChange: (v: number) => void
+    unit?: string; step?: number; min?: number
+  }) {
+    return (
+      <div className="space-y-1">
+        <label className="text-[10px] text-gray-500 font-semibold block tracking-wide">{label}</label>
+        <div className="relative">
+          <input type="number" value={isNaN(value) ? '' : value} step={step} min={min}
+            inputMode="decimal"
+            onFocus={e => e.target.select()}
+            onChange={e => onChange(e.target.value === '' ? NaN : parseFloat(e.target.value))}
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-900 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 outline-none transition-all pr-10" />
+          {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-medium">{unit}</span>}
+        </div>
+      </div>
+    )
+  }
+
   const stages = STAGES[sp]
   const stage  = stages[Math.min(stIdx, stages.length - 1)]
   const pvRef  = PV_REF[sp]
@@ -87,7 +106,7 @@ export function EvTab() {
                   key={s}
                   onClick={() => { setSp(s); setStIdx(0); setWeight(PV_REF[s]) }}
                   className={clsx(
-                    'px-4 py-2 rounded-xl text-xs font-black transition-all',
+                    'px-4 py-2 rounded-xl text-xs font-bold transition-all',
                     sp === s
                       ? 'bg-white text-gray-900 shadow-sm'
                       : 'text-gray-500 hover:text-gray-700'
@@ -128,24 +147,8 @@ export function EvTab() {
 
           {/* Inputs */}
           <div className="px-5 py-4 grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-medium block">Cabezas</label>
-              <input
-                type="number" value={isNaN(heads) ? '' : heads} min={1} inputMode="numeric"
-                onFocus={e => e.target.select()}
-                onChange={e => setHeads(e.target.value === '' ? NaN : parseFloat(e.target.value))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-gray-500 outline-none"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-500 font-medium block">Peso vivo prom. (kg)</label>
-              <input
-                type="number" value={isNaN(weight) ? '' : weight} min={10} inputMode="decimal"
-                onFocus={e => e.target.select()}
-                onChange={e => setWeight(e.target.value === '' ? NaN : parseFloat(e.target.value))}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-gray-500 outline-none"
-              />
-            </div>
+            <Num label="Cabezas" value={heads} onChange={setHeads} unit="cab." min={1} />
+            <Num label="Peso vivo prom. (kg)" value={weight} onChange={setWeight} unit="kg" min={10} />
           </div>
         </div>
 

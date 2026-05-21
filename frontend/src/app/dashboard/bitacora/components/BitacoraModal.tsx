@@ -244,6 +244,17 @@ export default function BitacoraModal({
             transcript: liveTranscript
           })
         })
+        addToOfflineQueue({
+          type: 'field_note',
+          data: {
+            created_by: user?.uid, paddock_id: paddockId || null,
+            tags, category: tags[0], title: `Audio · ${timestamp}`,
+            sync_status: 'PENDING',
+          },
+          timestamp: Date.now(),
+          mediaType: 'audio',
+          mediaId: offlineId
+        })
         toast.success('Audio guardado offline. Se sincronizará automáticamente.')
       } else if (mode === 'FOTO' && photoFile) {
         import('@/lib/audioOfflineStore').then(({ savePendingPhoto }) => {
@@ -254,6 +265,17 @@ export default function BitacoraModal({
             createdAt: new Date().toISOString(),
             title: `Foto · ${timestamp}`
           })
+        })
+        addToOfflineQueue({
+          type: 'field_note',
+          data: {
+            created_by: user?.uid, paddock_id: paddockId || null,
+            tags, category: tags[0], title: `Foto · ${timestamp}`,
+            sync_status: 'PENDING',
+          },
+          timestamp: Date.now(),
+          mediaType: 'photo',
+          mediaId: offlineId
         })
         toast.success('Foto guardada offline. Se sincronizará automáticamente.')
       }
