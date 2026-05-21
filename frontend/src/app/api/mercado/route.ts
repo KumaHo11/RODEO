@@ -64,7 +64,7 @@ function getPersistentFallback() {
   return { insc: 4330, date: new Date().toISOString().split('T')[0] }
 }
 
-function savePersistentFallback(price, date) {
+function savePersistentFallback(price: string | number, date: string) {
   try {
     fs.writeFileSync(FALLBACK_CACHE_PATH, JSON.stringify({ price, date }), 'utf8')
   } catch(e) {}

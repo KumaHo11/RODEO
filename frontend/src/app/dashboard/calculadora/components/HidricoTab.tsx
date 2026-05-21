@@ -16,30 +16,42 @@ const CATS: Record<Sp, Cat[]> = {
     { label: 'Toro en servicio',     needsPV: true,  cbi: (pv) => (pv * 0.07) * 1.4 },
   ],
   Equinos: [
-    { label: 'Caballo / yegua (reposo)', needsPV: true, cbi: (pv) => pv * 0.06 },
-    { label: 'Caballo trabajo intenso',  needsPV: true, cbi: (pv) => pv * 0.10 },
-    { label: 'Padrillo',                 needsPV: true, cbi: (pv) => pv * 0.07 },
-    { label: 'Potrillo (< 1 año)',       needsPV: true, cbi: (pv) => pv * 0.12 },
+    { label: 'Caballo adulto en mantenimiento', needsPV: true, cbi: (pv) => pv * 0.05 },
+    { label: 'Yegua gestante',                  needsPV: false, cbi: () => 45 },
+    { label: 'Yegua en lactancia',              needsPV: false, extraLabel: 'Litros leche/día', cbi: (_, lt) => 50 + (1.1 * lt) },
+    { label: 'Caballo en trabajo/entrenamiento',needsPV: true, cbi: (pv) => pv * 0.05 * 2.0 },
+    { label: 'Padrillo en servicio',            needsPV: false, cbi: () => 50 },
+    { label: 'Potrillo (crecimiento)',          needsPV: false, cbi: () => 20 },
   ],
   Ovinos: [
-    { label: 'Oveja seca',        needsPV: true, cbi: (pv) => pv * 0.08 },
-    { label: 'Oveja con cordero', needsPV: true, cbi: (pv) => pv * 0.12 },
-    { label: 'Cordero',           needsPV: true, cbi: (pv) => pv * 0.10 },
+    { label: 'Oveja seca / capón',       needsPV: false, cbi: () => 4 },
+    { label: 'Oveja preñada',            needsPV: false, cbi: () => 7 },
+    { label: 'Oveja en lactancia',       needsPV: false, extraLabel: 'Litros leche/día', cbi: (_, lt) => 4 + (2.5 * lt) },
+    { label: 'Borrego / cordero',        needsPV: false, cbi: () => 3 },
+    { label: 'Carnero en servicio',      needsPV: false, cbi: () => 7 },
   ],
   Caprinos: [
-    { label: 'Cabra seca',     needsPV: true, cbi: (pv) => pv * 0.09 },
-    { label: 'Cabra lactante', needsPV: true, extraLabel: 'Litros leche/día', cbi: (pv, lt) => (pv * 0.09) + (lt * 1.2) },
-    { label: 'Cabrito',        needsPV: true, cbi: (pv) => pv * 0.12 },
+    { label: 'Cabra seca',               needsPV: false, cbi: () => 3.8 },
+    { label: 'Cabra preñada',            needsPV: false, cbi: () => 6 },
+    { label: 'Cabra en lactancia',       needsPV: false, cbi: () => 8.5 },
+    { label: 'Chivito (crecimiento)',    needsPV: false, cbi: () => 2.3 },
+    { label: 'Chivato en servicio',      needsPV: false, cbi: () => 5.5 },
   ],
   Porcinos: [
-    { label: 'Cerdo engorde',  needsPV: true, extraLabel: 'kg alimento/día', cbi: (_, kg) => kg * 2.5 },
-    { label: 'Cerda gestante', needsPV: true, cbi: (pv) => pv * 0.12 },
-    { label: 'Cerda lactante', needsPV: true, cbi: (pv) => pv * 0.25 },
+    { label: 'Lechón',                   needsPV: false, cbi: () => 2 },
+    { label: 'Cerdo crecimiento/terminación', needsPV: true, extraLabel: 'kg alimento/día', cbi: (_, kg) => kg * 3 },
+    { label: 'Cachorra / cerda vacía',   needsPV: false, cbi: () => 11 },
+    { label: 'Cerda gestante',           needsPV: false, cbi: () => 13.5 },
+    { label: 'Cerda lactante',           needsPV: false, extraLabel: 'Cant. lechones', cbi: (_, lechones) => 15 + (1.5 * lechones) },
+    { label: 'Padrillo en servicio',     needsPV: false, cbi: () => 13.5 },
   ],
   Aves: [
-    { label: 'Pollo parrillero', needsPV: false, extraLabel: 'kg alimento/día/ave', cbi: (_, kg) => kg * 1.8 },
-    { label: 'Gallina postura',  needsPV: false, cbi: () => 0.25 },
-    { label: 'Pavo',             needsPV: false, cbi: () => 0.45 },
+    { label: 'Pollo engorde (Sem. 1)',   needsPV: false, cbi: () => 0.04 },
+    { label: 'Pollo engorde (Sem. 4)',   needsPV: false, cbi: () => 0.175 },
+    { label: 'Pollo engorde (Sem. 6-7)', needsPV: false, cbi: () => 0.35 },
+    { label: 'Gallina ponedora',         needsPV: false, cbi: () => 0.30 },
+    { label: 'Pollita recría',           needsPV: false, cbi: () => 0.14 },
+    { label: 'Gallo reproductor',        needsPV: false, cbi: () => 0.32 },
   ],
 }
 
@@ -75,16 +87,16 @@ export function HidricoTab() {
           {/* Especie */}
           <div className="px-5 pt-5 pb-4 border-b border-gray-50">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Especie</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1 p-1 bg-gray-100 rounded-2xl w-fit">
               {SPECIES.map(s => (
                 <button
                   key={s}
                   onClick={() => { setSp(s); setCat(0) }}
                   className={clsx(
-                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                    'px-4 py-2 rounded-xl text-xs font-black transition-all',
                     sp === s
-                      ? 'bg-gray-900 text-white border-gray-900'
-                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
                   )}
                 >
                   {s}
@@ -96,16 +108,16 @@ export function HidricoTab() {
           {/* Categoría */}
           <div className="px-5 py-4 border-b border-gray-50">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Categoría</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1 p-1 bg-gray-100 rounded-2xl w-fit">
               {cats.map((c, i) => (
                 <button
                   key={i}
                   onClick={() => setCat(i)}
                   className={clsx(
-                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                    'px-4 py-2 rounded-xl text-xs font-black transition-all',
                     catIdx === i
-                      ? 'bg-blue-700 text-white border-blue-700'
-                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
                   )}
                 >
                   {c.label}
@@ -155,10 +167,10 @@ export function HidricoTab() {
         <div className="space-y-3 lg:sticky lg:top-4">
 
           {/* Bebedero — hero */}
-          <div className="border-2 border-blue-500 bg-blue-50 rounded-xl p-6 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-2">Volumen bebedero</p>
-            <p className="text-5xl font-black tabular-nums text-blue-900">{ri.toLocaleString('es')}</p>
-            <p className="text-sm text-blue-600 mt-1">L / día</p>
+          <div className="border border-gray-200 bg-gray-50 rounded-xl p-6 text-center shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Volumen bebedero</p>
+            <p className="text-5xl font-black tabular-nums text-gray-900">{ri.toLocaleString('es')}</p>
+            <p className="text-sm text-gray-500 mt-1">L / día</p>
           </div>
 
           {/* Consumo individual + total */}
@@ -174,12 +186,19 @@ export function HidricoTab() {
           </div>
 
           {/* Fórmulas y desglose */}
-          <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs text-gray-500 space-y-1.5">
+          <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs text-gray-500 space-y-2">
             {temp > 30 && (
               <div className="text-amber-800 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-200 mb-2 font-medium">
                 ⚠️ Estrés térmico: factor Ft = 1.4 aplicado al consumo base (+40%).
               </div>
             )}
+            <ul className="list-disc pl-4 space-y-1 text-[10px] text-gray-400 mb-2">
+              <li><strong>CRI</strong>: Consumo Real Individual</li>
+              <li><strong>CBI</strong>: Consumo Base Individual</li>
+              <li><strong>F<sub>t</sub></strong>: Factor por estrés térmico</li>
+              <li><strong>CTL</strong>: Consumo Total del Lote</li>
+              <li><strong>RI</strong>: Requerimiento de Infraestructura (Bebedero)</li>
+            </ul>
             <p>CRI = CBI × F<sub>t</sub> = <strong>{cri.toFixed(1)} L/día</strong></p>
             <p>CTL = CRI × {isNaN(heads) ? 0 : heads} animales = <strong>{ctl.toLocaleString('es')} L/día</strong></p>
             <p>Bebedero (RI) = CTL × 1.20 (margen infraestructura) = <strong>{ri.toLocaleString('es')} L/día</strong></p>
