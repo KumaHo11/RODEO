@@ -632,7 +632,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         if (score) {
           const roundedScore = Math.min(5, Math.max(1, Math.round(score)))
           setBcsScore(roundedScore)
-          setBcsAiResult(`${score}/5 — ${condLabel}${recommendation ? ' · ' + recommendation.slice(0, 80) : ''}`)
+          setBcsAiResult(`${score}/5 — ${condLabel}${recommendation ? ' · ' + recommendation : ''}`)
           import('sonner').then(({ toast }) => toast.success(`IA detectó BCS ${score}/5 — ${condLabel}`))
         } else {
           import('sonner').then(({ toast }) => toast.error('La IA no pudo determinar la condición corporal'))
@@ -1430,7 +1430,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                               </div>
                               {ev.photo_url && (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-28 object-cover" />
+                                <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-60 object-cover" />
                               )}
                             </div>
                           </div>
