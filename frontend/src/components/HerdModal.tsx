@@ -12,7 +12,7 @@ import {
   Calendar, Hash, Scale, Clock, ClipboardList,
   TrendingDown, TrendingUp, Baby, ShoppingCart,
   AlertTriangle, BookOpen, CalendarDays, Info, Edit3,
-  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users, Trash2,
+  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users, Trash2, Search, FileText, Image as ImageIcon,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '@/lib/apiFetch'
@@ -836,9 +836,63 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     { id: 'historial',   label: 'Historial' },
   ] as const
 
+  const [historySearch, setHistorySearch] = useState('')
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
+  const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
+
+  const monthNames = useMemo(() => ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], []);
+
+  const filteredEvents = useMemo(() => {
+    return agendaEvents.filter(ev => {
+      if (historySearch && !ev.title.toLowerCase().includes(historySearch.toLowerCase()) && !(ev.description || '').toLowerCase().includes(historySearch.toLowerCase())) {
+        return false;
+      }
+      
+      const isNota = ev.event_type === 'nota' || ev.title.includes('Nota');
+      let type = ev.event_type;
+      if (isNota) {
+        if (ev.audio_url) type = 'audio';
+        else if (ev.photo_url) type = 'foto';
+        else type = 'texto';
+      }
+
+      if (historyTypeFilter) {
+        if (historyTypeFilter === 'audio' && type !== 'audio') return false;
+        if (historyTypeFilter === 'foto' && type !== 'foto') return false;
+        if (historyTypeFilter === 'texto' && type !== 'texto') return false;
+        if (historyTypeFilter === 'otros' && ['audio', 'foto', 'texto'].includes(type)) return false;
+      }
+
+      if (historyMonthFilter) {
+        const d = new Date(ev.event_date);
+        const dateObj = isNaN(d.getTime()) ? new Date(ev.created_at || ev.event_date) : d;
+        if (!isNaN(dateObj.getTime())) {
+          const m = monthNames[dateObj.getMonth()];
+          if (m !== historyMonthFilter) return false;
+        } else {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [agendaEvents, historySearch, historyTypeFilter, historyMonthFilter, monthNames]);
+
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    agendaEvents.forEach(ev => {
+      const d = new Date(ev.event_date);
+      const dateObj = isNaN(d.getTime()) ? new Date(ev.created_at || ev.event_date) : d;
+      if (!isNaN(dateObj.getTime())) {
+        months.add(monthNames[dateObj.getMonth()]);
+      }
+    });
+    // Sort logic could be added here if needed, but string set is fine for now
+    return Array.from(months);
+  }, [agendaEvents, monthNames]);
+
   const modalContent = (
     <div className="fixed inset-0 z-[9999] bg-white sm:bg-black/40 sm:backdrop-blur-sm flex flex-col sm:items-center sm:justify-center sm:p-4 pb-20 sm:pb-0">
-      <div className="bg-white w-full h-full sm:rounded-2xl sm:shadow-2xl sm:w-full sm:max-w-2xl sm:max-h-[92vh] flex flex-col">
+      <div className="bg-white w-full h-full sm:rounded-2xl sm:shadow-2xl sm:w-full sm:max-w-5xl sm:max-h-[92vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
@@ -1352,12 +1406,20 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                     {agendaEvents.length > 0 && (
                       <div className="space-y-2">
                         {agendaEvents.slice(0, 3).map(ev => {
-                          const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
                           const isNota = ev.event_type === 'nota' || ev.title.includes('Nota')
+                          let type = ev.event_type;
+                          if (isNota) {
+                            if (ev.audio_url) type = 'audio';
+                            else if (ev.photo_url) type = 'foto';
+                            else type = 'texto';
+                          }
                           return (
                             <div key={ev.id} className="flex gap-2.5">
                               <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0">
-                                <span className={`w-2 h-2 rounded-full ${dot}`} />
+                                {type === 'audio' ? <Mic className="w-3.5 h-3.5 text-red-500" /> :
+                                 type === 'foto' ? <ImageIcon className="w-3.5 h-3.5 text-green-600" /> :
+                                 isNota ? <FileText className="w-3.5 h-3.5 text-gray-500" /> :
+                                 <div className="w-2 h-2 rounded-full bg-gray-400" />}
                               </div>
                               <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2">
                                 <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
@@ -1400,16 +1462,63 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                     <p className={LABEL}>Historial de eventos y actividades</p>
                     {evLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
                   </div>
+
+                  {/* Search & Filters */}
+                  <div className="space-y-3 pb-2 border-b border-gray-100">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input 
+                        type="text" 
+                        placeholder="Buscar en el historial..." 
+                        value={historySearch} 
+                        onChange={e => setHistorySearch(e.target.value)}
+                        className="w-full bg-gray-50 border-none rounded-xl pl-9 pr-4 py-2 text-xs outline-none focus:ring-1 focus:ring-gray-200"
+                      />
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      {/* Types */}
+                      {['audio', 'foto', 'texto', 'otros'].map(t => (
+                        <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+                          className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                            historyTypeFilter === t ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}>
+                          {t.toUpperCase()}
+                        </button>
+                      ))}
+                      {/* Divider */}
+                      {availableMonths.length > 0 && <div className="w-px h-5 bg-gray-200 mx-1" />}
+                      {/* Months */}
+                      {availableMonths.map(m => (
+                        <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
+                          className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                            historyMonthFilter === m ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}>
+                          {m.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="relative">
                     <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
                     <div className="space-y-2">
-                      {agendaEvents.map(ev => {
-                        const dot = EVENT_TYPES_QUICK.find(t => t.id === ev.event_type)?.color ?? 'bg-gray-400'
+                      {filteredEvents.map(ev => {
                         const isNota = ev.event_type === 'nota' || ev.title.includes('Nota')
+                        let type = ev.event_type;
+                        if (isNota) {
+                          if (ev.audio_url) type = 'audio';
+                          else if (ev.photo_url) type = 'foto';
+                          else type = 'texto';
+                        }
+
                         return (
                           <div key={ev.id} className="flex gap-2.5 group">
                             <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0 z-10">
-                              <span className={`w-2 h-2 rounded-full ${dot}`} />
+                              {type === 'audio' ? <Mic className="w-3.5 h-3.5 text-red-500" /> :
+                               type === 'foto' ? <ImageIcon className="w-3.5 h-3.5 text-green-600" /> :
+                               isNota ? <FileText className="w-3.5 h-3.5 text-gray-500" /> :
+                               <div className="w-2 h-2 rounded-full bg-gray-400" />}
                             </div>
                             <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
                               <div className="px-3 py-2 flex items-start justify-between gap-2">
@@ -1436,8 +1545,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           </div>
                         )
                       })}
-                      {agendaEvents.length === 0 && !evLoading && (
-                        <p className="text-xs text-gray-400 text-center py-4">No hay eventos registrados</p>
+                      {filteredEvents.length === 0 && !evLoading && (
+                        <p className="text-xs text-gray-400 text-center py-4">
+                          {agendaEvents.length === 0 ? "No hay eventos registrados" : "No hay resultados para los filtros"}
+                        </p>
                       )}
                     </div>
                   </div>

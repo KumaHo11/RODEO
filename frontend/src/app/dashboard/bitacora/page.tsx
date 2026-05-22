@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio, savePendingPhoto, getAllPendingPhotos, deletePendingPhoto, countPendingItems } from '@/lib/audioOfflineStore'
@@ -132,6 +132,10 @@ export default function BitacoraPage() {
   const [savingMsg, setSavingMsg] = useState('Subiendo...')
   const [pendingOffline, setPendingOffline] = useState(0)
   const [search, setSearch] = useState('')
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
+  const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
+
+  const monthNames = useMemo(() => ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], []);
 
   // Recording
   const [isRecording, setIsRecording] = useState(false)
@@ -381,8 +385,37 @@ export default function BitacoraPage() {
 
   // ── Filtering ───────────────────────────────────────────────────────────────
   const sorted = [...notes].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  const filtered = search.trim()
-    ? sorted.filter(n => n.title?.toLowerCase().includes(search.toLowerCase()) || n.content?.toLowerCase().includes(search.toLowerCase()))
+  
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    notes.forEach(note => {
+      const d = new Date(note.created_at);
+      if (!isNaN(d.getTime())) months.add(monthNames[d.getMonth()]);
+    });
+    return Array.from(months);
+  }, [notes, monthNames]);
+
+  const filtered = search.trim() || historyTypeFilter || historyMonthFilter
+    ? sorted.filter(n => {
+        if (search.trim() && !(n.title?.toLowerCase().includes(search.toLowerCase()) || n.content?.toLowerCase().includes(search.toLowerCase()))) return false;
+        
+        let type = 'texto';
+        if (n.audio_url) type = 'audio';
+        else if (n.photo_url) type = 'foto';
+
+        if (historyTypeFilter) {
+          if (historyTypeFilter === 'audio' && type !== 'audio') return false;
+          if (historyTypeFilter === 'foto' && type !== 'foto') return false;
+          if (historyTypeFilter === 'texto' && type !== 'texto') return false;
+        }
+
+        if (historyMonthFilter) {
+          const d = new Date(n.created_at);
+          if (!isNaN(d.getTime()) && monthNames[d.getMonth()] !== historyMonthFilter) return false;
+        }
+
+        return true;
+      })
     : sorted
   const grouped = groupByDate(filtered)
 
@@ -433,6 +466,29 @@ export default function BitacoraPage() {
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Buscar grabaciones y notas..."
             className="w-full bg-gray-100 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-gray-200" />
+        </div>
+
+        <div className="flex flex-wrap gap-2 mt-3">
+          {/* Types */}
+          {['audio', 'foto', 'texto'].map(t => (
+            <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+              className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                historyTypeFilter === t ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+              }`}>
+              {t.toUpperCase()}
+            </button>
+          ))}
+          {/* Divider */}
+          {availableMonths.length > 0 && <div className="w-px h-5 bg-gray-200 mx-1" />}
+          {/* Months */}
+          {availableMonths.map(m => (
+            <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
+              className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                historyMonthFilter === m ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+              }`}>
+              {m.toUpperCase()}
+            </button>
+          ))}
         </div>
       </div>
 

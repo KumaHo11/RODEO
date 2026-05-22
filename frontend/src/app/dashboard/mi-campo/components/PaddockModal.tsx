@@ -5,9 +5,9 @@
  * Tipografía y campos unificados con el modal de Rebaños.
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock } from 'lucide-react'
+import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock, Search, FileText, Image as ImageIcon } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
@@ -404,6 +404,61 @@ export default function PaddockModal({
   const [ndviRefreshing, setNdviRefreshing]   = useState(false)
   const currentNdvi = ndviData?.averageNdvi ?? paddock.current_ndvi
 
+  const [historySearch, setHistorySearch] = useState('')
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
+  const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
+
+  const monthNames = useMemo(() => ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], []);
+
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    notes.forEach(note => {
+      const d = new Date(note.created_at);
+      if (!isNaN(d.getTime())) months.add(monthNames[d.getMonth()]);
+    });
+    paddockSnapshots.forEach((snap: any) => {
+      const d = new Date(snap.calculated_at);
+      if (!isNaN(d.getTime())) months.add(monthNames[d.getMonth()]);
+    });
+    return Array.from(months);
+  }, [notes, paddockSnapshots, monthNames]);
+
+  const filteredSnapshots = useMemo(() => {
+    if (historyTypeFilter && historyTypeFilter !== 'ndvi') return [];
+    return paddockSnapshots.filter((snap: any) => {
+      if (historyMonthFilter) {
+        const d = new Date(snap.calculated_at);
+        if (!isNaN(d.getTime()) && monthNames[d.getMonth()] !== historyMonthFilter) return false;
+      }
+      return true;
+    });
+  }, [paddockSnapshots, historyTypeFilter, historyMonthFilter, monthNames]);
+
+  const filteredNotes = useMemo(() => {
+    return notes.filter(note => {
+      if (historySearch && !note.title?.toLowerCase().includes(historySearch.toLowerCase()) && !note.content?.toLowerCase().includes(historySearch.toLowerCase())) {
+        return false;
+      }
+
+      let type = 'texto';
+      if (note.audio_url) type = 'audio';
+      else if (note.photo_url) type = 'foto';
+
+      if (historyTypeFilter) {
+        if (historyTypeFilter === 'ndvi') return false; // NDVI only shows in snapshots
+        if (historyTypeFilter === 'audio' && type !== 'audio') return false;
+        if (historyTypeFilter === 'foto' && type !== 'foto') return false;
+        if (historyTypeFilter === 'texto' && type !== 'texto') return false;
+      }
+
+      if (historyMonthFilter) {
+        const d = new Date(note.created_at);
+        if (!isNaN(d.getTime()) && monthNames[d.getMonth()] !== historyMonthFilter) return false;
+      }
+      return true;
+    });
+  }, [notes, historySearch, historyTypeFilter, historyMonthFilter, monthNames]);
+
   // ── Guardar ───────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!name.trim()) return
@@ -786,7 +841,7 @@ export default function PaddockModal({
   const modalContent = (
     <div className="fixed inset-0 z-[9999] bg-white md:bg-black/40 md:backdrop-blur-sm flex flex-col md:items-center md:justify-center md:p-4 pb-20 md:pb-0">
       <ConfirmModal />
-      <div className="bg-white w-full h-full md:rounded-2xl md:shadow-2xl md:w-full md:max-w-2xl md:max-h-[92vh] flex flex-col">
+      <div className="bg-white w-full h-full md:rounded-2xl md:shadow-2xl md:w-full md:max-w-5xl md:max-h-[92vh] flex flex-col">
 
         {/* Header — mismo estilo que Rebaños */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
@@ -1439,8 +1494,45 @@ export default function PaddockModal({
           {activeTab === 'historial' && (
             <div className="px-6 py-5 space-y-5">
 
+              {/* Search & Filters */}
+              <div className="space-y-3 pb-2 border-b border-gray-100">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Buscar en el historial..." 
+                    value={historySearch} 
+                    onChange={e => setHistorySearch(e.target.value)}
+                    className="w-full bg-gray-50 border-none rounded-xl pl-9 pr-4 py-2 text-xs outline-none focus:ring-1 focus:ring-gray-200"
+                  />
+                </div>
+                
+                <div className="flex flex-wrap gap-2">
+                  {/* Types */}
+                  {['ndvi', 'audio', 'foto', 'texto'].map(t => (
+                    <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                        historyTypeFilter === t ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                      }`}>
+                      {t.toUpperCase()}
+                    </button>
+                  ))}
+                  {/* Divider */}
+                  {availableMonths.length > 0 && <div className="w-px h-5 bg-gray-200 mx-1" />}
+                  {/* Months */}
+                  {availableMonths.map(m => (
+                    <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                        historyMonthFilter === m ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                      }`}>
+                      {m.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* ══ NDVI SATELITAL — diferenciado con badge y estilo esmeralda ══ */}
-              {paddockSnapshots.length > 0 && (
+              {filteredSnapshots.length > 0 && (
                 <div>
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">NDVI Satelital</span>
@@ -1450,7 +1542,7 @@ export default function PaddockModal({
                     </span>
                   </div>
                   <div className="space-y-2">
-                    {paddockSnapshots.map((snap: any, i: number) => {
+                    {filteredSnapshots.map((snap: any, i: number) => {
                       const ndvi = Number(snap.ndvi)
                       const ndviBg = ndvi >= 0.6 ? 'bg-emerald-50 border-emerald-200' : ndvi >= 0.4 ? 'bg-green-50 border-green-200' : ndvi >= 0.2 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
                       const ndviTxt = ndvi >= 0.6 ? 'text-emerald-700' : ndvi >= 0.4 ? 'text-green-700' : ndvi >= 0.2 ? 'text-amber-700' : 'text-red-700'
@@ -1493,7 +1585,7 @@ export default function PaddockModal({
                   {notesLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
                 </div>
 
-                {notes.length === 0 && !notesLoading && paddockSnapshots.length === 0 && (
+                {filteredNotes.length === 0 && !notesLoading && filteredSnapshots.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed border-gray-200">
                     <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mb-2.5">
                       <Mic className="w-5 h-5 text-gray-300" />
@@ -1503,15 +1595,15 @@ export default function PaddockModal({
                   </div>
                 )}
 
-                {notes.length === 0 && !notesLoading && paddockSnapshots.length > 0 && (
+                {filteredNotes.length === 0 && !notesLoading && filteredSnapshots.length > 0 && (
                   <p className="text-xs text-gray-400 italic text-center py-4">No hay registros de campo para este potrero.</p>
                 )}
 
-                {notes.length > 0 && (
+                {filteredNotes.length > 0 && (
                   <div className="relative">
                     <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
                     <div className="space-y-3">
-                      {notes.map(note => {
+                      {filteredNotes.map(note => {
                         if (deletedNotes[note.id]) {
                           return (
                             <div key={note.id} className="flex items-center gap-3 pl-10 opacity-30">
