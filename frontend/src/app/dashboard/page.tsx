@@ -342,7 +342,30 @@ export default function DashboardOverview() {
         actions={
           <div className="flex items-center gap-3">
             {loading && <Loader2 className="w-5 h-5 text-green-600 animate-spin" />}
-            <button className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors shadow-sm">
+            <button 
+              onClick={() => {
+                try {
+                  let csv = '--- RESUMEN DEL ESTADO DEL CAMPO ---\n\n'
+                  csv += 'POTREROS\nNombre,Area (ha),Materia Seca (kg/ha)\n'
+                  paddocks.forEach(p => { csv += `${p.name},${p.area_ha || 0},${p.dry_matter_kg_ha || 0}\n` })
+                  csv += '\nRODEOS\nNombre,Cabezas,Peso Prom (kg),EV Total\n'
+                  herds.forEach(h => { csv += `${h.name},${h.head_count || 0},${h.avg_weight_kg || 0},${h.total_ev || 0}\n` })
+                  csv += '\nTAREAS Y EVENTOS\nFecha,Tipo,Titulo\n'
+                  farmEvents.forEach(e => { csv += `${e.event_date},Evento,${e.title}\n` })
+                  upcomingTasks.forEach(t => { csv += `${t.due_date || 'Sin fecha'},Tarea,${t.title}\n` })
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `resumen_panel_${new Date().toISOString().split('T')[0]}.csv`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                  toast.success('Historial descargado en CSV')
+                } catch (e) {
+                  toast.error('Error al generar la descarga')
+                }
+              }}
+              className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors shadow-sm">
               <Download className="w-4 h-4" /> Descargar historial
             </button>
           </div>
