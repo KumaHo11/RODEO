@@ -709,6 +709,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     }
 
     let audio_url: string | null = null
+    let finalTranscript = quickNote.trim()
+
     if (effectiveBlob) {
       const blobType = effectiveBlob.type || 'audio/webm'
       const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
@@ -717,14 +719,35 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       fd.append('folder', 'herd-audio')
       const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
       if (up.ok) ({ url: audio_url } = await up.json())
+
+      // ── Transcribe with Gemini (best effort) ──
+      try {
+        const tf = new FormData()
+        tf.append('file', new File([effectiveBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
+        const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
+        if (tr.ok) {
+          const d = await tr.json()
+          if (d.transcript && d.transcript !== '[Sin voz detectable]') {
+            finalTranscript = d.transcript
+            setQuickNote(d.transcript) // update local state so it doesn't disappear
+          }
+        }
+      } catch { /* keep live Web Speech transcript */ }
     }
 
-    const description = [quickNote.trim(), photo_url ? `[Foto](${photo_url})` : ''].filter(Boolean).join('\n\n')
+    const isAudioNote = noteMode === 'audio' || !!effectiveBlob
+    const resolvedTitle = isAudioNote
+      ? `🎙️ Nota de audio: ${finalTranscript.slice(0, 60) || 'Audio guardado'}`
+      : finalTranscript
+        ? `Nota: ${finalTranscript.slice(0, 60)}`
+        : (notePhoto ? 'Nota visual agregada' : 'Nota de rodeo')
+
+    const description = [finalTranscript, photo_url ? `[Foto](${photo_url})` : ''].filter(Boolean).join('\n\n')
 
     const res = await apiFetch('/api/farm-events', {
       method: 'POST',
       body: JSON.stringify({
-        title: titleStr,
+        title: resolvedTitle,
         event_type: 'nota',
         event_date: todayISO(),
         herd_id: herd.id, herd_ids: [herd.id],
@@ -740,7 +763,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       const saved = await res.json().catch(() => null)
       setAgendaEvents(prev => [{
         id: saved?.event?.id ?? `temp-${Date.now()}`,
-        title: titleStr,
+        title: resolvedTitle,
         event_type: 'nota',
         event_date: todayISO(),
         herd_id: herd.id,
