@@ -55,9 +55,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const idToken = await firebaseUser.getIdToken()
 
-      // Timeout de 8 s para evitar que isLoading quede bloqueado si la DB tarda
+      // Timeout de 15 s para evitar que isLoading quede bloqueado si la DB tarda
       const controller = new AbortController()
-      const timeoutId  = setTimeout(() => controller.abort(), 8000)
+      const timeoutId  = setTimeout(() => controller.abort(), 15000)
 
       let res: Response
       try {

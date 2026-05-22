@@ -5,7 +5,7 @@ import { AuthProvider } from '@/components/AuthProvider'
 import OfflineIndicator from '@/components/OfflineIndicator'
 import { Toaster } from 'sonner'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], preload: false })
 
 export const metadata: Metadata = {
   title: 'RODEO — Gestión Ganadera Regenerativa',
