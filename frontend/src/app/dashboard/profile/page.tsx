@@ -242,7 +242,7 @@ export default function ProfilePage() {
             { id: 'perfil', label: 'Mi perfil' },
             { id: 'notificaciones', label: 'Notificaciones' },
             { id: 'facturacion', label: 'Facturación' },
-            { id: 'planes', label: 'Mis planes' },
+            { id: 'planes', label: 'Planes' },
           ]}
         />
       </div>
