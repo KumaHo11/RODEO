@@ -735,7 +735,6 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       } catch { /* keep live Web Speech transcript */ }
     }
 
-    const isAudioNote = noteMode === 'audio' || !!effectiveBlob
     const resolvedTitle = isAudioNote
       ? `🎙️ Nota de audio: ${finalTranscript.slice(0, 60) || 'Audio guardado'}`
       : finalTranscript
