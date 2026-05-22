@@ -166,8 +166,11 @@ const templates = {
         `).join('')}
       </div>
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;margin-bottom:28px">
-        <p style="margin:0;color:#92400e;font-size:13px;font-weight:600">
+        <p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:600">
           💡 Recordá preparar el potrero receptor, controlar el agua y el alambrado antes del movimiento.
+        </p>
+        <p style="margin:0;color:#92400e;font-size:13px;font-weight:600">
+          📸 Al salir del potrero: recordá registrar el remanente de pasto de salida y tomar fotos del pasto, la condición corporal y el animal.
         </p>
       </div>
       <div style="text-align:center;margin-bottom:20px">

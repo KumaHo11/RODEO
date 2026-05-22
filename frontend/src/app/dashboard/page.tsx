@@ -499,7 +499,7 @@ export default function DashboardOverview() {
         <FeatureWidget
           title="Logística de movimientos"
           icon={<Navigation className="w-4 h-4 text-green-600" />}
-          isFeatureEnabled={true}
+          isFeatureEnabled={hasFeature('grazing_planner')}
           actionLabel="Planificador"
           href="/dashboard/grazing"
         >
@@ -569,8 +569,8 @@ export default function DashboardOverview() {
         <FeatureWidget
           title="Pastoreo y vigor (NDVI)"
           icon={<Satellite className="w-4 h-4 text-emerald-600" />}
-          isFeatureEnabled={canNdvi}
-          requiredPlan="latifundio"
+          isFeatureEnabled={hasFeature('clima')}
+          requiredPlan="holistico"
           actionLabel="Actualizar"
           onAction={refreshAllNdvi}
           className="lg:col-span-2"

@@ -59,14 +59,23 @@ function Num({ label, value, onChange, unit, step = 1, min }: {
   label: string; value: number; onChange: (v: number) => void
   unit?: string; step?: number; min?: number
 }) {
+  const [localStr, setLocalStr] = useState<string | null>(null)
+  
   return (
     <div className="space-y-1">
       <label className="text-[10px] text-gray-500 font-semibold block tracking-wide">{label}</label>
       <div className="relative">
-        <input type="number" value={isNaN(value) ? '' : value} step={step} min={min}
+        <input type="number" 
+          value={localStr !== null ? localStr : (isNaN(value) ? '' : value)} 
+          step={step} min={min}
           inputMode="decimal"
           onFocus={e => e.target.select()}
-          onChange={e => onChange(e.target.value === '' ? NaN : parseFloat(e.target.value))}
+          onChange={e => {
+            setLocalStr(e.target.value)
+            const v = parseFloat(e.target.value)
+            onChange(isNaN(v) ? NaN : v)
+          }}
+          onBlur={() => setLocalStr(null)}
           className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-900 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 outline-none transition-all pr-10" />
         {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-medium">{unit}</span>}
       </div>

@@ -7,9 +7,11 @@ import '@geoman-io/leaflet-geoman-free'
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css'
 import L from 'leaflet'
 import { useAuth } from '@/components/AuthProvider'
+import { usePlan } from '@/hooks/usePlan'
 import { apiFetch } from '@/lib/apiFetch'
 import { area } from '@turf/area'
 import { toast } from 'sonner'
+import { Lock } from 'lucide-react'
 
 const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png'
 const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png'
@@ -143,6 +145,7 @@ interface DraftPaddock { geojson: any; layer: any; area_ha: number }
 // ─── MAIN COMPONENT ────────────────────────────────────────────────────────────
 export default function PaddockMap() {
   const { user } = useAuth()
+  const { hasFeature } = usePlan()
 
   const [geoData, setGeoData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -458,14 +461,23 @@ export default function PaddockMap() {
 
             {/* NDVI */}
             {selectedPaddock.current_ndvi && (
-              <div className="flex items-center justify-between bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
-                <div>
-                  <p className="text-[9px] text-gray-400 font-black uppercase">NDVI satelital</p>
-                  <p className="text-base font-black text-gray-900">{Number(selectedPaddock.current_ndvi).toFixed(2)}</p>
+              <div className="relative">
+                <div className={`flex items-center justify-between bg-gray-50 rounded-lg border border-gray-100 px-3 py-2 transition-all ${!hasFeature('ndvi_access') ? 'opacity-50 blur-[2px]' : ''}`}>
+                  <div>
+                    <p className="text-[9px] text-gray-400 font-black uppercase">NDVI satelital</p>
+                    <p className="text-base font-black text-gray-900">{Number(selectedPaddock.current_ndvi).toFixed(2)}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getNdviStatus(selectedPaddock.current_ndvi).color}`}>
+                    {getNdviStatus(selectedPaddock.current_ndvi).label}
+                  </span>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getNdviStatus(selectedPaddock.current_ndvi).color}`}>
-                  {getNdviStatus(selectedPaddock.current_ndvi).label}
-                </span>
+                {!hasFeature('ndvi_access') && (
+                  <div className="absolute inset-0 flex items-center justify-center z-10" title="Requiere Plan Latifundio">
+                    <span className="bg-white/80 backdrop-blur-sm p-1 rounded-full border border-gray-200 shadow-sm flex items-center justify-center">
+                      <Lock className="w-3.5 h-3.5 text-amber-600" />
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

@@ -72,9 +72,9 @@ function Toggle({
       role="switch"
       aria-checked={value}
     >
-      <span className={`absolute top-0.5 rounded-full bg-white shadow transition-transform duration-200 ${
+      <span className={`absolute top-0.5 left-0 rounded-full bg-white shadow transition-transform duration-200 ${
         isSm ? 'w-3 h-3' : 'w-4 h-4'
-      } ${value ? (isSm ? 'translate-x-4' : 'translate-x-5') : 'translate-x-0.5'}`} />
+      } ${value ? (isSm ? 'translate-x-[18px]' : 'translate-x-[22px]') : 'translate-x-0.5'}`} />
       {loading && (
         <span className="absolute inset-0 flex items-center justify-center">
           <span className={`border-2 border-white/40 border-t-white rounded-full animate-spin ${isSm ? 'w-2 h-2' : 'w-3 h-3'}`} />

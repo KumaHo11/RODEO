@@ -115,7 +115,7 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<'perfil' | 'facturacion' | 'planes'>('perfil')
+  const [activeTab, setActiveTab] = useState<'perfil' | 'notificaciones' | 'facturacion' | 'planes'>('perfil')
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -234,15 +234,18 @@ export default function ProfilePage() {
       </Card>
 
       {/* === Tabs === */}
-      <Tabs 
-        activeTab={activeTab}
-        onChange={setActiveTab}
-        items={[
-          { id: 'perfil', label: 'Mi perfil' },
-          { id: 'facturacion', label: 'Facturación' },
-          { id: 'planes', label: 'Mis planes' },
-        ]}
-      />
+      <div className="overflow-x-auto pb-2">
+        <Tabs 
+          activeTab={activeTab}
+          onChange={(tab) => setActiveTab(tab as any)}
+          items={[
+            { id: 'perfil', label: 'Mi perfil' },
+            { id: 'notificaciones', label: 'Notificaciones' },
+            { id: 'facturacion', label: 'Facturación' },
+            { id: 'planes', label: 'Mis planes' },
+          ]}
+        />
+      </div>
 
       {/* Feedback messages */}
       {success && (
@@ -305,6 +308,53 @@ export default function ProfilePage() {
       {/* === Seguridad === */}
       {activeTab === 'perfil' && (
         <PasswordChangeSection />
+      )}
+
+      {/* === NOTIFICACIONES TAB === */}
+      {activeTab === 'notificaciones' && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader title="Notificaciones de la aplicación" />
+            
+            <div className="space-y-6">
+              <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
+                  <Camera className="w-5 h-5 text-green-700" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-black text-gray-900">Recordatorio de salida de potrero</p>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" defaultChecked className="sr-only peer" />
+                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Te recordaremos registrar el remanente de pasto y tomar fotos de la condición corporal, el animal y el pasto al confirmar la salida de un rodeo del pastoreo.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                  <Mail className="w-5 h-5 text-blue-700" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-black text-gray-900">Resumen semanal</p>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" defaultChecked className="sr-only peer" />
+                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Recibí un correo semanal con el estado de tus rodeos y el consumo forrajero.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* === FACTURACIÓN TAB === */}

@@ -1,0 +1,108 @@
+{
+  "tamboCalculadoraTab": {
+    "sections": [
+      {
+        "id": "produccion_alimentacion",
+        "title": "Producción y alimentación",
+        "fields": [
+          {
+            "name": "liters",
+            "label": "Producción de leche",
+            "type": "number",
+            "unit": "L/día",
+            "required": true
+          },
+          {
+            "name": "fat_kg",
+            "label": "Grasa producida",
+            "type": "number",
+            "unit": "kg",
+            "required": true
+          },
+          {
+            "name": "protein_kg",
+            "label": "Proteína producida",
+            "type": "number",
+            "unit": "kg",
+            "required": true
+          },
+          {
+            "name": "live_weight",
+            "label": "Peso vivo",
+            "type": "number",
+            "unit": "kg",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "reproduccion",
+        "title": "Eficiencia reproductiva",
+        "fields": [
+          {
+            "name": "eligible",
+            "label": "Vacas elegibles",
+            "type": "number",
+            "unit": "cabezas",
+            "required": true
+          },
+          {
+            "name": "inseminated",
+            "label": "Vacas inseminadas",
+            "type": "number",
+            "unit": "cabezas",
+            "required": true
+          },
+          {
+            "name": "pregnant",
+            "label": "Vacas preñadas",
+            "type": "number",
+            "unit": "cabezas",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "rodeo_campo",
+        "title": "Rodeo y superficie",
+        "fields": [
+          {
+            "name": "milking_cows",
+            "label": "Vacas en ordeño (VO)",
+            "type": "number",
+            "unit": "cabezas",
+            "required": true
+          },
+          {
+            "name": "dry_cows",
+            "label": "Vacas secas (VS)",
+            "type": "number",
+            "unit": "cabezas",
+            "required": true
+          },
+          {
+            "name": "total_heads",
+            "label": "Cabezas totales",
+            "type": "number",
+            "unit": "cabezas",
+            "required": true
+          },
+          {
+            "name": "cow_equivalent",
+            "label": "Equivalente vaca promedio",
+            "type": "number",
+            "unit": "EV/cabeza",
+            "required": true
+          },
+          {
+            "name": "hectares",
+            "label": "Superficie efectiva",
+            "type": "number",
+            "unit": "ha",
+            "required": true
+          }
+        ]
+      }
+    ]
+  }
+}

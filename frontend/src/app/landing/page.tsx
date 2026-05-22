@@ -9,6 +9,7 @@ import {
   Camera, WifiOff, Brain, BarChart3, Zap, Shield, Loader2, CloudRain, Leaf,
 } from 'lucide-react'
 import RodeoLogo from '@/components/RodeoLogo'
+import { FormulasTab } from '@/app/dashboard/calculadora/components/FormulasTab'
 
 interface ApiPlan {
   id: string; name: string; slug: string; description: string
@@ -827,28 +828,39 @@ export default function LandingPage() {
       </section>
 
 
-      {/* ── AI TRUST SECTION ── */}
-      <section className="py-16 bg-gray-950 text-white">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="grid md:grid-cols-3 gap-8 text-center">
-            {[
-              { Icon: Brain, label: 'Motor IA', value: 'Gemini Pro Vision', sub: 'Google Cloud · Análisis multimodal' },
-              { Icon: BarChart3, label: 'Índice satelital', value: 'NDVI en tiempo real', sub: 'Calibración por imagen de potrero' },
-              { Icon: Mic, label: 'Voz a texto', value: 'Cloud Speech-to-Text', sub: 'Transcripción + categorización NLP' },
-            ].map(({ Icon, label, value, sub }, i) => (
-              <div key={i} className="flex flex-col items-center gap-3">
-                <div className="w-12 h-12 bg-green-600/15 rounded-full flex items-center justify-center">
-                  <Icon className="w-6 h-6 text-green-400" />
-                </div>
-                <div className="text-[10px] font-black tracking-widest text-gray-500">{label}</div>
-                <div className="text-lg font-black text-white">{value}</div>
-                <div className="text-xs text-gray-600">{sub}</div>
+      {/* ── CALCULATOR SECTION ── */}
+      <section className="py-24 bg-gray-50 border-t border-gray-100">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-10">
+            <SectionLabel>HERRAMIENTA ABIERTA</SectionLabel>
+            <h2 className="text-3xl lg:text-4xl font-black text-gray-950 mb-4">Calculadora Ganadera</h2>
+            <p className="text-gray-500 max-w-xl mx-auto">
+              Probá nuestras fórmulas de Equivalente Vaca y Balance Hídrico de forma gratuita.
+            </p>
+          </div>
+          
+          <div className="bg-white rounded-3xl shadow-xl border border-gray-200 overflow-hidden">
+            <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-center">
+              <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit">
+                <button
+                  className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all bg-white text-gray-900 shadow-sm">
+                  Fórmulas
+                </button>
+                <Link href="/register"
+                  className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all text-gray-500 hover:text-gray-700">
+                  Proyecciones
+                </Link>
               </div>
-            ))}
+            </div>
+            
+            <div className="p-6 md:p-8 bg-gray-50/30">
+              <div className="max-w-3xl mx-auto">
+                <FormulasTab />
+              </div>
+            </div>
           </div>
         </div>
       </section>
-
 
       {/* ── FINAL CTA ── */}
       <section className="py-24 bg-green-600 relative overflow-hidden">

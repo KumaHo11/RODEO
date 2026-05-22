@@ -5250,8 +5250,21 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 )}
               </div>
 
-                {/* Form */}
-                <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              {/* Recordatorio de salida */}
+              <div className="bg-amber-50 border-l-4 border-amber-500 p-4 mx-6 mt-4 rounded-r-xl">
+                <div className="flex gap-3">
+                  <Camera className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-amber-900">Registro en campo</p>
+                    <p className="text-xs text-amber-800 mt-1">
+                      No olvides registrar el remanente de pasto y tomar fotos (del pasto, condición corporal y animal) para nutrir el modelo IA.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form */}
+              <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
                   
                   <div className="grid grid-cols-2 gap-4">
                     {/* Fecha real de entrada */}

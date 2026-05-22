@@ -12,7 +12,7 @@ import {
   Calendar, Hash, Scale, Clock, ClipboardList,
   TrendingDown, TrendingUp, Baby, ShoppingCart,
   AlertTriangle, BookOpen, CalendarDays, Info, Edit3,
-  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users, Trash2, Search, FileText, Image as ImageIcon, Filter
+  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users, Trash2, Search, FileText, Image as ImageIcon, Filter, Activity, Target, Stethoscope, Scissors, CheckCircle2, Lock
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '@/lib/apiFetch'
@@ -1234,21 +1234,31 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                     </div>
                     <div className="p-4">
                       {/* Three capture buttons */}
-                      <div className={`grid gap-2 mb-3 ${canVoice ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                        {/* Mic — solo si voice_bitacora habilitado */}
-                        {canVoice ? (
+                      <div className="grid gap-2 mb-3 grid-cols-3">
+                        {/* Mic — siempre visible, pero difuminado si no tiene voice_bitacora */}
+                        <div className="relative h-full">
                           <button type="button"
-                            onClick={() => { if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') } }}
-                            className={`relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
+                            onClick={() => {
+                              if (!canVoice) return;
+                              if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') }
+                            }}
+                            className={`w-full h-full relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
                               noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'
-                            }`}>
+                            } ${!canVoice ? 'opacity-50 blur-[1px] cursor-not-allowed' : ''}`}>
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
                               {micOn ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
                             </div>
                             <span className="text-[9px] font-black text-gray-600 tracking-wide">{micOn ? 'GRABANDO' : 'AUDIO'}</span>
                             {micOn && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />}
                           </button>
-                        ) : null}
+                          {!canVoice && (
+                            <div className="absolute inset-0 flex items-center justify-center z-10" title="Requiere Plan Holístico">
+                              <span className="bg-white/80 backdrop-blur-sm p-1 rounded-full border border-gray-200 shadow-sm">
+                                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                              </span>
+                            </div>
+                          )}
+                        </div>
                         {/* Camera */}
                         <button type="button"
                           onClick={() => { fileInputRef.current?.click(); setNoteExpanded(true); setNoteMode('photo') }}
@@ -1384,11 +1394,20 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         )}
                         {/* Botón análisis IA — visible cuando hay foto */}
                         {bcsPhotoFile && (
-                          <button type="button" onClick={analyzeBcs} disabled={bcsAnalyzing}
-                            className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50 transition-all">
-                            {bcsAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>✨</span>}
-                            {bcsAnalyzing ? 'Analizando con IA…' : 'Analizar condición con IA'}
-                          </button>
+                          <div className="relative">
+                            <button type="button" onClick={analyzeBcs} disabled={bcsAnalyzing || !hasFeature('ai_insights')}
+                              className={`w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl transition-all ${!hasFeature('ai_insights') ? 'opacity-50 blur-[1px]' : 'hover:bg-violet-100 disabled:opacity-50'}`}>
+                              {bcsAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>✨</span>}
+                              {bcsAnalyzing ? 'Analizando con IA…' : 'Analizar condición con IA'}
+                            </button>
+                            {!hasFeature('ai_insights') && (
+                              <div className="absolute inset-0 flex items-center justify-center z-10" title="Requiere Plan Holístico">
+                                <span className="bg-white/80 backdrop-blur-sm p-1 rounded-full border border-gray-200 shadow-sm">
+                                  <Lock className="w-3.5 h-3.5 text-amber-600" />
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         )}
                         {/* Resultado IA */}
                         {bcsAiResult && (
