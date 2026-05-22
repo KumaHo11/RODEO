@@ -54,30 +54,50 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!oldPlan) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   try {
-    await query(
-      `UPDATE subscriptions_plans SET
-        name                    = COALESCE($1, name),
-        description             = COALESCE($2, description),
-        price                   = COALESCE($3, price),
-        price_yearly            = COALESCE($4, price_yearly),
-        paddocks_limit          = COALESCE($5, paddocks_limit),
-        herds_limit             = COALESCE($6, herds_limit),
-        has_ai_analysis         = COALESCE($7, has_ai_analysis),
-        color                   = COALESCE($8, color),
-        is_popular              = COALESCE($9, is_popular),
-        is_active               = COALESCE($10, is_active),
-        sort_order              = COALESCE($11, sort_order),
-        stripe_price_id_monthly = COALESCE($12, stripe_price_id_monthly),
-        stripe_price_id_yearly  = COALESCE($13, stripe_price_id_yearly),
-        mp_preapproval_plan_id  = COALESCE($14, mp_preapproval_plan_id),
-        trial_days              = COALESCE($15, trial_days),
-        updated_at              = NOW()
-       WHERE id = $16`,
-      [name, description, price, price_yearly, paddocks_limit, herds_limit,
-       has_ai_analysis, color, is_popular, is_active, sort_order,
-       stripe_price_id_monthly, stripe_price_id_yearly, mp_preapproval_plan_id,
-       trial_days, id]
-    )
+    // Build SET clause dynamically — only include fields present in the request.
+    // trial_days is optional: omit it if the column doesn't exist yet in DB.
+    const fields: string[] = []
+    const values: any[]   = []
+    let   idx             = 1
+
+    const add = (col: string, val: any) => {
+      if (val !== undefined) { fields.push(`${col} = COALESCE($${idx++}, ${col})`); values.push(val) }
+    }
+
+    add('name',                    name)
+    add('description',             description)
+    add('price',                   price)
+    add('price_yearly',            price_yearly)
+    add('paddocks_limit',          paddocks_limit)
+    add('herds_limit',             herds_limit)
+    add('has_ai_analysis',         has_ai_analysis)
+    add('color',                   color)
+    add('is_popular',              is_popular)
+    add('is_active',               is_active)
+    add('sort_order',              sort_order)
+    add('stripe_price_id_monthly', stripe_price_id_monthly)
+    add('stripe_price_id_yearly',  stripe_price_id_yearly)
+    add('mp_preapproval_plan_id',  mp_preapproval_plan_id)
+
+    // trial_days: only add if it was explicitly sent AND we can verify the column exists
+    if (trial_days !== undefined) {
+      try {
+        // Check column exists before including it
+        await queryOne(`SELECT trial_days FROM subscriptions_plans WHERE id = $1`, [id])
+        add('trial_days', trial_days)
+      } catch {
+        // Column doesn't exist yet — skip silently until migration runs
+      }
+    }
+
+    if (fields.length > 0) {
+      fields.push('updated_at = NOW()')
+      values.push(id)
+      await query(
+        `UPDATE subscriptions_plans SET ${fields.join(', ')} WHERE id = $${idx}`,
+        values
+      )
+    }
 
     // Update feature flags: upsert each flag
     if (feature_flags && Array.isArray(feature_flags)) {

@@ -12,6 +12,7 @@ export async function GET() {
         sp.id, sp.name, sp.slug, sp.description,
         sp.price, sp.price_yearly, sp.color,
         sp.is_popular, sp.sort_order,
+        COALESCE(sp.trial_days, 0) AS trial_days,
         COALESCE(
           JSON_AGG(
             JSON_BUILD_OBJECT(

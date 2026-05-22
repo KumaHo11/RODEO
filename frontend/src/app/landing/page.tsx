@@ -12,7 +12,7 @@ import RodeoLogo from '@/components/RodeoLogo'
 
 interface ApiPlan {
   id: string; name: string; slug: string; description: string
-  price: number; price_yearly: number; color: string
+  price: number; price_yearly: number; color: string; trial_days: number
   is_popular: boolean; sort_order: number
   feature_flags: { flag_key: string; flag_value: any; flag_type: string; label: string }[]
 }
@@ -660,14 +660,23 @@ export default function LandingPage() {
             <p className="text-base text-gray-500 mb-2 max-w-xl mx-auto">
               Cuatro planes diseñados para cada escala de operación ganadera. Empezá gratis y crecé cuando tu campo lo pida.
             </p>
-            <p className="text-sm text-green-600 font-semibold mb-8">El valor que Rodeo entrega es siempre mayor al costo.</p>
+            <p className="text-sm text-green-600 font-semibold mb-6">El valor que Rodeo entrega es siempre mayor al costo.</p>
+
+            {/* Trial Banner */}
+            <div className="inline-flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-8">
+              <span className="text-2xl">⏱️</span>
+              <div className="text-left">
+                <div className="text-sm font-black text-amber-900">Trial gratuito de 45 días — acceso completo al plan Holístico</div>
+                <div className="text-xs text-amber-700 mt-0.5">45 días = el tiempo mínimo de descanso de un potrero. Verás los resultados antes de decidir.</div>
+              </div>
+            </div>
 
             <div className="inline-flex items-center gap-1 bg-gray-200 rounded-full p-1">
               {(['monthly', 'annual'] as const).map((period) => (
                 <button key={period} onClick={() => setActivePlan(period)}
                   className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${activePlan === period ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                   {period === 'monthly' ? 'Mensual' : 'Anual'}
-                  {period === 'annual' && <span className="ml-1.5 text-green-600 text-xs font-bold">−2 meses</span>}
+                  {period === 'annual' && <span className="ml-1.5 text-green-600 text-xs font-bold">−18%</span>}
                 </button>
               ))}
             </div>
@@ -689,6 +698,8 @@ export default function LandingPage() {
                 const hasPrice = price > 0
                 const isPopular = plan.is_popular
                 const isEnterprise = plan.slug === 'latifundio'
+                const trialDays = (plan as any).trial_days ?? 0
+                const hasTrial = trialDays > 0 && plan.slug !== 'brote' && plan.slug !== 'latifundio'
                 return (
                   <div key={plan.id}
                     className={`relative rounded-2xl p-6 flex flex-col transition-all ${
@@ -706,19 +717,27 @@ export default function LandingPage() {
                     )}
 
                     <div className="mb-4">
-                      <h3 className={`text-base font-black mb-1 ${isPopular || isEnterprise ? 'text-white' : 'text-gray-950'}`}>
-                        {plan.name}
-                      </h3>
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h3 className={`text-base font-black ${isPopular || isEnterprise ? 'text-white' : 'text-gray-950'}`}>
+                          {plan.name}
+                        </h3>
+                        {hasTrial && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">
+                            {trialDays}d gratis
+                          </span>
+                        )}
+                      </div>
                       <p className={`text-xs leading-relaxed ${isPopular || isEnterprise ? 'text-gray-400' : 'text-gray-500'}`}>
                         {plan.description}
                       </p>
                     </div>
 
-                    <div className="mb-5 min-h-[60px] flex flex-col justify-center">
+                    <div className="mb-5 min-h-[72px] flex flex-col justify-center">
                       {plan.slug === 'brote' ? (
                         <>
                           <div className={`text-3xl font-black ${isPopular || isEnterprise ? 'text-white' : 'text-gray-950'}`}>Gratis</div>
                           <div className={`text-xs mt-0.5 ${isPopular || isEnterprise ? 'text-gray-500' : 'text-gray-400'}`}>Sin tarjeta de crédito</div>
+                          <div className="text-xs text-gray-400 mt-0.5">Para siempre</div>
                         </>
                       ) : plan.slug === 'latifundio' ? (
                         <>
@@ -731,7 +750,11 @@ export default function LandingPage() {
                             <span className="text-3xl">USD {price}</span>
                             <span className={`text-xs font-medium ml-1 ${isPopular ? 'text-gray-400' : 'text-gray-500'}`}>/mes</span>
                           </div>
-                          {activePlan === 'annual' && <div className="text-xs text-green-400 font-semibold mt-0.5">Facturación anual</div>}
+                          {activePlan === 'annual' ? (
+                            <div className="text-xs text-green-400 font-semibold mt-0.5">Facturación anual · Ahorrás 18%</div>
+                          ) : (
+                            hasTrial && <div className={`text-xs mt-0.5 ${isPopular ? 'text-amber-300' : 'text-amber-600'}`}>Incluye {trialDays} días de prueba gratis</div>
+                          )}
                         </>
                       ) : (
                         <div className={`text-sm font-medium ${isPopular || isEnterprise ? 'text-gray-400' : 'text-gray-400'}`}>Precio a consultar</div>
