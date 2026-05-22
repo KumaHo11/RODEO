@@ -9,24 +9,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { Storage } from '@google-cloud/storage'
+import { getStorage } from 'firebase-admin/storage'
+import admin from '@/lib/firebase/admin'
 
-const BUCKET_NAME = process.env.GCS_BUCKET_NAME || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'rodeo-media'
-
-// Initialize GCS client
-const getStorage = () => {
-  const credsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-  if (credsJson) {
-    try {
-      const creds = JSON.parse(credsJson)
-      return new Storage({ credentials: creds, projectId: creds.project_id })
-    } catch (e) {
-      console.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON:', e)
-    }
-  }
-  // In Cloud Run, uses default service account
-  return new Storage({ projectId: process.env.GCLOUD_PROJECT || 'rodeo-staging' })
-}
+const BUCKET_NAME = process.env.GCS_BUCKET_NAME || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'rodeo-app-fac50.firebasestorage.app'
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     // ── 1. Try GCS first (production / staging) ─────────────────────────────
     try {
-      const storage = getStorage()
+      const storage = getStorage(admin.getAdminApp())
       const bucket = storage.bucket(BUCKET_NAME)
       const gcsPath = `${folder}/${filename}`
       const gcsFile = bucket.file(gcsPath)
