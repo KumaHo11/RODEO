@@ -7,7 +7,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock, Search, FileText, Image as ImageIcon } from 'lucide-react'
+import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock, Search, FileText, Image as ImageIcon, Filter } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
@@ -405,6 +405,7 @@ export default function PaddockModal({
   const currentNdvi = ndviData?.averageNdvi ?? paddock.current_ndvi
 
   const [historySearch, setHistorySearch] = useState('')
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
 
@@ -1495,39 +1496,57 @@ export default function PaddockModal({
             <div className="px-6 py-5 space-y-5">
 
               {/* Search & Filters */}
-              <div className="space-y-3 pb-2 border-b border-gray-100">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input 
-                    type="text" 
-                    placeholder="Buscar en el historial..." 
-                    value={historySearch} 
-                    onChange={e => setHistorySearch(e.target.value)}
-                    className="w-full bg-gray-50 border-none rounded-xl pl-9 pr-4 py-2 text-xs outline-none focus:ring-1 focus:ring-gray-200"
-                  />
-                </div>
+              <div className="flex flex-col sm:flex-row gap-2 items-center pb-2 border-b border-gray-100">
                 
-                <div className="flex flex-wrap gap-2">
+                {/* Filters */}
+                <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
+                  <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+                  
                   {/* Types */}
-                  {['ndvi', 'audio', 'foto', 'texto'].map(t => (
-                    <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
-                      className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
-                        historyTypeFilter === t ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                      }`}>
-                      {t.toUpperCase()}
-                    </button>
-                  ))}
-                  {/* Divider */}
-                  {availableMonths.length > 0 && <div className="w-px h-5 bg-gray-200 mx-1" />}
+                  <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
+                    {['ndvi', 'audio', 'foto', 'texto'].map(t => (
+                      <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+                        className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                          historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                        }`}>
+                        {t.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+
                   {/* Months */}
-                  {availableMonths.map(m => (
-                    <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
-                      className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
-                        historyMonthFilter === m ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                      }`}>
-                      {m.toUpperCase()}
-                    </button>
-                  ))}
+                  {availableMonths.length > 0 && (
+                    <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
+                      {availableMonths.map(m => (
+                        <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
+                          className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                            historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                          }`}>
+                          {m.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1" />
+
+                {/* Expandable Search */}
+                <div className={`relative flex items-center bg-gray-100 rounded-2xl transition-all duration-300 overflow-hidden shrink-0 ${
+                  isSearchExpanded || historySearch ? 'w-full sm:w-64 px-2' : 'w-10 h-10 cursor-pointer justify-center hover:bg-gray-200'
+                }`} onClick={() => !isSearchExpanded && setIsSearchExpanded(true)}>
+                  <Search className={`w-4 h-4 shrink-0 ${isSearchExpanded || historySearch ? 'text-gray-400 ml-2' : 'text-gray-500'}`} />
+                  {(isSearchExpanded || historySearch) && (
+                    <input 
+                      autoFocus
+                      type="text" 
+                      placeholder="Buscar..." 
+                      value={historySearch} 
+                      onChange={e => setHistorySearch(e.target.value)}
+                      onBlur={() => { if(!historySearch) setIsSearchExpanded(false) }}
+                      className="w-full bg-transparent border-none py-2 text-xs outline-none focus:ring-0 text-gray-900 ml-2"
+                    />
+                  )}
                 </div>
               </div>
 

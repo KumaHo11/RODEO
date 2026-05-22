@@ -6,7 +6,7 @@ import { apiFetch } from '@/lib/apiFetch'
 import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio, savePendingPhoto, getAllPendingPhotos, deletePendingPhoto, countPendingItems } from '@/lib/audioOfflineStore'
 import {
   Mic, Camera, Loader2, Image as ImageIcon,
-  CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp, Lock, MessageCircle,
+  CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp, Lock, MessageCircle, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
@@ -132,6 +132,7 @@ export default function BitacoraPage() {
   const [savingMsg, setSavingMsg] = useState('Subiendo...')
   const [pendingOffline, setPendingOffline] = useState(0)
   const [search, setSearch] = useState('')
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
 
@@ -461,34 +462,58 @@ export default function BitacoraPage() {
           </Link>
         </div>
 
-        <div className="relative mt-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar grabaciones y notas..."
-            className="w-full bg-gray-100 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-gray-200" />
-        </div>
+        <div className="flex flex-col sm:flex-row gap-2 items-center mt-4">
+          
+          {/* Filters */}
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
+            <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+            
+            {/* Types */}
+            <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
+              {['audio', 'foto', 'texto'].map(t => (
+                <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+                  className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                    historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                  }`}>
+                  {t.toUpperCase()}
+                </button>
+              ))}
+            </div>
 
-        <div className="flex flex-wrap gap-2 mt-3">
-          {/* Types */}
-          {['audio', 'foto', 'texto'].map(t => (
-            <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
-              className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
-                historyTypeFilter === t ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-              }`}>
-              {t.toUpperCase()}
-            </button>
-          ))}
-          {/* Divider */}
-          {availableMonths.length > 0 && <div className="w-px h-5 bg-gray-200 mx-1" />}
-          {/* Months */}
-          {availableMonths.map(m => (
-            <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
-              className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all ${
-                historyMonthFilter === m ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-              }`}>
-              {m.toUpperCase()}
-            </button>
-          ))}
+            {/* Months */}
+            {availableMonths.length > 0 && (
+              <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
+                {availableMonths.map(m => (
+                  <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
+                    className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                      historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                    }`}>
+                    {m.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Expandable Search */}
+          <div className={`relative flex items-center bg-gray-100 rounded-2xl transition-all duration-300 overflow-hidden shrink-0 ${
+            isSearchExpanded || search ? 'w-full sm:w-64 px-2' : 'w-10 h-10 cursor-pointer justify-center hover:bg-gray-200'
+          }`} onClick={() => !isSearchExpanded && setIsSearchExpanded(true)}>
+            <Search className={`w-4 h-4 shrink-0 ${isSearchExpanded || search ? 'text-gray-400 ml-2' : 'text-gray-500'}`} />
+            {(isSearchExpanded || search) && (
+              <input 
+                autoFocus
+                type="text" 
+                placeholder="Buscar grabaciones y notas..." 
+                value={search} 
+                onChange={e => setSearch(e.target.value)}
+                onBlur={() => { if(!search) setIsSearchExpanded(false) }}
+                className="w-full bg-transparent border-none py-2 text-xs outline-none focus:ring-0 text-gray-900 ml-2"
+              />
+            )}
+          </div>
         </div>
       </div>
 

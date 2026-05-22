@@ -3,10 +3,11 @@ import React, { useState } from 'react'
 import clsx from 'clsx'
 import { EvTab } from './EvTab'
 import { HidricoTab } from './HidricoTab'
+// import { TamboTab } from './TamboTab' // TODO: Restaurar cuando se habilite Tambo
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function Num({ label, value, onChange, unit, step = 1, min }: {
+export function Num({ label, value, onChange, unit, step = 1, min }: {
   label: string; value: number; onChange: (v: number) => void
   unit?: string; step?: number; min?: number
 }) {
@@ -25,7 +26,7 @@ function Num({ label, value, onChange, unit, step = 1, min }: {
   )
 }
 
-function RO({ label, value, unit }: { label: string; value: string; unit: string }) {
+export function RO({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div className="space-y-1">
       <label className="text-[10px] text-gray-400 font-semibold block tracking-wide">{label}</label>
@@ -36,7 +37,7 @@ function RO({ label, value, unit }: { label: string; value: string; unit: string
   )
 }
 
-function RodeoBadge() {
+export function RodeoBadge() {
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-green-100 text-green-700 border border-green-200 ml-2 align-middle">
       ✦ Rodeo
@@ -48,7 +49,7 @@ function RodeoBadge() {
  * Card — design system unificado con el resto de la app.
  * Título en 20px (text-xl / font-black), igual que en las otras secciones.
  */
-function Card({ num, title, desc, formula, result, unit, resultLabel, rodeo, children }: {
+export function Card({ num, title, desc, formula, result, unit, resultLabel, rodeo, children }: {
   num: string; title: string; desc: string; formula: string
   result: string; unit: string; resultLabel: string
   rodeo?: boolean; children: React.ReactNode
@@ -315,12 +316,13 @@ function TecnicasGrid() {
 
 // ─── Tab Fórmulas ─────────────────────────────────────────────────────────────
 
-type SeccionFormulas = 'tecnicas' | 'ev' | 'agua'
+type SeccionFormulas = 'tecnicas' | 'ev' | 'agua' // | 'tambo'
 
 const SECCIONES: { key: SeccionFormulas; label: string; desc: string }[] = [
   { key: 'tecnicas', label: '16 fórmulas técnicas', desc: 'Holístico, PRV y ganadería extensiva' },
   { key: 'ev',       label: 'EV por especie',        desc: 'Equivalente vaca con peso real' },
   { key: 'agua',     label: 'Balance hídrico',       desc: 'Demanda y bebederos por categoría' },
+  // { key: 'tambo',    label: 'Tambo',                 desc: 'Indicadores lecheros y productivos' }, // Oculto por ahora
 ]
 
 export function FormulasTab() {
@@ -361,6 +363,7 @@ export function FormulasTab() {
       {seccion === 'tecnicas' && <TecnicasGrid />}
       {seccion === 'ev'       && <EvTab />}
       {seccion === 'agua'     && <HidricoTab />}
+      {/* {seccion === 'tambo'    && <TamboTab />} */}
     </div>
   )
 }

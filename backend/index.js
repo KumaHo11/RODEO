@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
+const { Pool } = require('pg');
 
 const app = express();
 
@@ -23,7 +23,7 @@ app.use(cors({
 app.use(express.json())
 
 // Validate required env vars at startup
-const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_ANON_KEY']
+const REQUIRED_ENV = ['DATABASE_URL']
 const missing = REQUIRED_ENV.filter(k => !process.env[k])
 if (missing.length > 0) {
   console.error(`[FATAL] Missing required env vars: ${missing.join(', ')}`)
@@ -31,10 +31,10 @@ if (missing.length > 0) {
   if (process.env.NODE_ENV === 'production') process.exit(1)
 }
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_ANON_KEY
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null
+// Initialize PostgreSQL pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // GET /map-data
 // Fetches paddocks geometries and converts PostGIS to GeoJSON mapping Format
@@ -45,24 +45,14 @@ app.get('/map-data', async (req, res) => {
             return res.status(400).json({ error: 'Missing org_id parameter' });
         }
 
-        // We use st_asgeojson to extract the geometry nicely formatted for the frontend.
-        const { data, error } = await supabase.rpc('get_paddocks_geojson', { p_org_id: orgId });
+        // Fetch paddocks for the given organization
+        const query = `
+            SELECT id, name, area_ha, is_grazable, current_status
+            FROM paddocks
+            WHERE org_id = $1
+        `;
+        const { rows: paddocks } = await pool.query(query, [orgId]);
         
-        // Since we don't have the RPC created yet in schema.sql, here is an alternative standard query using Supabase raw query capabilities 
-        // Note: For advanced PostGIS queries, RPCs or raw PostgREST queries are better.
-        // Assuming PostgREST handles GeoJSON via custom headers or RPC, a direct approach is needed:
-        const { data: paddocks, error: fetchError } = await supabase
-            .from('paddocks')
-            .select('id, name, area_ha, is_grazable, current_status');
-        
-        // For actual GeoJSON parsing with standard supabase client, an RPC is typically required:
-        // CREATE OR REPLACE FUNCTION get_paddocks_geojson(p_org_id UUID) RETURNS JSON AS $$
-        //   SELECT json_build_object('type', 'FeatureCollection', 'features', json_agg(json_build_object('type', 'Feature', 'geometry', ST_AsGeoJSON(geom)::json, 'properties', json_build_object('id', id, 'name', name, 'status', current_status))))
-        //   FROM paddocks WHERE org_id = p_org_id;
-        // $$ LANGUAGE SQL;
-        
-        if (fetchError) throw fetchError;
-
         // Mock response if PostGIS RPC is not readily available
         res.json({ success: true, count: paddocks.length, paddocks });
     } catch (error) {
