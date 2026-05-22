@@ -840,6 +840,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false)
 
   const monthNames = useMemo(() => ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], []);
 
@@ -1460,7 +1461,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className={LABEL}>Historial de eventos y actividades</p>
+                    <p className={LABEL}>Historial de registros</p>
                     {evLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
                   </div>
 
@@ -1469,32 +1470,41 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                     
                     {/* Filters */}
                     <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
-                      <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+                      <button 
+                        onClick={() => setIsFilterExpanded(!isFilterExpanded)} 
+                        className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all shrink-0 ${isFilterExpanded || historyTypeFilter || historyMonthFilter ? 'bg-gray-200 text-gray-900' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                      >
+                        <Filter className="w-4 h-4" />
+                      </button>
                       
-                      {/* Types */}
-                      <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
-                        {['audio', 'foto', 'texto', 'otros'].map(t => (
-                          <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
-                            className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                              historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
-                            }`}>
-                            {t.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
+                      {(isFilterExpanded || historyTypeFilter || historyMonthFilter) && (
+                        <>
+                          {/* Types */}
+                          <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0 animate-in fade-in slide-in-from-left-2 duration-300">
+                            {['audio', 'foto', 'texto', 'otros'].map(t => (
+                              <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+                                className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                                  historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                                }`}>
+                                {t.toUpperCase()}
+                              </button>
+                            ))}
+                          </div>
 
-                      {/* Months */}
-                      {availableMonths.length > 0 && (
-                        <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
-                          {availableMonths.map(m => (
-                            <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
-                              className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                                historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
-                              }`}>
-                              {m.toUpperCase()}
-                            </button>
-                          ))}
-                        </div>
+                          {/* Months */}
+                          {availableMonths.length > 0 && (
+                            <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0 animate-in fade-in slide-in-from-left-4 duration-300">
+                              {availableMonths.map(m => (
+                                <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
+                                  className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                                    historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                                  }`}>
+                                  {m.toUpperCase()}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
 
@@ -1535,7 +1545,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           <div key={ev.id} className="flex gap-2.5 group">
                             <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0 z-10">
                               {type === 'audio' ? <Mic className="w-3.5 h-3.5 text-red-500" /> :
-                               type === 'foto' ? <ImageIcon className="w-3.5 h-3.5 text-green-600" /> :
+                               type === 'foto' ? <Camera className="w-3.5 h-3.5 text-green-600" /> :
                                isNota ? <FileText className="w-3.5 h-3.5 text-gray-500" /> :
                                <div className="w-2 h-2 rounded-full bg-gray-400" />}
                             </div>

@@ -133,6 +133,8 @@ export default function BitacoraPage() {
   const [pendingOffline, setPendingOffline] = useState(0)
   const [search, setSearch] = useState('')
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false)
+  const [showMobileHistory, setShowMobileHistory] = useState(false)
   const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
 
@@ -466,32 +468,41 @@ export default function BitacoraPage() {
           
           {/* Filters */}
           <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
-            <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+            <button 
+              onClick={() => setIsFilterExpanded(!isFilterExpanded)} 
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all shrink-0 ${isFilterExpanded || historyTypeFilter || historyMonthFilter ? 'bg-gray-200 text-gray-900' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+            >
+              <Filter className="w-4 h-4" />
+            </button>
             
-            {/* Types */}
-            <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
-              {['audio', 'foto', 'texto'].map(t => (
-                <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
-                  className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                    historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
-                  }`}>
-                  {t.toUpperCase()}
-                </button>
-              ))}
-            </div>
+            {(isFilterExpanded || historyTypeFilter || historyMonthFilter) && (
+              <>
+                {/* Types */}
+                <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0 animate-in fade-in slide-in-from-left-2 duration-300">
+                  {['audio', 'foto', 'texto'].map(t => (
+                    <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+                      className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                        historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                      }`}>
+                      {t.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
 
-            {/* Months */}
-            {availableMonths.length > 0 && (
-              <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
-                {availableMonths.map(m => (
-                  <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
-                    className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                      historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
-                    }`}>
-                    {m.toUpperCase()}
-                  </button>
-                ))}
-              </div>
+                {/* Months */}
+                {availableMonths.length > 0 && (
+                  <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0 animate-in fade-in slide-in-from-left-4 duration-300">
+                    {availableMonths.map(m => (
+                      <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
+                        className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                          historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                        }`}>
+                        {m.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -515,10 +526,16 @@ export default function BitacoraPage() {
             )}
           </div>
         </div>
+        <div className="sm:hidden mt-6">
+          <button onClick={() => setShowMobileHistory(!showMobileHistory)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-700">
+            <span>Ver historial de registros ({filtered.length})</span>
+            {showMobileHistory ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+        </div>
       </div>
 
       {/* Notes list */}
-      <div className="flex-1 pb-56 px-4 sm:px-6">
+      <div className={`flex-1 pb-64 px-4 sm:px-6 ${showMobileHistory ? 'block' : 'hidden sm:block'} mt-4 sm:mt-0`}>
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 text-gray-300 animate-spin" /></div>
         ) : filtered.length === 0 ? (
@@ -541,7 +558,7 @@ export default function BitacoraPage() {
       </div>
 
       {/* Capture area — pinned to bottom of viewport */}
-      <div className="sticky bottom-0 left-0 right-0 mt-auto pb-8 sm:pb-6 px-8 pt-8 bg-gradient-to-t from-white via-white to-transparent pointer-events-none z-50">
+      <div className="sticky bottom-0 left-0 right-0 mt-auto pb-24 sm:pb-6 px-8 pt-8 bg-gradient-to-t from-white via-white to-transparent pointer-events-none z-50">
         <div className="max-w-md mx-auto flex flex-col items-center gap-8 pointer-events-auto">
 
           {isRecording ? (

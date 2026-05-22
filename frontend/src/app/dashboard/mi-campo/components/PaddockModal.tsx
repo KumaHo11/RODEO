@@ -408,6 +408,7 @@ export default function PaddockModal({
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false)
 
   const monthNames = useMemo(() => ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], []);
 
@@ -1500,32 +1501,41 @@ export default function PaddockModal({
                 
                 {/* Filters */}
                 <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
-                  <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+                  <button 
+                    onClick={() => setIsFilterExpanded(!isFilterExpanded)} 
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all shrink-0 ${isFilterExpanded || historyTypeFilter || historyMonthFilter ? 'bg-gray-200 text-gray-900' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                  >
+                    <Filter className="w-4 h-4" />
+                  </button>
                   
-                  {/* Types */}
-                  <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
-                    {['ndvi', 'audio', 'foto', 'texto'].map(t => (
-                      <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
-                        className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                          historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
-                        }`}>
-                        {t.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
+                  {(isFilterExpanded || historyTypeFilter || historyMonthFilter) && (
+                    <>
+                      {/* Types */}
+                      <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0 animate-in fade-in slide-in-from-left-2 duration-300">
+                        {['ndvi', 'audio', 'foto', 'texto'].map(t => (
+                          <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+                            className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                              historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                            }`}>
+                            {t.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
 
-                  {/* Months */}
-                  {availableMonths.length > 0 && (
-                    <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
-                      {availableMonths.map(m => (
-                        <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
-                          className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                            historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
-                          }`}>
-                          {m.toUpperCase()}
-                        </button>
-                      ))}
-                    </div>
+                      {/* Months */}
+                      {availableMonths.length > 0 && (
+                        <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0 animate-in fade-in slide-in-from-left-4 duration-300">
+                          {availableMonths.map(m => (
+                            <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
+                              className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                                historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                              }`}>
+                              {m.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -1599,7 +1609,7 @@ export default function PaddockModal({
               {/* ══ REGISTROS DE CAMPO (notas, audios, fotos) ══ */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">Registros de campo</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">Historial de registros</span>
                   <div className="flex-1 h-px bg-gray-100" />
                   {notesLoading && <Loader2 className="w-3 h-3 text-green-500 animate-spin" />}
                 </div>
@@ -1640,8 +1650,8 @@ export default function PaddockModal({
                         return (
                           <div key={note.id} className="flex gap-2.5 group">
                             {/* Timeline node */}
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 z-10 border ${hasAudio ? 'bg-red-50 border-red-200' : hasPhoto ? 'bg-green-50 border-green-200' : `${primary.bg} ${primary.border}`}`}>
-                              {hasAudio ? <Mic className="w-3.5 h-3.5 text-red-500" /> : hasPhoto ? <Camera className="w-3.5 h-3.5 text-green-600" /> : <CatIcon className="w-3.5 h-3.5" style={{ color: primary.color }} />}
+                            <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0 z-10">
+                              {hasAudio ? <Mic className="w-3.5 h-3.5 text-red-500" /> : hasPhoto ? <Camera className="w-3.5 h-3.5 text-green-600" /> : <CatIcon className="w-3.5 h-3.5 text-gray-500" />}
                             </div>
                             {/* Card */}
                             <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
