@@ -45,10 +45,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'El correo electrónico ya se encuentra registrado. Por favor inicia sesión.' }, { status: 400 })
     }
 
-    // 3. Crear organización + perfil en Cloud SQL
+    // 3. Crear organización con trial automático del plan Holístico
+    // trial_days es configurable desde el admin — lo leemos de la BD
+    const trialPlan = await query<{ id: string; trial_days: number }>(
+      `SELECT id, trial_days FROM subscriptions_plans WHERE slug = 'holistico' AND is_active = true LIMIT 1`
+    )
+    const planRow = trialPlan[0]
+
     const orgResult = await mutate(
-      `INSERT INTO organizations (owner_id, name) VALUES ($1, $2) RETURNING id`,
-      [uid, `${firstName || 'Mi'} Ranch`]
+      `INSERT INTO organizations
+         (owner_id, name, subscription_plan_id, plan_status, trial_ends_at)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [
+        uid,
+        `${firstName || 'Mi'} Ranch`,
+        planRow?.id ?? null,
+        planRow ? 'trialing' : 'active',
+        planRow?.trial_days
+          ? new Date(Date.now() + planRow.trial_days * 24 * 60 * 60 * 1000).toISOString()
+          : null,
+      ]
     )
     const orgId = orgResult.rows[0]?.id
 

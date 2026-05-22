@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json()
   const {
     name, description, price, price_yearly, paddocks_limit, herds_limit,
-    has_ai_analysis, color, is_popular, is_active, sort_order,
+    has_ai_analysis, color, is_popular, is_active, sort_order, trial_days,
     stripe_price_id_monthly, stripe_price_id_yearly, mp_preapproval_plan_id,
     feature_flags,
   } = body
@@ -70,12 +70,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         stripe_price_id_monthly = COALESCE($12, stripe_price_id_monthly),
         stripe_price_id_yearly  = COALESCE($13, stripe_price_id_yearly),
         mp_preapproval_plan_id  = COALESCE($14, mp_preapproval_plan_id),
+        trial_days              = COALESCE($15, trial_days),
         updated_at              = NOW()
-       WHERE id = $15`,
+       WHERE id = $16`,
       [name, description, price, price_yearly, paddocks_limit, herds_limit,
        has_ai_analysis, color, is_popular, is_active, sort_order,
        stripe_price_id_monthly, stripe_price_id_yearly, mp_preapproval_plan_id,
-       id]
+       trial_days, id]
     )
 
     // Update feature flags: upsert each flag

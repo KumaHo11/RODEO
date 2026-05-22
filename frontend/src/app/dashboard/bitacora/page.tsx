@@ -464,66 +464,55 @@ export default function BitacoraPage() {
           </Link>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 items-center mt-4">
-          
-          {/* Filters */}
-          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
-            <button 
-              onClick={() => setIsFilterExpanded(!isFilterExpanded)} 
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all shrink-0 ${isFilterExpanded || historyTypeFilter || historyMonthFilter ? 'bg-gray-200 text-gray-900' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-            >
-              <Filter className="w-4 h-4" />
-            </button>
-            
-            {(isFilterExpanded || historyTypeFilter || historyMonthFilter) && (
-              <>
-                {/* Types */}
-                <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0 animate-in fade-in slide-in-from-left-2 duration-300">
-                  {['audio', 'foto', 'texto'].map(t => (
-                    <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+        <div className="flex items-center gap-2 mt-4 overflow-x-auto">
+
+          {/* Filters panel — expands to the left of search */}
+          {(isFilterExpanded || historyTypeFilter || historyMonthFilter) && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
+                {['audio', 'foto', 'texto'].map(t => (
+                  <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+                    className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                      historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                    }`}>
+                    {t.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              {availableMonths.length > 0 && (
+                <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
+                  {availableMonths.map(m => (
+                    <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
                       className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                        historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
+                        historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
                       }`}>
-                      {t.toUpperCase()}
+                      {m.toUpperCase()}
                     </button>
                   ))}
                 </div>
-
-                {/* Months */}
-                {availableMonths.length > 0 && (
-                  <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0 animate-in fade-in slide-in-from-left-4 duration-300">
-                    {availableMonths.map(m => (
-                      <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
-                        className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                          historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
-                        }`}>
-                        {m.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           <div className="flex-1" />
 
-          {/* Expandable Search */}
-          <div className={`relative flex items-center bg-gray-100 rounded-2xl transition-all duration-300 overflow-hidden shrink-0 ${
-            isSearchExpanded || search ? 'w-full sm:w-64 px-2' : 'w-10 h-10 cursor-pointer justify-center hover:bg-gray-200'
-          }`} onClick={() => !isSearchExpanded && setIsSearchExpanded(true)}>
-            <Search className={`w-4 h-4 shrink-0 ${isSearchExpanded || search ? 'text-gray-400 ml-2' : 'text-gray-500'}`} />
-            {(isSearchExpanded || search) && (
-              <input 
-                autoFocus
-                type="text" 
-                placeholder="Buscar grabaciones y notas..." 
-                value={search} 
-                onChange={e => setSearch(e.target.value)}
-                onBlur={() => { if(!search) setIsSearchExpanded(false) }}
-                className="w-full bg-transparent border-none py-2 text-xs outline-none focus:ring-0 text-gray-900 ml-2"
-              />
-            )}
+          {/* Search + Filter — always visible on the right */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-2xl px-3 shrink-0">
+            <Search className="w-4 h-4 text-gray-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Buscar..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="bg-transparent border-none py-2.5 text-xs outline-none focus:ring-0 text-gray-900 w-40 sm:w-52 placeholder:text-gray-400"
+            />
+            <div className="w-px h-4 bg-gray-200 mx-1 shrink-0" />
+            <button
+              onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+              className={`p-1 rounded-xl transition-all shrink-0 ${isFilterExpanded || historyTypeFilter || historyMonthFilter ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <Filter className="w-4 h-4" />
+            </button>
           </div>
         </div>
         <div className="sm:hidden mt-6">

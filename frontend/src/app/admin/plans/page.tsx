@@ -12,7 +12,8 @@ interface Plan {
   id: string; name: string; slug: string; description: string
   price: number; price_yearly: number; paddocks_limit: number; herds_limit: number
   has_ai_analysis: boolean; color: string; is_popular: boolean; is_active: boolean
-  sort_order: number; stripe_price_id_monthly: string; stripe_price_id_yearly: string
+  sort_order: number; trial_days: number
+  stripe_price_id_monthly: string; stripe_price_id_yearly: string
   mp_preapproval_plan_id: string; org_count: number; feature_flags: FeatureFlag[]
   created_at: string; updated_at: string
 }
@@ -29,7 +30,7 @@ const FLAG_TEMPLATES = [
   { flag_key: 'clima',            label: 'Módulo clima y alertas',    flag_type: 'boolean' as const, default: true  },
   { flag_key: 'agenda',           label: 'Agenda / eventos',          flag_type: 'boolean' as const, default: true  },
   // ─ Módulos intermedios (Planificador+) ────────────────────────────────────
-  { flag_key: 'grazing_planner',  label: 'Planificador de pastoreo',  flag_type: 'boolean' as const, default: false },
+  { flag_key: 'grazing_planner',  label: 'Planificador de pastoreo (Savory)',  flag_type: 'boolean' as const, default: false },
   { flag_key: 'tareas',           label: 'Gestión de tareas',         flag_type: 'boolean' as const, default: false },
   { flag_key: 'equipo',           label: 'Gestión de equipo',         flag_type: 'boolean' as const, default: false },
   { flag_key: 'voice_bitacora',   label: 'Bitácora de voz + IA',      flag_type: 'boolean' as const, default: false },
@@ -96,11 +97,12 @@ function PlanModal({ plan, onClose, onSave }: {
         name: '', slug: '', description: '', price: 0, price_yearly: 0,
         paddocks_limit: 5, herds_limit: 1, has_ai_analysis: false,
         color: '#16a34a', is_popular: false, is_active: true, sort_order: 99,
+        trial_days: 45,
         stripe_price_id_monthly: '', stripe_price_id_yearly: '', mp_preapproval_plan_id: '',
         feature_flags: mergeFlags(),
       }
     }
-    return { ...plan, feature_flags: mergeFlags(plan.feature_flags ?? []) }
+    return { ...plan, trial_days: plan.trial_days ?? 0, feature_flags: mergeFlags(plan.feature_flags ?? []) }
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -156,16 +158,22 @@ function PlanModal({ plan, onClose, onSave }: {
               placeholder="Para ganaderos que quieren precisión total"
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className={labelCls}>Precio mensual (USD/EV)</label>
+              <label className={labelCls}>Precio mensual (USD/mes)</label>
               <input type="number" step="0.01" value={form.price || 0} className={inputCls}
                 onChange={e => setForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} />
             </div>
             <div>
-              <label className={labelCls}>Precio anual (USD/EV)</label>
+              <label className={labelCls}>Precio anual (USD/mes)</label>
               <input type="number" step="0.01" value={form.price_yearly || 0} className={inputCls}
                 onChange={e => setForm(f => ({ ...f, price_yearly: parseFloat(e.target.value) || 0 }))} />
+            </div>
+            <div>
+              <label className={labelCls}>Días de trial gratuito</label>
+              <input type="number" step="1" min="0" value={form.trial_days ?? 0} className={inputCls}
+                placeholder="0 = sin trial"
+                onChange={e => setForm(f => ({ ...f, trial_days: parseInt(e.target.value) || 0 }))} />
             </div>
           </div>
           <div className="space-y-2">
@@ -360,13 +368,20 @@ function PlanRow({ plan, onEdit, onRefresh }: {
           </div>
         </div>
 
-        {/* Price */}
+        {/* Price + Trial */}
         <div className="text-right hidden sm:block flex-shrink-0">
           <div className="text-gray-900 font-semibold text-sm">
-            {plan.price === 0 ? 'Gratis' : `USD ${plan.price}/EV/mes`}
+            {plan.price === 0 ? 'Gratis' : `USD ${plan.price}/mes`}
           </div>
           {plan.price_yearly > 0 && (
-            <div className="text-gray-400 text-xs">USD {plan.price_yearly}/EV/año</div>
+            <div className="text-gray-400 text-xs">USD {plan.price_yearly}/mes (anual)</div>
+          )}
+          {(plan.trial_days ?? 0) > 0 && (
+            <div className="mt-0.5">
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                {plan.trial_days}d trial
+              </span>
+            </div>
           )}
         </div>
 

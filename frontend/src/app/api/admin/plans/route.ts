@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   const {
     name, slug, description, price, price_yearly,
     paddocks_limit, herds_limit, has_ai_analysis,
-    color, is_popular, sort_order, feature_flags = []
+    color, is_popular, sort_order, trial_days = 0, feature_flags = []
   } = body
 
   if (!name || !slug) {
@@ -76,12 +76,12 @@ export async function POST(req: NextRequest) {
     const [plan] = await query<{ id: string }>(
       `INSERT INTO subscriptions_plans
          (name, slug, description, price, price_yearly, paddocks_limit, herds_limit,
-          has_ai_analysis, color, is_popular, sort_order, is_active)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true)
+          has_ai_analysis, color, is_popular, sort_order, trial_days, is_active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true)
        RETURNING id`,
       [name, slug, description || null, price || 0, price_yearly || 0,
        paddocks_limit || 5, herds_limit || 1, has_ai_analysis || false,
-       color || '#22C55E', is_popular || false, sort_order || 99]
+       color || '#22C55E', is_popular || false, sort_order || 99, trial_days || 0]
     )
 
     // Insert feature flags
