@@ -12,7 +12,7 @@ import {
   Calendar, Hash, Scale, Clock, ClipboardList,
   TrendingDown, TrendingUp, Baby, ShoppingCart,
   AlertTriangle, BookOpen, CalendarDays, Info, Edit3,
-  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users, Trash2, Search, FileText, Image as ImageIcon, Filter, Activity, Target, Stethoscope, Scissors, CheckCircle2, Lock
+  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users, Trash2, Search, FileText, Image as ImageIcon, Filter, Activity, Target, Stethoscope, Scissors, CheckCircle2, Lock, Paperclip
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '@/lib/apiFetch'
@@ -346,6 +346,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [noteMode,      setNoteMode]      = useState<'text' | 'audio' | 'photo' | null>(null)
   const [notePhoto,     setNotePhoto]     = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const [noteExpanded,  setNoteExpanded]  = useState(false)
   const [noteSaving,    setNoteSaving]    = useState(false)
   const [noteSaved,     setNoteSaved]     = useState(false)
@@ -1225,7 +1226,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           <Mic className="w-3.5 h-3.5 text-gray-500" />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas de rodeo</p>
+                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas del Rodeo</p>
                           <p className="text-[9px] text-gray-400 font-medium">Audio · Texto · Foto</p>
                         </div>
                       </div>
@@ -1265,7 +1266,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         </div>
                         {/* Camera */}
                         <button type="button"
-                          onClick={() => { fileInputRef.current?.click(); setNoteExpanded(true); setNoteMode('photo') }}
+                          onClick={() => { if (noteMode === 'photo' && noteExpanded) { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('photo') } }}
                           className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
                             noteMode === 'photo' && noteExpanded ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'
                           }`}>
@@ -1307,17 +1308,24 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           )}
                           {noteMode === 'photo' && (
                             <div className="flex flex-col gap-2">
-                              {notePhoto ? (
-                                <div className="relative w-full h-32 rounded-xl overflow-hidden border border-gray-200">
+                              <div className="grid grid-cols-2 gap-2">
+                                <button type="button" onClick={() => fileInputRef.current?.click()}
+                                  className="flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-gray-600 border border-dashed border-gray-300 rounded-xl hover:border-green-400 hover:text-green-700 bg-gray-50">
+                                  <Paperclip className="w-3.5 h-3.5" /> Galería
+                                </button>
+                                <button type="button" onClick={() => cameraInputRef.current?.click()}
+                                  className="flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-white bg-green-600 rounded-xl hover:bg-green-700">
+                                  <Camera className="w-3.5 h-3.5" /> Cámara
+                                </button>
+                              </div>
+                              <input type="file" ref={fileInputRef} className="sr-only" accept="image/*" onChange={e => { if(e.target.files?.[0]) { setNotePhoto(e.target.files[0]); setNoteMode('photo'); setNoteExpanded(true) } }} />
+                              <input type="file" ref={cameraInputRef} className="sr-only" accept="image/*" capture="environment" onChange={e => { if(e.target.files?.[0]) { setNotePhoto(e.target.files[0]); setNoteMode('photo'); setNoteExpanded(true) } }} />
+                              {notePhoto && (
+                                <div className="relative w-full h-32 rounded-xl overflow-hidden border border-gray-200 mt-2">
                                   <img src={URL.createObjectURL(notePhoto)} className="w-full h-full object-cover" />
                                   <button type="button" onClick={() => setNotePhoto(null)} className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full text-white hover:bg-black/70 transition-all"><X className="w-4 h-4"/></button>
                                 </div>
-                              ) : (
-                                <p className="text-[10px] text-gray-500 font-bold text-center py-5 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 uppercase tracking-widest">
-                                  Esperando imagen...
-                                </p>
                               )}
-                              <input type="file" ref={fileInputRef} className="sr-only" accept="image/*" onChange={e => { if(e.target.files?.[0]) { setNotePhoto(e.target.files[0]); setNoteMode('photo'); setNoteExpanded(true) } }} />
                             </div>
                           )}
                           <textarea value={quickNote} onChange={e => setQuickNote(e.target.value)} rows={3}
@@ -1347,7 +1355,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           <Scale className="w-3.5 h-3.5 text-gray-500" />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Condición Corporal</p>
+                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Registro de condición corporal</p>
                           <p className="text-[9px] text-gray-400 font-medium">BCS · Escala 1–5</p>
                         </div>
                       </div>

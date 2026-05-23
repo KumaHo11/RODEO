@@ -104,7 +104,7 @@ function LoginContent() {
   }
 
   return (
-    <div className="flex min-h-screen bg-white">
+    <main className="flex min-h-screen bg-white">
       {/* Visual Side */}
       <div className="hidden lg:flex w-1/2 bg-green-700 items-center justify-center relative overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)]">
         <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
@@ -117,7 +117,7 @@ function LoginContent() {
       <div className="flex-1 flex items-center justify-center p-8 lg:p-24 overflow-y-auto">
         <div className="w-full max-w-sm">
           <div className="mb-12">
-            <h2 className="text-3xl font-black tracking-tight text-gray-950 mb-2">Inicia sesión</h2>
+            <h1 className="text-3xl font-black tracking-tight text-gray-950 mb-2">Inicia sesión</h1>
             <p className="text-gray-500 text-sm">Ingresa a tu cuenta para gestionar tu campo.</p>
           </div>
 
@@ -231,7 +231,7 @@ function LoginContent() {
           </p>
         </div>
       </div>
-    </div>
+    </main>
   )
 }
 

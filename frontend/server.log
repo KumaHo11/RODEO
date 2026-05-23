@@ -1,0 +1,474 @@
+
+> frontend@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.1 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.100.5:3000
+- Environments: .env.local, .env
+✓ Ready in 287ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+
+ GET /login 200 in 285ms (next.js: 102ms, proxy.ts: 34ms, application-code: 148ms)
+⚠ Blocked cross-origin request to Next.js dev resource /_next/webpack-hmr from "127.0.0.1".
+Cross-origin access to Next.js dev resources is blocked by default for safety.
+
+To allow this host in development, add it to "allowedDevOrigins" in next.config.js and restart the dev server:
+
+// next.config.js
+module.exports = {
+  allowedDevOrigins: ['127.0.0.1'],
+}
+
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ GET /landing 200 in 222ms (next.js: 59ms, proxy.ts: 2ms, application-code: 161ms)
+ GET /api/plans 200 in 461ms (next.js: 65ms, proxy.ts: 9ms, application-code: 387ms)
+✅ Profile found for UID: 8OokiAB25rZMf7FcVPqT3nlso2H2
+ GET /api/auth/profile 200 in 155ms (next.js: 28ms, proxy.ts: 2ms, application-code: 125ms)
+ GET /admin/dashboard 200 in 48ms (next.js: 19ms, proxy.ts: 4ms, application-code: 26ms)
+ GET /api/admin/metrics 200 in 407ms (next.js: 26ms, proxy.ts: 3ms, application-code: 378ms)
+ GET /api/admin/metrics 200 in 65ms (next.js: 5ms, proxy.ts: 2ms, application-code: 58ms)
+ GET /login?next=%2Fadmin%2Fdashboard 200 in 47ms (next.js: 9ms, proxy.ts: 4ms, application-code: 35ms)
+✅ Profile found for UID: JEw65x8AU3haqIXFUueDh91YmCO2
+ GET /api/auth/profile 200 in 116ms (next.js: 6ms, proxy.ts: 6ms, application-code: 104ms)
+ GET /dashboard 200 in 52ms (next.js: 28ms, proxy.ts: 5ms, application-code: 19ms)
+ GET /api/herds 200 in 217ms (next.js: 76ms, proxy.ts: 9ms, application-code: 132ms)
+ GET /api/organizations 200 in 281ms (next.js: 102ms, proxy.ts: 4ms, application-code: 176ms)
+ GET /api/paddocks 200 in 541ms (next.js: 100ms, proxy.ts: 7ms, application-code: 434ms)
+ GET /api/grazing-plans 200 in 531ms (next.js: 78ms, proxy.ts: 42ms, application-code: 411ms)
+ GET /api/tasks?from_date=2026-05-23&limit=4 200 in 490ms (next.js: 59ms, proxy.ts: 2ms, application-code: 429ms)
+ GET /api/climate-adjustment 200 in 431ms (next.js: 22ms, proxy.ts: 24ms, application-code: 385ms)
+ GET /api/herds 200 in 99ms (next.js: 50ms, proxy.ts: 4ms, application-code: 45ms)
+ GET /api/paddocks 200 in 57ms (next.js: 4ms, proxy.ts: 1504µs, application-code: 51ms)
+ GET /api/organizations 200 in 132ms (next.js: 3ms, proxy.ts: 2ms, application-code: 127ms)
+ GET /api/grazing-plans 200 in 48ms (next.js: 1971µs, proxy.ts: 1939µs, application-code: 44ms)
+ GET /api/farm-events 200 in 626ms (next.js: 23ms, proxy.ts: 2ms, application-code: 601ms)
+ GET /api/tasks?from_date=2026-05-23&limit=4 200 in 85ms (next.js: 3ms, proxy.ts: 1723µs, application-code: 81ms)
+ GET /api/climate-adjustment 200 in 178ms (next.js: 1070µs, proxy.ts: 1427µs, application-code: 175ms)
+ GET /api/paddocks 200 in 51ms (next.js: 4ms, proxy.ts: 1419µs, application-code: 46ms)
+ GET /api/notifications 200 in 508ms (next.js: 81ms, proxy.ts: 2ms, application-code: 424ms)
+[mercado] SIO Carnes web fetch failed: fetch failed
+[mercado] Using hardcoded INMAG/INSC fallback value
+ GET /api/mercado 200 in 1155ms (next.js: 49ms, proxy.ts: 5ms, application-code: 1101ms)
+ GET /api/farm-events 200 in 209ms (next.js: 1647µs, proxy.ts: 3ms, application-code: 205ms)
+ GET /api/notifications 200 in 101ms (next.js: 1617µs, proxy.ts: 1690µs, application-code: 97ms)
+ GET /api/climate-adjustment 200 in 177ms (next.js: 974µs, proxy.ts: 1312µs, application-code: 175ms)
+ GET /api/climate-adjustment 200 in 179ms (next.js: 5ms, proxy.ts: 2ms, application-code: 171ms)
+ GET /api/climate-adjustment 200 in 184ms (next.js: 1820µs, proxy.ts: 1734µs, application-code: 180ms)
+ GET /api/climate-adjustment 200 in 189ms (next.js: 5ms, proxy.ts: 4ms, application-code: 181ms)
+ GET /api/weather/current 200 in 1246ms (next.js: 37ms, proxy.ts: 4ms, application-code: 1205ms)
+ GET /api/weather/current 200 in 1188ms (next.js: 1032µs, proxy.ts: 1333µs, application-code: 1186ms)
+ GET /dashboard/herds 200 in 161ms (next.js: 41ms, proxy.ts: 101ms, application-code: 19ms)
+ GET /api/herds 200 in 123ms (next.js: 6ms, proxy.ts: 7ms, application-code: 110ms)
+ GET /api/herds 200 in 55ms (next.js: 2ms, proxy.ts: 1454µs, application-code: 52ms)
+ GET /api/team 200 in 445ms (next.js: 41ms, proxy.ts: 6ms, application-code: 398ms)
+ GET /api/farm-events 200 in 540ms (next.js: 7ms, proxy.ts: 6ms, application-code: 527ms)
+ GET /uploads/JEw65x8A_1779454268585.webm 404 in 77ms (next.js: 35ms, proxy.ts: 3ms, application-code: 40ms)
+[upload] GCS unavailable, using local fallback: invalid_grant: Invalid JWT Signature.
+[upload] Local fallback OK → /uploads/JEw65x8A_1779562767415.webm
+ POST /api/upload 200 in 401ms (next.js: 166ms, proxy.ts: 8ms, application-code: 227ms)
+ POST /api/transcribe-audio 200 in 8.4s (next.js: 25ms, proxy.ts: 1829µs, application-code: 8.3s)
+ POST /api/farm-events 201 in 103ms (next.js: 4ms, proxy.ts: 5ms, application-code: 94ms)
+[upload] GCS unavailable, using local fallback: invalid_grant: Invalid JWT Signature.
+[upload] Local fallback OK → /uploads/JEw65x8A_1779562855613.jpeg
+ POST /api/upload 200 in 156ms (next.js: 7ms, proxy.ts: 9ms, application-code: 140ms)
+ POST /api/farm-events 201 in 93ms (next.js: 2ms, proxy.ts: 2ms, application-code: 88ms)
+ GET /uploads/JEw65x8A_1779454268585.webm 404 in 44ms (next.js: 11ms, proxy.ts: 7ms, application-code: 26ms)
+ GET /uploads/JEw65x8A_1779376442958.webm 404 in 63ms (next.js: 30ms, proxy.ts: 4ms, application-code: 29ms)
+ GET /api/team 200 in 414ms (next.js: 11ms, proxy.ts: 4ms, application-code: 398ms)
+ GET /api/farm-events 200 in 544ms (next.js: 12ms, proxy.ts: 6ms, application-code: 526ms)
+ GET /api/team 200 in 420ms (next.js: 12ms, proxy.ts: 6ms, application-code: 402ms)
+ GET /api/farm-events 200 in 531ms (next.js: 7ms, proxy.ts: 6ms, application-code: 519ms)
+ GET /uploads/JEw65x8A_1779454268585.webm 404 in 69ms (next.js: 10ms, proxy.ts: 7ms, application-code: 51ms)
+ GET /uploads/JEw65x8A_1779376442958.webm 404 in 66ms (next.js: 24ms, proxy.ts: 7ms, application-code: 35ms)
+ GET /api/team 200 in 417ms (next.js: 12ms, proxy.ts: 7ms, application-code: 399ms)
+ GET /api/farm-events 200 in 528ms (next.js: 9ms, proxy.ts: 7ms, application-code: 512ms)
+ GET /api/team 200 in 403ms (next.js: 10ms, proxy.ts: 7ms, application-code: 387ms)
+ GET /api/farm-events 200 in 533ms (next.js: 6ms, proxy.ts: 7ms, application-code: 520ms)
+ GET /api/team 200 in 409ms (next.js: 11ms, proxy.ts: 7ms, application-code: 392ms)
+ GET /api/farm-events 200 in 530ms (next.js: 8ms, proxy.ts: 6ms, application-code: 516ms)
+ GET /uploads/JEw65x8A_1779454268585.webm 404 in 68ms (next.js: 13ms, proxy.ts: 8ms, application-code: 46ms)
+ GET /uploads/JEw65x8A_1779376442958.webm 404 in 66ms (next.js: 33ms, proxy.ts: 8ms, application-code: 26ms)
+ GET /dashboard/mi-campo 200 in 56ms (next.js: 34ms, proxy.ts: 5ms, application-code: 17ms)
+ GET /api/paddocks 200 in 109ms (next.js: 20ms, proxy.ts: 16ms, application-code: 73ms)
+ GET /api/paddocks 200 in 49ms (next.js: 1819µs, proxy.ts: 1791µs, application-code: 45ms)
+ GET /api/organizations 200 in 192ms (next.js: 17ms, proxy.ts: 21ms, application-code: 154ms)
+ GET /api/organizations 200 in 139ms (next.js: 1017µs, proxy.ts: 1373µs, application-code: 136ms)
+ GET /api/grazing-plans 200 in 392ms (next.js: 17ms, proxy.ts: 21ms, application-code: 354ms)
+ GET /api/herds 200 in 392ms (next.js: 19ms, proxy.ts: 6ms, application-code: 367ms)
+ GET /api/grazing-plans 200 in 57ms (next.js: 7ms, proxy.ts: 3ms, application-code: 48ms)
+ GET /api/herds 200 in 63ms (next.js: 1800µs, proxy.ts: 3ms, application-code: 59ms)
+ GET /api/climate-adjustment 200 in 690ms (next.js: 15ms, proxy.ts: 14ms, application-code: 661ms)
+ GET /api/climate-adjustment 200 in 206ms (next.js: 6ms, proxy.ts: 4ms, application-code: 196ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1211ms (next.js: 2ms, proxy.ts: 5ms, application-code: 1204ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1440ms (next.js: 36ms, proxy.ts: 4ms, application-code: 1400ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1480ms (next.js: 46ms, proxy.ts: 6ms, application-code: 1428ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1526ms (next.js: 44ms, proxy.ts: 5ms, application-code: 1476ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1601ms (next.js: 59ms, proxy.ts: 3ms, application-code: 1539ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1630ms (next.js: 43ms, proxy.ts: 4ms, application-code: 1583ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 895ms (next.js: 8ms, proxy.ts: 3ms, application-code: 884ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 931ms (next.js: 10ms, proxy.ts: 2ms, application-code: 919ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 977ms (next.js: 10ms, proxy.ts: 2ms, application-code: 965ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1021ms (next.js: 9ms, proxy.ts: 3ms, application-code: 1009ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1071ms (next.js: 9ms, proxy.ts: 5ms, application-code: 1057ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1107ms (next.js: 6ms, proxy.ts: 3ms, application-code: 1098ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 797ms (next.js: 10ms, proxy.ts: 5ms, application-code: 782ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 843ms (next.js: 8ms, proxy.ts: 4ms, application-code: 830ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 879ms (next.js: 7ms, proxy.ts: 4ms, application-code: 868ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 921ms (next.js: 10ms, proxy.ts: 4ms, application-code: 907ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 959ms (next.js: 5ms, proxy.ts: 4ms, application-code: 950ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 994ms (next.js: 7ms, proxy.ts: 4ms, application-code: 983ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 815ms (next.js: 9ms, proxy.ts: 5ms, application-code: 802ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 858ms (next.js: 7ms, proxy.ts: 4ms, application-code: 847ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 901ms (next.js: 8ms, proxy.ts: 4ms, application-code: 890ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 939ms (next.js: 6ms, proxy.ts: 4ms, application-code: 928ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 981ms (next.js: 6ms, proxy.ts: 11ms, application-code: 963ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1013ms (next.js: 8ms, proxy.ts: 5ms, application-code: 1001ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 426ms (next.js: 7ms, proxy.ts: 36ms, application-code: 383ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 785ms (next.js: 9ms, proxy.ts: 1659µs, application-code: 774ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 827ms (next.js: 9ms, proxy.ts: 4ms, application-code: 814ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 879ms (next.js: 8ms, proxy.ts: 4ms, application-code: 867ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 949ms (next.js: 6ms, proxy.ts: 36ms, application-code: 907ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 984ms (next.js: 7ms, proxy.ts: 37ms, application-code: 940ms)
+ GET /api/field-notes?paddock_id=804a9699-4fdb-42da-82e9-651a5c76398c 200 in 125ms (next.js: 25ms, proxy.ts: 11ms, application-code: 90ms)
+ GET /api/field-notes?paddock_id=804a9699-4fdb-42da-82e9-651a5c76398c 200 in 90ms (next.js: 1809µs, proxy.ts: 1486µs, application-code: 87ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 1064ms (next.js: 1685µs, proxy.ts: 1967µs, application-code: 1060ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 801ms (next.js: 12ms, proxy.ts: 4ms, application-code: 785ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 838ms (next.js: 11ms, proxy.ts: 3ms, application-code: 824ms)
+[NDVI API Error] Error: Earth Search error: 400
+    at POST (src/app/api/ndvi/route.ts:50:13)
+  48 |
+  49 |     if (!stacResponse.ok) {
+> 50 |       throw new Error(`Earth Search error: ${stacResponse.status}`)
+     |             ^
+  51 |     }
+  52 |
+  53 |     const stacData = await stacResponse.json()
+ POST /api/ndvi 200 in 991ms (next.js: 11ms, proxy.ts: 4ms, application-code: 976ms)
+ GET /dashboard/herds 200 in 33ms (next.js: 9ms, proxy.ts: 7ms, application-code: 17ms)
+ GET /api/herds 200 in 57ms (next.js: 6ms, proxy.ts: 3ms, application-code: 47ms)
+ GET /api/herds 200 in 50ms (next.js: 2ms, proxy.ts: 2ms, application-code: 46ms)
+ GET /api/team 200 in 423ms (next.js: 13ms, proxy.ts: 5ms, application-code: 405ms)
+ GET /api/farm-events 200 in 539ms (next.js: 8ms, proxy.ts: 5ms, application-code: 525ms)
+ GET /dashboard/mi-campo 200 in 31ms (next.js: 6ms, proxy.ts: 8ms, application-code: 17ms)
+ GET /api/paddocks 200 in 69ms (next.js: 6ms, proxy.ts: 7ms, application-code: 56ms)
+ GET /api/paddocks 200 in 54ms (next.js: 1569µs, proxy.ts: 1820µs, application-code: 50ms)
+ GET /api/organizations 200 in 158ms (next.js: 10ms, proxy.ts: 3ms, application-code: 145ms)
+ GET /api/organizations 200 in 144ms (next.js: 3ms, proxy.ts: 2ms, application-code: 139ms)
+ GET /api/grazing-plans 200 in 362ms (next.js: 13ms, proxy.ts: 2ms, application-code: 347ms)
+ GET /api/herds 200 in 398ms (next.js: 10ms, proxy.ts: 3ms, application-code: 386ms)
+ GET /api/grazing-plans 200 in 55ms (next.js: 5ms, proxy.ts: 3ms, application-code: 46ms)
+ GET /api/herds 200 in 49ms (next.js: 1884µs, proxy.ts: 2ms, application-code: 45ms)
+ GET /api/climate-adjustment 200 in 677ms (next.js: 10ms, proxy.ts: 3ms, application-code: 663ms)
+ GET /api/climate-adjustment 200 in 191ms (next.js: 3ms, proxy.ts: 3ms, application-code: 184ms)
+ GET /api/field-notes?paddock_id=804a9699-4fdb-42da-82e9-651a5c76398c 200 in 107ms (next.js: 6ms, proxy.ts: 4ms, application-code: 97ms)
+ GET /api/field-notes?paddock_id=804a9699-4fdb-42da-82e9-651a5c76398c 200 in 101ms (next.js: 4ms, proxy.ts: 5ms, application-code: 92ms)
+ GET /dashboard/herds 200 in 29ms (next.js: 7ms, proxy.ts: 7ms, application-code: 16ms)
+ GET /api/herds 200 in 59ms (next.js: 6ms, proxy.ts: 4ms, application-code: 48ms)
+ GET /api/herds 200 in 54ms (next.js: 3ms, proxy.ts: 3ms, application-code: 47ms)
+ GET /api/team 200 in 430ms (next.js: 6ms, proxy.ts: 3ms, application-code: 421ms)
+ GET /api/farm-events 200 in 549ms (next.js: 4ms, proxy.ts: 3ms, application-code: 542ms)
+✓ Compiled in 500ms
+ GET /dashboard/herds 200 in 153ms (next.js: 41ms, proxy.ts: 79ms, application-code: 33ms)
+ GET /dashboard/herds 200 in 37ms (next.js: 3ms, proxy.ts: 1609µs, application-code: 33ms)
+ GET /dashboard/herds 200 in 39ms (next.js: 1716µs, proxy.ts: 1333µs, application-code: 36ms)
+ GET /dashboard/herds 200 in 39ms (next.js: 1799µs, proxy.ts: 1498µs, application-code: 35ms)
+ GET /dashboard/herds 200 in 29ms (next.js: 1280µs, proxy.ts: 1249µs, application-code: 26ms)
+ GET /dashboard/herds 200 in 15ms (next.js: 1263µs, proxy.ts: 2ms, application-code: 11ms)

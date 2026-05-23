@@ -1,0 +1,15 @@
+{
+  "cookies": [
+    {
+      "name": "__session",
+      "value": "eyJhbGciOiJSUzI1NiIsImtpZCI6ImM5YTBjMWRlYWEyN2JjNjMyNTUzYmM4MWEyMmQ4NzY1MWM3MTMyY2IiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiSmF2aWVyIE9zb3JpbyIsImlzcyI6Imh0dHBzOi8vc2VjdXJldG9rZW4uZ29vZ2xlLmNvbS9yb2Rlby1hcHAtZmFjNTAiLCJhdWQiOiJyb2Rlby1hcHAtZmFjNTAiLCJhdXRoX3RpbWUiOjE3Nzk1NjA2NzYsInVzZXJfaWQiOiJKRXc2NXg4QVUzaGFxSVhGVXVlRGg5MVltQ08yIiwic3ViIjoiSkV3NjV4OEFVM2hhcUlYRlV1ZURoOTFZbUNPMiIsImlhdCI6MTc3OTU2MDY3NiwiZXhwIjoxNzc5NTY0Mjc2LCJlbWFpbCI6Imphdmkub3NvcmlvLjFAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsiZW1haWwiOlsiamF2aS5vc29yaW8uMUBnbWFpbC5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.361S6gM_gfimtW5HbdUtXz1MmzKrk6MNmOjKHoZW85e1GDHlyrjzHMv4DTxRatQKUxG6GCw6LvUcLCliEpQH6mnjMd3aweeC-_58RJMh0uCyay7yld8KH0oA8bNEtX3xSICIaYdduy6UlOvzmJRILV8YIUKq6MFQ6e6PD7lHCOexXY-vLhx2AnluARMLEq5DGfIzGTeWPLaKhuSpp-B4duMSKYJkBhkxGP-h50m5M1xFEZ5VoUUWvqppoXdAqbiw8Xf1zNIOMOLfZl7YJS5M6dHm3GEnUS2XTTaaBDYhan9J9R2rb8E1zWX-KVaOo_CBBypd89_D1jIeOjQVg6eBjA",
+      "domain": "rodeo-staging-831756494147.southamerica-east1.run.app",
+      "path": "/",
+      "expires": 1779564276.985683,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

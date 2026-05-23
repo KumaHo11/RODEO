@@ -1168,7 +1168,7 @@ export default function PaddockModal({
                         <Mic className="w-3.5 h-3.5 text-gray-500" />
                       </div>
                       <div>
-                        <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas de campo</p>
+                        <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas del potrero</p>
                         <p className="text-[9px] text-gray-400 font-medium">Audio · Texto · Foto</p>
                       </div>
                     </div>
