@@ -758,7 +758,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     })
 
     if (!res.ok) {
-      toast.error('Error al guardar la nota')
+      import('sonner').then(({ toast }) => toast.error('Error al guardar la nota'))
       setNoteSaving(false)
       return
     }
