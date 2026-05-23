@@ -331,7 +331,7 @@ export default function BitacoraModal({
         } catch { /* fallback to Web Speech transcript */ }
 
         setSavingMsg('Guardando...')
-        await apiFetch('/api/field-notes', {
+        const response = await apiFetch('/api/field-notes', {
           method: 'POST',
           body: JSON.stringify({
             paddock_id: finalPaddockId, tags: finalTags,
@@ -341,6 +341,7 @@ export default function BitacoraModal({
             analysis_result: analysisResult,
           }),
         })
+        if (!response.ok) throw new Error('Error al guardar nota de audio')
       }
 
       // ── FOTO save ───────────────────────────────────────────────────
@@ -353,7 +354,7 @@ export default function BitacoraModal({
         if (r.ok) { photo_url = (await r.json()).url }
 
         setSavingMsg('Guardando...')
-        await apiFetch('/api/field-notes', {
+        const response = await apiFetch('/api/field-notes', {
           method: 'POST',
           body: JSON.stringify({
             paddock_id: paddockId || null, tags,
@@ -362,12 +363,13 @@ export default function BitacoraModal({
             photo_url,
           }),
         })
+        if (!response.ok) throw new Error('Error al guardar nota con foto')
       }
 
       // ── TEXTO save ──────────────────────────────────────────────────
       else if (mode === 'TEXTO') {
         setSavingMsg('Guardando...')
-        await apiFetch('/api/field-notes', {
+        const response = await apiFetch('/api/field-notes', {
           method: 'POST',
           body: JSON.stringify({
             paddock_id: paddockId || null, tags,
@@ -375,11 +377,13 @@ export default function BitacoraModal({
             content: textContent || null,
           }),
         })
+        if (!response.ok) throw new Error('Error al guardar nota de texto')
       }
 
       setSaving(false); onSaved(); onClose()
-    } catch (e) {
+    } catch (e: any) {
       console.error('BitacoraModal save error:', e)
+      toast.error(e.message || 'Error al guardar la nota')
       setSaving(false); setSavingMsg('')
     }
   }
@@ -557,8 +561,8 @@ export default function BitacoraModal({
                 </div>
               )}
 
-              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
-              <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={handlePhotoChange} />
+              <input ref={galleryRef} type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
             </div>
           )}
 

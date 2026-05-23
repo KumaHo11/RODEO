@@ -757,11 +757,16 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       }),
     })
 
+    if (!res.ok) {
+      toast.error('Error al guardar la nota')
+      setNoteSaving(false)
+      return
+    }
+
     // Update historial local immediately — no need to reload
-    if (res.ok) {
-      const saved = await res.json().catch(() => null)
-      setAgendaEvents(prev => [{
-        id: saved?.event?.id ?? `temp-${Date.now()}`,
+    const saved = await res.json().catch(() => null)
+    setAgendaEvents(prev => [{
+      id: saved?.event?.id ?? `temp-${Date.now()}`,
         title: resolvedTitle,
         event_type: 'nota',
         event_date: todayISO(),
@@ -769,10 +774,9 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         herd_ids: [herd.id],
         description: description || null,
         photo_url,
-        audio_url,
-        status: 'completado',
-      }, ...prev])
-    }
+      audio_url,
+      status: 'completado',
+    }, ...prev])
 
     setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null); audioBlobRef.current = null;
     setTimeout(() => setNoteSaved(false), 3000)
@@ -1313,7 +1317,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                   Esperando imagen...
                                 </p>
                               )}
-                              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => { if(e.target.files?.[0]) { setNotePhoto(e.target.files[0]); setNoteMode('photo'); setNoteExpanded(true) } }} />
+                              <input type="file" ref={fileInputRef} className="sr-only" accept="image/*" onChange={e => { if(e.target.files?.[0]) { setNotePhoto(e.target.files[0]); setNoteMode('photo'); setNoteExpanded(true) } }} />
                             </div>
                           )}
                           <textarea value={quickNote} onChange={e => setQuickNote(e.target.value)} rows={3}
@@ -1419,7 +1423,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                             </div>
                           </div>
                         )}
-                        <input ref={bcsCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                        <input ref={bcsCameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
                           onChange={e => { const f = e.target.files?.[0]; if (f) { setBcsPhotoFile(f); setBcsPhotoPreview(URL.createObjectURL(f)); setBcsAiResult(null) } }} />
                       </div>
 

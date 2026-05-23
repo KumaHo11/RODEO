@@ -1292,9 +1292,9 @@ export default function PaddockModal({
                                 <Camera className="w-3.5 h-3.5" /> Cámara
                               </button>
                             </div>
-                            <input ref={noteImageRef} type="file" accept="image/*" className="hidden"
+                            <input ref={noteImageRef} type="file" accept="image/*" className="sr-only"
                               onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
-                            <input ref={noteCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                            <input ref={noteCameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
                               onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
                             {noteImagePreview && (
                               // eslint-disable-next-line @next/next/no-img-element
