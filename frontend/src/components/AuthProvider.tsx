@@ -72,6 +72,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (res.ok) {
         const data = await res.json()
         setProfile(data.profile)
+        try {
+          localStorage.setItem('rodeo_cached_profile', JSON.stringify(data.profile))
+        } catch { /* ignore */ }
         return
       }
 
@@ -91,8 +94,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (err.name === 'AbortError') {
         console.warn('fetchProfile timeout — continuando sin perfil')
       } else {
-        console.error('Error fetching profile:', err)
+        console.warn('Error fetching profile (possibly offline):', err)
       }
+      try {
+        const cached = localStorage.getItem('rodeo_cached_profile')
+        if (cached) {
+          setProfile(JSON.parse(cached))
+          return
+        }
+      } catch { /* ignore */ }
       setProfile(null)
     }
   }, [])

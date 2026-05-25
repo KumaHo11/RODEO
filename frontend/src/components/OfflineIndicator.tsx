@@ -156,8 +156,12 @@ export default function OfflineIndicator() {
         localStorage.setItem('rodeo_offline_queue', JSON.stringify(newQueue))
         readPending()
         
-        if (newQueue.length === 0) setStatus('synced')
-        else setStatus('offline') // some failed
+        if (newQueue.length === 0) {
+          setStatus('synced')
+          window.dispatchEvent(new Event('rodeo_sync_completed'))
+        } else {
+          setStatus('offline') // some failed
+        }
 
         setTimeout(() => {
           setVisible(false)

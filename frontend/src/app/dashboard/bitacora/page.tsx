@@ -167,8 +167,55 @@ export default function BitacoraPage() {
   const loadNotes = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    const res = await apiFetch('/api/field-notes')
-    setNotes(res.ok ? (await res.json()).notes || [] : [])
+    let fetchedNotes: any[] = []
+    try {
+      const res = await apiFetch('/api/field-notes')
+      if (res.ok) {
+        fetchedNotes = (await res.json()).notes || []
+        try {
+          localStorage.setItem('rodeo_cached_notes', JSON.stringify(fetchedNotes))
+        } catch { /* ignore */ }
+      } else {
+        throw new Error('API error')
+      }
+    } catch {
+      try {
+        fetchedNotes = JSON.parse(localStorage.getItem('rodeo_cached_notes') || '[]')
+      } catch { /* ignore */ }
+    }
+
+    // Merge with offline queue
+    try {
+      const queue = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
+      const pendingFieldNotes = queue.filter((q: any) => q.type === 'field_note')
+      
+      const localNotes = await Promise.all(pendingFieldNotes.map(async (item: any) => {
+        const noteData = { ...item.data, id: `pending-${item.timestamp}`, created_at: new Date(item.timestamp).toISOString(), is_pending: true }
+        
+        if (item.mediaType === 'photo' && item.mediaId) {
+          const { getPendingPhoto } = await import('@/lib/audioOfflineStore')
+          const photo = await getPendingPhoto(item.mediaId)
+          if (photo && photo.blob) {
+            noteData.photo_url = URL.createObjectURL(photo.blob)
+          }
+        } else if (item.mediaType === 'audio' && item.mediaId) {
+          const { getPendingAudio } = await import('@/lib/audioOfflineStore')
+          const audio = await getPendingAudio(item.mediaId)
+          if (audio && audio.blob) {
+            noteData.audio_url = URL.createObjectURL(audio.blob)
+            noteData.audio_duration_secs = audio.durationSecs
+            if (!noteData.content && audio.transcript) noteData.content = audio.transcript
+          }
+        }
+        return noteData
+      }))
+      
+      setNotes([...localNotes, ...fetchedNotes])
+    } catch (e) {
+      console.error('Error merging offline notes:', e)
+      setNotes(fetchedNotes)
+    }
+
     setLoading(false)
   }, [user])
 
@@ -183,10 +230,16 @@ export default function BitacoraPage() {
   useEffect(() => { refreshPending() }, [refreshPending])
 
   useEffect(() => {
-    const handler = () => refreshPending()
-    window.addEventListener('rodeo_queue_updated', handler)
-    return () => window.removeEventListener('rodeo_queue_updated', handler)
-  }, [refreshPending])
+    const queueHandler = () => { refreshPending(); loadNotes() }
+    const syncHandler = () => { loadNotes() }
+    
+    window.addEventListener('rodeo_queue_updated', queueHandler)
+    window.addEventListener('rodeo_sync_completed', syncHandler)
+    return () => {
+      window.removeEventListener('rodeo_queue_updated', queueHandler)
+      window.removeEventListener('rodeo_sync_completed', syncHandler)
+    }
+  }, [refreshPending, loadNotes])
 
   // ── Geo ─────────────────────────────────────────────────────────────────────
   const getLocation = () => {
