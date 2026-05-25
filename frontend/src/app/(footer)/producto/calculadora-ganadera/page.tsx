@@ -75,14 +75,19 @@ export default function CalculadoraGanaderaLanding() {
                   <FormulasTab />
                 </div>
               ) : (
-                <div className="max-w-3xl mx-auto relative">
+                <div className="max-w-3xl mx-auto relative h-[400px] overflow-hidden rounded-2xl">
                   {/* Blurred background mockup */}
-                  <div className="blur-md opacity-40 pointer-events-none select-none">
-                    <FormulasTab />
+                  <div className="absolute inset-0 bg-white border border-gray-100 rounded-2xl p-8 blur-sm opacity-50 flex flex-col gap-6 pointer-events-none select-none">
+                    <div className="h-8 bg-gray-100 rounded-lg w-1/3"></div>
+                    <div className="h-24 bg-gray-50 rounded-xl w-full"></div>
+                    <div className="flex gap-4">
+                      <div className="h-20 bg-gray-50 rounded-xl w-1/2"></div>
+                      <div className="h-20 bg-gray-50 rounded-xl w-1/2"></div>
+                    </div>
                   </div>
                   {/* CTA Overlay */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                    <div className="bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl max-w-md border border-gray-100">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 z-10">
+                    <div className="bg-white/95 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border border-gray-100">
                       <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <BarChart3 className="w-6 h-6 text-green-600" />
                       </div>
