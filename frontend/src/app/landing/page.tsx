@@ -86,6 +86,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function LandingPage() {
   const [activeFeature, setActiveFeature] = useState(0)
+  const [calcTab, setCalcTab] = useState<'formulas'|'proyecciones'>('formulas')
   const [menuOpen, setMenuOpen]           = useState(false)
   const [scrolled, setScrolled]           = useState(false)
   const [activePlan, setActivePlan]       = useState<'monthly' | 'annual'>('annual')
@@ -829,7 +830,7 @@ export default function LandingPage() {
 
 
       {/* ── CALCULATOR SECTION ── */}
-      <section className="py-24 bg-gray-50 border-t border-gray-100">
+      <section id="calculadora" className="py-24 bg-gray-50 border-t border-gray-100">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center mb-10">
             <SectionLabel>HERRAMIENTA ABIERTA</SectionLabel>
@@ -843,20 +844,47 @@ export default function LandingPage() {
             <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-center">
               <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit">
                 <button
-                  className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all bg-white text-gray-900 shadow-sm">
+                  onClick={() => setCalcTab('formulas')}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${calcTab === 'formulas' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                   Fórmulas
                 </button>
-                <Link href="/register"
-                  className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all text-gray-500 hover:text-gray-700">
+                <button
+                  onClick={() => setCalcTab('proyecciones')}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${calcTab === 'proyecciones' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                   Proyecciones
-                </Link>
+                </button>
               </div>
             </div>
             
-            <div className="p-6 md:p-8 bg-gray-50/30">
-              <div className="max-w-3xl mx-auto">
-                <FormulasTab />
-              </div>
+            <div className="p-6 md:p-8 bg-gray-50/30 min-h-[400px] relative">
+              {calcTab === 'formulas' ? (
+                <div className="max-w-3xl mx-auto">
+                  <FormulasTab />
+                </div>
+              ) : (
+                <div className="max-w-3xl mx-auto relative">
+                  {/* Blurred background mockup */}
+                  <div className="blur-md opacity-40 pointer-events-none select-none">
+                    <FormulasTab />
+                  </div>
+                  {/* CTA Overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+                    <div className="bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl max-w-md border border-gray-100">
+                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <BarChart3 className="w-6 h-6 text-green-600" />
+                      </div>
+                      <h3 className="text-xl font-black text-gray-900 mb-2">Proyecciones en tiempo real</h3>
+                      <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                        Las proyecciones se calculan en base a los datos climáticos, satelitales (NDVI) y de stock de <strong>tu propio campo</strong>. Necesitás crear una cuenta gratuita para acceder a la herramienta.
+                      </p>
+                      <Link href="/register"
+                        className="inline-flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-green-600/30">
+                        Crear cuenta gratis
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -893,18 +921,18 @@ export default function LandingPage() {
 
 
       {/* ── FOOTER ── */}
-      <footer className="bg-gray-950 text-gray-500 py-16">
+      <footer className="bg-gray-950 text-gray-300 py-16">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-10 mb-12">
             <div>
               <div className="text-xl font-black italic text-white tracking-tighter mb-3">RODEO</div>
-              <p className="text-sm leading-relaxed text-gray-600">
+              <p className="text-sm leading-relaxed text-gray-400">
                 Plataforma de gestión ganadera con IA y pastoreo holístico para el productor latinoamericano.
               </p>
               <div className="flex gap-2 mt-5">
                 {['Instagram', 'LinkedIn', 'YouTube'].map(s => (
                   <a key={s} href="#"
-                    className="text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors font-medium text-gray-400 hover:text-white">
+                    className="text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors font-medium text-gray-300 hover:text-white">
                     {s}
                   </a>
                 ))}
@@ -917,6 +945,7 @@ export default function LandingPage() {
                 { label: 'Bitácora de Voz',        href: '/producto/bitacora-de-voz' },
                 { label: 'Gestión de Hacienda',    href: '/producto/gestion-de-hacienda' },
                 { label: 'Planificador Holístico', href: '/producto/planificador-holistico' },
+                { label: 'Calculadora Ganadera',   href: '#calculadora' },
                 { label: 'Modo Offline',           href: '/producto/modo-offline' },
               ]},
               { title: 'Empresa', links: [
@@ -937,21 +966,21 @@ export default function LandingPage() {
                 <div className="text-[10px] font-black text-gray-400 tracking-widest mb-4">{col.title.toUpperCase()}</div>
                 <div className="space-y-2.5">
                   {col.links.map(link => (
-                    <a key={link.href} href={link.href} className="block text-sm text-gray-600 hover:text-gray-200 transition-colors">{link.label}</a>
+                    <a key={link.href} href={link.href} className="block text-sm text-gray-400 hover:text-white transition-colors">{link.label}</a>
                   ))}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-gray-700">© 2026 Rodeo AgTech. Hecho en Argentina para toda LATAM.</div>
+          <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="text-sm text-gray-500">© 2026 Rodeo AgTech. Hecho en Argentina para toda LATAM.</div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5 text-xs text-gray-700">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                 Todos los sistemas operativos
               </div>
-              <div className="text-xs text-gray-700 tracking-wider">ARG · URU · BRA · PAR · COL · CHI</div>
+              <div className="text-xs text-gray-500 tracking-wider">ARG · URU · BRA · PAR · COL · CHI</div>
             </div>
           </div>
         </div>
