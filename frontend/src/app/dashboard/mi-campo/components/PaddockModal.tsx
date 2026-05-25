@@ -681,8 +681,12 @@ export default function PaddockModal({
         fd.append('file', compressedImage)
         fd.append('folder', 'field-notes')
         const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-        if (up.ok) ({ url: photo_url } = await up.json())
-        else console.warn('[saveQuickNote] photo upload failed:', up.status)
+        if (up.ok) {
+          const upData = await up.json().catch(() => ({}))
+          photo_url = upData.url || null
+        } else {
+          console.warn('[saveQuickNote] photo upload failed:', up.status)
+        }
       } catch (err) {
         console.error('[saveQuickNote] compress error:', err)
       }
@@ -699,7 +703,7 @@ export default function PaddockModal({
       fd.append('folder', 'field-notes-audio')
       const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
       if (up.ok) {
-        const upData = await up.json()
+        const upData = await up.json().catch(() => ({}))
         audio_url = upData.url || null
         console.log('[saveQuickNote] audio uploaded:', audio_url)
       } else {
@@ -714,7 +718,7 @@ export default function PaddockModal({
         tf.append('file', new File([effectiveBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
         const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
         if (tr.ok) {
-          const d = await tr.json()
+          const d = await tr.json().catch(() => ({}))
           if (d.transcript && d.transcript !== '[Sin voz detectable]') {
             finalTranscript = d.transcript
             setAudioTranscript(d.transcript)
@@ -797,11 +801,13 @@ export default function PaddockModal({
         setNoteAnalyzing(false)
         return
       }
-      const data = await resp.json()
+      const data = await resp.json().catch(() => ({}))
       // API returns { success: true, data: { dry_matter_kg_ha, ... } }
       const result = data?.data ?? data
       if (result?.dry_matter_kg_ha) {
         setNoteResult(result)
+        setMsHa(String(Math.round(result.dry_matter_kg_ha)))
+        toast.success(`La IA estimó ${Math.round(result.dry_matter_kg_ha)} kg MS/ha. Se actualizó el potrero.`)
       } else {
         toast.error('La IA no pudo determinar la biomasa de esta imagen')
       }
@@ -1522,6 +1528,20 @@ export default function PaddockModal({
                               {hasPhoto && (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={note.photo_url} alt="Evidencia" className="w-full max-h-24 object-cover" />
+                              )}
+                              {hasAI && (
+                                <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
+                                  {[
+                                    { l: 'MS/ha', v: `${note.analysis_result.dry_matter_kg_ha} kg` },
+                                    { l: 'Alt.', v: `${note.analysis_result.grass_height_cm ?? '—'} cm` },
+                                    { l: 'Cob.', v: `${note.analysis_result.coverage_pct ?? '—'}%` },
+                                  ].map(item => (
+                                    <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
+                                      <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
+                                      <p className="text-[10px] font-black text-violet-800">{item.v}</p>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
                               <div className="px-3 pb-2">
                                 <p className="text-[8px] text-gray-300 font-medium">{fmtDate(note.created_at)}</p>

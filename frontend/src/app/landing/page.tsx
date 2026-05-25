@@ -829,66 +829,7 @@ export default function LandingPage() {
       </section>
 
 
-      {/* ── CALCULATOR SECTION ── */}
-      <section id="calculadora" className="py-24 bg-gray-50 border-t border-gray-100">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="text-center mb-10">
-            <SectionLabel>HERRAMIENTA ABIERTA</SectionLabel>
-            <h2 className="text-3xl lg:text-4xl font-black text-gray-950 mb-4">Calculadora Ganadera</h2>
-            <p className="text-gray-500 max-w-xl mx-auto">
-              Probá nuestras fórmulas de Equivalente Vaca y Balance Hídrico de forma gratuita.
-            </p>
-          </div>
-          
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-200 overflow-hidden">
-            <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-center">
-              <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit">
-                <button
-                  onClick={() => setCalcTab('formulas')}
-                  className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${calcTab === 'formulas' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                  Fórmulas
-                </button>
-                <button
-                  onClick={() => setCalcTab('proyecciones')}
-                  className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${calcTab === 'proyecciones' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                  Proyecciones
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6 md:p-8 bg-gray-50/30 min-h-[400px] relative">
-              {calcTab === 'formulas' ? (
-                <div className="max-w-3xl mx-auto">
-                  <FormulasTab />
-                </div>
-              ) : (
-                <div className="max-w-3xl mx-auto relative">
-                  {/* Blurred background mockup */}
-                  <div className="blur-md opacity-40 pointer-events-none select-none">
-                    <FormulasTab />
-                  </div>
-                  {/* CTA Overlay */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                    <div className="bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl max-w-md border border-gray-100">
-                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <BarChart3 className="w-6 h-6 text-green-600" />
-                      </div>
-                      <h3 className="text-xl font-black text-gray-900 mb-2">Proyecciones en tiempo real</h3>
-                      <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-                        Las proyecciones se calculan en base a los datos climáticos, satelitales (NDVI) y de stock de <strong>tu propio campo</strong>. Necesitás crear una cuenta gratuita para acceder a la herramienta.
-                      </p>
-                      <Link href="/register"
-                        className="inline-flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-green-600/30">
-                        Crear cuenta gratis
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
+
 
       {/* ── FINAL CTA ── */}
       <section className="py-24 bg-green-600 relative overflow-hidden">
@@ -945,7 +886,7 @@ export default function LandingPage() {
                 { label: 'Bitácora de Voz',        href: '/producto/bitacora-de-voz' },
                 { label: 'Gestión de Hacienda',    href: '/producto/gestion-de-hacienda' },
                 { label: 'Planificador Holístico', href: '/producto/planificador-holistico' },
-                { label: 'Calculadora Ganadera',   href: '#calculadora' },
+                { label: 'Calculadora Ganadera',   href: '/producto/calculadora-ganadera' },
                 { label: 'Modo Offline',           href: '/producto/modo-offline' },
               ]},
               { title: 'Empresa', links: [
