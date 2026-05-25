@@ -14,6 +14,33 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+// ── Image compression helper ──────────────────────────────────────────────────
+async function compressImage(file: File, maxDim = 1200): Promise<File> {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = (e) => {
+      const img = new Image()
+      img.src = e.target?.result as string
+      img.onload = () => {
+        let { width, height } = img
+        if (width > height && width > maxDim) { height *= maxDim / width; width = maxDim }
+        else if (height > maxDim) { width *= maxDim / height; height = maxDim }
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+        canvas.toBlob((blob) => {
+          if (blob) resolve(new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }))
+          else resolve(file)
+        }, 'image/jpeg', 0.7)
+      }
+      img.onerror = () => resolve(file)
+    }
+    reader.onerror = () => resolve(file)
+  })
+}
+
 // ── Categories ────────────────────────────────────────────────────────────────
 const CATEGORIES = [
   { id: 'INFRAESTRUCTURA', label: 'Infraestructura', icon: Wrench,        border: 'border-cyan-200',   text: 'text-cyan-800',   bg: 'bg-cyan-50' },
@@ -344,14 +371,19 @@ export default function BitacoraModal({
         if (!response.ok) throw new Error('Error al guardar nota de audio')
       }
 
-      // ── FOTO save ───────────────────────────────────────────────────
+      // ── FOTO save ───────────────────────────────────────────────
       else if (mode === 'FOTO' && photoFile) {
         setSavingMsg('Subiendo foto...')
         let photo_url: string | null = null
-        const fd = new FormData()
-        fd.append('file', photoFile); fd.append('folder', 'bitacora-photos')
-        const r = await apiFetch('/api/upload', { method: 'POST', body: fd })
-        if (r.ok) { photo_url = (await r.json()).url }
+        try {
+          const compressedImage = await compressImage(photoFile)
+          const fd = new FormData()
+          fd.append('file', compressedImage); fd.append('folder', 'bitacora-photos')
+          const r = await apiFetch('/api/upload', { method: 'POST', body: fd })
+          if (r.ok) { photo_url = (await r.json()).url }
+        } catch (err) {
+          console.error('[BitacoraModal] compress error:', err)
+        }
 
         setSavingMsg('Guardando...')
         const response = await apiFetch('/api/field-notes', {
@@ -572,11 +604,11 @@ export default function BitacoraModal({
               <label className="text-[10px] font-black tracking-widest text-gray-400 uppercase">Nota de texto</label>
               <input type="text" value={textTitle} onChange={e => setTextTitle(e.target.value)}
                 placeholder="Título · ¿Qué está pasando?" required
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-950 focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-300" />
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base md:text-sm font-bold text-gray-950 focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-300" />
               <textarea value={textContent} onChange={e => setTextContent(e.target.value)}
                 placeholder="Detalle adicional (opcional)..."
                 rows={4}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 focus:ring-1 focus:ring-green-600 outline-none resize-none transition-all placeholder:text-gray-400" />
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base md:text-sm font-medium text-gray-700 focus:ring-1 focus:ring-green-600 outline-none resize-none transition-all placeholder:text-gray-400" />
             </div>
           )}
 

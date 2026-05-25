@@ -12,7 +12,7 @@ import {
   Calendar, Hash, Scale, Clock, ClipboardList,
   TrendingDown, TrendingUp, Baby, ShoppingCart,
   AlertTriangle, BookOpen, CalendarDays, Info, Edit3,
-  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users, Trash2, Search, FileText, Image as ImageIcon, Filter, Activity, Target, Stethoscope, Scissors, CheckCircle2, Lock, Paperclip
+  Camera, Mic, MicOff, MessageSquarePlus, ChevronRight, Users, Trash2, Search, FileText, Image as ImageIcon, Filter, Activity, Target, Stethoscope, Scissors, CheckCircle2, Lock, Paperclip, Sparkles
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '@/lib/apiFetch'
@@ -61,6 +61,33 @@ interface Props {
 // calculateBaseEV importado desde lib/grazing/evProjection
 // todayISO importado desde lib/utils/dates
 
+async function compressImage(file: File, maxDim = 1200): Promise<File> {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = (e) => {
+      const img = new Image()
+      img.src = e.target?.result as string
+      img.onload = () => {
+        let { width, height } = img
+        if (width > height && width > maxDim) { height *= maxDim / width; width = maxDim }
+        else if (height > maxDim) { width *= maxDim / height; height = maxDim }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+        canvas.toBlob((blob) => {
+          if (blob) resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg', lastModified: Date.now() }))
+          else resolve(file)
+        }, 'image/jpeg', 0.7)
+      }
+      img.onerror = () => resolve(file)
+    }
+    reader.onerror = () => resolve(file)
+  })
+}
+
 function bcsLabel(s: number) {
   if (s <= 1) return 'Muy baja'
   if (s <= 2) return 'Baja'
@@ -79,8 +106,8 @@ const EVENT_TYPES_QUICK = [
 ]
 
 const LABEL = 'text-[10px] font-black text-gray-700 tracking-widest uppercase'
-const INPUT  = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all'
-const TEXTAREA = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none resize-none transition-all'
+const INPUT  = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-base md:text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all'
+const TEXTAREA = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-base md:text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none resize-none transition-all'
 
 // ── Activity options — uniform grid layout ─────────────────────────────────────
 
@@ -525,11 +552,16 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     // ── Online Path ──
     let photo_url: string | null = null
     if (bcsPhotoFile) {
-      const fd = new FormData()
-      fd.append('file', bcsPhotoFile)
-      fd.append('folder', 'bcs-photos')
-      const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-      if (up.ok) ({ url: photo_url } = await up.json())
+      try {
+        const compressedImage = await compressImage(bcsPhotoFile)
+        const fd = new FormData()
+        fd.append('file', compressedImage)
+        fd.append('folder', 'bcs-photos')
+        const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+        if (up.ok) ({ url: photo_url } = await up.json())
+      } catch (err) {
+        console.error('[saveBcs] compress error:', err)
+      }
     }
 
     const eventTitle = `Condición Corporal registrada: ${bcsScore}/5 — ${label}`
@@ -613,16 +645,17 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     setBcsAnalyzing(true)
     setBcsAiResult(null)
     try {
+      const compressedImage = await compressImage(bcsPhotoFile)
       const reader = new FileReader()
       const b64: string = await new Promise((res, rej) => {
         reader.onload = () => res((reader.result as string).split(',')[1])
         reader.onerror = rej
-        reader.readAsDataURL(bcsPhotoFile)
+        reader.readAsDataURL(compressedImage)
       })
       const resp = await apiFetch('/api/analyze-body-condition', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: b64, mimeType: bcsPhotoFile.type, species: catKey ? catKey.toLowerCase() : 'bovino' }),
+        body: JSON.stringify({ imageBase64: b64, mimeType: compressedImage.type, species: catKey ? catKey.toLowerCase() : 'bovino' }),
       })
       if (resp.ok) {
         const json = await resp.json()
@@ -702,11 +735,16 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     // ── Online Path ──
     let photo_url: string | null = null
     if (notePhoto) {
-      const fd = new FormData()
-      fd.append('file', notePhoto)
-      fd.append('folder', 'herd-notes')
-      const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-      if (up.ok) ({ url: photo_url } = await up.json())
+      try {
+        const compressedImage = await compressImage(notePhoto)
+        const fd = new FormData()
+        fd.append('file', compressedImage)
+        fd.append('folder', 'herd-notes')
+        const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+        if (up.ok) ({ url: photo_url } = await up.json())
+      } catch (err) {
+        console.error('[saveNote] compress error:', err)
+      }
     }
 
     let audio_url: string | null = null
@@ -972,7 +1010,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
           {/* ════ TAB 1 — DATOS OPERATIVOS ════ */}
           {tab === 'operativo' && (
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 pt-5 pb-24 space-y-4">
               <div className="space-y-1.5">
                 <label className={LABEL}>Categoría comercial</label>
                 <CatCombobox value={catLabel} onChange={(lbl, key) => { setCatLabel(lbl); setCatKey(key) }} />
@@ -982,6 +1020,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                   </p>
                 )}
               </div>
+
 
               <div className="space-y-1.5">
                 <label className={LABEL}>Nombre del rodeo *</label>
@@ -1069,7 +1108,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
           {/* ════ TAB 2 — ACTIVIDADES ════ */}
           {tab === 'actividades' && (
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-6 pt-5 pb-24 space-y-5">
               {!isEditing ? (
                 <div className="py-10 text-center">
                   <ClipboardList className="w-10 h-10 text-gray-200 mx-auto mb-3" />
@@ -1205,7 +1244,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
           {/* ════ TAB 3 — REGISTROS ════ */}
           {tab === 'registros' && (
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 pt-5 pb-24 space-y-4">
 
               {!isEditing ? (
                 <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
@@ -1408,9 +1447,9 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         {bcsPhotoFile && (
                           <div className="relative">
                             <button type="button" onClick={analyzeBcs} disabled={bcsAnalyzing || !hasFeature('ai_insights')}
-                              className={`w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl transition-all ${!hasFeature('ai_insights') ? 'opacity-50 blur-[1px]' : 'hover:bg-violet-100 disabled:opacity-50'}`}>
-                              {bcsAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>✨</span>}
-                              {bcsAnalyzing ? 'Analizando con IA…' : 'Analizar condición con IA'}
+                              className={`w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl transition-all whitespace-nowrap overflow-hidden px-2 ${!hasFeature('ai_insights') ? 'opacity-50 blur-[1px]' : 'hover:bg-violet-100 disabled:opacity-50'}`}>
+                              {bcsAnalyzing ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" /> : <Sparkles className="w-4 h-4 shrink-0" />}
+                              <span className="truncate">{bcsAnalyzing ? 'Analizando con IA…' : 'Analizar condición con IA'}</span>
                             </button>
                             {!hasFeature('ai_insights') && (
                               <div className="absolute inset-0 flex items-center justify-center z-10" title="Requiere Plan Holístico">
@@ -1476,12 +1515,21 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                  isNota ? <FileText className="w-3.5 h-3.5 text-gray-500" /> :
                                  <div className="w-2 h-2 rounded-full bg-gray-400" />}
                               </div>
-                              <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2">
-                                <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
-                                <p className="text-[8px] text-gray-400 font-medium mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''}{isNota ? '' : ` · ${ev.event_type}`}</p>
+                              <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
+                                <div className="px-3 pt-2 pb-1">
+                                  <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
+                                  <p className="text-[8px] text-gray-400 font-medium mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''}{isNota ? '' : ` · ${ev.event_type}`}</p>
+                                </div>
                                 {ev.audio_url && (
-                                  <audio controls src={ev.audio_url} className="w-full h-8 mt-2" />
+                                  <div className="px-3 pb-2">
+                                    <audio controls src={ev.audio_url} className="w-full rounded-lg" style={{ height: '28px' }} />
+                                  </div>
                                 )}
+                                {ev.photo_url && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-24 object-cover" />
+                                )}
+                                {!ev.audio_url && !ev.photo_url && <div className="pb-1" />}
                               </div>
                             </div>
                           )
@@ -1502,7 +1550,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
           {/* ════ TAB 4 — HISTORIAL ════ */}
           {tab === 'historial' && (
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 pt-5 pb-24 space-y-4">
               {!isEditing ? (
                 <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
