@@ -7,7 +7,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock, Search, FileText, Image as ImageIcon, Filter } from 'lucide-react'
+import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock, Search, FileText, Image as ImageIcon, Filter, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
@@ -141,8 +141,8 @@ const fmtDate = (iso: string | null | undefined) => {
 
 // ─── Shared token strings ──────────────────────────────────────────────────
 const LABEL_CLS  = 'text-[10px] font-black text-gray-700 tracking-widest uppercase'
-const INPUT_CLS  = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-400'
-const SELECT_CLS = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-800 focus:ring-1 focus:ring-gray-400 outline-none transition-all'
+const INPUT_CLS  = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-base md:text-sm font-medium text-gray-800 focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-400'
+const SELECT_CLS = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-base md:text-sm font-bold text-gray-800 focus:ring-1 focus:ring-gray-400 outline-none transition-all'
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
@@ -297,6 +297,35 @@ function Collapsible({ title, children, defaultOpen = false, accent }: {
       )}
     </div>
   )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function compressImage(file: File, maxDim = 1200): Promise<File> {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = (e) => {
+      const img = new Image()
+      img.src = e.target?.result as string
+      img.onload = () => {
+        let { width, height } = img
+        if (width > height && width > maxDim) { height *= maxDim / width; width = maxDim }
+        else if (height > maxDim) { width *= maxDim / height; height = maxDim }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+        canvas.toBlob((blob) => {
+          if (blob) resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg', lastModified: Date.now() }))
+          else resolve(file)
+        }, 'image/jpeg', 0.7)
+      }
+      img.onerror = () => resolve(file)
+    }
+    reader.onerror = () => resolve(file)
+  })
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -646,12 +675,17 @@ export default function PaddockModal({
     // ── Online Path ──
     let photo_url: string | null = null
     if (noteImage) {
-      const fd = new FormData()
-      fd.append('file', noteImage)
-      fd.append('folder', 'field-notes')
-      const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-      if (up.ok) ({ url: photo_url } = await up.json())
-      else console.warn('[saveQuickNote] photo upload failed:', up.status)
+      try {
+        const compressedImage = await compressImage(noteImage)
+        const fd = new FormData()
+        fd.append('file', compressedImage)
+        fd.append('folder', 'field-notes')
+        const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+        if (up.ok) ({ url: photo_url } = await up.json())
+        else console.warn('[saveQuickNote] photo upload failed:', up.status)
+      } catch (err) {
+        console.error('[saveQuickNote] compress error:', err)
+      }
     }
 
     // 1. Upload audio file (use ref blob for reliability)
@@ -745,16 +779,17 @@ export default function PaddockModal({
     setNoteAnalyzing(true)
     setNoteResult(null)
     try {
+      const compressedImage = await compressImage(noteImage)
       const reader = new FileReader()
       const b64: string = await new Promise((res, rej) => {
         reader.onload = () => res((reader.result as string).split(',')[1])
         reader.onerror = rej
-        reader.readAsDataURL(noteImage)
+        reader.readAsDataURL(compressedImage)
       })
       const resp = await apiFetch('/api/analyze-biomass', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: b64, mimeType: noteImage.type, area_ha: areaHa })
+        body: JSON.stringify({ imageBase64: b64, mimeType: compressedImage.type, area_ha: areaHa })
       })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
@@ -781,9 +816,10 @@ export default function PaddockModal({
     if (!bioPhoto) return
     setBioAnalyzing(true); setBioError(null); setBioResult(null)
     try {
+      const compressedImage = await compressImage(bioPhoto)
       const reader = new FileReader()
-      const b64: string = await new Promise((res, rej) => { reader.onload = () => res((reader.result as string).split(',')[1]); reader.onerror = rej; reader.readAsDataURL(bioPhoto) })
-      const resp = await apiFetch('/api/analyze-biomass', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: b64, mimeType: bioPhoto.type, area_ha: areaHa }) })
+      const b64: string = await new Promise((res, rej) => { reader.onload = () => res((reader.result as string).split(',')[1]); reader.onerror = rej; reader.readAsDataURL(compressedImage) })
+      const resp = await apiFetch('/api/analyze-biomass', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: b64, mimeType: compressedImage.type, area_ha: areaHa }) })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
         setBioError(err.error || 'No se pudo analizar la imagen.')
@@ -886,7 +922,7 @@ export default function PaddockModal({
 
           {/* ════ TAB 1 — DATOS OPERATIVOS ════ */}
           {activeTab === 'operativo' && (
-            <div className="px-6 pt-5 pb-48 space-y-4">
+            <div className="px-6 pt-5 pb-24 space-y-4">
 
               {/* Nombre */}
               <div className="space-y-1.5">
@@ -1250,7 +1286,7 @@ export default function PaddockModal({
                         {noteMode === 'text' && (
                           <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
                             placeholder="Escribí tu observación de campo…" rows={3} autoFocus
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none" />
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-base md:text-sm font-medium text-gray-800 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none" />
                         )}
 
                         {/* AUDIO mode */}
@@ -1302,9 +1338,9 @@ export default function PaddockModal({
                             )}
                             {noteImage && canAiInsight && (
                               <button type="button" onClick={analyzeNoteImage} disabled={noteAnalyzing}
-                                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50">
-                                {noteAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>✨</span>}
-                                {noteAnalyzing ? 'Analizando con IA…' : 'Analizar biomasa con IA'}
+                                className="w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50 whitespace-nowrap overflow-hidden px-2">
+                                {noteAnalyzing ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" /> : <Sparkles className="w-4 h-4 shrink-0" />}
+                                <span className="truncate">{noteAnalyzing ? 'Analizando con IA…' : 'Analizar biomasa con IA'}</span>
                               </button>
                             )}
                             {noteImage && !canAiInsight && (
@@ -1322,7 +1358,7 @@ export default function PaddockModal({
                               </div>
                             )}
                             <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Descripción adicional…" rows={2}
-                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none" />
+                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-base md:text-sm text-gray-700 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none" />
                           </div>
                         )}
 
@@ -1420,8 +1456,8 @@ export default function PaddockModal({
                       )}
                       <button type="button"
                         onClick={() => { setNoteExpanded(true); setNoteMode('image') }}
-                        className="mt-2 text-[9px] font-black text-violet-600 hover:text-violet-800 flex items-center gap-0.5">
-                        ✨ Analizar foto
+                        className="mt-2 text-[9px] font-black text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> Analizar foto
                       </button>
                     </div>
                   </div>
@@ -1470,13 +1506,26 @@ export default function PaddockModal({
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${hasAudio ? 'bg-red-50 border-red-200' : hasPhoto ? 'bg-green-50 border-green-200' : `${primary.bg} ${primary.border}`}`}>
                               {hasAudio ? <Mic className="w-3 h-3 text-red-500" /> : hasPhoto ? <Camera className="w-3 h-3 text-green-600" /> : <CatIcon className="w-3 h-3" style={{ color: primary.color }} />}
                             </div>
-                            <div className="flex-1 bg-white rounded-xl border border-gray-100 px-3 py-2">
-                              <div className="flex flex-wrap gap-1 mb-0.5">
-                                {tags.map(t => { const c = CAT_CONFIG[t] || CAT_CONFIG.GENERAL; return <span key={t} className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${c.badge}`}>{c.label}</span> })}
-                                {hasAI && <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase">IA</span>}
+                            <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
+                              <div className="px-3 pt-2 pb-1.5">
+                                <div className="flex flex-wrap gap-1 mb-0.5">
+                                  {tags.map(t => { const c = CAT_CONFIG[t] || CAT_CONFIG.GENERAL; return <span key={t} className={`text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${c.badge}`}>{c.label}</span> })}
+                                  {hasAI && <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase">IA</span>}
+                                </div>
+                                <p className="text-[11px] font-black text-gray-900 leading-tight">{note.title}</p>
                               </div>
-                              <p className="text-[11px] font-black text-gray-900 leading-tight">{note.title}</p>
-                              <p className="text-[8px] text-gray-300 font-medium mt-0.5">{fmtDate(note.created_at)}</p>
+                              {hasAudio && (
+                                <div className="px-3 pb-2">
+                                  <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '28px' }} />
+                                </div>
+                              )}
+                              {hasPhoto && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={note.photo_url} alt="Evidencia" className="w-full max-h-24 object-cover" />
+                              )}
+                              <div className="px-3 pb-2">
+                                <p className="text-[8px] text-gray-300 font-medium">{fmtDate(note.created_at)}</p>
+                              </div>
                             </div>
                           </div>
                         )
