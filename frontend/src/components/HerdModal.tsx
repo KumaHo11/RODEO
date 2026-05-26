@@ -374,20 +374,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         }
       }
 
-      // Update historial local immediately
-      if (evRes.ok) {
-        const saved = await evRes.json().catch(() => null)
-        setAgendaEvents(prev => [{
-          id: saved?.event?.id ?? `temp-${Date.now()}`,
-          title: evTitle,
-          event_type: actId,
-          event_date: actDate,
-          herd_id: herd.id,
-          herd_ids: [herd.id],
-          description: evDesc || null,
-          status: 'completado',
-        }, ...prev])
-      }
+
 
       // Destete: auto-create child herd
       if (actId === 'destete' && n > 0) {
