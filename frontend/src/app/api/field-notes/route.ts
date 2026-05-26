@@ -25,9 +25,10 @@ export async function GET(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
-    const paddockId = searchParams.get('paddock_id')
-    const source    = searchParams.get('source')   // 'WHATSAPP' | 'APP'
-    const status    = searchParams.get('status')   // 'PENDING_REVIEW' | 'APPROVED'
+    const paddockId     = searchParams.get('paddock_id')
+    const source        = searchParams.get('source')        // 'WHATSAPP' | 'APP'
+    const status        = searchParams.get('status')        // 'PENDING_REVIEW' | 'APPROVED'
+    const bitacoraOnly  = searchParams.get('bitacora_only') // '1' => paddock_id IS NULL only
 
     let sql = `
       SELECT
@@ -42,9 +43,10 @@ export async function GET(req: NextRequest) {
     `
     const vals: any[] = [auth.orgId]
 
-    if (paddockId) { sql += ` AND fn.paddock_id = $${vals.length + 1}`; vals.push(paddockId) }
-    if (source)    { sql += ` AND fn.source = $${vals.length + 1}`;     vals.push(source) }
-    if (status)    { sql += ` AND fn.status = $${vals.length + 1}`;     vals.push(status) }
+    if (paddockId)    { sql += ` AND fn.paddock_id = $${vals.length + 1}`;   vals.push(paddockId) }
+    if (bitacoraOnly === '1') { sql += ` AND fn.paddock_id IS NULL` }
+    if (source)       { sql += ` AND fn.source = $${vals.length + 1}`;      vals.push(source) }
+    if (status)       { sql += ` AND fn.status = $${vals.length + 1}`;      vals.push(status) }
 
     sql += ` ORDER BY fn.created_at DESC LIMIT 200`
 

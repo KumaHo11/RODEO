@@ -133,8 +133,13 @@ export default function OfflineIndicator() {
           }
         }
         
-        // Clean up orphaned audios/photos from old implementations
-        for (const pa of orphanedAudios) {
+        // Clean up orphaned audios/photos — only those NOT already referenced in a queue item
+        // (Legacy: from old implementations that saved media without enqueuing a corresponding item)
+        const queuedMediaIds = new Set(queue.map((q: any) => q.mediaId).filter(Boolean))
+        const trulyOrphanedAudios = orphanedAudios.filter((a: any) => !queuedMediaIds.has(a.id))
+        const trulyOrphanedPhotos = orphanedPhotos.filter((p: any) => !queuedMediaIds.has(p.id))
+
+        for (const pa of trulyOrphanedAudios) {
            const fd = new FormData()
            fd.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
            fd.append('folder', 'bitacora-audio')
@@ -147,7 +152,7 @@ export default function OfflineIndicator() {
            }
            await deletePendingAudio(pa.id)
         }
-        for (const pp of orphanedPhotos) {
+        for (const pp of trulyOrphanedPhotos) {
            const fd = new FormData()
            fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
            fd.append('folder', 'bitacora-photos')

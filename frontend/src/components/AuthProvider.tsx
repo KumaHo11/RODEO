@@ -52,12 +52,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchProfile = useCallback(async (firebaseUser: User) => {
+    // ── Offline fast path: use cached profile immediately ──
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      try {
+        const cached = localStorage.getItem('rodeo_cached_profile')
+        if (cached) {
+          setProfile(JSON.parse(cached))
+          return
+        }
+      } catch { /* ignore */ }
+    }
+
     try {
       const idToken = await firebaseUser.getIdToken()
 
-      // Timeout de 15 s para evitar que isLoading quede bloqueado si la DB tarda
+      // Timeout de 10 s (reducido de 15) para evitar que isLoading quede bloqueado si la DB tarda
       const controller = new AbortController()
-      const timeoutId  = setTimeout(() => controller.abort(), 15000)
+      const timeoutId  = setTimeout(() => controller.abort(), 10000)
 
       let res: Response
       try {
@@ -89,10 +100,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
+      // Fallback al caché si la API falló por cualquier motivo
+      try {
+        const cached = localStorage.getItem('rodeo_cached_profile')
+        if (cached) { setProfile(JSON.parse(cached)); return }
+      } catch { /* ignore */ }
       setProfile(null)
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        console.warn('fetchProfile timeout — continuando sin perfil')
+        console.warn('fetchProfile timeout — usando caché si existe')
       } else {
         console.warn('Error fetching profile (possibly offline):', err)
       }

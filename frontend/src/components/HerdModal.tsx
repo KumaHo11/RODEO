@@ -1511,9 +1511,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         {bcsPhotoFile && (
                           <div className="relative">
                             <button type="button" onClick={analyzeBcs} disabled={bcsAnalyzing || !hasFeature('ai_insights') || (typeof navigator !== 'undefined' && !navigator.onLine)}
-                              className={`w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl transition-all whitespace-nowrap overflow-hidden px-2 ${(!hasFeature('ai_insights') || (typeof navigator !== 'undefined' && !navigator.onLine)) ? 'opacity-50 blur-[1px]' : 'hover:bg-violet-100 disabled:opacity-50'}`}>
+                              title={(typeof navigator !== 'undefined' && !navigator.onLine) ? 'Requiere conexión a internet' : !hasFeature('ai_insights') ? 'Requiere Plan Holístico' : undefined}
+                              className={`w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl transition-all whitespace-nowrap overflow-hidden px-2 ${(!hasFeature('ai_insights') || (typeof navigator !== 'undefined' && !navigator.onLine)) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-violet-100 disabled:opacity-50'}`}>
                               {bcsAnalyzing ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" /> : <Sparkles className="w-4 h-4 shrink-0" />}
-                              <span className="truncate">{bcsAnalyzing ? 'Analizando con IA…' : 'Analizar condición con IA'}</span>
+                              <span className="truncate">{bcsAnalyzing ? 'Analizando con IA…' : (typeof navigator !== 'undefined' && !navigator.onLine) ? 'IA no disponible sin conexión' : 'Analizar condición con IA'}</span>
                             </button>
                             {!hasFeature('ai_insights') && (
                               <div className="absolute inset-0 flex items-center justify-center z-10" title="Requiere Plan Holístico">

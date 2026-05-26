@@ -381,6 +381,16 @@ export default function PaddockModal({
   const [hasPredators, setHasPredators]           = useState<boolean>(paddock.technical_data?.has_predators ?? false)
   const [relativeQuality, setRelativeQuality]     = useState<number>(paddock.technical_data?.relative_quality ?? 0)
 
+  // Online/offline detection
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  useEffect(() => {
+    const onOnline  = () => setIsOnline(true)
+    const onOffline = () => setIsOnline(false)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline) }
+  }, [])
+
   // Tab 3 — notas e historial
   const [noteExpanded, setNoteExpanded]     = useState(false)
   const [noteMode, setNoteMode]             = useState<'text' | 'image' | 'audio' | null>(null)
@@ -623,7 +633,10 @@ export default function PaddockModal({
     // ── Offline Path ──
     if (!navigator.onLine) {
       const offlineId = crypto.randomUUID()
+      const offlineTitle = noteTitle.trim() || (noteText || audioTranscript).slice(0, 60) || 'Nota de campo'
+      
       if (!effectiveBlob && !noteImage) {
+        // Nota de texto — encolar directamente
         import('@/components/OfflineIndicator').then(({ addToOfflineQueue }) => {
           addToOfflineQueue({
             type: 'field_note',
@@ -631,7 +644,7 @@ export default function PaddockModal({
               paddock_id: paddock.id,
               category: noteResult ? 'BIOMASA' : 'GENERAL',
               tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-              title: noteTitle.trim() || (noteText || audioTranscript).slice(0, 60) || 'Nota de campo',
+              title: offlineTitle,
               content: noteText || audioTranscript || null,
               sync_status: 'PENDING',
               analysis_result: noteResult || null,
@@ -639,33 +652,66 @@ export default function PaddockModal({
             timestamp: Date.now(),
           })
         })
+        toast.success('Nota guardada. Se sincronizará cuando tengas internet.')
       } else if (effectiveBlob) {
-        import('@/lib/audioOfflineStore').then(({ savePendingAudio }) => {
-          savePendingAudio({
-            id: offlineId,
-            blob: effectiveBlob!,
-            durationSecs: 0,
-            lat: null, lng: null,
-            createdAt: new Date().toISOString(),
+        // Audio — guardar blob en IndexedDB y encolar
+        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+        await savePendingAudio({
+          id: offlineId,
+          blob: effectiveBlob,
+          durationSecs: 0,
+          lat: null, lng: null,
+          createdAt: new Date().toISOString(),
+          title: noteTitle.trim() || `Audio · ${timestamp}`,
+          transcript: audioTranscript
+        })
+        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        addToOfflineQueue({
+          type: 'field_note',
+          data: {
+            paddock_id: paddock.id,
+            category: 'GENERAL',
+            tags: ['GENERAL'],
             title: noteTitle.trim() || `Audio · ${timestamp}`,
-            transcript: audioTranscript
-          })
-        })
-        toast.success('Audio guardado offline. Se sincronizará automáticamente.')
+            content: audioTranscript || null,
+            sync_status: 'PENDING',
+          },
+          timestamp: Date.now(),
+          mediaType: 'audio',
+          mediaId: offlineId,
+        } as any)
+        toast.success('🎙️ Audio guardado. Se subirá al servidor cuando tengas conexión.')
       } else if (noteImage) {
-        import('@/lib/audioOfflineStore').then(({ savePendingPhoto }) => {
-          savePendingPhoto({
-            id: offlineId,
-            blob: noteImage,
-            lat: null, lng: null,
-            createdAt: new Date().toISOString(),
-            title: noteTitle.trim() || noteImage.name,
-          })
+        // Foto — guardar blob en IndexedDB y encolar, mostrar preview
+        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+        await savePendingPhoto({
+          id: offlineId,
+          blob: noteImage,
+          lat: null, lng: null,
+          createdAt: new Date().toISOString(),
+          title: noteTitle.trim() || noteImage.name,
         })
-        toast.success('Foto guardada offline. Se sincronizará automáticamente.')
+        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        addToOfflineQueue({
+          type: 'field_note',
+          data: {
+            paddock_id: paddock.id,
+            category: noteResult ? 'BIOMASA' : 'GENERAL',
+            tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
+            title: noteTitle.trim() || noteImage.name,
+            content: noteText || null,
+            sync_status: 'PENDING',
+            analysis_result: noteResult || null,
+          },
+          timestamp: Date.now(),
+          mediaType: 'photo',
+          mediaId: offlineId,
+        } as any)
+        toast.success('📷 Foto guardada. Se subirá al servidor cuando tengas conexión.')
       }
       setNoteSaving(false)
       setNoteSaved(true)
+      setSessionNoteCount(c => c + 1)
       setTimeout(() => setNoteSaved(false), 3000)
       resetNoteCapture()
       audioBlobRef.current = null
@@ -1343,10 +1389,11 @@ export default function PaddockModal({
                               <img src={noteImagePreview} alt="preview" className="w-full max-h-36 object-cover rounded-xl" />
                             )}
                             {noteImage && canAiInsight && (
-                              <button type="button" onClick={analyzeNoteImage} disabled={noteAnalyzing}
-                                className="w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50 whitespace-nowrap overflow-hidden px-2">
+                              <button type="button" onClick={analyzeNoteImage} disabled={noteAnalyzing || !isOnline}
+                                title={!isOnline ? 'Requiere conexión a internet' : undefined}
+                                className="w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap overflow-hidden px-2">
                                 {noteAnalyzing ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" /> : <Sparkles className="w-4 h-4 shrink-0" />}
-                                <span className="truncate">{noteAnalyzing ? 'Analizando con IA…' : 'Analizar biomasa con IA'}</span>
+                                <span className="truncate">{noteAnalyzing ? 'Analizando con IA…' : !isOnline ? 'IA no disponible sin conexión' : 'Analizar biomasa con IA'}</span>
                               </button>
                             )}
                             {noteImage && !canAiInsight && (

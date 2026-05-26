@@ -174,7 +174,8 @@ export default function BitacoraPage() {
     setLoading(true)
     let fetchedNotes: any[] = []
     try {
-      const res = await apiFetch('/api/field-notes')
+      // bitacora_only=1 → solo notas sin paddock_id (notas de bitácora pura)
+      const res = await apiFetch('/api/field-notes?bitacora_only=1')
       if (res.ok) {
         fetchedNotes = (await res.json()).notes || []
         try {
@@ -189,10 +190,12 @@ export default function BitacoraPage() {
       } catch { /* ignore */ }
     }
 
-    // Merge with offline queue
+    // Merge with offline queue — solo items de bitácora (paddock_id null)
     try {
       const queue = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
-      const pendingFieldNotes = queue.filter((q: any) => q.type === 'field_note')
+      const pendingFieldNotes = queue.filter(
+        (q: any) => q.type === 'field_note' && (q.data?.paddock_id == null || q.data?.paddock_id === '')
+      )
       
       const localNotes = await Promise.all(pendingFieldNotes.map(async (item: any) => {
         const noteData = { ...item.data, id: `pending-${item.timestamp}`, created_at: new Date(item.timestamp).toISOString(), is_pending: true }
@@ -358,6 +361,7 @@ export default function BitacoraPage() {
         mediaId: id
       } as any)
       await refreshPending()
+      toast.success('🎙️ Audio guardado. Se subirá al servidor cuando tengas conexión.')
       flashSaved(); resetCapture(); return
     }
 
@@ -380,6 +384,7 @@ export default function BitacoraPage() {
         mediaId: id
       } as any)
       await refreshPending()
+      toast.success('📷 Foto guardada. Se subirá al servidor cuando tengas conexión.')
       flashSaved(); resetCapture(); return
     }
 

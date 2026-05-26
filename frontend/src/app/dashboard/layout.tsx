@@ -228,11 +228,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!user) return null
 
-  // While profile is still loading, show the loading spinner (never redirect)
-  // This avoids the blank screen + false redirect when profile hasn't fetched yet
+  // Mientras el perfil sigue cargando, mostrar spinner (nunca redirigir)
+  // Esto evita la pantalla en blanco + falsa redirección cuando el perfil aún no fue consultado
   if (authProfile === null && !isLoading) {
-    // Profile fetch finished but returned null = profile not found (edge case)
-    // Don't redirect here, let the useEffect handle it after confirming
+    // Si estamos offline, intentar leer el perfil cacheado del localStorage
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      try {
+        const cached = localStorage.getItem('rodeo_cached_profile')
+        if (!cached) {
+          // Sin caché y sin conexión → mostrar aviso
+          return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col gap-4 px-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <WifiOff className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-gray-800 font-black text-sm">Sin conexión</p>
+                <p className="text-gray-400 text-xs mt-1">No se pudo cargar tu perfil. Conectate a internet para continuar.</p>
+              </div>
+            </div>
+          )
+        }
+        // Si hay caché, AuthProvider ya debería haberlo restaurado. Mostrar spinner breve.
+      } catch { /* ignore */ }
+    }
+    // Profile fetch finalizó pero retornó null (caso edge) — No redirigir aquí
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
         <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
