@@ -55,6 +55,10 @@ function buildAgriAdvice(pastRain: number, futureRain: number, next7Rain: number
 
 export async function getPaddockWeather(lat: number, lon: number): Promise<WeatherData> {
   try {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error('Offline mode - skipping Open-Meteo fetch')
+    }
+
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,weathercode&past_days=30&forecast_days=15&timezone=auto`
     const response = await fetch(url)
     if (!response.ok) throw new Error('Failed to fetch weather data')
