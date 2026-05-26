@@ -59,7 +59,7 @@ export async function getPaddockWeather(lat: number, lon: number): Promise<Weath
       throw new Error('Offline mode - skipping Open-Meteo fetch')
     }
 
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,weathercode&past_days=30&forecast_days=15&timezone=auto`
+    const url = `/api/weather/proxy?latitude=${lat}&longitude=${lon}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,weathercode&past_days=30&forecast_days=15&timezone=auto`
     const response = await fetch(url)
     if (!response.ok) throw new Error('Failed to fetch weather data')
 
