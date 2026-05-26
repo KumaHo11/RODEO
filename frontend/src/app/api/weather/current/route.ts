@@ -142,7 +142,7 @@ export async function GET(req: NextRequest) {
       'temperature_2m_max',
       'temperature_2m_min',
       'precipitation_sum',
-      'weathercode',
+      'weather_code',
       'windspeed_10m_max',
       'precipitation_probability_max',
       'relative_humidity_2m_max',
@@ -168,10 +168,10 @@ export async function GET(req: NextRequest) {
     const maxTemps: number[]      = daily.temperature_2m_max ?? []
     const minTemps: number[]      = daily.temperature_2m_min ?? []
     const precipitations: number[] = daily.precipitation_sum ?? []
-    const weatherCodes: number[]  = daily.weathercode ?? []
-    const windSpeeds: number[]    = daily.windspeed_10m_max ?? []
+    const weatherCodes: number[]  = daily.weather_code ?? daily.weathercode ?? []
+    const windSpeeds: number[]    = daily.windspeed_10m_max ?? daily.wind_speed_10m_max ?? []
     const precipProbs: number[]   = daily.precipitation_probability_max ?? []
-    const humidities: number[]    = daily.relative_humidity_2m_max ?? []
+    const humidities: number[]    = daily.relative_humidity_2m_max ?? daily.relative_humidity_2m_mean ?? []
 
     const currentWeather = raw.current_weather ?? {}
     const today = new Date().toISOString().split('T')[0]
