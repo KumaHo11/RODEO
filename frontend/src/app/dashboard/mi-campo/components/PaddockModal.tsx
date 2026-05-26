@@ -599,7 +599,7 @@ export default function PaddockModal({
   }, [])
 
   // ── Guardar nota ───────────────────────────────────────────────────────────
-  const saveQuickNote = useCallback(async () => {
+  const saveQuickNote = useCallback(async (): Promise<boolean> => {
     // If still recording, stop first and wait for onstop to complete
     let effectiveBlob: Blob | null = audioBlobRef.current
 
@@ -624,7 +624,7 @@ export default function PaddockModal({
     const content = noteText || audioTranscript
     if (!content && !noteImage && !effectiveBlob) {
       setNoteSaving(false)
-      return
+      return false
     }
 
     setNoteSaving(true)
@@ -715,7 +715,7 @@ export default function PaddockModal({
       setTimeout(() => setNoteSaved(false), 3000)
       resetNoteCapture()
       audioBlobRef.current = null
-      return
+      return true
     }
 
     // ── Online Path ──
@@ -740,7 +740,7 @@ export default function PaddockModal({
       if (!photo_url) {
         toast.error('No se pudo subir la foto al servidor. Verificá tu conexión e intentá de nuevo.')
         setNoteSaving(false)
-        return
+        return false
       }
     }
 
@@ -762,7 +762,7 @@ export default function PaddockModal({
         console.warn('[saveQuickNote] audio upload failed:', errTxt)
         toast.error('No se pudo subir el audio. Verificá tu conexión e intentá de nuevo.')
         setNoteSaving(false)
-        return
+        return false
       }
     }
 
@@ -793,7 +793,7 @@ export default function PaddockModal({
       console.error('[saveQuickNote] POST failed:', errData)
       toast.error('No se pudo guardar el registro. Intentá de nuevo.')
       setNoteSaving(false)
-      return
+      return false
     }
 
     const savedNote = await saveRes.json().catch(() => ({}))
@@ -830,6 +830,7 @@ export default function PaddockModal({
     audioBlobRef.current = null
     resetNoteCapture()
     loadNotes()
+    return true
   }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes, noteTitle, recording, resetNoteCapture])
 
 
@@ -1442,11 +1443,13 @@ export default function PaddockModal({
                           {(noteText || audioTranscript || noteImage || audioBlob) && (
                             <button type="button"
                               onClick={async () => {
-                                await saveQuickNote()
-                                setSessionNoteCount(c => c + 1)
-                                import('sonner').then(({ toast }) =>
-                                  toast.success('✓ Registro guardado en el historial')
-                                )
+                                const saved = await saveQuickNote()
+                                if (saved) {
+                                  setSessionNoteCount(c => c + 1)
+                                  import('sonner').then(({ toast }) =>
+                                    toast.success('✓ Registro guardado en el historial')
+                                  )
+                                }
                               }}
                               disabled={noteSaving}
                               className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">

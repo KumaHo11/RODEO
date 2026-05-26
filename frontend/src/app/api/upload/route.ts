@@ -60,7 +60,11 @@ export async function POST(req: NextRequest) {
       console.log('[upload] GCS OK →', publicUrl)
       return NextResponse.json({ url: publicUrl, filename: gcsPath })
     } catch (gcsErr: any) {
-      console.error('[upload] GCS failed — bucket:', BUCKET_NAME, '| error:', gcsErr?.code, gcsErr?.message)
+      // Log full error details for diagnosis
+      console.error('[upload] GCS failed — bucket:', BUCKET_NAME)
+      console.error('[upload] GCS error code:', gcsErr?.code)
+      console.error('[upload] GCS error message:', gcsErr?.message)
+      console.error('[upload] GCS error full:', JSON.stringify(gcsErr, Object.getOwnPropertyNames(gcsErr)).slice(0, 500))
     }
 
     // ── 2. Local filesystem fallback (dev only) ──────────────────────────────
