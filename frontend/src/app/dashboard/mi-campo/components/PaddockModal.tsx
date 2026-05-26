@@ -736,11 +736,16 @@ export default function PaddockModal({
       } catch (err) {
         console.error('[saveQuickNote] compress error:', err)
       }
+
+      if (!photo_url) {
+        toast.error('No se pudo subir la foto al servidor. Verificá tu conexión e intentá de nuevo.')
+        setNoteSaving(false)
+        return
+      }
     }
 
     // 1. Upload audio file (use ref blob for reliability)
     let audio_url: string | null = null
-    let finalTranscript = audioTranscript
     if (effectiveBlob) {
       const blobType = effectiveBlob.type || 'audio/webm'
       const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
@@ -755,32 +760,20 @@ export default function PaddockModal({
       } else {
         const errTxt = await up.text().catch(() => String(up.status))
         console.warn('[saveQuickNote] audio upload failed:', errTxt)
-        toast.error('No se pudo subir el audio. Se guardará la nota sin audio.')
+        toast.error('No se pudo subir el audio. Verificá tu conexión e intentá de nuevo.')
+        setNoteSaving(false)
+        return
       }
-
-      // 2. Transcribe with Gemini (best effort — don't block save on failure)
-      try {
-        const tf = new FormData()
-        tf.append('file', new File([effectiveBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
-        const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
-        if (tr.ok) {
-          const d = await tr.json().catch(() => ({}))
-          if (d.transcript && d.transcript !== '[Sin voz detectable]') {
-            finalTranscript = d.transcript
-            setAudioTranscript(d.transcript)
-          }
-        }
-      } catch { /* keep live Web Speech transcript */ }
     }
 
-    // 3. Build content AFTER transcript resolved
-    const resolvedContent = noteText || finalTranscript || null
+    // 2. Build content — use live Web Speech transcript initially, AI will improve it in background
+    const resolvedContent = noteText || audioTranscript || null
     const resolvedTitle = noteTitle.trim() ||
       resolvedContent?.slice(0, 60) ||
       noteImage?.name ||
       (effectiveBlob ? `Audio · ${timestamp}` : 'Nota de campo')
 
-    // 4. Save note
+    // 3. Save note immediately (don't block on AI transcription)
     const saveRes = await apiFetch('/api/field-notes', {
       method: 'POST',
       body: JSON.stringify({
@@ -803,6 +796,34 @@ export default function PaddockModal({
       return
     }
 
+    const savedNote = await saveRes.json().catch(() => ({}))
+    const savedNoteId: string | null = savedNote?.note?.id ?? null
+
+    // 4. AI transcription in background — PATCH the note when done (non-blocking)
+    if (effectiveBlob && savedNoteId) {
+      const capturedBlob = effectiveBlob
+      ;(async () => {
+        try {
+          const blobType = capturedBlob.type || 'audio/webm'
+          const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
+          const tf = new FormData()
+          tf.append('file', new File([capturedBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 20000) // 20s max
+          const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf, signal: controller.signal }).catch(() => null)
+          clearTimeout(timeoutId)
+          if (!tr?.ok) return
+          const d = await tr.json().catch(() => ({}))
+          if (d.transcript && d.transcript !== '[Sin voz detectable]') {
+            await apiFetch(`/api/field-notes/${savedNoteId}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ content: d.transcript }),
+            }).catch(() => null)
+          }
+        } catch { /* background — ignore errors */ }
+      })()
+    }
+
     setNoteSaving(false)
     setNoteSaved(true)
     setTimeout(() => setNoteSaved(false), 3000)
@@ -810,6 +831,7 @@ export default function PaddockModal({
     resetNoteCapture()
     loadNotes()
   }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes, noteTitle, recording, resetNoteCapture])
+
 
   // ── Eliminar nota (solo creador) ─────────────────────────────────────────────
   const deleteNote = useCallback(async (noteId: string) => {

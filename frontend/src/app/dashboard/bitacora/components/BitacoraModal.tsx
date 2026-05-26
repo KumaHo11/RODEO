@@ -318,57 +318,63 @@ export default function BitacoraModal({
         fd.append('file', new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
         fd.append('folder', 'bitacora-audio')
         const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd })
-        if (uploadRes.ok) { audio_url = (await uploadRes.json()).url }
+        if (uploadRes.ok) {
+          audio_url = (await uploadRes.json()).url || null
+        }
 
-        let transcript = liveTranscript
-        let finalTags = tags
-        let finalPaddockId = paddockId || null
-        let analysisResult: any = null
-
-        setSavingMsg('Analizando con IA...')
-        try {
-          const tf = new FormData()
-          tf.append('file', new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
-          const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
-          if (tr.ok) {
-            const d = await tr.json()
-            if (d.transcript && d.transcript !== '[Sin voz detectable]') transcript = d.transcript
-
-            // Auto-apply category if confidence is high and user left default
-            if (d.confidence > 0.65 && d.category && d.category !== 'GENERAL' && tags.includes('GENERAL')) {
-              finalTags = [d.category]
-            }
-
-            // Auto-match paddock_hint to existing paddocks
-            if (!paddockId && d.paddock_hint && paddocks?.length) {
-              const hint = d.paddock_hint.toLowerCase()
-              const match = paddocks.find(p =>
-                p.name?.toLowerCase().includes(hint) || hint.includes(p.name?.toLowerCase())
-              )
-              if (match) finalPaddockId = match.id
-            }
-
-            analysisResult = {
-              category:      d.category,
-              paddock_hint:  d.paddock_hint,
-              tasks:         d.tasks || [],
-              confidence:    d.confidence,
-            }
-          }
-        } catch { /* fallback to Web Speech transcript */ }
+        if (!audio_url) {
+          toast.error('No se pudo subir el audio al servidor. Verificá tu conexión e intentá de nuevo.')
+          setSaving(false); setSavingMsg(''); return
+        }
 
         setSavingMsg('Guardando...')
+        // Save note immediately with audio_url — don't block on AI transcription
         const response = await apiFetch('/api/field-notes', {
           method: 'POST',
           body: JSON.stringify({
-            paddock_id: finalPaddockId, tags: finalTags,
+            paddock_id: paddockId || null, tags,
             title: `Audio · ${timestamp}`,
-            content: transcript || null,
+            content: liveTranscript || null,
             audio_url, audio_duration_secs: recordSecsSnap.current,
-            analysis_result: analysisResult,
+            analysis_result: null,
           }),
         })
         if (!response.ok) throw new Error('Error al guardar nota de audio')
+        const savedNote = await response.json().catch(() => ({}))
+        const savedNoteId: string | null = savedNote?.note?.id ?? null
+
+        // ── AI transcription in background (non-blocking) ──────────────
+        if (savedNoteId) {
+          ;(async () => {
+            try {
+              const tf = new FormData()
+              tf.append('file', new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
+              const controller = new AbortController()
+              const timeoutId = setTimeout(() => controller.abort(), 20000) // 20s max
+              const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf, signal: controller.signal }).catch(() => null)
+              clearTimeout(timeoutId)
+              if (!tr?.ok) return
+              const d = await tr.json().catch(() => ({}))
+              if (!d.transcript || d.transcript === '[Sin voz detectable]') return
+
+              let finalTags = tags
+              let finalPaddockId = paddockId || null
+              if (d.confidence > 0.65 && d.category && d.category !== 'GENERAL' && tags.includes('GENERAL')) {
+                finalTags = [d.category]
+              }
+              if (!paddockId && d.paddock_hint && paddocks?.length) {
+                const hint = d.paddock_hint.toLowerCase()
+                const match = paddocks.find((p: any) => p.name?.toLowerCase().includes(hint) || hint.includes(p.name?.toLowerCase()))
+                if (match) finalPaddockId = match.id
+              }
+              const analysisResult = { category: d.category, paddock_hint: d.paddock_hint, tasks: d.tasks || [], confidence: d.confidence }
+              await apiFetch(`/api/field-notes/${savedNoteId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ content: d.transcript, tags: finalTags, paddock_id: finalPaddockId || undefined, analysis_result: analysisResult }),
+              }).catch(() => null)
+            } catch { /* background — ignore errors */ }
+          })()
+        }
       }
 
       // ── FOTO save ───────────────────────────────────────────────
@@ -380,9 +386,14 @@ export default function BitacoraModal({
           const fd = new FormData()
           fd.append('file', compressedImage); fd.append('folder', 'bitacora-photos')
           const r = await apiFetch('/api/upload', { method: 'POST', body: fd })
-          if (r.ok) { photo_url = (await r.json()).url }
+          if (r.ok) { photo_url = (await r.json()).url || null }
         } catch (err) {
           console.error('[BitacoraModal] compress error:', err)
+        }
+
+        if (!photo_url) {
+          toast.error('No se pudo subir la foto al servidor. Verificá tu conexión e intentá de nuevo.')
+          setSaving(false); setSavingMsg(''); return
         }
 
         setSavingMsg('Guardando...')
@@ -419,6 +430,7 @@ export default function BitacoraModal({
       setSaving(false); setSavingMsg('')
     }
   }
+
 
   // ── Mode button config ────────────────────────────────────────────────
   const MODES: { id: CaptureMode; label: string; icon: React.ReactNode }[] = [

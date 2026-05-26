@@ -24,7 +24,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
-    const { paddock_id, tags, title, content, lat, lng, photo_url, analysis_result, status } = body
+    const { paddock_id, tags, title, content, lat, lng, photo_url, audio_url, analysis_result, status } = body
     const category = Array.isArray(tags) && tags.length > 0 ? tags[0] : undefined
 
     await mutate(
@@ -37,10 +37,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
          lat             = $6,
          lng             = $7,
          photo_url       = COALESCE($8, photo_url),
-         analysis_result = COALESCE($9, analysis_result),
-         status          = COALESCE($12, status),
+         audio_url       = COALESCE($9, audio_url),
+         analysis_result = COALESCE($10, analysis_result),
+         status          = COALESCE($13, status),
          updated_at      = NOW()
-       WHERE id = $10 AND org_id = $11`,
+       WHERE id = $11 AND org_id = $12`,
       [
         paddock_id ?? null,
         tags ? JSON.stringify(tags) : null,
@@ -50,6 +51,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         lat ?? null,
         lng ?? null,
         photo_url ?? null,
+        audio_url ?? null,
         analysis_result ? JSON.stringify(analysis_result) : null,
         (await params).id,
         orgId,
