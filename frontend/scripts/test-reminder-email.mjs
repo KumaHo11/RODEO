@@ -1,7 +1,11 @@
 // Script de prueba: envía email de recordatorio de movimiento
 // Ejecutar con: node scripts/test-reminder-email.mjs
 
-const RESEND_API_KEY = 're_7VPFTibe_6fS8fbewG9hS9YZqXvcaswd8'
+const RESEND_API_KEY = process.env.RESEND_API_KEY
+if (!RESEND_API_KEY) {
+  console.error("Missing RESEND_API_KEY environment variable")
+  process.exit(1)
+}
 const FROM_EMAIL     = 'onboarding@resend.dev'   // dominio de prueba verificado por Resend
 const TO_EMAIL       = 'josorio@rodeoagtech.com'
 
