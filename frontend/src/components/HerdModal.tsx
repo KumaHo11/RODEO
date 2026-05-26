@@ -221,10 +221,26 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       total_ev: liveEV || null,
     }
     try {
+      if (!navigator.onLine && isEditing) {
+        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        addToOfflineQueue({
+          type: 'herd_update',
+          data: { herd_id: herd.id, ...payload },
+          timestamp: Date.now(),
+        } as any)
+        import('sonner').then(({ toast }) => toast.success('Rodeo guardado offline. Se sincronizará al conectar.'))
+        onSaved(); onClose()
+        return
+      }
+
       let res: Response
       if (isEditing) {
         res = await apiFetch(`/api/herds/${herd.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
       } else {
+        if (!navigator.onLine) {
+           setSaveError('No podés crear nuevos rodeos sin conexión.')
+           return
+        }
         res = await apiFetch('/api/herds', { method: 'POST', body: JSON.stringify(payload) })
       }
       if (!res.ok) {
@@ -281,32 +297,82 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       const patchPayload: Record<string, any> = { head_count: newCount, total_ev: newEV }
       if (isAdd && actWeight !== '' && Number(actWeight) > 0) patchPayload.avg_weight_kg = newWeight
 
-      const patchRes = await apiFetch(`/api/herds/${herd.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patchPayload),
-      })
-      if (!patchRes.ok) throw new Error('No se pudo actualizar el stock')
+      if (!navigator.onLine) {
+        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        addToOfflineQueue({
+          type: 'herd_update',
+          data: { herd_id: herd.id, ...patchPayload },
+          timestamp: Date.now()
+        } as any)
+        
+        const evTitle = `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${herd.name}${
+          isAdd && actWeight !== '' ? ` · ${Number(actWeight)} kg/cab` : ''
+        }`
+        const evDesc = [
+          actNote || null,
+          isAdd && actWeight !== '' ? `Peso ingresado: ${Number(actWeight)} kg/cab · Peso promedio nuevo: ${newWeight} kg` : null,
+          `EV resultante: ${newEV.toFixed(0)}`,
+        ].filter(Boolean).join(' · ')
+        
+        addToOfflineQueue({
+          type: 'farm_event',
+          data: {
+            title: evTitle, event_type: actId, event_date: actDate,
+            herd_id: herd.id, herd_ids: [herd.id], description: evDesc || null, status: 'completado'
+          },
+          timestamp: Date.now() + 1
+        } as any)
 
-      const evTitle = `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${herd.name}${
-        isAdd && actWeight !== '' ? ` · ${Number(actWeight)} kg/cab` : ''
-      }`
-      const evDesc = [
-        actNote || null,
-        isAdd && actWeight !== '' ? `Peso ingresado: ${Number(actWeight)} kg/cab · Peso promedio nuevo: ${newWeight} kg` : null,
-        `EV resultante: ${newEV.toFixed(0)}`,
-      ].filter(Boolean).join(' · ')
+        setAgendaEvents(prev => [{
+          id: `temp-${Date.now()}`,
+          title: evTitle, event_type: actId, event_date: actDate,
+          herd_id: herd.id, herd_ids: [herd.id], description: evDesc || null, status: 'completado',
+        }, ...prev])
 
-      const evRes = await apiFetch('/api/farm-events', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: evTitle,
-          event_type: actId,
-          event_date: actDate,
-          herd_id: herd.id, herd_ids: [herd.id],
-          description: evDesc || null,
-          status: 'completado',
-        }),
-      })
+        import('sonner').then(({ toast }) => toast.success('Actividad guardada offline. Se sincronizará al conectar.'))
+      } else {
+        const patchRes = await apiFetch(`/api/herds/${herd.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(patchPayload),
+        })
+        if (!patchRes.ok) throw new Error('No se pudo actualizar el stock')
+
+        const evTitle = `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${herd.name}${
+          isAdd && actWeight !== '' ? ` · ${Number(actWeight)} kg/cab` : ''
+        }`
+        const evDesc = [
+          actNote || null,
+          isAdd && actWeight !== '' ? `Peso ingresado: ${Number(actWeight)} kg/cab · Peso promedio nuevo: ${newWeight} kg` : null,
+          `EV resultante: ${newEV.toFixed(0)}`,
+        ].filter(Boolean).join(' · ')
+
+        const evRes = await apiFetch('/api/farm-events', {
+          method: 'POST',
+          body: JSON.stringify({
+            title: evTitle,
+            event_type: actId,
+            event_date: actDate,
+            herd_id: herd.id, herd_ids: [herd.id],
+            description: evDesc || null,
+            status: 'completado',
+          }),
+        })
+
+        // Update historial local immediately
+        if (evRes.ok) {
+          const saved = await evRes.json().catch(() => null)
+          setAgendaEvents(prev => [{
+            id: saved?.event?.id ?? `temp-${Date.now()}`,
+            title: evTitle,
+            event_type: actId,
+            event_date: actDate,
+            herd_id: herd.id,
+            herd_ids: [herd.id],
+            description: evDesc || null,
+            status: 'completado',
+          }, ...prev])
+        }
+      }
 
       // Update historial local immediately
       if (evRes.ok) {
@@ -824,33 +890,44 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const saveEvent = async () => {
     if (!newEvTitle.trim() || !herd?.id) return
     setEvSaving(true)
-    const res = await apiFetch('/api/farm-events', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: newEvTitle.trim(),
-        event_type: newEvType,
-        event_date: newEvDate,
-        end_date: newEvEndDate || null,
-        description: newEvDesc.trim() || null,
-        herd_id: herd.id, herd_ids: [herd.id],
-        status: 'pendiente',
-        assigned_to: newEvAssignee || null,
-      }),
-    })
-    if (res.ok) {
-      const saved = await res.json().catch(() => null)
-      setAgendaEvents(prev => [{
-        id: saved?.event?.id ?? `temp-${Date.now()}`,
-        title: newEvTitle.trim(),
-        event_type: newEvType,
-        event_date: newEvDate,
-        end_date: newEvEndDate || null,
-        description: newEvDesc.trim() || null,
-        herd_id: herd.id,
-        herd_ids: [herd.id],
-        status: 'pendiente',
-      }, ...prev])
+    
+    const payload = {
+      title: newEvTitle.trim(),
+      event_type: newEvType,
+      event_date: newEvDate,
+      end_date: newEvEndDate || null,
+      description: newEvDesc.trim() || null,
+      herd_id: herd.id, herd_ids: [herd.id],
+      status: 'pendiente',
+      assigned_to: newEvAssignee || null,
     }
+
+    if (!navigator.onLine) {
+      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      addToOfflineQueue({
+        type: 'farm_event',
+        data: payload,
+        timestamp: Date.now()
+      } as any)
+      setAgendaEvents(prev => [{
+        id: `temp-${Date.now()}`,
+        ...payload
+      }, ...prev])
+      import('sonner').then(({ toast }) => toast.success('Evento guardado offline. Se sincronizará al conectar.'))
+    } else {
+      const res = await apiFetch('/api/farm-events', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        const saved = await res.json().catch(() => null)
+        setAgendaEvents(prev => [{
+          id: saved?.event?.id ?? `temp-${Date.now()}`,
+          ...payload
+        }, ...prev])
+      }
+    }
+    
     setEvSaving(false); setEvSaved(true)
     setNewEvTitle(''); setNewEvDate(todayISO()); setNewEvEndDate(''); setNewEvDesc(''); setNewEvAssignee('')
     setTimeout(() => setEvSaved(false), 3000)
@@ -1446,8 +1523,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         {/* Botón análisis IA — visible cuando hay foto */}
                         {bcsPhotoFile && (
                           <div className="relative">
-                            <button type="button" onClick={analyzeBcs} disabled={bcsAnalyzing || !hasFeature('ai_insights')}
-                              className={`w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl transition-all whitespace-nowrap overflow-hidden px-2 ${!hasFeature('ai_insights') ? 'opacity-50 blur-[1px]' : 'hover:bg-violet-100 disabled:opacity-50'}`}>
+                            <button type="button" onClick={analyzeBcs} disabled={bcsAnalyzing || !hasFeature('ai_insights') || (typeof navigator !== 'undefined' && !navigator.onLine)}
+                              className={`w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl transition-all whitespace-nowrap overflow-hidden px-2 ${(!hasFeature('ai_insights') || (typeof navigator !== 'undefined' && !navigator.onLine)) ? 'opacity-50 blur-[1px]' : 'hover:bg-violet-100 disabled:opacity-50'}`}>
                               {bcsAnalyzing ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" /> : <Sparkles className="w-4 h-4 shrink-0" />}
                               <span className="truncate">{bcsAnalyzing ? 'Analizando con IA…' : 'Analizar condición con IA'}</span>
                             </button>

@@ -79,7 +79,13 @@ export default function AgendaPage() {
       apiFetch('/api/herds'),
       apiFetch('/api/grazing-plans'),
     ])
-    setEvents(eventsRes.ok ? (await eventsRes.json()).events || [] : [])
+    if (eventsRes.ok) {
+      const allEvents = (await eventsRes.json()).events || []
+      const validTypes = EVENT_TYPES.map(t => t.id)
+      setEvents(allEvents.filter((e: any) => validTypes.includes(e.event_type)))
+    } else {
+      setEvents([])
+    }
     setHerds(herdsRes.ok ? (await herdsRes.json()).herds || [] : [])
     setGrazingPlans(plansRes.ok ? (await plansRes.json()).plans || [] : [])
     setLoading(false)

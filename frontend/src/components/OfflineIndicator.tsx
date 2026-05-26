@@ -117,6 +117,14 @@ export default function OfflineIndicator() {
             } else if (item.type === 'farm_event') {
                const res = await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify(data) })
                if (!res.ok) throw new Error('farm_event sync failed')
+            } else if (item.type === 'herd_update') {
+               const { herd_id, ...payload } = data
+               const res = await apiFetch(`/api/herds/${herd_id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+               if (!res.ok) throw new Error('herd_update sync failed')
+            } else if (item.type === 'paddock_update') {
+               const { paddock_id, ...payload } = data
+               const res = await apiFetch(`/api/paddocks/${paddock_id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+               if (!res.ok) throw new Error('paddock_update sync failed')
             }
           } catch (e) {
             console.error('Failed to sync item:', item, e)

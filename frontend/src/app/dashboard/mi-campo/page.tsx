@@ -193,7 +193,19 @@ export default function MiCampoPage() {
   const handlePaddockSaved = async (paddockId: string, technicalData: Record<string, any>, dryMatter?: number) => {
     const updates: Record<string, any> = { technical_data: technicalData }
     if (dryMatter !== undefined) updates.dry_matter_kg_ha = dryMatter
-    await apiFetch(`/api/paddocks/${paddockId}`, { method: 'PATCH', body: JSON.stringify(updates) })
+
+    if (!navigator.onLine) {
+      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      addToOfflineQueue({
+        type: 'paddock_update',
+        data: { paddock_id: paddockId, ...updates },
+        timestamp: Date.now()
+      } as any)
+      import('sonner').then(({ toast }) => toast.success('Potrero guardado offline. Se sincronizará al conectar.'))
+    } else {
+      await apiFetch(`/api/paddocks/${paddockId}`, { method: 'PATCH', body: JSON.stringify(updates) })
+    }
+    
     setPaddocks(prev => prev.map(p => p.id === paddockId ? { ...p, ...updates } : p))
   }
 

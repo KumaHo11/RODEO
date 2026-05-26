@@ -77,6 +77,11 @@ function NoteRow({ note }: { note: any }) {
               <><span className="w-1 h-1 rounded-full bg-gray-200" /><span className="text-xs font-bold text-gray-500 uppercase tracking-tighter">{note.paddock_name}</span></>
             )}
             {isAudio && <span className="text-[9px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full uppercase tracking-widest">Audio</span>}
+            {note.is_pending && (
+              <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1" title="Se sincronizará cuando tengas internet">
+                <WifiOff className="w-2.5 h-2.5" /> Pendiente
+              </span>
+            )}
           </div>
 
           {/* Transcript preview */}

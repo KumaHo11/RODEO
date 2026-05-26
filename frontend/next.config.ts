@@ -6,10 +6,20 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
-  disable: process.env.NODE_ENV === "development",
+  disable: false, // Habilitado para probar offline localmente
   workboxOptions: {
     disableDevLogs: true,
     runtimeCaching: [
+      // Cache Next.js API calls (NetworkFirst to get fresh data, fallback to cache offline)
+      {
+        urlPattern: /\/api\/.*/,
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "next-api",
+          expiration: { maxEntries: 200, maxAgeSeconds: 24 * 60 * 60 },
+          networkTimeoutSeconds: 5,
+        },
+      },
       // Cache Supabase API calls (stale-while-revalidate)
       {
         urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/.*$/,
