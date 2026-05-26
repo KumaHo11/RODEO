@@ -61,6 +61,29 @@ docker build \
 
 docker push $IMAGE
 
+# ── Generar env vars YAML (evita truncado de = en base64 con --set-env-vars) ──
+echo "▶ Generando env vars YAML..."
+python3 - <<PYEOF
+import os, json
+def q(v): return json.dumps(str(v))
+lines = [
+  f'NODE_ENV: production',
+  f'NEXT_PUBLIC_APP_URL: {q("$STAGING_URL")}',
+  f'DATABASE_URL: {q(os.environ.get("DATABASE_URL",""))}',
+  f'FIREBASE_ADMIN_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
+  f'FIREBASE_ADMIN_CREDENTIALS_BASE64: {q(os.environ.get("FIREBASE_ADMIN_CREDENTIALS_BASE64",""))}',
+  f'FIREBASE_ADMIN_IMPERSONATE_SA: {q(os.environ.get("FIREBASE_ADMIN_IMPERSONATE_SA",""))}',
+  f'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: {q(os.environ.get("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",""))}',
+  f'GCS_BUCKET_NAME: {q(os.environ.get("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",""))}',
+  f'GEMINI_API_KEY: {q(os.environ.get("GEMINI_API_KEY",""))}',
+  f'RESEND_API_KEY: {q(os.environ.get("RESEND_API_KEY",""))}',
+  f'RESEND_FROM_EMAIL: {q(os.environ.get("RESEND_FROM_EMAIL",""))}',
+  f'TITILER_URL: {q(os.environ.get("TITILER_URL",""))}',
+]
+with open('/tmp/rodeo-staging-env.yaml','w') as f: f.write('\n'.join(lines))
+print('  ✓ /tmp/rodeo-staging-env.yaml generado')
+PYEOF
+
 # ── Deploy Cloud Run ──────────────────────────────────────────────────────────
 echo "▶ Desplegando en Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
@@ -74,18 +97,7 @@ gcloud run deploy $SERVICE_NAME \
   --cpu=1 \
   --min-instances=0 \
   --max-instances=3 \
-  --set-env-vars="NODE_ENV=production" \
-  --set-env-vars="NEXT_PUBLIC_APP_URL=$STAGING_URL" \
-  --set-env-vars="DATABASE_URL=$DATABASE_URL" \
-  --set-env-vars="FIREBASE_ADMIN_PROJECT_ID=$FIREBASE_ADMIN_PROJECT_ID" \
-  --set-env-vars="FIREBASE_ADMIN_CREDENTIALS_BASE64=$FIREBASE_ADMIN_CREDENTIALS_BASE64" \
-  --set-env-vars="FIREBASE_ADMIN_IMPERSONATE_SA=$FIREBASE_ADMIN_IMPERSONATE_SA" \
-  --set-env-vars="NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
-  --set-env-vars="GCS_BUCKET_NAME=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
-  --set-env-vars="GEMINI_API_KEY=$GEMINI_API_KEY" \
-  --set-env-vars="RESEND_API_KEY=$RESEND_API_KEY" \
-  --set-env-vars="RESEND_FROM_EMAIL=$RESEND_FROM_EMAIL" \
-  --set-env-vars="TITILER_URL=$TITILER_URL" \
+  --env-vars-file=/tmp/rodeo-staging-env.yaml \
   --quiet
 
 # ── Done ──────────────────────────────────────────────────────────────────────
