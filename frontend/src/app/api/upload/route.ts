@@ -50,13 +50,11 @@ export async function POST(req: NextRequest) {
       await gcsFile.save(buffer, {
         metadata: { 
           contentType: file.type || 'application/octet-stream',
-          metadata: {
-            firebaseStorageDownloadTokens: downloadToken
-          }
         },
       })
 
-      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${BUCKET_NAME}/o/${encodeURIComponent(gcsPath)}?alt=media&token=${downloadToken}`
+      // rodeo-media es un bucket GCS público — usar URL directa de storage.googleapis.com
+      const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${gcsPath}`
       console.log('[upload] GCS OK →', publicUrl)
       return NextResponse.json({ url: publicUrl, filename: gcsPath })
     } catch (gcsErr: any) {
