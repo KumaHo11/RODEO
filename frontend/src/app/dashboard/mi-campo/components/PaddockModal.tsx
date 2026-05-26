@@ -1594,12 +1594,33 @@ export default function PaddockModal({
                               </div>
                               {hasAudio && (
                                 <div className="px-3 pb-2">
-                                  <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '28px' }} />
+                                  {note.audio_url?.startsWith('/uploads/') ? (
+                                    <div className="flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 rounded-lg px-2 py-1.5">
+                                      <Mic className="w-3 h-3" />
+                                      <span>Audio no disponible en este entorno</span>
+                                    </div>
+                                  ) : (
+                                    <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '28px' }}
+                                      onError={(e) => { const el = e.currentTarget; el.style.display='none'; const fb = el.nextElementSibling as HTMLElement; if(fb) fb.style.display='flex' }}
+                                    />
+                                  )}
+                                  <div className="hidden items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 rounded-lg px-2 py-1.5">
+                                    <Mic className="w-3 h-3" /><span>Audio no disponible</span>
+                                  </div>
                                 </div>
                               )}
                               {hasPhoto && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={note.photo_url} alt="Evidencia" className="w-full max-h-24 object-cover" />
+                                note.photo_url?.startsWith('/uploads/') ? (
+                                  <div className="flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2">
+                                    <Camera className="w-3 h-3" />
+                                    <span>Imagen no disponible en este entorno</span>
+                                  </div>
+                                ) : (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={note.photo_url} alt="Evidencia" className="w-full max-h-24 object-cover"
+                                    onError={(e) => { const el = e.currentTarget; el.style.display='none'; const fb = document.createElement('div'); fb.className='flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2'; fb.innerHTML='<span>Imagen no disponible</span>'; el.parentNode?.insertBefore(fb, el.nextSibling) }}
+                                  />
+                                )
                               )}
                               {hasAI && (
                                 <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
@@ -1803,12 +1824,33 @@ export default function PaddockModal({
                               </div>
                               {hasAudio && (
                                 <div className="px-3 pb-2">
-                                  <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '32px' }} />
+                                  {note.audio_url?.startsWith('/uploads/') ? (
+                                    <div className="flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 rounded-lg px-2 py-1.5">
+                                      <Mic className="w-3 h-3" />
+                                      <span>Audio no disponible en este entorno</span>
+                                    </div>
+                                  ) : (
+                                    <audio controls src={note.audio_url} className="w-full rounded-lg" style={{ height: '32px' }}
+                                      onError={(e) => { const el = e.currentTarget; el.style.display='none'; const fb = el.nextElementSibling as HTMLElement; if(fb) fb.style.display='flex' }}
+                                    />
+                                  )}
+                                  <div className="hidden items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 rounded-lg px-2 py-1.5">
+                                    <Mic className="w-3 h-3" /><span>Audio no disponible</span>
+                                  </div>
                                 </div>
                               )}
                               {hasPhoto && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={note.photo_url} alt="Evidencia" className="w-full max-h-32 object-cover" />
+                                note.photo_url?.startsWith('/uploads/') ? (
+                                  <div className="flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2">
+                                    <Camera className="w-3 h-3" />
+                                    <span>Imagen no disponible en este entorno</span>
+                                  </div>
+                                ) : (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={note.photo_url} alt="Evidencia" className="w-full max-h-32 object-cover"
+                                    onError={(e) => { const el = e.currentTarget; el.style.display='none'; const fb = document.createElement('div'); fb.className='flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2'; fb.innerHTML='<span>Imagen no disponible</span>'; el.parentNode?.insertBefore(fb, el.nextSibling) }}
+                                  />
+                                )
                               )}
                               {note.content && (
                                 <div className="px-3 pb-2">
