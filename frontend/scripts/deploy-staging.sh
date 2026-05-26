@@ -79,9 +79,13 @@ gcloud run deploy $SERVICE_NAME \
   --set-env-vars="DATABASE_URL=$DATABASE_URL" \
   --set-env-vars="FIREBASE_ADMIN_PROJECT_ID=$FIREBASE_ADMIN_PROJECT_ID" \
   --set-env-vars="FIREBASE_ADMIN_CREDENTIALS_BASE64=$FIREBASE_ADMIN_CREDENTIALS_BASE64" \
+  --set-env-vars="FIREBASE_ADMIN_IMPERSONATE_SA=$FIREBASE_ADMIN_IMPERSONATE_SA" \
+  --set-env-vars="NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
+  --set-env-vars="GCS_BUCKET_NAME=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
   --set-env-vars="GEMINI_API_KEY=$GEMINI_API_KEY" \
-  --set-env-vars="SENDGRID_API_KEY=$SENDGRID_API_KEY" \
-  --set-env-vars="SENDGRID_FROM_EMAIL=$SENDGRID_FROM_EMAIL" \
+  --set-env-vars="RESEND_API_KEY=$RESEND_API_KEY" \
+  --set-env-vars="RESEND_FROM_EMAIL=$RESEND_FROM_EMAIL" \
+  --set-env-vars="TITILER_URL=$TITILER_URL" \
   --quiet
 
 # ── Done ──────────────────────────────────────────────────────────────────────

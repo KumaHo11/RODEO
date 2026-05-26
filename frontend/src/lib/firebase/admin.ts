@@ -22,11 +22,14 @@ function getAdminApp(): App {
   const saEmail     = process.env.FIREBASE_ADMIN_IMPERSONATE_SA
   const credBase64  = process.env.FIREBASE_ADMIN_CREDENTIALS_BASE64
 
+  const storageBucket = process.env.GCS_BUCKET_NAME || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'rodeo-app-fac50.firebasestorage.app'
+
   // Opción 0: Service Account JSON completo en base64 (preferido en Cloud Run)
   if (credBase64) {
     const saJson = JSON.parse(Buffer.from(credBase64, 'base64').toString('utf8'))
     return initializeApp({
       credential: cert(saJson),
+      storageBucket,
     })
   }
 
@@ -38,6 +41,7 @@ function getAdminApp(): App {
     // Opción 1: Service account key explícita (producción / CI)
     return initializeApp({
       credential: cert({ projectId, clientEmail: clientEmail!, privateKey: privateKey! }),
+      storageBucket,
     })
   }
 
@@ -48,6 +52,7 @@ function getAdminApp(): App {
   return initializeApp({
     credential: applicationDefault(),
     projectId,
+    storageBucket,
     serviceAccountId: saEmail || undefined,
   })
 }

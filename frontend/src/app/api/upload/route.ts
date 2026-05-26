@@ -60,12 +60,20 @@ export async function POST(req: NextRequest) {
       console.log('[upload] GCS OK →', publicUrl)
       return NextResponse.json({ url: publicUrl, filename: gcsPath })
     } catch (gcsErr: any) {
-      console.warn('[upload] GCS unavailable, using local fallback:', gcsErr.message)
+      console.error('[upload] GCS failed — bucket:', BUCKET_NAME, '| error:', gcsErr?.code, gcsErr?.message)
     }
 
     // ── 2. Local filesystem fallback (dev only) ──────────────────────────────
-    // Saves to /public/uploads/ so Next.js serves it at /uploads/<filename>
-    // This URL *can* be stored in the DB (it's a normal relative path, not a data URL)
+    // Cloud Run has an ephemeral filesystem — local paths are not served and
+    // will 404 immediately. Only allow this fallback in local development.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[upload] GCS failed in production — refusing local fallback to avoid broken URLs')
+      return NextResponse.json(
+        { error: 'No se pudo guardar el archivo. Problema con el almacenamiento en la nube.' },
+        { status: 500 }
+      )
+    }
+
     try {
       const { writeFile, mkdir } = await import('fs/promises')
       const { join } = await import('path')
@@ -86,6 +94,7 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       )
     }
+
   } catch (err: any) {
     console.error('POST /api/upload error:', err)
     return NextResponse.json({ error: 'Error al subir archivo: ' + err.message }, { status: 500 })
