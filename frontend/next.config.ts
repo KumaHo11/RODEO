@@ -5,31 +5,29 @@ const withPWA = withPWAInit({
   dest: "public",
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
-  reloadOnOnline: true,
-  disable: false, // Habilitado para probar offline localmente
+  // No recargar automáticamente al volver online — la sincronización manual evita perder datos
+  reloadOnOnline: false,
+  disable: false,
   workboxOptions: {
     disableDevLogs: true,
     runtimeCaching: [
-      // Cache Next.js API calls (NetworkFirst to get fresh data, fallback to cache offline)
+      // ── Upload, auth, and transcription APIs: NEVER cache (NetworkOnly) ──────
+      // These must always hit the network — caching them causes silent failures offline.
+      {
+        urlPattern: /\/api\/(upload|auth|transcribe-audio|webhooks)\/.*/,
+        handler: "NetworkOnly",
+      },
+      // ── Other API calls (NetworkFirst: fresh data, fallback to cache offline) ─
       {
         urlPattern: /\/api\/.*/,
         handler: "NetworkFirst",
         options: {
           cacheName: "next-api",
           expiration: { maxEntries: 200, maxAgeSeconds: 24 * 60 * 60 },
-          networkTimeoutSeconds: 5,
+          networkTimeoutSeconds: 8,
         },
       },
-      // Cache Supabase API calls (stale-while-revalidate)
-      {
-        urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/.*$/,
-        handler: "StaleWhileRevalidate",
-        options: {
-          cacheName: "supabase-api",
-          expiration: { maxEntries: 200, maxAgeSeconds: 24 * 60 * 60 },
-        },
-      },
-      // Cache tile images (maps)
+      // ── Map tiles ────────────────────────────────────────────────────────────
       {
         urlPattern: /^https:\/\/server\.arcgisonline\.com\/.*/,
         handler: "CacheFirst",
@@ -38,7 +36,25 @@ const withPWA = withPWAInit({
           expiration: { maxEntries: 500, maxAgeSeconds: 7 * 24 * 60 * 60 },
         },
       },
-      // Cache Google Fonts
+      // ── Firebase Storage images ───────────────────────────────────────────────
+      {
+        urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/,
+        handler: "CacheFirst",
+        options: {
+          cacheName: "firebase-storage",
+          expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60 },
+        },
+      },
+      // ── Google Cloud Storage images ───────────────────────────────────────────
+      {
+        urlPattern: /^https:\/\/storage\.googleapis\.com\/.*/,
+        handler: "CacheFirst",
+        options: {
+          cacheName: "gcs-storage",
+          expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60 },
+        },
+      },
+      // ── Google Fonts ─────────────────────────────────────────────────────────
       {
         urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/,
         handler: "CacheFirst",
@@ -57,6 +73,8 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.supabase.co" },
+      { protocol: "https", hostname: "firebasestorage.googleapis.com" },
+      { protocol: "https", hostname: "storage.googleapis.com" },
     ],
   },
 };
