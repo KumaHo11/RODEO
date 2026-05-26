@@ -22,7 +22,7 @@ function getAdminApp(): App {
   const saEmail     = process.env.FIREBASE_ADMIN_IMPERSONATE_SA
   const credBase64  = process.env.FIREBASE_ADMIN_CREDENTIALS_BASE64
 
-  const storageBucket = process.env.GCS_BUCKET_NAME || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'rodeo-app-fac50.firebasestorage.app'
+  const storageBucket = process.env.GCS_BUCKET_NAME || 'rodeo-media'
 
   // Opción 0: Service Account JSON completo en base64 (preferido en Cloud Run)
   if (credBase64) {

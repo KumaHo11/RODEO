@@ -72,7 +72,7 @@ jobs:
             f'FIREBASE_ADMIN_CREDENTIALS_BASE64: {q(os.environ.get("FIREBASE_ADMIN_CREDENTIALS_BASE64",""))}',
             f'FIREBASE_ADMIN_IMPERSONATE_SA: {q(os.environ.get("FIREBASE_ADMIN_IMPERSONATE_SA",""))}',
             f'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: {q(os.environ.get("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",""))}',
-            f'GCS_BUCKET_NAME: {q(os.environ.get("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",""))}',
+            f'GCS_BUCKET_NAME: {q("rodeo-media")}',
             f'GEMINI_API_KEY: {q(os.environ.get("GEMINI_API_KEY",""))}',
             f'RESEND_API_KEY: {q(os.environ.get("RESEND_API_KEY",""))}',
             f'RESEND_FROM_EMAIL: {q(os.environ.get("RESEND_FROM_EMAIL",""))}',

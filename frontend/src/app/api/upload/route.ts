@@ -12,7 +12,7 @@ import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { getStorage } from 'firebase-admin/storage'
 import admin from '@/lib/firebase/admin'
 
-const BUCKET_NAME = process.env.GCS_BUCKET_NAME || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'rodeo-app-fac50.firebasestorage.app'
+const BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'rodeo-media'
 
 export async function POST(req: NextRequest) {
   try {
