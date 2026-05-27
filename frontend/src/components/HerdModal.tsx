@@ -118,11 +118,11 @@ const TEXTAREA = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-
 // ── Activity options — uniform grid layout ─────────────────────────────────────
 
 const ACTIVITIES = [
-  { id: 'paricion',  label: 'Parición',  color: 'text-gray-700',   bg: 'bg-gray-50',   border: 'border-gray-200',   dot: 'bg-gray-400',   icon: Plus },
-  { id: 'compra',    label: 'Compra',    color: 'text-gray-700',  bg: 'bg-gray-50',  border: 'border-gray-200',  dot: 'bg-gray-400',  icon: Plus },
-  { id: 'mortandad', label: 'Mortandad', color: 'text-gray-700',    bg: 'bg-gray-50',    border: 'border-gray-200',    dot: 'bg-gray-400',    icon: Minus },
-  { id: 'venta',     label: 'Venta',     color: 'text-gray-700',  bg: 'bg-gray-50',  border: 'border-gray-200',  dot: 'bg-gray-400',  icon: Minus },
-  { id: 'destete',   label: 'Destete',   color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200', dot: 'bg-gray-400', icon: Minus },
+  { id: 'paricion',  label: 'Parición',  desc: 'Incorpora crías nacidas en el rodeo',       type: 'entrada', icon: Plus  },
+  { id: 'compra',    label: 'Compra',    desc: 'Ingreso de animales por compra o traslado',  type: 'entrada', icon: Plus  },
+  { id: 'mortandad', label: 'Mortandad', desc: 'Bajas por muerte, descarte o causas ajenas', type: 'salida',  icon: Minus },
+  { id: 'venta',     label: 'Venta',     desc: 'Egreso de animales por venta o faena',       type: 'salida',  icon: Minus },
+  { id: 'destete',   label: 'Destete',   desc: 'Segregación de terneros con asistencia EV',  type: 'salida',  icon: Minus },
 ]
 const ACTIVITY_ADDS   = new Set(['paricion', 'compra'])
 type ActivityId = 'paricion' | 'compra' | 'mortandad' | 'venta' | 'destete'
@@ -1521,7 +1521,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
           {/* ════ TAB 2 — ACTIVIDADES ════ */}
           {tab === 'actividades' && (
-            <div className="px-6 pt-5 pb-24 space-y-5">
+            <div className="px-5 pt-5 pb-24 space-y-4">
               {!isEditing ? (
                 <div className="py-10 text-center">
                   <ClipboardList className="w-10 h-10 text-gray-200 mx-auto mb-3" />
@@ -1529,291 +1529,305 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                 </div>
               ) : (
                 <>
+                  {/* ── Toasts ── */}
                   <AnimatePresence mode="sync">
                     {actSuccess && (
                       <motion.div key="act-success" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                         className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
                         <Check className="w-4 h-4 text-green-600 shrink-0" />
-                        <p className="text-sm font-bold text-green-700">{actSuccess}</p>
+                        <p className="text-xs font-bold text-green-700">{actSuccess}</p>
                       </motion.div>
                     )}
                     {weanSuccess && (
                       <motion.div key="wean-success" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                         className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
                         <Check className="w-4 h-4 text-green-600 shrink-0" />
-                        <p className="text-sm font-bold text-green-700">✓ Rodeo de terneros destetados creado automáticamente</p>
+                        <p className="text-xs font-bold text-green-700">Rodeo de terneros creado correctamente</p>
                       </motion.div>
                     )}
                     {actError && (
                       <motion.div key="act-error" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                         className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
                         <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                        <p className="text-sm font-bold text-red-600">{actError}</p>
+                        <p className="text-xs font-bold text-red-600">{actError}</p>
                       </motion.div>
                     )}
                   </AnimatePresence>
 
-                  {/* Current stock */}
-                  <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200">
-                    <Hash className="w-4 h-4 text-gray-400 shrink-0" />
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Stock actual</p>
-                      <p className="text-xl font-black text-gray-900">{liveHerd?.head_count ?? herd?.head_count} <span className="text-xs font-normal text-gray-400">cabezas</span></p>
+                  {/* ── Stock pill ── */}
+                  <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <Hash className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="text-xs text-gray-500 font-medium">Stock actual</span>
                     </div>
+                    <span className="text-sm font-black text-gray-900">
+                      {(liveHerd?.head_count ?? herd?.head_count ?? 0).toLocaleString('es-AR')}
+                      <span className="text-xs font-medium text-gray-400 ml-1">cab</span>
+                    </span>
                   </div>
 
-                  {/* Uniform 2+3 activity grid */}
-                  <div className="space-y-2">
-                    <p className={`${LABEL} flex items-center gap-1.5`}><Plus className="w-3 h-3 text-green-600" /> Suma</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {ACTIVITIES.filter(a => ACTIVITY_ADDS.has(a.id)).map(a => {
-                        const Icon = a.icon
-                        const sel  = actId === a.id
-                        return (
-                          <button key={a.id} type="button" onClick={() => setActId(sel ? null : a.id as ActivityId)}
-                            className={`flex flex-col items-center gap-2 px-3 py-4 rounded-xl border text-xs font-bold transition-all ${sel ? `bg-gray-900 border-gray-900 text-white shadow-md` : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'}`}>
-                            <span className={`w-2 h-2 rounded-full ${sel ? 'bg-white' : 'bg-gray-300'}`} />
-                            <Icon className="w-5 h-5" />
-                            {a.label}
+                  {/* ── Activity list — accordion style ── */}
+                  <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 overflow-hidden">
+
+                    {/* Group: Entradas */}
+                    <div className="px-4 py-2 bg-gray-50/80">
+                      <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Entradas</p>
+                    </div>
+
+                    {ACTIVITIES.filter(a => ACTIVITY_ADDS.has(a.id)).map(a => {
+                      const sel = actId === a.id
+                      return (
+                        <div key={a.id} className="divide-y divide-gray-100">
+                          <button
+                            type="button"
+                            onClick={() => setActId(sel ? null : a.id as ActivityId)}
+                            className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${
+                              sel ? 'bg-green-50' : 'bg-white hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                              sel ? 'bg-green-100' : 'bg-gray-100'
+                            }`}>
+                              <Plus className={`w-3.5 h-3.5 ${sel ? 'text-green-700' : 'text-gray-400'}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-bold transition-colors ${sel ? 'text-green-800' : 'text-gray-800'}`}>{a.label}</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{(a as any).desc}</p>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${
+                              sel ? 'border-green-600 bg-green-600' : 'border-gray-300'
+                            }`}>
+                              {sel && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
                           </button>
-                        )
-                      })}
-                    </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <p className={`${LABEL} flex items-center gap-1.5`}><Minus className="w-3 h-3 text-red-500" /> Resta</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {ACTIVITIES.filter(a => !ACTIVITY_ADDS.has(a.id)).map(a => {
-                        const Icon = a.icon
-                        const sel  = actId === a.id
-                        return (
-                          <button key={a.id} type="button" onClick={() => setActId(sel ? null : a.id as ActivityId)}
-                            className={`flex flex-col items-center gap-2 px-3 py-4 rounded-xl border text-xs font-bold transition-all ${sel ? `bg-gray-900 border-gray-900 text-white shadow-md` : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'}`}>
-                            <span className={`w-2 h-2 rounded-full ${sel ? 'bg-white' : 'bg-gray-300'}`} />
-                            <Icon className="w-5 h-5" />
-                            {a.label}
+                          <AnimatePresence>
+                            {sel && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="px-4 pb-4 pt-3 space-y-3 bg-white border-t border-gray-100">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                      <label className={LABEL}>Cantidad de cabezas</label>
+                                      <input type="number" min="1" value={actCount}
+                                        onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <label className={LABEL}>Fecha</label>
+                                      <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <label className={LABEL}>Peso de ingreso (kg/cab)</label>
+                                    <input type="number" min="0" step="1" value={actWeight}
+                                      inputMode="numeric"
+                                      onChange={e => setActWeight(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                                      onFocus={e => e.target.select()}
+                                      placeholder="Ej: 320" className={INPUT} />
+                                    <p className="text-[10px] text-gray-400">Se recalcula el peso promedio y EV del rodeo</p>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <label className={LABEL}>Nota (opcional)</label>
+                                    <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
+                                      placeholder="Ej: Compra en remate feria..." className={INPUT} />
+                                  </div>
+                                  <button type="button" onClick={handleActivity} disabled={actSaving || !actCount}
+                                    className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
+                                    {actSaving ? 'Guardando...' : `Confirmar ${a.label.toLowerCase()}`}
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )
+                    })}
+
+                    {/* Group: Salidas */}
+                    <div className="px-4 py-2 bg-gray-50/80">
+                      <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Salidas</p>
+                    </div>
+
+                    {ACTIVITIES.filter(a => !ACTIVITY_ADDS.has(a.id)).map(a => {
+                      const sel = actId === a.id
+                      return (
+                        <div key={a.id} className="divide-y divide-gray-100">
+                          <button
+                            type="button"
+                            onClick={() => setActId(sel ? null : a.id as ActivityId)}
+                            className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${
+                              sel ? 'bg-green-50' : 'bg-white hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                              sel ? 'bg-green-100' : 'bg-gray-100'
+                            }`}>
+                              <Minus className={`w-3.5 h-3.5 ${sel ? 'text-green-700' : 'text-gray-400'}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-bold transition-colors ${sel ? 'text-green-800' : 'text-gray-800'}`}>{a.label}</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{(a as any).desc}</p>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${
+                              sel ? 'border-green-600 bg-green-600' : 'border-gray-300'
+                            }`}>
+                              {sel && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
                           </button>
-                        )
-                      })}
-                    </div>
-                  </div>
 
-                  {/* Activity detail form */}
-                  <AnimatePresence>
-                    {actId && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }} className="overflow-hidden border border-gray-200 rounded-xl">
-
-                        {/* ════ DESTETE — UI inline completa ════ */}
-                        {actId === 'destete' ? (
-                          <div className="space-y-4 px-4 py-4">
-
-                            {/* Header del flujo */}
-                            <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
-                              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
-                                <Activity className="w-3.5 h-3.5 text-emerald-600" />
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-black text-emerald-700 tracking-widest uppercase">Flujo de Destete</p>
-                                <p className="text-[9px] text-emerald-600">Las madres remanentes mantienen su estado o se reclasifican</p>
-                              </div>
-                            </div>
-
-                            {/* Cabezas + Fecha */}
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <label className={LABEL}>Terneros destetados</label>
-                                <input type="number" min="1" value={actCount}
-                                  onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
-                                <p className="text-[9px] text-gray-400">máx {liveHerd?.head_count ?? herd?.head_count ?? '?'} cab</p>
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className={LABEL}>Fecha de destete</label>
-                                <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
-                              </div>
-                            </div>
-
-                            {/* ── Parámetros productivos de las crías ── */}
-                            <div className="rounded-xl border border-orange-100 bg-orange-50/50 p-3 space-y-3">
-                              <p className="text-[10px] font-black text-orange-700 tracking-widest uppercase">Crías · Parámetros productivos</p>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                  <label className={`${LABEL} flex items-center gap-1`}>
-                                    <Scale className="w-3 h-3 text-orange-400" /> Peso al destete (kg)
-                                  </label>
-                                  <input type="number" min="80" max="280" step="5"
-                                    value={weanCalfWeight}
-                                    onChange={e => setWeanCalfWeight(e.target.value === '' ? '' : Number(e.target.value))}
-                                    onFocus={e => e.target.select()}
-                                    className={INPUT}
-                                    placeholder="Ej: 160" />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <label className={`${LABEL} flex items-center gap-1`}>
-                                    <TrendingUp className="w-3 h-3 text-orange-400" /> GDP post-destete (kg/día)
-                                  </label>
-                                  <input type="number" min="0" max="2" step="0.05"
-                                    value={weanCalfGdp}
-                                    onChange={e => setWeanCalfGdp(e.target.value === '' ? '' : Number(e.target.value))}
-                                    onFocus={e => e.target.select()}
-                                    className={INPUT}
-                                    placeholder="Ej: 0.550" />
-                                </div>
-                              </div>
-
-                              {/* EV Preview de crías */}
-                              {weanCalvesEV > 0 && actCount !== '' && Number(actCount) > 0 && (
-                                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-orange-100">
-                                  <ClipboardList className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                                  <p className="text-xs text-gray-700">
-                                    EV crías: <strong className="text-orange-600">{weanCalvesEV.toFixed(2)} EV</strong>
-                                    <span className="text-gray-400 ml-1.5">· {Math.round(weanCalvesEV * 11).toLocaleString('es-AR')} kg MS/día</span>
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* ── Destino de los terneros ── */}
-                            <div className="space-y-2.5">
-                              <p className="text-[10px] font-black text-gray-600 tracking-widest uppercase">Destino de los terneros</p>
-
-                              {/* Radio: Nuevo rodeo */}
-                              <label className={`flex items-start gap-2.5 cursor-pointer px-3 py-3 rounded-xl border-2 transition-all ${
-                                weanDestination === 'new' ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 hover:border-gray-300 bg-white'
-                              }`}>
-                                <input type="radio" name="wean-dest" value="new"
-                                  checked={weanDestination === 'new'}
-                                  onChange={() => setWeanDestination('new')}
-                                  className="mt-0.5 accent-emerald-600" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-black text-gray-800">Crear nuevo rodeo independiente</p>
-                                  <p className="text-[9px] text-gray-400 mt-0.5">Se dará de alta un rodeo de terneros con los parámetros ingresados</p>
-                                  {weanDestination === 'new' && (
-                                    <input type="text"
-                                      className={`${INPUT} mt-2`}
-                                      placeholder="Nombre del rodeo (ej: Destete Cabezas 2026)"
-                                      value={weanNewHerdName}
-                                      onChange={e => setWeanNewHerdName(e.target.value)}
-                                      autoFocus
-                                    />
+                          <AnimatePresence>
+                            {sel && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="px-4 pb-4 pt-3 space-y-3 bg-white border-t border-gray-100">
+                                  {actId === 'destete' ? (
+                                    /* ════ DESTETE ════ */
+                                    <>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Terneros destetados</label>
+                                          <input type="number" min="1" value={actCount}
+                                            onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
+                                          <p className="text-[9px] text-gray-400">máx {liveHerd?.head_count ?? herd?.head_count ?? '?'} cab</p>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Fecha</label>
+                                          <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
+                                        </div>
+                                      </div>
+                                      <div className="rounded-xl border border-gray-200 bg-gray-50/40 p-3 space-y-3">
+                                        <p className={LABEL}>Crías · Parámetros</p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                          <div className="space-y-1.5">
+                                            <label className={LABEL}>Peso al destete (kg)</label>
+                                            <input type="number" min="80" max="280" step="5"
+                                              value={weanCalfWeight}
+                                              onChange={e => setWeanCalfWeight(e.target.value === '' ? '' : Number(e.target.value))}
+                                              onFocus={e => e.target.select()}
+                                              className={INPUT} placeholder="Ej: 160" />
+                                          </div>
+                                          <div className="space-y-1.5">
+                                            <label className={LABEL}>GDP crías (kg/día)</label>
+                                            <input type="number" min="0" max="2" step="0.05"
+                                              value={weanCalfGdp}
+                                              onChange={e => setWeanCalfGdp(e.target.value === '' ? '' : Number(e.target.value))}
+                                              onFocus={e => e.target.select()}
+                                              className={INPUT} placeholder="Ej: 0.55" />
+                                          </div>
+                                        </div>
+                                        {weanCalvesEV > 0 && actCount !== '' && Number(actCount) > 0 && (
+                                          <p className="text-[10px] text-gray-500">
+                                            EV crías: <strong className="text-green-700">{weanCalvesEV.toFixed(2)} EV</strong>
+                                            <span className="text-gray-400 ml-1.5">· {Math.round(weanCalvesEV * 11).toLocaleString('es-AR')} kg MS/día</span>
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="space-y-2">
+                                        <p className={LABEL}>Destino de los terneros</p>
+                                        <label className={`flex items-start gap-2.5 cursor-pointer px-3 py-3 rounded-xl border-2 transition-all ${
+                                          weanDestination === 'new' ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-gray-300 bg-white'
+                                        }`}>
+                                          <input type="radio" name="wean-dest" value="new"
+                                            checked={weanDestination === 'new'}
+                                            onChange={() => setWeanDestination('new')}
+                                            className="mt-0.5 accent-green-600" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-gray-800">Crear nuevo rodeo</p>
+                                            <p className="text-[9px] text-gray-400 mt-0.5">Se da de alta un rodeo de terneros con los parámetros ingresados</p>
+                                            {weanDestination === 'new' && (
+                                              <input type="text" className={`${INPUT} mt-2`}
+                                                placeholder="Nombre del rodeo (ej: Destete 2026)"
+                                                value={weanNewHerdName}
+                                                onChange={e => setWeanNewHerdName(e.target.value)}
+                                                autoFocus />
+                                            )}
+                                          </div>
+                                        </label>
+                                        <label className={`flex items-start gap-2.5 cursor-pointer px-3 py-3 rounded-xl border-2 transition-all ${
+                                          weanDestination === 'existing' ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-gray-300 bg-white'
+                                        }`}>
+                                          <input type="radio" name="wean-dest" value="existing"
+                                            checked={weanDestination === 'existing'}
+                                            onChange={() => setWeanDestination('existing')}
+                                            className="mt-0.5 accent-green-600" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-gray-800">Transferir a rodeo existente</p>
+                                            <p className="text-[9px] text-gray-400 mt-0.5">Ternero/a o Recría activos en el establecimiento</p>
+                                            {weanDestination === 'existing' && (
+                                              weanTargetHerds.length === 0 ? (
+                                                <p className="text-[9px] text-amber-600 mt-2 font-medium">Sin rodeos de terneros/recría disponibles.</p>
+                                              ) : (
+                                                <select className={`${INPUT} mt-2`} value={weanTargetHerdId} onChange={e => setWeanTargetHerdId(e.target.value)}>
+                                                  <option value="">— Seleccionar rodeo —</option>
+                                                  {weanTargetHerds.map(h => (
+                                                    <option key={h.id} value={h.id}>{h.name} · {h.head_count} cab {h.avg_weight_kg ? `· ${h.avg_weight_kg} kg` : ''}</option>
+                                                  ))}
+                                                </select>
+                                              )
+                                            )}
+                                          </div>
+                                        </label>
+                                      </div>
+                                      {herd && Number(actCount) > 0 && (
+                                        <div className="flex items-center justify-between text-[10px] px-1 pt-1">
+                                          <span className="text-gray-400">Madres remanentes tras el destete</span>
+                                          <span className="font-black text-green-700">
+                                            {Math.max(0, (liveHerd?.head_count ?? herd?.head_count ?? 0) - Number(actCount))} cab
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div className="space-y-1.5">
+                                        <label className={LABEL}>Nota (opcional)</label>
+                                        <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
+                                          placeholder="Ej: Destete precoz..." className={INPUT} />
+                                      </div>
+                                      <button type="button" onClick={openWeaningConfirm}
+                                        disabled={actSaving || !actCount || (weanDestination === 'new' && !weanNewHerdName.trim()) || (weanDestination === 'existing' && !weanTargetHerdId)}
+                                        className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
+                                        Confirmar destete
+                                      </button>
+                                    </>
+                                  ) : (
+                                    /* ════ Mortandad / Venta ════ */
+                                    <>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Cantidad de cabezas</label>
+                                          <input type="number" min="1" value={actCount}
+                                            onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Fecha</label>
+                                          <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
+                                        </div>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className={LABEL}>Nota (opcional)</label>
+                                        <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
+                                          placeholder={actId === 'venta' ? 'Ej: Venta en remate feria...' : 'Ej: Causa, potrero...'} className={INPUT} />
+                                      </div>
+                                      <button type="button" onClick={handleActivity} disabled={actSaving || !actCount}
+                                        className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
+                                        {actSaving ? 'Guardando...' : `Confirmar ${a.label.toLowerCase()}`}
+                                      </button>
+                                    </>
                                   )}
                                 </div>
-                              </label>
-
-                              {/* Radio: Rodeo existente */}
-                              <label className={`flex items-start gap-2.5 cursor-pointer px-3 py-3 rounded-xl border-2 transition-all ${
-                                weanDestination === 'existing' ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 hover:border-gray-300 bg-white'
-                              }`}>
-                                <input type="radio" name="wean-dest" value="existing"
-                                  checked={weanDestination === 'existing'}
-                                  onChange={() => setWeanDestination('existing')}
-                                  className="mt-0.5 accent-emerald-600" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-black text-gray-800">Transferir a rodeo existente</p>
-                                  <p className="text-[9px] text-gray-400 mt-0.5">Ternero/a o Recría activos en el establecimiento</p>
-                                  {weanDestination === 'existing' && (
-                                    weanTargetHerds.length === 0 ? (
-                                      <p className="text-[9px] text-amber-600 mt-2 font-medium">
-                                        Sin rodeos de terneros/recría disponibles. Creá uno primero.
-                                      </p>
-                                    ) : (
-                                      <select className={`${INPUT} mt-2`}
-                                        value={weanTargetHerdId}
-                                        onChange={e => setWeanTargetHerdId(e.target.value)}>
-                                        <option value="">— Seleccionar rodeo —</option>
-                                        {weanTargetHerds.map(h => (
-                                          <option key={h.id} value={h.id}>
-                                            {h.name} · {h.head_count} cab · {h.avg_weight_kg ? `${h.avg_weight_kg} kg` : ''}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    )
-                                  )}
-                                </div>
-                              </label>
-                            </div>
-
-                            {/* ── Resumen de impacto en madres (preview dinámico) ── */}
-                            {herd && Number(actCount) > 0 && (
-                              <div className="bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-3 space-y-1.5">
-                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Impacto en rodeo de madres</p>
-                                <div className="flex items-center justify-between">
-                                  <p className="text-[10px] text-gray-500">Stock actual</p>
-                                  <p className="text-[10px] font-black text-gray-700">{liveHerd?.head_count ?? herd?.head_count} cab</p>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <p className="text-[10px] text-gray-500">Terneros a segregar</p>
-                                  <p className="text-[10px] font-black text-orange-600">−{Number(actCount)} cab</p>
-                                </div>
-                                <div className="flex items-center justify-between border-t border-gray-200 pt-1.5">
-                                  <p className="text-[10px] font-black text-gray-700">Madres remanentes</p>
-                                  <p className="text-[10px] font-black text-emerald-700">
-                                    {Math.max(0, (liveHerd?.head_count ?? herd?.head_count ?? 0) - Number(actCount))} cab
-                                  </p>
-                                </div>
-                                <p className="text-[9px] text-gray-400 pt-0.5">
-                                  El estado fisiológico de las madres se definirá al confirmar.
-                                </p>
-                              </div>
+                              </motion.div>
                             )}
-
-                            {/* Nota */}
-                            <div className="space-y-1.5">
-                              <label className={LABEL}>Nota (opcional)</label>
-                              <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
-                                placeholder="Ej: Destete precoz, lluvias adelantadas..." className={INPUT} />
-                            </div>
-
-                            {/* Botón confirmar destete — abre modal de confirmación */}
-                            <button type="button" onClick={openWeaningConfirm}
-                              disabled={actSaving || !actCount || (weanDestination === 'new' && !weanNewHerdName.trim()) || (weanDestination === 'existing' && !weanTargetHerdId)}
-                              className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
-                              Confirmar destete
-                            </button>
-                          </div>
-
-                        ) : (
-                          /* ════ Otras actividades — formulario estándar ════ */
-                          <div className="space-y-3 px-4 py-4">
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <label className={LABEL}>Cantidad de cabezas</label>
-                                <input type="number" min="1" value={actCount}
-                                  onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className={LABEL}>Fecha</label>
-                                <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
-                              </div>
-                            </div>
-                            {ACTIVITY_ADDS.has(actId as ActivityId) && (
-                              <div className="space-y-1.5">
-                                <label className={`${LABEL} flex items-center gap-1`}>
-                                  <Scale className="w-3 h-3 text-gray-400" /> Peso de los animales que ingresan (kg/cab)
-                                </label>
-                                <input type="number" min="0" step="1" value={actWeight}
-                                  inputMode="numeric"
-                                  onChange={e => setActWeight(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                                  onFocus={e => e.target.select()}
-                                  placeholder="Ej: 320" className={INPUT} />
-                                <p className="text-[10px] text-gray-400 italic">Se recalcularán el peso promedio y el EV del rodeo</p>
-                              </div>
-                            )}
-                            <div className="space-y-1.5">
-                              <label className={LABEL}>Nota (opcional)</label>
-                              <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
-                                placeholder="Ej: Compra en remate feria..." className={INPUT} />
-                            </div>
-                            <button type="button" onClick={handleActivity} disabled={actSaving || !actCount}
-                              className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
-                              {actSaving ? 'Guardando...' : `Confirmar ${actId}`}
-                            </button>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                          </AnimatePresence>
+                        </div>
+                      )
+                    })}
+                  </div>
 
                 </>
               )}
