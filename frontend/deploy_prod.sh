@@ -37,7 +37,7 @@ gcloud run deploy rodeo-prod \
   --platform managed \
   --allow-unauthenticated \
   --set-env-vars="NEXT_PUBLIC_APP_URL=${PROD_URL}" \
-  --update-secrets="DATABASE_URL=rodeo-db-url-prod:latest,SENDGRID_API_KEY=sendgrid-api-key-prod:latest,FIREBASE_ADMIN_CREDENTIALS_BASE64=firebase-sa-key-prod:latest,GEMINI_API_KEY=gemini-api-key-prod:latest"
+  --update-secrets="DATABASE_URL=rodeo-db-url-prod:latest,RESEND_API_KEY=resend-api-key-prod:latest,FIREBASE_ADMIN_CREDENTIALS_BASE64=firebase-sa-key-prod:latest,GEMINI_API_KEY=gemini-api-key-prod:latest"
 
 # ── Configurar Mapeo de Dominio Personalizado ──
 # gcloud beta run domain-mappings create --service rodeo-prod --domain rodeoagtech.com --region southamerica-east1

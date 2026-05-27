@@ -7,7 +7,7 @@ import { finishOnboarding } from '../actions'
 import {
   Plus, Trash2, ArrowLeft, ClipboardList, Scale, Leaf,
   SkipForward, AlertTriangle, X, CheckCircle2, Loader2, TrendingUp,
-  ChevronDown, Calendar, Hash, Clock, Info,
+  ChevronDown, Calendar, Hash, Clock, Info, Activity,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import SuccessModal from './SuccessModal'
@@ -17,6 +17,10 @@ import {
   CATEGORIA_LABEL_RAE, CATEGORIA_KEY_FROM_LABEL, CATEGORIA_REF,
   type CategoriaComercial,
 } from '@/lib/categorias'
+import {
+  PHYSIOLOGICAL_CATEGORIES, PHYSIO_LABEL, PHYSIO_EV_BASE, GROWTH_PHYSIO_CATEGORIES,
+  type PhysiologicalCategory,
+} from '@/lib/grazing/evProjection'
 
 // ── Non-bovine species (forage / EV purposes — no market valuation) ────────────
 const OTHER_SPECIES = [
@@ -270,6 +274,11 @@ export default function Step3Herds() {
   const [ageValue,      setAgeValue]      = useState<number | ''>(6)
   const [ageUnit,       setAgeUnit]       = useState<'months' | 'years'>('months')
 
+  // ── v8: Campos fisiológicos ────────────────────────────────────────────────
+  const [physioCategory, setPhysioCategory] = useState<PhysiologicalCategory | ''>('')
+  const [lastWeighDate,  setLastWeighDate]  = useState('')
+  const [dailyGainKg,    setDailyGainKg]   = useState<number | ''>('')
+
   const [showSkipWarning, setShowSkipWarning] = useState(false)
   const [submitting,     setSubmitting]       = useState(false)
   const [error,          setError]            = useState<string | null>(null)
@@ -278,6 +287,16 @@ export default function Step3Herds() {
 
   // Update weight default when category changes
   useEffect(() => { setWeight(currentDefaultWeight) }, [currentDefaultWeight])
+
+  // GDP defaults inteligentes según categoría fisiológica
+  useEffect(() => {
+    if (physioCategory === '') return
+    if (GROWTH_PHYSIO_CATEGORIES.has(physioCategory)) {
+      if (dailyGainKg === '' || dailyGainKg === 0) setDailyGainKg(0.5)
+    } else if (physioCategory === 'VACA_CON_TERNERO') {
+      setDailyGainKg(0)
+    }
+  }, [physioCategory]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Category change handler ────────────────────────────────────────────────
   const handleCatChange = (label: string, key: string | null) => {
@@ -294,8 +313,19 @@ export default function Step3Herds() {
     setBreed('')
   }
 
-  // ── Computed values ────────────────────────────────────────────────────────
-  const currentEV    = useMemo(() => calcEV(currentDemandFactor, weight, Number(count) || 0), [currentDemandFactor, weight, count])
+  // ── Computed EV ──
+  // Prioridad 1: categoría fisiológica seleccionada → EV = Cabezas × EV_base
+  // Prioridad 2: fallback con peso y factor de demanda comercial
+  const currentEV = useMemo(() => {
+    const n = Number(count) || 0
+    if (n <= 0) return 0
+    if (physioCategory) {
+      const evBase = PHYSIO_EV_BASE[physioCategory] ?? 1.0
+      return parseFloat((evBase * n).toFixed(1))
+    }
+    return calcEV(currentDemandFactor, weight, n)
+  }, [physioCategory, count, currentDemandFactor, weight])
+
   const currentMsDay = useMemo(() => Math.round(currentEV * MS_PER_EV_DAY), [currentEV])
 
   const totalEV      = data.herds.reduce((s: number, h: any) => s + h.totalEV, 0)
@@ -317,26 +347,32 @@ export default function Step3Herds() {
   // ── Add herd ───────────────────────────────────────────────────────────────
   const addHerd = () => {
     if (!canAdd) return
-    const ev       = calcEV(currentDemandFactor, weight, Number(count))
+    const ev       = currentEV
     const species  = (otherSpecies ?? catLabel) || 'Otra'
     const categoria = catKey ?? null
     updateData({
       herds: [...data.herds, {
-        name:          name.trim(),
+        name:                 name.trim(),
         species,
         categoria,
-        breed:         breed.trim() || null,
-        headCount:     Number(count),
-        avgWeight:     weight,
-        age:           ageMonths ?? 0,          // legacy fallback
-        ageMonths:     ageMonths,
+        breed:                breed.trim() || null,
+        headCount:            Number(count),
+        avgWeight:            weight,
+        age:                  ageMonths ?? 0,
+        ageMonths:            ageMonths,
         admissionDate,
-        totalEV:       ev,
+        totalEV:              ev,
+        physiologicalCategory: physioCategory || null,
+        lastWeighDate:        lastWeighDate || null,
+        dailyGainKg:          dailyGainKg !== '' ? Number(dailyGainKg) : null,
       }],
     })
     setName(''); setBreed(''); setCount(''); setWeight(currentDefaultWeight)
     setAgeValue(6); setAgeUnit('months')
     setAdmissionDate(todayISO())
+    setPhysioCategory('')
+    setLastWeighDate('')
+    setDailyGainKg('')
   }
 
   const removeHerd = (i: number) => updateData({ herds: data.herds.filter((_: any, idx: number) => idx !== i) })
@@ -509,6 +545,66 @@ export default function Step3Herds() {
                 </div>
               </div>
 
+              {/* ── v8: Estado Fisiológico ── */}
+              {!otherSpecies && (
+                <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3.5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md bg-teal-100 flex items-center justify-center shrink-0">
+                      <Activity className="w-3 h-3 text-teal-600" />
+                    </div>
+                    <p className="text-[10px] font-black text-teal-700 tracking-widest uppercase">Estado Fisiológico</p>
+                    <span className="text-[8px] text-teal-400 font-medium">(opcional — mejora el cálculo de EV)</span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase">Categoría fisiológica</label>
+                    <select
+                      className="w-full bg-white border border-teal-100 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all"
+                      value={physioCategory}
+                      onChange={e => setPhysioCategory(e.target.value as PhysiologicalCategory | '')}
+                    >
+                      <option value="">— Opcional: seleccionar estado —</option>
+                      {PHYSIOLOGICAL_CATEGORIES.map(cat => (
+                        <option key={cat} value={cat}>
+                          {PHYSIO_LABEL[cat]} · EV base {PHYSIO_EV_BASE[cat].toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
+                    {physioCategory && (
+                      <p className="text-[9px] text-teal-600 font-medium">
+                        EV = {count || '?'} cab × {PHYSIO_EV_BASE[physioCategory]?.toFixed(2)} = <strong>{currentEV.toFixed(1)} EV</strong>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase flex items-center gap-1">
+                        <Calendar className="w-2.5 h-2.5 text-teal-400" /> Último pesaje
+                      </label>
+                      <input type="date"
+                        value={lastWeighDate}
+                        onChange={e => setLastWeighDate(e.target.value)}
+                        className="w-full bg-white border border-teal-100 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase flex items-center gap-1">
+                        <TrendingUp className="w-2.5 h-2.5 text-teal-400" /> GDP kg/día
+                        {physioCategory === 'VACA_CON_TERNERO' && <span className="text-[8px] text-gray-400 font-normal">inh.</span>}
+                      </label>
+                      <input type="number" step="0.05" min="0" max="3"
+                        value={dailyGainKg}
+                        onChange={e => setDailyGainKg(e.target.value === '' ? '' : Number(e.target.value))}
+                        disabled={physioCategory === 'VACA_CON_TERNERO'}
+                        placeholder={physioCategory === 'VACA_CON_TERNERO' ? '0.000' : 'ej: 0.500'}
+                        className={`w-full bg-white border border-teal-100 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all ${
+                          physioCategory === 'VACA_CON_TERNERO' ? 'opacity-40 cursor-not-allowed' : ''
+                        }`} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* ── Nombre del rodeo ── */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase">
@@ -637,21 +733,35 @@ export default function Step3Herds() {
 
               {/* ── EV preview ── */}
               {Number(count) > 0 && (
-                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50 rounded-xl border border-green-100">
-                    <Scale className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                    <div>
-                      <p className="text-[10px] font-black text-green-600 uppercase tracking-widest">Ev lote</p>
-                      <p className="text-base font-black text-green-700 leading-none">{currentEV} <span className="text-[9px] font-normal">EV</span></p>
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50 rounded-xl border border-green-100">
+                      <Scale className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <p className="text-[10px] font-black text-green-600 uppercase tracking-widest">Ev lote</p>
+                          {physioCategory && (
+                            <span className="text-[7px] font-black bg-teal-100 text-teal-700 px-1 rounded">
+                              {PHYSIO_EV_BASE[physioCategory]?.toFixed(2)}×
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-base font-black text-green-700 leading-none">{currentEV} <span className="text-[9px] font-normal">EV</span></p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
+                      <Leaf className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <div>
+                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">MS/día</p>
+                        <p className="text-base font-black text-emerald-700 leading-none">{currentMsDay} <span className="text-[9px] font-normal">kg</span></p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
-                    <Leaf className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <div>
-                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">MS/día</p>
-                      <p className="text-base font-black text-emerald-700 leading-none">{currentMsDay} <span className="text-[9px] font-normal">kg</span></p>
-                    </div>
-                  </div>
+                  {physioCategory && (
+                    <p className="text-[9px] text-teal-600/70 mt-1.5">
+                      {PHYSIO_LABEL[physioCategory]} · EV = {count} × {PHYSIO_EV_BASE[physioCategory]?.toFixed(2)} = {currentEV} EV
+                    </p>
+                  )}
                 </motion.div>
               )}
             </div>
@@ -753,6 +863,13 @@ export default function Step3Herds() {
                             {h.headCount} cab. · {h.breed || 'Sin raza'} · {h.avgWeight} kg
                             {h.admissionDate && <> · <Calendar className="w-2.5 h-2.5 inline mb-0.5 ml-0.5 text-gray-400" /> {h.admissionDate}</>}
                           </p>
+                          {h.physiologicalCategory && (
+                            <span className="inline-flex items-center gap-1 mt-0.5 text-[8px] font-black bg-teal-50 text-teal-600 border border-teal-100 px-1.5 py-0.5 rounded-full">
+                              <Activity className="w-2 h-2" />
+                              {PHYSIO_LABEL[h.physiologicalCategory as PhysiologicalCategory]}
+                              {h.dailyGainKg ? ` · GDP ${h.dailyGainKg} kg/d` : ''}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">

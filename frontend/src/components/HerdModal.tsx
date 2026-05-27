@@ -25,8 +25,10 @@ import {
   type CategoriaComercial,
 } from '@/lib/categorias'
 import { usePlan } from '@/hooks/usePlan'
-import { calculateBaseEV } from '@/lib/grazing/evProjection'
+import { calculateBaseEV, calculateProjectedEV, PHYSIOLOGICAL_CATEGORIES, PHYSIO_LABEL, PHYSIO_EV_BASE, GROWTH_PHYSIO_CATEGORIES, type PhysiologicalCategory } from '@/lib/grazing/evProjection'
 import { todayISO } from '@/lib/utils/dates'
+import GrowthProjectionChart from '@/components/GrowthProjectionChart'
+import WeaningWizard from '@/components/WeaningWizard'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,10 @@ export interface HerdData {
   parent_herd_id: string | null
   herd_notes: any[]
   created_at?: string
+  // v8: Physiological fields
+  physiological_category?: string | null
+  last_weigh_date?: string | null
+  daily_gain_kg?: number | null
 }
 
 interface Props {
@@ -101,7 +107,7 @@ const EVENT_TYPES_QUICK = [
   { id: 'tratamiento_sanitario', label: 'Tratamiento sanitario', color: 'bg-blue-500' },
   { id: 'servicio',              label: 'Servicio',              color: 'bg-purple-500' },
   { id: 'paricion',              label: 'Parición',              color: 'bg-green-500' },
-  { id: 'destete',               label: 'Destete',              color: 'bg-violet-500' },
+  { id: 'destete',               label: 'Destete',              color: 'bg-emerald-500' },
   { id: 'diagnostico_prenez',    label: 'Diagnóstico de preñez', color: 'bg-teal-500' },
 ]
 
@@ -159,6 +165,13 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
   const [tab, setTab] = useState<'operativo' | 'actividades' | 'registros' | 'historial'>('operativo')
 
+  // liveHerd: copia local del herd que se actualiza optimistamente tras cada actividad.
+  // Esto evita que el modal muestre datos obsoletos mientras el padre refetcha.
+  const [liveHerd, setLiveHerd] = useState(herd)
+
+  // Sync liveHerd when the parent re-passes a fresh herd prop (after onSaved refetch)
+  useEffect(() => { if (herd) setLiveHerd(herd) }, [herd])
+
   useEffect(() => {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
@@ -179,13 +192,28 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     herd?.admission_date ? String(herd.admission_date).slice(0, 10) : todayISO()
   )
   const [count,         setCount]         = useState<number | ''>(herd?.head_count ?? '')
-  const [weight,        setWeight]        = useState<number | ''>(herd?.avg_weight_kg ?? '')
+  const [weight,        setWeight]        = useState<number | ''>(herd?.avg_weight_kg != null ? Math.round(Number(herd.avg_weight_kg)) : '')
   const [ageValue,      setAgeValue]      = useState<number | ''>('')
   const [ageUnit,       setAgeUnit]       = useState<'months' | 'years'>('months')
   const [breed,         setBreed]         = useState(herd?.breed ?? '')
   const [exitDate,      setExitDate]      = useState<string>(
     herd?.exit_date ? String(herd.exit_date).slice(0, 10) : ''
   )
+
+  // ── v8: Physiological fields ────────────────────────────────────────────────
+  const [physioCategory, setPhysioCategory] = useState<PhysiologicalCategory | ''>(  
+    (herd?.physiological_category as PhysiologicalCategory | undefined) ?? ''
+  )
+  const [lastWeighDate, setLastWeighDate] = useState<string>(
+    herd?.last_weigh_date ? String(herd.last_weigh_date).slice(0, 10) : ''
+  )
+  const [dailyGainKg, setDailyGainKg] = useState<number | ''>(
+    herd?.daily_gain_kg != null ? Number(herd.daily_gain_kg) : ''
+  )
+
+  // GDP obligatoria para categorías de crecimiento; también habilitada para vacas (variación peso)
+  const gdpRequired = physioCategory !== '' && GROWTH_PHYSIO_CATEGORIES.has(physioCategory as PhysiologicalCategory)
+  const gdpEnabled  = physioCategory !== '' && physioCategory !== 'VACA_CON_TERNERO'
 
   useEffect(() => {
     if (herd?.age_months) { setAgeValue(herd.age_months); setAgeUnit('months') }
@@ -196,10 +224,44 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     if (!isEditing && catKey && !weight) setWeight(CATEGORIA_PESO_DEFAULT[catKey] ?? '')
   }, [catKey, isEditing]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // GDP defaults inteligentes por categoría fisiológica
+  useEffect(() => {
+    if (physioCategory === '') return
+    if (GROWTH_PHYSIO_CATEGORIES.has(physioCategory as PhysiologicalCategory)) {
+      // Ternero/Recría: GDP default 0.500 kg/día (crecimiento activo)
+      if (dailyGainKg === '' || dailyGainKg === 0) setDailyGainKg(0.5)
+    } else if (physioCategory === 'VACA_CON_TERNERO') {
+      // La madre mantiene peso — GDP = 0 (crecimiento medido en la cría)
+      setDailyGainKg(0)
+    }
+    // VACA_PRENADA / VACA_VACIA: no pisar si el usuario ya cargó un valor
+  }, [physioCategory]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const availableBreeds = useMemo(() => catKey ? (RAZAS_POR_CATEGORIA[catKey] ?? ['Otra']) : ['Otra'], [catKey])
   const currentRef = catKey ? CATEGORIA_REF[catKey] : undefined
   const ageMonths  = ageValue !== '' ? (ageUnit === 'years' ? Number(ageValue) * 12 : Number(ageValue)) : null
-  const liveEV     = useMemo(() => count && weight ? calculateBaseEV(catKey, Number(weight), Number(count)) : 0, [catKey, weight, count])
+
+  /**
+   * effectiveEV — EV del recuadro verde
+   *
+   * Prioridad:
+   * 1. Categoría fisiológica seleccionada:
+   *    EV = Cabezas × EV_base_fisiológico
+   *    (el coeficiente ya codifica el estado biológico; el peso es referencial)
+   * 2. Sin categoría fisiológica: falla hacia calculateBaseEV con peso/categoría comercial
+   */
+  const effectiveEV = useMemo(() => {
+    if (!count || Number(count) <= 0) return 0
+    if (physioCategory) {
+      const evBase = PHYSIO_EV_BASE[physioCategory as PhysiologicalCategory] ?? 1.0
+      return parseFloat((evBase * Number(count)).toFixed(2))
+    }
+    // Fallback: fórmula comercial por peso
+    return count && weight ? calculateBaseEV(catKey, Number(weight), Number(count)) : 0
+  }, [physioCategory, count, catKey, weight])
+
+  // liveEV es alias de effectiveEV para compatibilidad con el payload de save
+  const liveEV = effectiveEV
 
   const [saving,    setSaving]    = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -219,6 +281,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       admission_date: admissionDate && admissionDate.length === 10 ? admissionDate : null,
       exit_date: exitDate && exitDate.length === 10 ? exitDate : null,
       total_ev: liveEV || null,
+      // v8: Physiological fields
+      physiological_category: physioCategory || null,
+      last_weigh_date: lastWeighDate && lastWeighDate.length === 10 ? lastWeighDate : null,
+      daily_gain_kg: dailyGainKg !== '' ? Number(dailyGainKg) : null,
     }
     try {
       if (!navigator.onLine && isEditing) {
@@ -267,12 +333,57 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [actError,   setActError]   = useState<string | null>(null)
   const [weanLoading, setWeanLoading] = useState(false)
   const [weanSuccess, setWeanSuccess] = useState(false)
+  // Wizard de Destete (overlay — kept for legacy fallback)
+  const [weaningWizardOpen, setWeaningWizardOpen] = useState(false)
+
+  // ── Destete inline state ─────────────────────────────────────────────────
+  const [weanDestination,  setWeanDestination]  = useState<'new' | 'existing'>('new')
+  const [weanNewHerdName,  setWeanNewHerdName]  = useState('')
+  const [weanTargetHerdId, setWeanTargetHerdId] = useState('')
+  const [weanCalfWeight,   setWeanCalfWeight]   = useState<number | ''>(160)
+  const [weanCalfGdp,      setWeanCalfGdp]      = useState<number | ''>(0.55)
+
+  // Modal de confirmación de destete (nuevo — v8 fix)
+  const [weaningConfirmOpen,  setWeaningConfirmOpen]  = useState(false)
+  const [weanMothersOutcome,  setWeanMothersOutcome]  = useState<'partial' | 'total'>('partial')
+
+  // Rodeos existentes aptos para recibir terneros
+  const weanTargetHerds = useMemo(() =>
+    allHerds.filter(h =>
+      h.id !== herd?.id &&
+      (h.physiological_category === 'TERNERO' || h.physiological_category === 'RECRIA_NOVILLO' ||
+       h.categoria === 'TERNEROS' || h.categoria === 'TERNERAS' || h.categoria === 'NOVILLITOS')
+    ),
+    [allHerds, herd?.id]
+  )
+
+  // EV live preview del destete (crías)
+  const weanCalvesEV = useMemo(() => {
+    const w = weanCalfWeight !== '' ? Number(weanCalfWeight) : 160
+    const n = actCount !== '' ? Number(actCount) : 0
+    return calculateProjectedEV('TERNERO', w, n)
+  }, [weanCalfWeight, actCount])
+
+
 
   const handleActivity = async () => {
     if (!actId || !actCount || !herd?.id) return
+
+    // ── Destete en rodeo de vacas → lanzar Wizard asistido ──────────────────
+    if (
+      actId === 'destete' &&
+      (herd.physiological_category === 'VACA_CON_TERNERO' ||
+       herd.categoria === 'VACAS' ||
+       !herd.physiological_category)   // legacy: si no tiene categoría fisiológica y es destete, usar wizard
+    ) {
+      setWeaningWizardOpen(true)
+      return
+    }
+
     setActSaving(true); setActError(null)
     const n     = Number(actCount)
     const isAdd = ACTIVITY_ADDS.has(actId)
+
     try {
       const currentCount = herd.head_count || 0
       const currentWeight = Number(herd.avg_weight_kg || weight || 400)
@@ -376,30 +487,13 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
 
 
-      // Destete: auto-create child herd
-      if (actId === 'destete' && n > 0) {
-        setActSaving(false)
-        setWeanLoading(true)
-        const childEV = calculateBaseEV('TERNEROS', 180, n)
-        const childRes = await apiFetch('/api/herds', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: `Terneros · ${herd.name}`,
-            species: 'terneros',
-            categoria: 'TERNEROS',
-            breed: herd.breed || null,
-            head_count: n,
-            avg_weight_kg: 180,
-            total_ev: childEV,
-            parent_herd_id: herd.id,
-          }),
-        })
-        setWeanLoading(false)
-        if (childRes.ok) {
-          setWeanSuccess(true)
-          setTimeout(() => setWeanSuccess(false), 5000)
-        }
-      }
+      // Destete: ya no tiene auto-creación hardcodeada aquí.
+      // El flujo completo se maneja en handleWeaningInline (inline UI en Tab 2).
+
+      // Actualización optimista del liveHerd para que el modal refleje el nuevo stock de inmediato
+      setLiveHerd(prev => prev ? { ...prev, head_count: newCount, total_ev: newEV, avg_weight_kg: newWeight } : prev)
+      // También actualizar el campo count en Tab 1 (Datos Operativos)
+      setCount(newCount)
 
       setActSuccess(`${isAdd ? '+' : '-'}${n} cab · Stock: ${newCount} · EV: ${newEV.toFixed(0)}`)
       setActCount(1); setActWeight(''); setActNote(''); setActId(null)
@@ -411,6 +505,159 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       setActSaving(false)
     }
   }
+
+  /**
+  /**
+   * openWeaningConfirm — Valida el formulario y abre el modal de confirmación.
+   * No ejecuta nada hasta que el usuario elija el destino fisiológico de las madres.
+   */
+  const openWeaningConfirm = () => {
+    if (!herd?.id || !actCount || !weanCalfWeight || !weanCalfGdp) return
+    if (weanDestination === 'new' && !weanNewHerdName.trim()) return
+    if (weanDestination === 'existing' && !weanTargetHerdId) return
+    const n = Number(actCount)
+    const remaining = (liveHerd?.head_count ?? herd?.head_count ?? 0) - n
+    // Si no quedan madres forzamos total, si quedan sugerimos partial
+    setWeanMothersOutcome(remaining <= 0 ? 'total' : 'partial')
+    setWeaningConfirmOpen(true)
+  }
+
+  /**
+   * commitWeaning — Ejecuta el destete completo con la lógica corregida:
+   *
+   * SIEMPRE: stock madres = herd.head_count - n  (resta efectiva)
+   * Opción A (partial): madres remanentes → VACA_CON_TERNERO  · EV = remaining × 1.35
+   * Opción B (total):   madres remanentes → VACA_VACIA/SECA   · EV = remaining × 0.80
+   *
+   * Luego: POST/PATCH rodeo crías + POST farm-event.
+   */
+  const commitWeaning = async () => {
+    if (!herd?.id || !actCount || !weanCalfWeight || !weanCalfGdp) return
+
+    setWeaningConfirmOpen(false)
+    setActSaving(true); setActError(null)
+
+    const n         = Number(actCount)
+    const cWeight   = Number(weanCalfWeight)
+    const cGdp      = Number(weanCalfGdp)
+    const today     = actDate || todayISO()
+    // ── Stock correcto de madres tras el destete ──────────────────────────
+    const newMothersCount = Math.max(0, (liveHerd?.head_count ?? herd?.head_count ?? 0) - n)
+    const isTotal         = weanMothersOutcome === 'total' || newMothersCount === 0
+    const newPhysioCat    = isTotal ? 'VACA_VACIA' : 'VACA_CON_TERNERO'
+    const newEVBase       = isTotal ? 0.80 : 1.35
+    const newMothersEV    = parseFloat((newEVBase * newMothersCount).toFixed(2))
+
+    try {
+      // 1. PATCH madres — stock corregido + categoría elegida
+      await apiFetch(`/api/herds/${herd.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          head_count:             newMothersCount,
+          physiological_category: newPhysioCat,
+          total_ev:               newMothersEV,
+          last_weigh_date:        today,
+        }),
+      })
+
+      // 2. Crías
+      if (weanDestination === 'new') {
+        await apiFetch('/api/herds', {
+          method: 'POST',
+          body: JSON.stringify({
+            name:                   weanNewHerdName.trim(),
+            species:                'terneros',
+            categoria:              'TERNEROS',
+            physiological_category: 'TERNERO',
+            breed:                  herd.breed || null,
+            head_count:             n,
+            avg_weight_kg:          cWeight,
+            total_ev:               weanCalvesEV,
+            daily_gain_kg:          cGdp,
+            last_weigh_date:        today,
+            parent_herd_id:         herd.id,
+            admission_date:         today,
+          }),
+        })
+      } else {
+        const target = allHerds.find(h => h.id === weanTargetHerdId)
+        if (target) {
+          const existingCount  = target.head_count || 0
+          const existingWeight = Number(target.avg_weight_kg || cWeight)
+          const merged         = existingCount + n
+          const mergedWeight   = Math.round((existingCount * existingWeight + n * cWeight) / merged)
+          const mergedEV       = calculateProjectedEV(target.physiological_category ?? 'TERNERO', mergedWeight, merged)
+          await apiFetch(`/api/herds/${weanTargetHerdId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              head_count:    merged,
+              avg_weight_kg: mergedWeight,
+              total_ev:      mergedEV,
+              daily_gain_kg: cGdp,
+              last_weigh_date: today,
+            }),
+          })
+        }
+      }
+
+      // 3. Farm-event
+      const mothersDesc = isTotal
+        ? `Madres → Vaca Vacía/Seca (0.80 EV). ${newMothersCount} madres remanentes · EV: ${newMothersEV.toFixed(1)}.`
+        : `Destete parcial: ${newMothersCount} madres continúan como Vaca c/ Ternero (1.35 EV). EV madres: ${newMothersEV.toFixed(1)}.`
+
+      await apiFetch('/api/farm-events', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: `Destete: ${n} terneros · ${herd.name}`,
+          event_type: 'destete',
+          event_date: today,
+          herd_id: herd.id,
+          herd_ids: [herd.id],
+          description: [
+            `${n} terneros destetados. Peso al destete: ${cWeight} kg/cab (EV ~${weanCalvesEV.toFixed(1)}).`,
+            mothersDesc,
+            `GDP estimada crías: ${cGdp} kg/día.`,
+            weanDestination === 'new'
+              ? `Nuevo rodeo creado: «${weanNewHerdName.trim()}».`
+              : `Transferido a rodeo existente (${n} cab).`,
+            actNote ? `Notas: ${actNote}` : '',
+          ].filter(Boolean).join(' '),
+          status: 'completado',
+        }),
+      })
+
+      const toastMsg = isTotal
+        ? `Destete total · ${n} terneros segregados · Madres → Vaca Vacía/Seca`
+        : `Destete parcial · ${n} terneros segregados · ${newMothersCount} madres → Vaca c/ Ternero al Pie`
+      import('sonner').then(({ toast }) => toast.success(toastMsg))
+
+      // Actualización optimista del liveHerd tras el destete
+      setLiveHerd(prev => prev ? {
+        ...prev,
+        head_count: newMothersCount,
+        total_ev: newMothersEV,
+        physiological_category: newPhysioCat,
+      } : prev)
+      setCount(newMothersCount)
+
+      setActId(null)
+      setActCount(1)
+      setWeanNewHerdName('')
+      setWeanTargetHerdId('')
+      setActNote('')
+      setActSuccess(`✓ ${toastMsg}`)
+      setTimeout(() => setActSuccess(null), 6000)
+      onSaved()
+      // Cerrar el HerdModal para que el usuario vea los cambios reflejados en la card
+      setTimeout(() => onClose(), 800)
+    } catch (e: any) {
+      console.error('[commitWeaning]', e)
+      setActError('Error en el destete: ' + (e?.message || String(e)))
+    } finally {
+      setActSaving(false)
+    }
+  }
+
 
   // ── Tab 3: Registros ──────────────────────────────────────────────────────
   const [bcsScore,      setBcsScore]      = useState(herd?.bcs_score ?? 3)
@@ -1038,7 +1285,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                 {isEditing ? herd.name : 'Nuevo rodeo'}
               </h3>
               <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
-                {isEditing ? `${herd.head_count} cabezas · ${displayCat}` : 'Alta de rodeo'}
+                {isEditing ? `${liveHerd?.head_count ?? herd?.head_count} cabezas · ${displayCat}` : 'Alta de rodeo'}
               </p>
             </div>
           </div>
@@ -1085,6 +1332,80 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                 )}
               </div>
 
+              {/* ── Categoría Fisiológica / Biológica (v8) ── */}
+              <div className="rounded-xl border border-green-100 bg-green-50/30 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-black text-green-700 tracking-widest uppercase">Estado Fisiológico</p>
+                  <Tooltip text="La categoría fisiológica determina el EV real para la planificación del pastoreo. Independiente de la categoría comercial (usada para valuación de mercado)." />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className={LABEL}>Categoría fisiológica</label>
+                  <select
+                    id="physio-category-select"
+                    className={INPUT}
+                    value={physioCategory}
+                    onChange={e => setPhysioCategory(e.target.value as PhysiologicalCategory | '')}
+                  >
+                    <option value="">— Seleccionar estado fisiológico —</option>
+                    {PHYSIOLOGICAL_CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>
+                        {PHYSIO_LABEL[cat]} · EV base {PHYSIO_EV_BASE[cat].toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                  {physioCategory && (
+                    <p className="text-[10px] text-green-700 font-medium">
+                      EV base: <strong>{PHYSIO_EV_BASE[physioCategory as PhysiologicalCategory]?.toFixed(2)}</strong> por cabeza
+                      {' '}(× peso_factor × {count || '?'} cabezas)
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Fecha del último pesaje */}
+                  <div className="space-y-1.5">
+                    <label className={`${LABEL} flex items-center gap-1.5`}>
+                      Último pesaje real
+                    </label>
+                    <input
+                      type="date"
+                      className={INPUT}
+                      value={lastWeighDate}
+                      onChange={e => setLastWeighDate(e.target.value)}
+                    />
+                  </div>
+
+                  {/* GDP */}
+                  <div className="space-y-1.5">
+                    <label className={`${LABEL} flex items-center gap-1.5`}>
+                      GDP (kg/día)
+                      {gdpRequired && <span className="text-red-500 font-black">*</span>}
+                      {!gdpRequired && gdpEnabled && <span className="text-gray-400 font-medium normal-case text-[9px]">opc.</span>}
+                      <Tooltip text="Ganancia Diaria de Peso (GDP): cuántos kg gana cada animal por día. El valor 0,5 kg/día es la referencia típica para terneros en buen estado de pastoreo. Se usa para proyectar el peso futuro del rodeo y actualizar automáticamente el EV." />
+                    </label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="0"
+                      max="3"
+                      className={`${INPUT} ${!gdpEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      disabled={!gdpEnabled}
+                      value={dailyGainKg}
+                      onChange={e => setDailyGainKg(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder={gdpEnabled ? (gdpRequired ? 'ej: 0.500' : 'ej: 0.200') : 'Seleccionar categoría'}
+                    />
+                  </div>
+                </div>
+                {physioCategory && [
+                  'VACA_CON_TERNERO', 'VACA_PRENADA', 'VACA_VACIA'
+                ].includes(physioCategory) && (
+                  <p className="text-[10px] text-green-700/70">
+                    💡 La GDP en vacas proyecta variación de peso corporal en gestación o post-parto.
+                  </p>
+                )}
+              </div>
+
 
               <div className="space-y-1.5">
                 <label className={LABEL}>Nombre del rodeo *</label>
@@ -1127,7 +1448,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                 <label className={`${LABEL} flex items-center gap-1.5`}><Scale className="w-3 h-3 text-gray-400" /> Peso promedio (kg)</label>
                 <input type="number" min="0" step="1" value={weight}
                   inputMode="numeric"
-                  onChange={e => setWeight(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                  onChange={e => setWeight(e.target.value === '' ? '' : Math.round(Number(e.target.value)))}
                   onFocus={e => e.target.select()}
                   placeholder={currentRef ? `Ej: ${currentRef.hintPeso}` : 'Ej: 300'} className={INPUT} />
                 {currentRef && (
@@ -1151,18 +1472,46 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                 )}
               </div>
 
-              {liveEV > 0 && (
-                <div className="flex items-center gap-3 px-4 py-3 bg-green-50 rounded-xl border border-green-100">
-                  <ClipboardList className="w-4 h-4 text-green-600 shrink-0" />
-                  <div className="flex-1">
+              {effectiveEV > 0 && (
+                <div className="bg-green-50 rounded-xl border border-green-100 px-4 py-3 space-y-1">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-[10px] font-black text-green-600 tracking-widest uppercase">Equ. vaca (EV)</p>
-                      <Tooltip text="El 'Estómago Estándar': convertimos todos los animales a una misma unidad. Una vaca de 400kg = 1 EV. Ternero = 0.6 EV. Toro = 1.25 EV. Así calculamos cuánto pasto necesita todo el rodeo." />
+                      <ClipboardList className="w-4 h-4 text-green-600 shrink-0" />
+                      <p className="text-[10px] font-black text-green-600 tracking-widest uppercase">Equ. vaca (EV) Total</p>
+                      <Tooltip text="El 'Estómago Estándar': convertimos todos los animales a una misma unidad. EV = Cabezas × coeficiente fisiológico. Vaca vacía = 0.80 EV, Vaca con ternero = 1.35 EV, Ternero = 0.45 EV. Así calculamos cuánto pasto necesita todo el rodeo." />
                     </div>
-                    <p className="text-xl font-black text-gray-900">{liveEV.toFixed(2)} <span className="text-xs font-normal text-gray-400">EV · {Math.round(liveEV * 11)} kg MS/día</span></p>
+                    {physioCategory ? (
+                      <span className="text-[9px] font-black bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full tracking-wide uppercase">
+                        {count} × {PHYSIO_EV_BASE[physioCategory as PhysiologicalCategory]?.toFixed(2)} EV
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-medium text-gray-400">fórmula por peso</span>
+                    )}
                   </div>
+                  <p className="text-xl font-black text-gray-900">
+                    {effectiveEV.toFixed(2)}{' '}
+                    <span className="text-xs font-normal text-gray-400">EV · {Math.round(effectiveEV * 11).toLocaleString('es-AR')} kg MS/día</span>
+                  </p>
+                  {physioCategory && (
+                    <p className="text-[9px] text-teal-600/70">
+                      {PHYSIO_LABEL[physioCategory as PhysiologicalCategory]} · EV base {PHYSIO_EV_BASE[physioCategory as PhysiologicalCategory]?.toFixed(2)} por cabeza
+                    </p>
+                  )}
                 </div>
               )}
+
+              {/* ── Proyección de Crecimiento de Carga Animal (6 meses) ── */}
+              {effectiveEV > 0 && dailyGainKg !== '' && Number(dailyGainKg) > 0 && weight !== '' && (
+                <GrowthProjectionChart
+                  physioCategory={physioCategory || null}
+                  avgWeightKg={Number(weight)}
+                  gdpKgDay={Number(dailyGainKg)}
+                  headCount={Number(count) || 1}
+                  lastWeighDate={lastWeighDate || null}
+                  months={6}
+                />
+              )}
+
 
               {saveError && (
                 <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{saveError}</p>
@@ -1209,7 +1558,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                     <Hash className="w-4 h-4 text-gray-400 shrink-0" />
                     <div>
                       <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Stock actual</p>
-                      <p className="text-xl font-black text-gray-900">{herd.head_count} <span className="text-xs font-normal text-gray-400">cabezas</span></p>
+                      <p className="text-xl font-black text-gray-900">{liveHerd?.head_count ?? herd?.head_count} <span className="text-xs font-normal text-gray-400">cabezas</span></p>
                     </div>
                   </div>
 
@@ -1254,53 +1603,218 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                   <AnimatePresence>
                     {actId && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }} className="overflow-hidden space-y-3 border border-gray-200 rounded-xl px-4 py-4">
-                        {actId === 'destete' && (
-                          <div className="flex items-start gap-2 px-3 py-2 bg-violet-50 border border-violet-200 rounded-xl">
-                            <Info className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
-                            <p className="text-xs text-violet-700 font-medium">
-                              Se creará automáticamente un rodeo de terneros destetados con los datos heredados.
-                            </p>
+                        exit={{ opacity: 0, height: 0 }} className="overflow-hidden border border-gray-200 rounded-xl">
+
+                        {/* ════ DESTETE — UI inline completa ════ */}
+                        {actId === 'destete' ? (
+                          <div className="space-y-4 px-4 py-4">
+
+                            {/* Header del flujo */}
+                            <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                                <Activity className="w-3.5 h-3.5 text-emerald-600" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black text-emerald-700 tracking-widest uppercase">Flujo de Destete</p>
+                                <p className="text-[9px] text-emerald-600">Las madres remanentes mantienen su estado o se reclasifican</p>
+                              </div>
+                            </div>
+
+                            {/* Cabezas + Fecha */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <label className={LABEL}>Terneros destetados</label>
+                                <input type="number" min="1" value={actCount}
+                                  onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
+                                <p className="text-[9px] text-gray-400">máx {liveHerd?.head_count ?? herd?.head_count ?? '?'} cab</p>
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className={LABEL}>Fecha de destete</label>
+                                <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
+                              </div>
+                            </div>
+
+                            {/* ── Parámetros productivos de las crías ── */}
+                            <div className="rounded-xl border border-orange-100 bg-orange-50/50 p-3 space-y-3">
+                              <p className="text-[10px] font-black text-orange-700 tracking-widest uppercase">Crías · Parámetros productivos</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                  <label className={`${LABEL} flex items-center gap-1`}>
+                                    <Scale className="w-3 h-3 text-orange-400" /> Peso al destete (kg)
+                                  </label>
+                                  <input type="number" min="80" max="280" step="5"
+                                    value={weanCalfWeight}
+                                    onChange={e => setWeanCalfWeight(e.target.value === '' ? '' : Number(e.target.value))}
+                                    onFocus={e => e.target.select()}
+                                    className={INPUT}
+                                    placeholder="Ej: 160" />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className={`${LABEL} flex items-center gap-1`}>
+                                    <TrendingUp className="w-3 h-3 text-orange-400" /> GDP post-destete (kg/día)
+                                  </label>
+                                  <input type="number" min="0" max="2" step="0.05"
+                                    value={weanCalfGdp}
+                                    onChange={e => setWeanCalfGdp(e.target.value === '' ? '' : Number(e.target.value))}
+                                    onFocus={e => e.target.select()}
+                                    className={INPUT}
+                                    placeholder="Ej: 0.550" />
+                                </div>
+                              </div>
+
+                              {/* EV Preview de crías */}
+                              {weanCalvesEV > 0 && actCount !== '' && Number(actCount) > 0 && (
+                                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-orange-100">
+                                  <ClipboardList className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                  <p className="text-xs text-gray-700">
+                                    EV crías: <strong className="text-orange-600">{weanCalvesEV.toFixed(2)} EV</strong>
+                                    <span className="text-gray-400 ml-1.5">· {Math.round(weanCalvesEV * 11).toLocaleString('es-AR')} kg MS/día</span>
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* ── Destino de los terneros ── */}
+                            <div className="space-y-2.5">
+                              <p className="text-[10px] font-black text-gray-600 tracking-widest uppercase">Destino de los terneros</p>
+
+                              {/* Radio: Nuevo rodeo */}
+                              <label className={`flex items-start gap-2.5 cursor-pointer px-3 py-3 rounded-xl border-2 transition-all ${
+                                weanDestination === 'new' ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 hover:border-gray-300 bg-white'
+                              }`}>
+                                <input type="radio" name="wean-dest" value="new"
+                                  checked={weanDestination === 'new'}
+                                  onChange={() => setWeanDestination('new')}
+                                  className="mt-0.5 accent-emerald-600" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-gray-800">Crear nuevo rodeo independiente</p>
+                                  <p className="text-[9px] text-gray-400 mt-0.5">Se dará de alta un rodeo de terneros con los parámetros ingresados</p>
+                                  {weanDestination === 'new' && (
+                                    <input type="text"
+                                      className={`${INPUT} mt-2`}
+                                      placeholder="Nombre del rodeo (ej: Destete Cabezas 2026)"
+                                      value={weanNewHerdName}
+                                      onChange={e => setWeanNewHerdName(e.target.value)}
+                                      autoFocus
+                                    />
+                                  )}
+                                </div>
+                              </label>
+
+                              {/* Radio: Rodeo existente */}
+                              <label className={`flex items-start gap-2.5 cursor-pointer px-3 py-3 rounded-xl border-2 transition-all ${
+                                weanDestination === 'existing' ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 hover:border-gray-300 bg-white'
+                              }`}>
+                                <input type="radio" name="wean-dest" value="existing"
+                                  checked={weanDestination === 'existing'}
+                                  onChange={() => setWeanDestination('existing')}
+                                  className="mt-0.5 accent-emerald-600" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-gray-800">Transferir a rodeo existente</p>
+                                  <p className="text-[9px] text-gray-400 mt-0.5">Ternero/a o Recría activos en el establecimiento</p>
+                                  {weanDestination === 'existing' && (
+                                    weanTargetHerds.length === 0 ? (
+                                      <p className="text-[9px] text-amber-600 mt-2 font-medium">
+                                        Sin rodeos de terneros/recría disponibles. Creá uno primero.
+                                      </p>
+                                    ) : (
+                                      <select className={`${INPUT} mt-2`}
+                                        value={weanTargetHerdId}
+                                        onChange={e => setWeanTargetHerdId(e.target.value)}>
+                                        <option value="">— Seleccionar rodeo —</option>
+                                        {weanTargetHerds.map(h => (
+                                          <option key={h.id} value={h.id}>
+                                            {h.name} · {h.head_count} cab · {h.avg_weight_kg ? `${h.avg_weight_kg} kg` : ''}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )
+                                  )}
+                                </div>
+                              </label>
+                            </div>
+
+                            {/* ── Resumen de impacto en madres (preview dinámico) ── */}
+                            {herd && Number(actCount) > 0 && (
+                              <div className="bg-gray-50 border border-gray-100 rounded-xl px-3.5 py-3 space-y-1.5">
+                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Impacto en rodeo de madres</p>
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[10px] text-gray-500">Stock actual</p>
+                                  <p className="text-[10px] font-black text-gray-700">{liveHerd?.head_count ?? herd?.head_count} cab</p>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[10px] text-gray-500">Terneros a segregar</p>
+                                  <p className="text-[10px] font-black text-orange-600">−{Number(actCount)} cab</p>
+                                </div>
+                                <div className="flex items-center justify-between border-t border-gray-200 pt-1.5">
+                                  <p className="text-[10px] font-black text-gray-700">Madres remanentes</p>
+                                  <p className="text-[10px] font-black text-emerald-700">
+                                    {Math.max(0, (liveHerd?.head_count ?? herd?.head_count ?? 0) - Number(actCount))} cab
+                                  </p>
+                                </div>
+                                <p className="text-[9px] text-gray-400 pt-0.5">
+                                  El estado fisiológico de las madres se definirá al confirmar.
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Nota */}
+                            <div className="space-y-1.5">
+                              <label className={LABEL}>Nota (opcional)</label>
+                              <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
+                                placeholder="Ej: Destete precoz, lluvias adelantadas..." className={INPUT} />
+                            </div>
+
+                            {/* Botón confirmar destete — abre modal de confirmación */}
+                            <button type="button" onClick={openWeaningConfirm}
+                              disabled={actSaving || !actCount || (weanDestination === 'new' && !weanNewHerdName.trim()) || (weanDestination === 'existing' && !weanTargetHerdId)}
+                              className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
+                              Confirmar destete
+                            </button>
+                          </div>
+
+                        ) : (
+                          /* ════ Otras actividades — formulario estándar ════ */
+                          <div className="space-y-3 px-4 py-4">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <label className={LABEL}>Cantidad de cabezas</label>
+                                <input type="number" min="1" value={actCount}
+                                  onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className={LABEL}>Fecha</label>
+                                <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
+                              </div>
+                            </div>
+                            {ACTIVITY_ADDS.has(actId as ActivityId) && (
+                              <div className="space-y-1.5">
+                                <label className={`${LABEL} flex items-center gap-1`}>
+                                  <Scale className="w-3 h-3 text-gray-400" /> Peso de los animales que ingresan (kg/cab)
+                                </label>
+                                <input type="number" min="0" step="1" value={actWeight}
+                                  inputMode="numeric"
+                                  onChange={e => setActWeight(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                                  onFocus={e => e.target.select()}
+                                  placeholder="Ej: 320" className={INPUT} />
+                                <p className="text-[10px] text-gray-400 italic">Se recalcularán el peso promedio y el EV del rodeo</p>
+                              </div>
+                            )}
+                            <div className="space-y-1.5">
+                              <label className={LABEL}>Nota (opcional)</label>
+                              <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
+                                placeholder="Ej: Compra en remate feria..." className={INPUT} />
+                            </div>
+                            <button type="button" onClick={handleActivity} disabled={actSaving || !actCount}
+                              className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
+                              {actSaving ? 'Guardando...' : `Confirmar ${actId}`}
+                            </button>
                           </div>
                         )}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <label className={LABEL}>Cantidad de cabezas</label>
-                            <input type="number" min="1" value={actCount}
-                              onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className={LABEL}>Fecha</label>
-                            <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
-                          </div>
-                        </div>
-                        {/* Peso — solo para actividades que agregan animales */}
-                        {ACTIVITY_ADDS.has(actId as ActivityId) && (
-                          <div className="space-y-1.5">
-                            <label className={`${LABEL} flex items-center gap-1`}>
-                              <Scale className="w-3 h-3 text-gray-400" /> Peso de los animales que ingresan (kg/cab)
-                            </label>
-                            <input type="number" min="0" step="1" value={actWeight}
-                              inputMode="numeric"
-                              onChange={e => setActWeight(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                              onFocus={e => e.target.select()}
-                              placeholder="Ej: 320" className={INPUT} />
-                            <p className="text-[10px] text-gray-400 italic">Se recalcularán el peso promedio y el EV del rodeo</p>
-                          </div>
-                        )}
-                        <div className="space-y-1.5">
-                          <label className={LABEL}>Nota (opcional)</label>
-                          <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
-                            placeholder="Ej: Compra en remate feria..." className={INPUT} />
-                        </div>
-                        <button type="button" onClick={handleActivity} disabled={actSaving || weanLoading || !actCount}
-                          className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-black py-3 rounded-xl text-sm transition-all disabled:opacity-40">
-                          {(actSaving || weanLoading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                          Confirmar {actId}
-                        </button>
                       </motion.div>
                     )}
                   </AnimatePresence>
+
                 </>
               )}
             </div>
@@ -1751,15 +2265,13 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             </button>
             {tab === 'operativo' && (
               <button type="button" onClick={handleSave} disabled={saving || !canSave}
-                className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-40 transition-all">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                {isEditing ? 'Actualizar' : 'Crear rodeo'}
+                className="px-5 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
+                {saving ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear rodeo')}
               </button>
             )}
             {tab === 'registros' && sessionNoteCount > 0 && (
               <button type="button" onClick={onClose}
-                className="flex items-center gap-2 px-5 py-2.5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 transition-all">
-                <Check className="w-4 h-4" />
+                className="px-5 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all">
                 Confirmar (+{sessionNoteCount} registros)
               </button>
             )}
@@ -1796,6 +2308,200 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     </div>
   )
 
+
+  // ── Confirm modal computed values ─────────────────────────────────────────
+  const weanN         = actCount !== '' ? Number(actCount) : 0
+  const weanRemaining = Math.max(0, (liveHerd?.head_count ?? herd?.head_count ?? 0) - weanN)
+  const evPartial     = parseFloat((1.35 * weanRemaining).toFixed(2))
+  const evTotal       = parseFloat((0.80 * weanRemaining).toFixed(2))
+
   if (typeof document === 'undefined') return null
-  return createPortal(modalContent, document.body)
+
+  const confirmPortalContent = weaningConfirmOpen && herd ? (
+    <AnimatePresence>
+      <motion.div
+        key="wean-confirm-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[10002] flex items-center justify-center p-4"
+        style={{ background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(6px)' }}
+        onClick={() => setWeaningConfirmOpen(false)}
+      >
+        <motion.div
+          key="wean-confirm-card"
+          initial={{ opacity: 0, scale: 0.93, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 8 }}
+          transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+          className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black text-green-700 tracking-widest uppercase mb-1">Confirmación de Destete</p>
+                <h3 className="text-sm font-black text-gray-900 leading-snug">
+                  Estado Fisiológico del Rodeo de Madres
+                </h3>
+              </div>
+              <button onClick={() => setWeaningConfirmOpen(false)}
+                className="w-7 h-7 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-400 transition-all shrink-0">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 font-medium mt-2 leading-relaxed">
+              Ha seleccionado realizar un destete de{' '}
+              <strong className="text-gray-800">{weanN} terneros</strong> sobre el rodeo{' '}
+              <strong className="text-gray-800">{herd.name}</strong>. Para mantener la precisión del stock y el cálculo
+              {' '}de Equivalente Vaca (EV), determine la condición actual de las madres remanentes:
+            </p>
+          </div>
+
+          {/* Opciones */}
+          <div className="px-5 py-4 space-y-3">
+
+            {/* Opción A — Destete Parcial */}
+            <button
+              type="button"
+              onClick={() => setWeanMothersOutcome('partial')}
+              disabled={weanRemaining <= 0}
+              className={`w-full text-left px-4 py-3.5 rounded-2xl border-2 transition-all ${
+                weanMothersOutcome === 'partial'
+                  ? 'border-green-400 bg-green-50'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              } ${weanRemaining <= 0 ? 'opacity-30 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 shrink-0 flex items-center justify-center ${
+                  weanMothersOutcome === 'partial' ? 'border-green-600 bg-green-600' : 'border-gray-300'
+                }`}>
+                  {weanMothersOutcome === 'partial' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-gray-900">Opción A — Destete Parcial</p>
+                  <p className="text-[10px] text-gray-500 font-normal mt-0.5 leading-relaxed">
+                    Mantener el stock remanente de{' '}
+                    <strong className="text-green-700">{weanRemaining} vacas</strong> como{' '}
+                    <strong className="text-green-700">Vaca con Ternero al Pie</strong> (EV Base: 1.35).
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <span className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                      {weanRemaining} cab × 1.35 = {evPartial.toFixed(1)} EV
+                    </span>
+                    <span className="text-[9px] text-green-700 font-bold">
+                      {Math.round(evPartial * 11).toLocaleString('es-AR')} kg MS/día
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </button>
+
+            {/* Opción B — Destete Total */}
+            <button
+              type="button"
+              onClick={() => setWeanMothersOutcome('total')}
+              className={`w-full text-left px-4 py-3.5 rounded-2xl border-2 transition-all ${
+                weanMothersOutcome === 'total'
+                  ? 'border-green-400 bg-green-50'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 shrink-0 flex items-center justify-center ${
+                  weanMothersOutcome === 'total' ? 'border-green-600 bg-green-600' : 'border-gray-300'
+                }`}>
+                  {weanMothersOutcome === 'total' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-gray-900">Opción B — Destete Total / Cambio de Categoría</p>
+                  <p className="text-[10px] text-gray-500 font-normal mt-0.5 leading-relaxed">
+                    Finalizar el destete de todo el rodeo y pasar las{' '}
+                    <strong className="text-gray-700">{weanRemaining} vacas</strong> a la categoría{' '}
+                    <strong className="text-gray-700">Vaca Vacía/Seca</strong> (EV Base: 0.80).
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <span className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                      {weanRemaining} cab × 0.80 = {evTotal.toFixed(1)} EV
+                    </span>
+                    <span className="text-[9px] text-emerald-600 font-bold">
+                      {Math.round(evTotal * 11).toLocaleString('es-AR')} kg MS/día
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </button>
+
+            {/* Resumen de impacto */}
+            <div className="bg-gray-50 rounded-xl px-3.5 py-3 border border-gray-100 space-y-1">
+              <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Resumen de la operación</p>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-gray-600">Stock madres (antes)</p>
+                <p className="text-[10px] font-black text-gray-800">{liveHerd?.head_count ?? herd?.head_count} cab</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-gray-600">Terneros segregados</p>
+                <p className="text-[10px] font-black text-orange-600">−{weanN} cab</p>
+              </div>
+              <div className="flex items-center justify-between border-t border-gray-200 pt-1 mt-1">
+                <p className="text-[10px] font-black text-gray-700">Stock madres (después)</p>
+                <p className="text-[10px] font-black text-gray-900">{weanRemaining} cab</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-black text-gray-700">EV madres (después)</p>
+                <p className={`text-[10px] font-black ${
+                  'text-green-700'
+                }`}>
+                  {weanMothersOutcome === 'partial' ? evPartial.toFixed(1) : evTotal.toFixed(1)} EV
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div className="px-5 pb-6 space-y-2">
+            <button
+              type="button"
+              onClick={commitWeaning}
+              disabled={actSaving}
+              className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40"
+            >
+              {actSaving ? 'Procesando...' : 'Confirmar y ejecutar destete'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeaningConfirmOpen(false)}
+              className="w-full text-xs font-bold text-gray-400 hover:text-gray-600 py-1.5 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  ) : null
+
+  return (
+    <>
+      {createPortal(modalContent, document.body)}
+      {confirmPortalContent && createPortal(confirmPortalContent, document.body)}
+      {weaningWizardOpen && herd && (
+        <WeaningWizard
+          herd={herd}
+          allHerds={allHerds}
+          weanedCount={actCount !== '' ? Number(actCount) : Math.floor((herd.head_count || 0) * 0.9)}
+          weanDate={actDate || todayISO()}
+          notes={actNote || undefined}
+          onClose={() => setWeaningWizardOpen(false)}
+          onCompleted={() => {
+            setWeaningWizardOpen(false)
+            setActId(null)
+            setActSuccess('✓ Destete completado · categorías y EV actualizados')
+            onSaved()
+          }}
+        />
+      )}
+    </>
+  )
 }

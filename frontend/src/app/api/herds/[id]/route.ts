@@ -69,6 +69,10 @@ export async function PATCH(
       bcs_score: 'bcs_score', bcs_label: 'bcs_label',
       bcs_data: 'bcs_data', photo_url: 'photo_url',
       parent_herd_id: 'parent_herd_id', herd_notes: 'herd_notes',
+      // v8: Physiological fields
+      physiological_category: 'physiological_category',
+      last_weigh_date: 'last_weigh_date',
+      daily_gain_kg: 'daily_gain_kg',
     }
 
     const optSets: string[] = []

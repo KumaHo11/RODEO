@@ -7,6 +7,12 @@
  *  - Mes de parición configurado por el usuario
  *
  * Basado en estándares INTA / Ovis 21 para Hemisferio Sur.
+ *
+ * ─── Servicio Core Inyectable ────────────────────────
+ * TODAS las funciones de cálculo EV de la plataforma se
+ * centralizan aquí. El Dashboard, la Calculadora Rápida y
+ * los Reportes de Historial DEBEN consumir estas funciones
+ * para garantizar consistencia total de datos.
  */
 
 /** Factores base de EV por categoría (respecto a vaca de 450 kg a mantenimiento) */
@@ -21,6 +27,167 @@ export const EV_BASE: Record<string, number> = {
   MEJ:         0.90,
   BUBALINOS:   1.10,
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CATEGORÍAS FISIOLÓGICAS / BIOLÓGICAS
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Categorías fisiológicas independientes de la nomenclatura comercial.
+ * Estas categorías gobiernan el cálculo de EV dinámico y la planificación.
+ * La categoría comercial (VACAS, TERNEROS…) se mantiene para valuación de mercado.
+ *
+ * EV base por estado fisiológico (INTA / Ovis 21):
+ *  - Vaca con ternero al pie (lactancia activa):  1.35 EV
+ *  - Vaca preñada (gestación avanzada):           1.10 EV
+ *  - Vaca vacía / seca:                           0.80 EV
+ *  - Ternero/a destete:                           0.45 EV (escala con peso)
+ *  - Recría / novillo en crecimiento:             1.00 EV (escala con peso)
+ */
+export const PHYSIOLOGICAL_CATEGORIES = [
+  'VACA_CON_TERNERO',
+  'VACA_PRENADA',
+  'VACA_VACIA',
+  'TERNERO',
+  'RECRIA_NOVILLO',
+] as const
+
+export type PhysiologicalCategory = typeof PHYSIOLOGICAL_CATEGORIES[number]
+
+/** EV base por categoría fisiológica (sin escalar por peso — peso escala vía fórmula) */
+export const PHYSIO_EV_BASE: Record<PhysiologicalCategory, number> = {
+  VACA_CON_TERNERO: 1.35,
+  VACA_PRENADA:     1.10,
+  VACA_VACIA:       0.80,
+  TERNERO:          0.45,
+  RECRIA_NOVILLO:   1.00,
+}
+
+/** Etiquetas en español para la UI */
+export const PHYSIO_LABEL: Record<PhysiologicalCategory, string> = {
+  VACA_CON_TERNERO: 'Vaca con Ternero al Pie',
+  VACA_PRENADA:     'Vaca Preñada',
+  VACA_VACIA:       'Vaca Vacía / Seca',
+  TERNERO:          'Ternero/a',
+  RECRIA_NOVILLO:   'Recría / Novillo',
+}
+
+/**
+ * Categorías de crecimiento activo (requieren GDP para proyección).
+ * En estas categorías la GDP es obligatoria.
+ * Para vacas, la GDP también puede usarse para proyectar variación de peso
+ * corporal en gestación/post-parto.
+ */
+export const GROWTH_PHYSIO_CATEGORIES = new Set<PhysiologicalCategory>([
+  'TERNERO',
+  'RECRIA_NOVILLO',
+])
+
+/**
+ * Peso de referencia base para escalar el EV (kg).
+ * Vaca estándar de referencia INTA = 400 kg.
+ */
+const EV_REFERENCE_WEIGHT_KG = 400
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FUNCIONES DE PROYECCIÓN GDP
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Calcula el peso proyectado de un animal en una fecha futura usando GDP lineal.
+ *
+ * Peso_Proyectado(t) = Peso_Actual + (GDP × Días_Transcurridos)
+ *
+ * @param baseWeightKg      Peso promedio actual en kg
+ * @param gdpKgDay          Ganancia Diaria de Peso en kg/día (ej: 0.500)
+ * @param daysSinceWeigh    Días transcurridos desde el último pesaje
+ * @param maxWeightKg       Peso máximo permitido (default: 650 kg)
+ */
+export function calculateProjectedWeight(
+  baseWeightKg: number,
+  gdpKgDay: number,
+  daysSinceWeigh: number,
+  maxWeightKg = 650,
+): number {
+  const projected = baseWeightKg + gdpKgDay * daysSinceWeigh
+  return Math.min(Math.round(projected * 10) / 10, maxWeightKg)
+}
+
+/**
+ * Calcula el EV proyectado de un rodeo usando categoría fisiológica y peso proyectado.
+ *
+ * EV_Proyectado(t) = EV_Base_Fisiológico × (Peso_Proyectado / 400)^0.75 × Cabezas
+ *
+ * @param physioCategory    Categoría fisiológica del rodeo
+ * @param projectedWeightKg Peso proyectado por cabeza en kg
+ * @param headCount         Número de cabezas
+ */
+export function calculateProjectedEV(
+  physioCategory: PhysiologicalCategory | string | null,
+  projectedWeightKg: number,
+  headCount: number,
+): number {
+  const evBase = physioCategory
+    ? (PHYSIO_EV_BASE[physioCategory as PhysiologicalCategory] ?? 1.0)
+    : 1.0
+  return parseFloat(
+    (evBase * Math.pow((projectedWeightKg || EV_REFERENCE_WEIGHT_KG) / EV_REFERENCE_WEIGHT_KG, 0.75) * headCount).toFixed(2)
+  )
+}
+
+export interface GrowthDataPoint {
+  month: number          // 0 = mes actual, 1 = próximo, etc.
+  monthLabel: string     // ej: "Jun '25"
+  projectedWeightKg: number
+  evTotal: number
+  dailyConsumptionKgMS: number   // kg de Materia Seca / día (EV × 11)
+}
+
+export interface GrowthProjectionInput {
+  physioCategory: PhysiologicalCategory | string | null
+  avgWeightKg: number
+  gdpKgDay: number           // kg/día
+  headCount: number
+  lastWeighDate?: string | null  // YYYY-MM-DD — si null, usa hoy
+}
+
+/**
+ * Genera la proyección de crecimiento mensual para los próximos N meses.
+ *
+ * Usa la GDP del rodeo para calcular el peso mes a mes y el EV resultante.
+ * Fuente única de verdad para el gráfico de crecimiento y la UI de proyección.
+ *
+ * @param input   Datos del rodeo
+ * @param months  Número de meses a proyectar (default: 12)
+ */
+export function generateGrowthProjection(
+  input: GrowthProjectionInput,
+  months = 12,
+): GrowthDataPoint[] {
+  const { physioCategory, avgWeightKg, gdpKgDay, headCount, lastWeighDate } = input
+  const referenceDate = lastWeighDate ? new Date(lastWeighDate + 'T00:00:00') : new Date()
+  const today = new Date()
+
+  return Array.from({ length: months }, (_, i) => {
+    const targetDate = new Date(today.getFullYear(), today.getMonth() + i, 1)
+    const daysSince = Math.max(
+      0,
+      Math.round((targetDate.getTime() - referenceDate.getTime()) / 86_400_000),
+    )
+
+    const projectedWeightKg = calculateProjectedWeight(avgWeightKg, gdpKgDay, daysSince)
+    const evTotal = calculateProjectedEV(physioCategory, projectedWeightKg, headCount)
+    const dailyConsumptionKgMS = parseFloat((evTotal * 11).toFixed(1))
+
+    const monthLabel = targetDate.toLocaleString('es', { month: 'short', year: '2-digit' })
+
+    return { month: i, monthLabel, projectedWeightKg, evTotal, dailyConsumptionKgMS }
+  })
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FUNCIONES BASE EXISTENTES (sin modificación)
+// ══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Calcula el EV base de un rodeo.

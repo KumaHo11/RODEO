@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
                 age_years, age_months, admission_date,
                 bcs_score, bcs_label, bcs_data, photo_url,
                 parent_herd_id, herd_notes, exit_date,
+                physiological_category, last_weigh_date, daily_gain_kg,
                 created_at, updated_at
          FROM herds
          WHERE org_id = $1
@@ -44,15 +45,31 @@ export async function GET(req: NextRequest) {
         [auth.orgId]
       )
     } catch {
-      // Fallback to guaranteed-only columns (pre-migration DB)
-      herds = await query(
-        `SELECT id, org_id, name, species, breed, categoria, head_count,
-                avg_weight_kg, total_ev, created_at, updated_at
-         FROM herds
-         WHERE org_id = $1
-         ORDER BY created_at DESC`,
-        [auth.orgId]
-      )
+      // Fallback: try without new physiological columns (pre-v8 schema)
+      try {
+        herds = await query(
+          `SELECT id, org_id, name, species, breed, categoria, head_count,
+                  avg_weight_kg, total_ev,
+                  age_years, age_months, admission_date,
+                  bcs_score, bcs_label, bcs_data, photo_url,
+                  parent_herd_id, herd_notes, exit_date,
+                  created_at, updated_at
+           FROM herds
+           WHERE org_id = $1
+           ORDER BY created_at DESC`,
+          [auth.orgId]
+        )
+      } catch {
+        // Final fallback to guaranteed-only columns (pre-migration DB)
+        herds = await query(
+          `SELECT id, org_id, name, species, breed, categoria, head_count,
+                  avg_weight_kg, total_ev, created_at, updated_at
+           FROM herds
+           WHERE org_id = $1
+           ORDER BY created_at DESC`,
+          [auth.orgId]
+        )
+      }
     }
 
     return NextResponse.json({ herds })
@@ -73,10 +90,12 @@ export async function POST(req: NextRequest) {
     const {
       name, species, breed,
       head_count, avg_weight_kg, total_ev, categoria,
-      // Optional new columns
+      // Optional new columns (v1-v7 migrations)
       age_months, age_years, admission_date, parent_herd_id, exit_date,
       // Temporary herd fields
       is_temporary, notes,
+      // Physiological fields (v8 migration)
+      physiological_category, last_weigh_date, daily_gain_kg,
     } = body
 
     if (!name || !head_count) {
@@ -131,6 +150,28 @@ export async function POST(req: NextRequest) {
         )
       } catch {
         // Column may not exist in older schema — non-critical
+      }
+    }
+
+    // Step 3: UPDATE physiological fields (v8) — separate block, silently skip if not migrated
+    if (id && (physiological_category !== undefined || last_weigh_date !== undefined || daily_gain_kg !== undefined)) {
+      try {
+        await mutate(
+          `UPDATE herds
+           SET physiological_category = $1,
+               last_weigh_date = $2,
+               daily_gain_kg = $3,
+               updated_at = NOW()
+           WHERE id = $4`,
+          [
+            physiological_category ?? null,
+            last_weigh_date        ?? null,
+            daily_gain_kg          ?? null,
+            id,
+          ]
+        )
+      } catch (physErr: any) {
+        console.warn('POST /api/herds physiological columns skipped (run v8 migration):', physErr.message)
       }
     }
 

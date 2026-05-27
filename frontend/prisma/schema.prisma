@@ -91,20 +91,28 @@ model Paddock {
 }
 
 model Herd {
-  id           String        @id @default(uuid()) @db.Uuid
-  orgId        String        @map("org_id") @db.Uuid
-  name         String        @db.VarChar(255)
-  species      String?       @default("Bovine") @db.VarChar(100)
-  breed        String?       @db.VarChar(100)
-  category     String?       @db.VarChar(100)
-  headCount    Int           @default(0) @map("head_count")
-  avgWeightKg  Decimal?      @map("avg_weight_kg") @db.Decimal(10, 2)
-  totalEv      Decimal?      @map("total_ev") @db.Decimal(10, 2)
-  version      Int           @default(1)
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  grazingPlans GrazingPlan[]
+  id                     String        @id @default(uuid()) @db.Uuid
+  orgId                  String        @map("org_id") @db.Uuid
+  name                   String        @db.VarChar(255)
+  species                String?       @default("Bovine") @db.VarChar(100)
+  breed                  String?       @db.VarChar(100)
+  category               String?       @db.VarChar(100)
+  headCount              Int           @default(0) @map("head_count")
+  avgWeightKg            Decimal?      @map("avg_weight_kg") @db.Decimal(10, 2)
+  totalEv                Decimal?      @map("total_ev") @db.Decimal(10, 2)
+  /// Estado fisiológico/biológico del rodeo (governs dynamic EV calculation)
+  /// Values: VACA_CON_TERNERO | VACA_PRENADA | VACA_VACIA | TERNERO | RECRIA_NOVILLO
+  physiologicalCategory  String?       @map("physiological_category") @db.VarChar(50)
+  /// Fecha del último pesaje real registrado (base para proyección GDP)
+  lastWeighDate          DateTime?     @map("last_weigh_date") @db.Date
+  /// Ganancia Diaria de Peso en kg/día (para proyección de crecimiento)
+  /// Obligatorio para TERNERO y RECRIA_NOVILLO; opcional para vacas (variación peso corporal)
+  dailyGainKg            Decimal?      @map("daily_gain_kg") @db.Decimal(8, 3)
+  version                Int           @default(1)
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
+  organization           Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  grazingPlans           GrazingPlan[]
 
   @@map("herds")
 }

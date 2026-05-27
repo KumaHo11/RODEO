@@ -137,26 +137,29 @@ export async function finishOnboarding(formData: {
     }
   }
 
-  // 4. Insert Herds — admission_date and age_months now exist in table
+  // 4. Insert Herds — admission_date, age_months, physiological_category, last_weigh_date, daily_gain_kg
   if (formData.herds && formData.herds.length > 0) {
     for (const h of formData.herds) {
       try {
-        // Try full insert with all columns
         await mutate(
           `INSERT INTO herds
-             (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria, admission_date, age_months)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+             (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria,
+              admission_date, age_months, physiological_category, last_weigh_date, daily_gain_kg)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
           [
             orgId,
             h.name,
-            h.species     || 'Bovine',
-            h.breed       || null,
+            h.species              || 'Bovine',
+            h.breed                || null,
             h.headCount,
-            h.avgWeight   || null,
-            h.totalEV     || 0,
-            h.categoria   || null,
-            h.admissionDate || null,
-            h.ageMonths   ?? null,
+            h.avgWeight            || null,
+            h.totalEV              || 0,
+            h.categoria            || null,
+            h.admissionDate        || null,
+            h.ageMonths            ?? null,
+            h.physiologicalCategory || null,
+            h.lastWeighDate        || null,
+            h.dailyGainKg          ?? null,
           ]
         )
       } catch (err: any) {

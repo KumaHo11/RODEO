@@ -37,7 +37,7 @@ gcloud run deploy rodeo-preprod \
   --platform managed \
   --allow-unauthenticated \
   --set-env-vars="NEXT_PUBLIC_APP_URL=${PREPROD_URL}" \
-  --update-secrets="DATABASE_URL=rodeo-db-url-preprod:latest,SENDGRID_API_KEY=sendgrid-api-key-preprod:latest,FIREBASE_ADMIN_CREDENTIALS_BASE64=firebase-sa-key-preprod:latest,GEMINI_API_KEY=gemini-api-key-preprod:latest"
+  --update-secrets="DATABASE_URL=rodeo-db-url-preprod:latest,RESEND_API_KEY=resend-api-key-preprod:latest,FIREBASE_ADMIN_CREDENTIALS_BASE64=firebase-sa-key-preprod:latest,GEMINI_API_KEY=gemini-api-key-preprod:latest"
 
 echo "✅ Deploy de Pre-Producción completado!"
 echo "   URL: ${PREPROD_URL}"

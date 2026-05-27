@@ -35,6 +35,10 @@ interface OnboardingData {
     ageMonths?: number | null
     admissionDate?: string | null
     totalEV: number
+    // v8 physiological fields
+    physiologicalCategory?: string | null
+    lastWeighDate?: string | null
+    dailyGainKg?: number | null
   }>
   skippedHerds: boolean         // user skipped step 3
 }

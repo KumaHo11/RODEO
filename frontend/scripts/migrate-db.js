@@ -190,6 +190,10 @@ ALTER TABLE herds ADD COLUMN IF NOT EXISTS photo_url TEXT;
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS age_years DECIMAL(5,2);
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS exit_date DATE;
 
+-- v8: Campos fisiológicos para cálculo dinámico de EV
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS physiological_category VARCHAR(50);
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS last_weigh_date DATE;
+ALTER TABLE herds ADD COLUMN IF NOT EXISTS daily_gain_kg DECIMAL(8,3);
 -- farm_events: assigned_to for team member tasks
 ALTER TABLE farm_events ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES profiles(id) ON DELETE SET NULL;
 
