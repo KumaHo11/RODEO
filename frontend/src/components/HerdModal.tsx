@@ -127,6 +127,18 @@ const ACTIVITIES = [
 const ACTIVITY_ADDS   = new Set(['paricion', 'compra'])
 type ActivityId = 'paricion' | 'compra' | 'mortandad' | 'venta' | 'destete'
 
+// Categorías que NO tienen Parición ni Destete (terneros, novillos, toros)
+const ACTIVIDADES_EXCLUIDAS: Record<string, Set<string>> = {
+  paricion: new Set([
+    'TERNERO', 'RECRIA_NOVILLO', 'RECRIA_VAQUILLONA', 'TORO',          // fisiológica
+    'TERNEROS', 'TERNERAS', 'NOVILLOS', 'NOVILLITOS', 'TOROS', 'TORITOS' // comercial
+  ]),
+  destete: new Set([
+    'TERNERO', 'RECRIA_NOVILLO', 'RECRIA_VAQUILLONA', 'TORO',
+    'TERNEROS', 'TERNERAS', 'NOVILLOS', 'NOVILLITOS', 'TOROS', 'TORITOS'
+  ]),
+}
+
 // ── SpeechRecognition hook ────────────────────────────────────────────────────
 
 function useSpeech(onResult: (t: string) => void, onStart?: () => void) {
@@ -357,6 +369,42 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     [allHerds, herd?.id]
   )
 
+  // ── Parición Wizard state ──────────────────────────────────────────────────
+  const [paricionMadres,       setParicionMadres]       = useState<number | ''>('')
+  const [paricionCrias,        setParicionCrias]        = useState<number | ''>('')
+  const [paricionFecha,        setParicionFecha]        = useState<string>(todayISO())
+  const [paricionPesoCrias,    setParicionPesoCrias]    = useState<number | ''>(35)
+  const [paricionDestino,      setParicionDestino]      = useState<'new' | 'existing'>('new')
+  const [paricionNombreNuevo,  setParicionNombreNuevo]  = useState<string>('')
+  const [paricionHerdDestinoId, setParicionHerdDestinoId] = useState<string>('')
+
+  // Rodeos VACA_CON_TERNERO existentes (para transferir el lote parido)
+  const paricionRodeosDestino = useMemo(() =>
+    allHerds.filter(h =>
+      h.id !== herd?.id &&
+      h.physiological_category === 'VACA_CON_TERNERO'
+    ),
+    [allHerds, herd?.id]
+  )
+
+  // ¿Mostrar el wizard completo de parición?
+  const isParicionWizard = (
+    liveHerd?.physiological_category === 'VACA_PRENADA' ||
+    herd?.physiological_category === 'VACA_PRENADA'
+  )
+
+  // Actividades visibles según la categoría del rodeo actual
+  const activePhysio  = liveHerd?.physiological_category ?? herd?.physiological_category ?? ''
+  const activeComCat  = liveHerd?.categoria ?? herd?.categoria ?? catKey ?? ''
+  const visibleActivities = useMemo(() =>
+    ACTIVITIES.filter(a => {
+      const excl = ACTIVIDADES_EXCLUIDAS[a.id]
+      if (!excl) return true
+      return !excl.has(activePhysio as string) && !excl.has(activeComCat as string)
+    }),
+    [activePhysio, activeComCat]  // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
   // EV live preview del destete (crías)
   const weanCalvesEV = useMemo(() => {
     const w = weanCalfWeight !== '' ? Number(weanCalfWeight) : 160
@@ -365,6 +413,93 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   }, [weanCalfWeight, actCount])
 
 
+
+  // ── Parición Wizard: handler completo ───────────────────────────────────────
+  const handleParicion = async () => {
+    if (!herd?.id || !paricionMadres) return
+    if (paricionDestino === 'new' && !paricionNombreNuevo.trim()) return
+    if (paricionDestino === 'existing' && !paricionHerdDestinoId) return
+
+    setActSaving(true); setActError(null)
+    const n = Number(paricionMadres)
+    const currentCount = liveHerd?.head_count ?? herd.head_count ?? 0
+    const newCount = Math.max(0, currentCount - n)
+    const newEV = parseFloat((newCount * (PHYSIO_EV_BASE['VACA_PRENADA'] ?? 1.2)).toFixed(2))
+    const destinoEV = parseFloat((n * (PHYSIO_EV_BASE['VACA_CON_TERNERO'] ?? 1.35)).toFixed(2))
+
+    try {
+      // 1. Descontar madres paridas del rodeo original (sigue siendo VACA_PRENADA)
+      const patchRes = await apiFetch(`/api/herds/${herd.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ head_count: newCount, total_ev: newEV }),
+      })
+      if (!patchRes.ok) throw new Error('No se pudo actualizar el rodeo original')
+
+      if (paricionDestino === 'new') {
+        // 2a. Crear nuevo rodeo VACA_CON_TERNERO con las paridas
+        const postRes = await apiFetch('/api/herds', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: paricionNombreNuevo.trim(),
+            species: herd.species || 'vacas',
+            categoria: herd.categoria || 'VACAS',
+            breed: herd.breed || null,
+            head_count: n,
+            avg_weight_kg: herd.avg_weight_kg ?? null,
+            physiological_category: 'VACA_CON_TERNERO',
+            total_ev: destinoEV,
+            admission_date: paricionFecha && paricionFecha.length === 10 ? paricionFecha : null,
+          }),
+        })
+        if (!postRes.ok) throw new Error('No se pudo crear el rodeo de paridas')
+      } else {
+        // 2b. Sumar al rodeo existente VACA_CON_TERNERO
+        const targetHerd = paricionRodeosDestino.find(h => h.id === paricionHerdDestinoId)
+        const targetCount = (targetHerd?.head_count ?? 0) + n
+        const targetEV = parseFloat((targetCount * (PHYSIO_EV_BASE['VACA_CON_TERNERO'] ?? 1.35)).toFixed(2))
+        const patchTargetRes = await apiFetch(`/api/herds/${paricionHerdDestinoId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ head_count: targetCount, total_ev: targetEV }),
+        })
+        if (!patchTargetRes.ok) throw new Error('No se pudo actualizar el rodeo destino')
+      }
+
+      // 3. Registrar evento en agenda
+      await apiFetch('/api/farm-events', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: `Parición: ${n} madres · ${herd.name}`,
+          event_type: 'paricion',
+          event_date: paricionFecha,
+          herd_id: herd.id, herd_ids: [herd.id],
+          description: [
+            `${n} madres paridas. Crías: ${Number(paricionCrias)}.`,
+            paricionPesoCrias !== '' ? `Peso crías: ${paricionPesoCrias} kg.` : null,
+            paricionDestino === 'new'
+              ? `Nuevo rodeo: ${paricionNombreNuevo.trim()}`
+              : `Rodeo destino: ${paricionRodeosDestino.find(h => h.id === paricionHerdDestinoId)?.name ?? paricionHerdDestinoId}`,
+          ].filter(Boolean).join(' '),
+          status: 'completado',
+        }),
+      })
+
+      // 4. Actualización optimista inmediata
+      setLiveHerd(prev => prev ? { ...prev, head_count: newCount, total_ev: newEV } : prev)
+      setCount(newCount)
+      setActSuccess(`✓ Parición registrada · ${newCount} preñadas remanentes · ${n} con ternero al pie`)
+      // Reset wizard state
+      setParicionMadres(''); setParicionCrias(''); setParicionFecha(todayISO())
+      setParicionPesoCrias(35); setParicionDestino('new')
+      setParicionNombreNuevo(''); setParicionHerdDestinoId('')
+      setActId(null)
+      setTimeout(() => setActSuccess(null), 4000)
+      onSaved()
+    } catch (e: any) {
+      setActError('Error: ' + e.message)
+    } finally {
+      setActSaving(false)
+    }
+  }
 
   const handleActivity = async () => {
     if (!actId || !actCount || !herd?.id) return
@@ -1574,8 +1709,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Entradas</p>
                     </div>
 
-                    {ACTIVITIES.filter(a => ACTIVITY_ADDS.has(a.id)).map(a => {
+                    {visibleActivities.filter(a => ACTIVITY_ADDS.has(a.id)).map(a => {
                       const sel = actId === a.id
+                      // ¿Este es el wizard completo de parición?
+                      const isThisParicionWizard = a.id === 'paricion' && isParicionWizard
                       return (
                         <div key={a.id} className="divide-y divide-gray-100">
                           <button
@@ -1592,7 +1729,11 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className={`text-sm font-bold transition-colors ${sel ? 'text-green-800' : 'text-gray-800'}`}>{a.label}</p>
-                              <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{(a as any).desc}</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">
+                                {isThisParicionWizard
+                                  ? 'Asistente de parición · Vacas preñadas → con ternero al pie'
+                                  : (a as any).desc}
+                              </p>
                             </div>
                             <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${
                               sel ? 'border-green-600 bg-green-600' : 'border-gray-300'
@@ -1610,35 +1751,176 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                 className="overflow-hidden"
                               >
                                 <div className="px-4 pb-4 pt-3 space-y-3 bg-white border-t border-gray-100">
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                      <label className={LABEL}>Cantidad de cabezas</label>
-                                      <input type="number" min="1" value={actCount}
-                                        onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                      <label className={LABEL}>Fecha</label>
-                                      <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
-                                    </div>
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <label className={LABEL}>Peso de ingreso (kg/cab)</label>
-                                    <input type="number" min="0" step="1" value={actWeight}
-                                      inputMode="numeric"
-                                      onChange={e => setActWeight(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                                      onFocus={e => e.target.select()}
-                                      placeholder="Ej: 320" className={INPUT} />
-                                    <p className="text-[10px] text-gray-400">Se recalcula el peso promedio y EV del rodeo</p>
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <label className={LABEL}>Nota (opcional)</label>
-                                    <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
-                                      placeholder="Ej: Compra en remate feria..." className={INPUT} />
-                                  </div>
-                                  <button type="button" onClick={handleActivity} disabled={actSaving || !actCount}
-                                    className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
-                                    {actSaving ? 'Guardando...' : `Confirmar ${a.label.toLowerCase()}`}
-                                  </button>
+                                  {isThisParicionWizard ? (
+                                    /* ════ WIZARD PARICIÓN (VACA_PRENADA) ════ */
+                                    <>
+                                      {/* Step 1 — Datos del evento */}
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Madres paridas</label>
+                                          <input type="number" min="1"
+                                            max={liveHerd?.head_count ?? herd?.head_count ?? undefined}
+                                            value={paricionMadres}
+                                            onChange={e => {
+                                              const v = e.target.value === '' ? '' : Number(e.target.value)
+                                              setParicionMadres(v)
+                                              if (v !== '' && (paricionCrias === '' || paricionCrias === paricionMadres)) {
+                                                setParicionCrias(v)
+                                              }
+                                            }}
+                                            onFocus={e => e.target.select()}
+                                            className={INPUT} placeholder="Ej: 30" />
+                                          <p className="text-[9px] text-gray-400">máx {liveHerd?.head_count ?? herd?.head_count ?? '?'} cab</p>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Crías nacidas</label>
+                                          <input type="number" min="0"
+                                            value={paricionCrias}
+                                            onChange={e => setParicionCrias(e.target.value === '' ? '' : Number(e.target.value))}
+                                            onFocus={e => e.target.select()}
+                                            className={INPUT} placeholder="= madres paridas" />
+                                          <p className="text-[9px] text-gray-400">incluye mellizos / bajas al nacer</p>
+                                        </div>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Fecha del evento</label>
+                                          <input type="date" value={paricionFecha}
+                                            onChange={e => setParicionFecha(e.target.value)} className={INPUT} />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Peso crías al nacer (kg)</label>
+                                          <input type="number" min="20" max="60" step="1"
+                                            value={paricionPesoCrias}
+                                            onChange={e => setParicionPesoCrias(e.target.value === '' ? '' : Number(e.target.value))}
+                                            onFocus={e => e.target.select()}
+                                            className={INPUT} placeholder="Ej: 35" />
+                                        </div>
+                                      </div>
+
+                                      {/* Step 2 — Preview de impacto */}
+                                      {paricionMadres !== '' && Number(paricionMadres) > 0 && (
+                                        <div className="rounded-xl border border-gray-200 bg-gray-50/40 p-3 space-y-1.5">
+                                          <p className={LABEL}>Impacto en el rodeo</p>
+                                          <div className="flex items-center justify-between text-[10px]">
+                                            <span className="text-gray-500">Vacas preñadas remanentes</span>
+                                            <span className="font-black text-gray-800">
+                                              {Math.max(0, (liveHerd?.head_count ?? herd?.head_count ?? 0) - Number(paricionMadres))} cab
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center justify-between text-[10px]">
+                                            <span className="text-gray-500">Nuevo lote vaca c/ ternero al pie</span>
+                                            <span className="font-black text-green-700">{Number(paricionMadres)} cab · EV {(Number(paricionMadres) * 1.35).toFixed(1)}</span>
+                                          </div>
+                                          {paricionCrias !== '' && Number(paricionCrias) !== Number(paricionMadres) && (
+                                            <p className="text-[9px] text-gray-400">
+                                              {Number(paricionCrias) > Number(paricionMadres)
+                                                ? `${Number(paricionCrias) - Number(paricionMadres)} mellizo(s) detectado(s)`
+                                                : `${Number(paricionMadres) - Number(paricionCrias)} baja(s) al nacer`}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {/* Step 3 — Destino del lote parido */}
+                                      <div className="space-y-2">
+                                        <p className={LABEL}>Destino del lote parido</p>
+                                        <label className={`flex items-start gap-2.5 cursor-pointer px-3 py-3 rounded-xl border-2 transition-all ${
+                                          paricionDestino === 'new' ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-gray-300 bg-white'
+                                        }`}>
+                                          <input type="radio" name="paricion-dest" value="new"
+                                            checked={paricionDestino === 'new'}
+                                            onChange={() => setParicionDestino('new')}
+                                            className="mt-0.5 accent-green-600" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-gray-800">Crear nuevo rodeo</p>
+                                            <p className="text-[9px] text-gray-400 mt-0.5">Categoría automática: Vaca con Ternero al Pie · EV base 1.35</p>
+                                            {paricionDestino === 'new' && (
+                                              <input type="text" className={`${INPUT} mt-2`}
+                                                placeholder="Nombre (ej: Parición Cabeza 2026)"
+                                                value={paricionNombreNuevo}
+                                                onChange={e => setParicionNombreNuevo(e.target.value)}
+                                                autoFocus />
+                                            )}
+                                          </div>
+                                        </label>
+                                        <label className={`flex items-start gap-2.5 cursor-pointer px-3 py-3 rounded-xl border-2 transition-all ${
+                                          paricionDestino === 'existing' ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-gray-300 bg-white'
+                                        }`}>
+                                          <input type="radio" name="paricion-dest" value="existing"
+                                            checked={paricionDestino === 'existing'}
+                                            onChange={() => setParicionDestino('existing')}
+                                            className="mt-0.5 accent-green-600" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-gray-800">Transferir a rodeo existente</p>
+                                            <p className="text-[9px] text-gray-400 mt-0.5">Solo rodeos activos con categoría Vaca con Ternero al Pie</p>
+                                            {paricionDestino === 'existing' && (
+                                              paricionRodeosDestino.length === 0 ? (
+                                                <p className="text-[9px] text-amber-600 mt-2 font-medium">
+                                                  Sin rodeos de Vaca con Ternero al Pie disponibles.
+                                                </p>
+                                              ) : (
+                                                <select className={`${INPUT} mt-2`}
+                                                  value={paricionHerdDestinoId}
+                                                  onChange={e => setParicionHerdDestinoId(e.target.value)}>
+                                                  <option value="">— Seleccionar rodeo —</option>
+                                                  {paricionRodeosDestino.map(h => (
+                                                    <option key={h.id} value={h.id}>
+                                                      {h.name} · {h.head_count} cab · EV {Number(h.total_ev).toFixed(1)}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                              )
+                                            )}
+                                          </div>
+                                        </label>
+                                      </div>
+
+                                      {/* Confirm */}
+                                      <button type="button" onClick={handleParicion}
+                                        disabled={
+                                          actSaving || !paricionMadres ||
+                                          (paricionDestino === 'new' && !paricionNombreNuevo.trim()) ||
+                                          (paricionDestino === 'existing' && (!paricionHerdDestinoId || paricionRodeosDestino.length === 0))
+                                        }
+                                        className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
+                                        {actSaving ? 'Guardando...' : 'Confirmar parición'}
+                                      </button>
+                                    </>
+                                  ) : (
+                                    /* ════ Formulario simple (Compra u otros) ════ */
+                                    <>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Cantidad de cabezas</label>
+                                          <input type="number" min="1" value={actCount}
+                                            onChange={e => setActCount(e.target.value === '' ? '' : Number(e.target.value))} className={INPUT} />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                          <label className={LABEL}>Fecha</label>
+                                          <input type="date" value={actDate} onChange={e => setActDate(e.target.value)} className={INPUT} />
+                                        </div>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className={LABEL}>Peso de ingreso (kg/cab)</label>
+                                        <input type="number" min="0" step="1" value={actWeight}
+                                          inputMode="numeric"
+                                          onChange={e => setActWeight(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                                          onFocus={e => e.target.select()}
+                                          placeholder="Ej: 320" className={INPUT} />
+                                        <p className="text-[10px] text-gray-400">Se recalcula el peso promedio y EV del rodeo</p>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className={LABEL}>Nota (opcional)</label>
+                                        <input type="text" value={actNote} onChange={e => setActNote(e.target.value)}
+                                          placeholder="Ej: Compra en remate feria..." className={INPUT} />
+                                      </div>
+                                      <button type="button" onClick={handleActivity} disabled={actSaving || !actCount}
+                                        className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
+                                        {actSaving ? 'Guardando...' : `Confirmar ${a.label.toLowerCase()}`}
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </motion.div>
                             )}
@@ -1647,12 +1929,14 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       )
                     })}
 
-                    {/* Group: Salidas */}
-                    <div className="px-4 py-2 bg-gray-50/80">
-                      <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Salidas</p>
-                    </div>
+                    {/* Group: Salidas — solo si hay salidas visibles */}
+                    {visibleActivities.filter(a => !ACTIVITY_ADDS.has(a.id)).length > 0 && (
+                      <div className="px-4 py-2 bg-gray-50/80">
+                        <p className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Salidas</p>
+                      </div>
+                    )}
 
-                    {ACTIVITIES.filter(a => !ACTIVITY_ADDS.has(a.id)).map(a => {
+                    {visibleActivities.filter(a => !ACTIVITY_ADDS.has(a.id)).map(a => {
                       const sel = actId === a.id
                       return (
                         <div key={a.id} className="divide-y divide-gray-100">
