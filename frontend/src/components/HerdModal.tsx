@@ -387,6 +387,27 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     [allHerds, herd?.id]
   )
 
+  // Destino de las vacas cuyos terneros murieron al nacer (VACA_VACIA)
+  const [paricionVacasVaciasDestino, setParicionVacasVaciasDestino] = useState<'new' | 'existing' | 'skip'>('existing')
+  const [paricionVacasVaciasNombre,  setParicionVacasVaciasNombre]  = useState<string>('')
+  const [paricionVacasVaciasHerdId,  setParicionVacasVaciasHerdId]  = useState<string>('')
+
+  // Rodeos VACA_VACIA existentes (destino de las pérdidas al nacer)
+  const paricionRodeosVaciaDestino = useMemo(() =>
+    allHerds.filter(h =>
+      h.id !== herd?.id &&
+      (h.physiological_category === 'VACA_VACIA' || h.physiological_category === 'VACA_SECA')
+    ),
+    [allHerds, herd?.id]
+  )
+
+  // Vacas cuya cría murió al nacer (diferencia madres - crías vivas)
+  const paricionBajasAlNacer = useMemo(() => {
+    const m = Number(paricionMadres) || 0
+    const c = paricionCrias !== '' ? Number(paricionCrias) : m
+    return Math.max(0, m - c)
+  }, [paricionMadres, paricionCrias])
+
   // ¿Mostrar el wizard completo de parición?
   const isParicionWizard = (
     liveHerd?.physiological_category === 'VACA_PRENADA' ||
@@ -427,6 +448,13 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     const newEV = parseFloat((newCount * (PHYSIO_EV_BASE['VACA_PRENADA'] ?? 1.2)).toFixed(2))
     const destinoEV = parseFloat((n * (PHYSIO_EV_BASE['VACA_CON_TERNERO'] ?? 1.35)).toFixed(2))
 
+    // Crías VIVAS = paricionCrias (puede diferir de madres por mellizos o bajas)
+    const criasVivas  = paricionCrias !== '' ? Math.max(0, Number(paricionCrias)) : n
+    const bajasNacer  = Math.max(0, n - criasVivas)
+    // EV para el lote de vacas con ternero (basado en crías vivas = madres que sí tienen ternero)
+    const destinoEVActual = parseFloat((criasVivas * (PHYSIO_EV_BASE['VACA_CON_TERNERO'] ?? 1.35)).toFixed(2))
+    const vaciaEV   = parseFloat((bajasNacer * (PHYSIO_EV_BASE['VACA_VACIA'] ?? 0.80)).toFixed(2))
+
     try {
       // 1. Descontar madres paridas del rodeo original (sigue siendo VACA_PRENADA)
       const patchRes = await apiFetch(`/api/herds/${herd.id}`, {
@@ -435,8 +463,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       })
       if (!patchRes.ok) throw new Error('No se pudo actualizar el rodeo original')
 
+      // 2. Lote VACA_CON_TERNERO — usar criasVivas (no madresParidas)
       if (paricionDestino === 'new') {
-        // 2a. Crear nuevo rodeo VACA_CON_TERNERO con las paridas
         const postRes = await apiFetch('/api/herds', {
           method: 'POST',
           body: JSON.stringify({
@@ -444,18 +472,17 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             species: herd.species || 'vacas',
             categoria: herd.categoria || 'VACAS',
             breed: herd.breed || null,
-            head_count: n,
+            head_count: criasVivas,
             avg_weight_kg: herd.avg_weight_kg ?? null,
             physiological_category: 'VACA_CON_TERNERO',
-            total_ev: destinoEV,
+            total_ev: destinoEVActual,
             admission_date: paricionFecha && paricionFecha.length === 10 ? paricionFecha : null,
           }),
         })
         if (!postRes.ok) throw new Error('No se pudo crear el rodeo de paridas')
       } else {
-        // 2b. Sumar al rodeo existente VACA_CON_TERNERO
         const targetHerd = paricionRodeosDestino.find(h => h.id === paricionHerdDestinoId)
-        const targetCount = (targetHerd?.head_count ?? 0) + n
+        const targetCount = (targetHerd?.head_count ?? 0) + criasVivas
         const targetEV = parseFloat((targetCount * (PHYSIO_EV_BASE['VACA_CON_TERNERO'] ?? 1.35)).toFixed(2))
         const patchTargetRes = await apiFetch(`/api/herds/${paricionHerdDestinoId}`, {
           method: 'PATCH',
@@ -464,7 +491,35 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         if (!patchTargetRes.ok) throw new Error('No se pudo actualizar el rodeo destino')
       }
 
-      // 3. Registrar evento en agenda
+      // 3. Vacas cuyo ternero murió al nacer → VACA_VACIA (si las hay)
+      if (bajasNacer > 0 && paricionVacasVaciasDestino !== 'skip') {
+        if (paricionVacasVaciasDestino === 'new' && paricionVacasVaciasNombre.trim()) {
+          await apiFetch('/api/herds', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: paricionVacasVaciasNombre.trim(),
+              species: herd.species || 'vacas',
+              categoria: herd.categoria || 'VACAS',
+              breed: herd.breed || null,
+              head_count: bajasNacer,
+              avg_weight_kg: herd.avg_weight_kg ?? null,
+              physiological_category: 'VACA_VACIA',
+              total_ev: vaciaEV,
+              admission_date: paricionFecha && paricionFecha.length === 10 ? paricionFecha : null,
+            }),
+          })
+        } else if (paricionVacasVaciasDestino === 'existing' && paricionVacasVaciasHerdId) {
+          const vaciaHerd = paricionRodeosVaciaDestino.find(h => h.id === paricionVacasVaciasHerdId)
+          const vaciaCount = (vaciaHerd?.head_count ?? 0) + bajasNacer
+          const vaciaEVTotal = parseFloat((vaciaCount * (PHYSIO_EV_BASE['VACA_VACIA'] ?? 0.80)).toFixed(2))
+          await apiFetch(`/api/herds/${paricionVacasVaciasHerdId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ head_count: vaciaCount, total_ev: vaciaEVTotal }),
+          })
+        }
+      }
+
+      // 4. Registrar evento en agenda
       await apiFetch('/api/farm-events', {
         method: 'POST',
         body: JSON.stringify({
@@ -473,7 +528,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           event_date: paricionFecha,
           herd_id: herd.id, herd_ids: [herd.id],
           description: [
-            `${n} madres paridas. Crías: ${Number(paricionCrias)}.`,
+            `${n} madres paridas. Crías vivas: ${criasVivas}.`,
+            bajasNacer > 0 ? `Bajas al nacer: ${bajasNacer} (→ Vaca vacía).` : null,
             paricionPesoCrias !== '' ? `Peso crías: ${paricionPesoCrias} kg.` : null,
             paricionDestino === 'new'
               ? `Nuevo rodeo: ${paricionNombreNuevo.trim()}`
@@ -483,14 +539,20 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         }),
       })
 
-      // 4. Actualización optimista inmediata
+      // 5. Actualización optimista inmediata
       setLiveHerd(prev => prev ? { ...prev, head_count: newCount, total_ev: newEV } : prev)
       setCount(newCount)
-      setActSuccess(`✓ Parición registrada · ${newCount} preñadas remanentes · ${n} con ternero al pie`)
+      setActSuccess(
+        bajasNacer > 0
+          ? `✓ Parición · ${criasVivas} c/ ternero al pie · ${bajasNacer} vacías · ${newCount} preñadas`
+          : `✓ Parición · ${criasVivas} c/ ternero al pie · ${newCount} preñadas remanentes`
+      )
       // Reset wizard state
       setParicionMadres(''); setParicionCrias(''); setParicionFecha(todayISO())
       setParicionPesoCrias(35); setParicionDestino('new')
       setParicionNombreNuevo(''); setParicionHerdDestinoId('')
+      setParicionVacasVaciasDestino('existing'); setParicionVacasVaciasNombre('')
+      setParicionVacasVaciasHerdId('')
       setActId(null)
       setTimeout(() => setActSuccess(null), 4000)
       onSaved()
@@ -1731,7 +1793,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                               <p className={`text-sm font-bold transition-colors ${sel ? 'text-green-800' : 'text-gray-800'}`}>{a.label}</p>
                               <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">
                                 {isThisParicionWizard
-                                  ? 'Asistente de parición · Vacas preñadas → con ternero al pie'
+                                  ? 'Asistente de parición · Segregá el lote parido con EV 1.35'
                                   : (a as any).desc}
                               </p>
                             </div>
@@ -1764,22 +1826,21 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                             onChange={e => {
                                               const v = e.target.value === '' ? '' : Number(e.target.value)
                                               setParicionMadres(v)
-                                              if (v !== '' && (paricionCrias === '' || paricionCrias === paricionMadres)) {
-                                                setParicionCrias(v)
-                                              }
+                                              // Auto-sync crías si el usuario no las editó aún
+                                              if (v !== '') setParicionCrias(v)
                                             }}
                                             onFocus={e => e.target.select()}
                                             className={INPUT} placeholder="Ej: 30" />
                                           <p className="text-[9px] text-gray-400">máx {liveHerd?.head_count ?? herd?.head_count ?? '?'} cab</p>
                                         </div>
                                         <div className="space-y-1.5">
-                                          <label className={LABEL}>Crías nacidas</label>
+                                          <label className={LABEL}>Crías nacidas vivas</label>
                                           <input type="number" min="0"
                                             value={paricionCrias}
                                             onChange={e => setParicionCrias(e.target.value === '' ? '' : Number(e.target.value))}
                                             onFocus={e => e.target.select()}
                                             className={INPUT} placeholder="= madres paridas" />
-                                          <p className="text-[9px] text-gray-400">incluye mellizos / bajas al nacer</p>
+                                          <p className="text-[9px] text-gray-400">editá si hubo mellizos o bajas al nacer</p>
                                         </div>
                                       </div>
                                       <div className="grid grid-cols-2 gap-3">
@@ -1798,33 +1859,39 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                         </div>
                                       </div>
 
-                                      {/* Step 2 — Preview de impacto */}
-                                      {paricionMadres !== '' && Number(paricionMadres) > 0 && (
-                                        <div className="rounded-xl border border-gray-200 bg-gray-50/40 p-3 space-y-1.5">
-                                          <p className={LABEL}>Impacto en el rodeo</p>
-                                          <div className="flex items-center justify-between text-[10px]">
-                                            <span className="text-gray-500">Vacas preñadas remanentes</span>
-                                            <span className="font-black text-gray-800">
-                                              {Math.max(0, (liveHerd?.head_count ?? herd?.head_count ?? 0) - Number(paricionMadres))} cab
-                                            </span>
+                                      {/* Step 2 — Preview de impacto (usa criasVivas) */}
+                                      {!!paricionMadres && Number(paricionMadres) > 0 && (() => {
+                                        const m = Number(paricionMadres)
+                                        const c = paricionCrias !== '' ? Math.max(0, Number(paricionCrias)) : m
+                                        const bajas = Math.max(0, m - c)
+                                        const remanentes = Math.max(0, (liveHerd?.head_count ?? herd?.head_count ?? 0) - m)
+                                        return (
+                                          <div className="rounded-xl border border-gray-200 bg-gray-50/40 p-3 space-y-1.5">
+                                            <p className={LABEL}>Impacto en el rodeo</p>
+                                            <div className="flex items-center justify-between text-[10px]">
+                                              <span className="text-gray-500">Vacas preñadas remanentes</span>
+                                              <span className="font-black text-gray-800">{remanentes} cab</span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-[10px]">
+                                              <span className="text-gray-500">Lote Vaca c/ Ternero al Pie</span>
+                                              <span className="font-black text-green-700">{c} cab · EV {(c * 1.35).toFixed(1)}</span>
+                                            </div>
+                                            {bajas > 0 && (
+                                              <div className="flex items-center justify-between text-[10px] border-t border-amber-100 pt-1.5">
+                                                <span className="text-amber-600">Vacas sin ternero (cría murió)</span>
+                                                <span className="font-black text-amber-700">{bajas} cab · EV {(bajas * 0.80).toFixed(1)}</span>
+                                              </div>
+                                            )}
+                                            {Number(paricionCrias) > m && (
+                                              <p className="text-[9px] text-gray-400">{Number(paricionCrias) - m} mellizo(s) detectado(s)</p>
+                                            )}
                                           </div>
-                                          <div className="flex items-center justify-between text-[10px]">
-                                            <span className="text-gray-500">Nuevo lote vaca c/ ternero al pie</span>
-                                            <span className="font-black text-green-700">{Number(paricionMadres)} cab · EV {(Number(paricionMadres) * 1.35).toFixed(1)}</span>
-                                          </div>
-                                          {paricionCrias !== '' && Number(paricionCrias) !== Number(paricionMadres) && (
-                                            <p className="text-[9px] text-gray-400">
-                                              {Number(paricionCrias) > Number(paricionMadres)
-                                                ? `${Number(paricionCrias) - Number(paricionMadres)} mellizo(s) detectado(s)`
-                                                : `${Number(paricionMadres) - Number(paricionCrias)} baja(s) al nacer`}
-                                            </p>
-                                          )}
-                                        </div>
-                                      )}
+                                        )
+                                      })()}
 
-                                      {/* Step 3 — Destino del lote parido */}
+                                      {/* Step 3 — Destino del lote parido (VACA_CON_TERNERO) */}
                                       <div className="space-y-2">
-                                        <p className={LABEL}>Destino del lote parido</p>
+                                        <p className={LABEL}>Destino del lote con ternero al pie</p>
                                         <label className={`flex items-start gap-2.5 cursor-pointer px-3 py-3 rounded-xl border-2 transition-all ${
                                           paricionDestino === 'new' ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-gray-300 bg-white'
                                         }`}>
@@ -1834,7 +1901,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                             className="mt-0.5 accent-green-600" />
                                           <div className="flex-1 min-w-0">
                                             <p className="text-xs font-bold text-gray-800">Crear nuevo rodeo</p>
-                                            <p className="text-[9px] text-gray-400 mt-0.5">Categoría automática: Vaca con Ternero al Pie · EV base 1.35</p>
+                                            <p className="text-[9px] text-gray-400 mt-0.5">Categoría automática: Vaca con Ternero al Pie · EV 1.35</p>
                                             {paricionDestino === 'new' && (
                                               <input type="text" className={`${INPUT} mt-2`}
                                                 placeholder="Nombre (ej: Parición Cabeza 2026)"
@@ -1876,17 +1943,94 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                         </label>
                                       </div>
 
+                                      {/* Step 4 — Vacas sin ternero (bajas al nacer) */}
+                                      {paricionBajasAlNacer > 0 && (
+                                        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3 space-y-2">
+                                          <div className="flex items-start gap-2">
+                                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                                            <div>
+                                              <p className="text-xs font-bold text-amber-800">
+                                                {paricionBajasAlNacer} vaca{paricionBajasAlNacer > 1 ? 's' : ''} sin ternero al pie
+                                              </p>
+                                              <p className="text-[9px] text-amber-600 mt-0.5">
+                                                Su ternero murió al nacer. Pasan a estado Vaca Vacía (EV 0.80). ¿Dónde las alojás?
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="space-y-1.5">
+                                            {(['existing', 'new', 'skip'] as const).map(opt => (
+                                              <label key={opt} className={`flex items-start gap-2 cursor-pointer px-2.5 py-2 rounded-lg border transition-all ${
+                                                paricionVacasVaciasDestino === opt ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                                              }`}>
+                                                <input type="radio" name="vacias-dest" value={opt}
+                                                  checked={paricionVacasVaciasDestino === opt}
+                                                  onChange={() => setParicionVacasVaciasDestino(opt)}
+                                                  className="mt-0.5 accent-amber-600 shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-[10px] font-bold text-gray-800">
+                                                    {opt === 'existing' ? 'Sumar a rodeo de Vaca Vacía existente'
+                                                      : opt === 'new' ? 'Crear nuevo rodeo Vaca Vacía'
+                                                      : 'Registrar manualmente después'}
+                                                  </p>
+                                                  {opt === 'existing' && paricionVacasVaciasDestino === 'existing' && (
+                                                    paricionRodeosVaciaDestino.length === 0 ? (
+                                                      <p className="text-[9px] text-amber-600 mt-1.5">Sin rodeos de Vaca Vacía disponibles. Elegí "Crear nuevo" o "Después".</p>
+                                                    ) : (
+                                                      <select className={`${INPUT} mt-1.5`}
+                                                        value={paricionVacasVaciasHerdId}
+                                                        onChange={e => setParicionVacasVaciasHerdId(e.target.value)}>
+                                                        <option value="">— Seleccionar rodeo —</option>
+                                                        {paricionRodeosVaciaDestino.map(h => (
+                                                          <option key={h.id} value={h.id}>{h.name} · {h.head_count} cab</option>
+                                                        ))}
+                                                      </select>
+                                                    )
+                                                  )}
+                                                  {opt === 'new' && paricionVacasVaciasDestino === 'new' && (
+                                                    <input type="text" className={`${INPUT} mt-1.5`}
+                                                      placeholder="Nombre rodeo (ej: Vacas Vacías 2026)"
+                                                      value={paricionVacasVaciasNombre}
+                                                      onChange={e => setParicionVacasVaciasNombre(e.target.value)} />
+                                                  )}
+                                                </div>
+                                              </label>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
                                       {/* Confirm */}
                                       <button type="button" onClick={handleParicion}
                                         disabled={
                                           actSaving || !paricionMadres ||
                                           (paricionDestino === 'new' && !paricionNombreNuevo.trim()) ||
-                                          (paricionDestino === 'existing' && (!paricionHerdDestinoId || paricionRodeosDestino.length === 0))
+                                          (paricionDestino === 'existing' && (!paricionHerdDestinoId || paricionRodeosDestino.length === 0)) ||
+                                          (paricionBajasAlNacer > 0 && paricionVacasVaciasDestino === 'new' && !paricionVacasVaciasNombre.trim()) ||
+                                          (paricionBajasAlNacer > 0 && paricionVacasVaciasDestino === 'existing' && !paricionVacasVaciasHerdId && paricionRodeosVaciaDestino.length > 0)
                                         }
                                         className="w-full py-2.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
                                         {actSaving ? 'Guardando...' : 'Confirmar parición'}
                                       </button>
                                     </>
+                                  ) : a.id === 'paricion' ? (
+                                    /* ════ PARICIÓN en rodeo SIN categoría VACA_PRENADA ════ */
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-4 space-y-3">
+                                      <div className="flex items-start gap-2.5">
+                                        <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                                        <div>
+                                          <p className="text-xs font-bold text-amber-800">El wizard de parición requiere categoría Vaca Preñada</p>
+                                          <p className="text-[10px] text-amber-700 mt-1 leading-relaxed">
+                                            Este rodeo no tiene la categoría fisiológica <strong>Vaca Preñada</strong> configurada.
+                                            Para acceder al asistente completo de parición (segregación de lotes, EV automático, control de bajas al nacer),
+                                            andá a <strong>Datos Operativos → Categoría Fisiológica</strong> y seleccioná <em>Vaca Preñada</em>.
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <button type="button" onClick={() => setTab('operativo')}
+                                        className="w-full py-2 text-xs font-bold text-amber-700 border border-amber-400 rounded-xl bg-white hover:bg-amber-50 transition-all">
+                                        Ir a Datos Operativos para configurar la categoría
+                                      </button>
+                                    </div>
                                   ) : (
                                     /* ════ Formulario simple (Compra u otros) ════ */
                                     <>

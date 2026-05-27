@@ -18,7 +18,7 @@ import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
 import { Lock } from 'lucide-react'
 import WeatherConditionChip from '@/components/WeatherConditionChip'
-import { calculateBaseEV } from '@/lib/grazing/evProjection'
+import { calculateBaseEV, PHYSIO_LABEL } from '@/lib/grazing/evProjection'
 import { fmtDate } from '@/lib/utils/dates'
 
 
@@ -446,6 +446,12 @@ export default function HerdsPage() {
                               <span className="ml-1 text-[8px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md tracking-wider">TEMP</span>
                             )}
                           </div>
+                          {/* Categoría fisiológica — nivel terciario (solo si está definida) */}
+                          {herd.physiological_category && (
+                            <p className="text-[9px] font-bold text-green-700/70 uppercase tracking-wider mt-0.5 truncate">
+                              {PHYSIO_LABEL[herd.physiological_category as keyof typeof PHYSIO_LABEL] ?? herd.physiological_category}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <button
