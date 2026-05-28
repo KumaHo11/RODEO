@@ -25,8 +25,8 @@ import { feature } from '@turf/helpers'
 import { Modal } from '@/design-system/molecules/Modal'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
 import { apiFetch } from '@/lib/apiFetch'
-import { projectEVDemand, calculateBaseEV, type ParitionSeason } from '@/lib/grazing/evProjection'
-import { paddockForageOffer, HARVEST_EFFICIENCY, type HarvestEfficiency, calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
+import { projectEVDemand, calculateBaseEV, obtenerEvRodeoParaFecha, type ParitionSeason, type BioMilestone } from '@/lib/grazing/evProjection'
+import { paddockForageOffer, HARVEST_EFFICIENCY, BASE_GROWTH_RATE_KG_HA_DAY, type HarvestEfficiency, calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Paddock {
@@ -46,6 +46,9 @@ interface Herd {
   avg_weight_kg: number | null
   categoria: string | null
   total_ev: number | null
+  physiological_category?: string | null
+  daily_gain_kg?: number | null
+  last_weigh_date?: string | null
 }
 
 interface SeasonPlan {
@@ -70,6 +73,7 @@ interface Props {
   herds: Herd[]
   existingPlan?: SeasonPlan | null
   isSuggestedMode?: boolean
+  bioMilestones?: BioMilestone[]
   onClose: () => void
   onSaved: (plan: SeasonPlan) => void
 }
@@ -182,7 +186,7 @@ function EVBar({ label, ev, maxEV }: { label: string; ev: number; maxEV: number 
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 export default function SeasonPlanModal({
-  paddocks, herds, existingPlan, isSuggestedMode, onClose, onSaved,
+  paddocks, herds, existingPlan, isSuggestedMode, bioMilestones, onClose, onSaved,
 }: Props) {
   const router = useRouter()
   const isEditing = !!existingPlan?.id
@@ -283,10 +287,41 @@ export default function SeasonPlanModal({
   // ── Tab 2: Proyección EV dinámica (motor biológico real) ─────────────────
   const MONTHS_AHEAD = 6
 
-  const projectedEVByMonth = useMemo(() =>
-    projectEVDemand(selectedHerds, dailyAllocationKg, paritionSeason, MONTHS_AHEAD),
-    [selectedHerds, dailyAllocationKg, paritionSeason]
-  )
+  const projectedEVByMonth = useMemo(() => {
+    if (!startDate) {
+      // Fallback si no hay fecha de inicio: usar el motor heredado
+      return projectEVDemand(selectedHerds, dailyAllocationKg, paritionSeason, MONTHS_AHEAD)
+    }
+    // Motor dinámico: usa obtenerEvRodeoParaFecha por mes
+    return Array.from({ length: MONTHS_AHEAD }, (_, i) => {
+      const dt = new Date(startDate + 'T00:00:00')
+      dt.setMonth(dt.getMonth() + i)
+      const dateISO = dt.toISOString().split('T')[0]
+      const monthLabel = dt.toLocaleString('es', { month: 'short', year: '2-digit' })
+      const monthIdx = dt.getMonth()
+
+      const breakdown = selectedHerds.map(h => {
+        const ev = obtenerEvRodeoParaFecha(h, dateISO, bioMilestones)
+        return { herdName: h.name, ev, headCount: Number(h.head_count) }
+      })
+
+      const totalEV = breakdown.reduce((s, b) => s + b.ev, 0)
+      const dailyDemandKg = totalEV * dailyAllocationKg
+      const growthKgHaDay = BASE_GROWTH_RATE_KG_HA_DAY[monthIdx] ?? 0
+      const totalHa = paddocks.reduce((s, p) => s + (Number(p.area_ha) || 0), 0)
+      const estimatedGrowthKgDay = growthKgHaDay * totalHa * 0.50
+      const demandExceedsGrowth = estimatedGrowthKgDay > 0 && dailyDemandKg > estimatedGrowthKgDay
+
+      return {
+        month: i,
+        monthLabel,
+        totalEV,
+        dailyDemandKg,
+        demandExceedsGrowth,
+        breakdown,
+      }
+    })
+  }, [selectedHerds, dailyAllocationKg, paritionSeason, startDate, bioMilestones, paddocks])
 
   const maxEV = useMemo(() =>
     Math.max(...projectedEVByMonth.map(m => m.totalEV), 0.1), [projectedEVByMonth])

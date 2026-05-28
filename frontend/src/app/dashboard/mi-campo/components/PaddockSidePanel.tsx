@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon } from 'lucide-react'
+import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
@@ -60,10 +60,12 @@ interface Props {
 }
 
 const TECH_ICONS = [
-  { key: 'hasWater',       Icon: Droplets,    color: 'text-blue-400',   bgOn: 'bg-blue-50',   bgOff: 'bg-gray-100' },
-  { key: 'hasInfraIssues', Icon: Wrench,      color: 'text-orange-400', bgOn: 'bg-orange-50', bgOff: 'bg-gray-100' },
-  { key: 'hasPredators',   Icon: ShieldAlert, color: 'text-red-400',    bgOn: 'bg-red-50',    bgOff: 'bg-gray-100' },
-  { key: 'hasPests',       Icon: Leaf,        color: 'text-lime-500',   bgOn: 'bg-lime-50',   bgOff: 'bg-gray-100' },
+  { key: 'hasWater',       Icon: Droplets,    color: 'text-blue-400',   bgOn: 'bg-blue-50',   bgOff: 'bg-gray-100', label: 'Agua' },
+  { key: 'hasInfraIssues', Icon: Wrench,      color: 'text-orange-400', bgOn: 'bg-orange-50', bgOff: 'bg-gray-100', label: 'Infra' },
+  { key: 'hasPredators',   Icon: ShieldAlert, color: 'text-red-400',    bgOn: 'bg-red-50',    bgOff: 'bg-gray-100', label: 'Depr.' },
+  { key: 'hasPests',       Icon: Leaf,        color: 'text-lime-500',   bgOn: 'bg-lime-50',   bgOff: 'bg-gray-100', label: 'Maleza' },
+  { key: 'has_shade',      Icon: TreeDeciduous, color: 'text-cyan-500', bgOn: 'bg-cyan-50',   bgOff: 'bg-gray-100', label: 'Sombra' },
+  { key: 'has_water_risk', Icon: Waves,       color: 'text-sky-500',    bgOn: 'bg-sky-50',    bgOff: 'bg-gray-100', label: 'R.Híd.' },
 ]
 
 const getNdviLabel = (ndvi: number) => {
@@ -389,9 +391,11 @@ export default function PaddockSidePanel({
                 const totalMsCard = ms > 0 && paddock.area_ha ? Math.round(ms * Number(paddock.area_ha)) : null
                 const msColor    = ms >= 1500 ? 'text-green-700' : ms >= 800 ? 'text-amber-700' : 'text-red-600'
                 const qualityScore = (paddock.technical_data as any)?.quality_score as number | undefined
-                const qColor = qualityScore != null
-                  ? qualityScore >= 7 ? 'bg-green-100 text-green-800 border-green-200'
-                  : qualityScore >= 4 ? 'bg-amber-100 text-amber-800 border-amber-200'
+                // Clamp ranking to 1-5 scale
+                const rankDisplay = qualityScore != null ? Math.min(5, Math.max(1, Math.round(qualityScore))) : undefined
+                const qColor = rankDisplay != null
+                  ? rankDisplay >= 4 ? 'bg-green-100 text-green-800 border-green-200'
+                  : rankDisplay >= 3 ? 'bg-amber-100 text-amber-800 border-amber-200'
                   : 'bg-red-100 text-red-800 border-red-200'
                   : ''
                 const climateSnap = latestByPaddock.get(paddock.id)
@@ -487,10 +491,10 @@ export default function PaddockSidePanel({
                           ) : (
                             <p className="text-xs text-gray-300 italic pt-1">Sin datos de MS</p>
                           )}
-                          {qualityScore != null && (
+                          {rankDisplay != null && (
                             <div className="ml-auto self-center">
                               <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${qColor}`}>
-                                {qualityScore}/10
+                                ★ {rankDisplay}/5
                               </span>
                             </div>
                           )}
@@ -500,29 +504,59 @@ export default function PaddockSidePanel({
 
                     {/* ── Bottom: semáforo climático + indicadores técnicos + Detalles ── */}
                     {isActive && (
-                      <div className="px-4 pb-4 pt-2 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                          {/* Chip de clima con icóno + estado de crecimiento */}
-                          <WeatherConditionChip
-                            mode="paddock"
-                            entityName={paddock.name}
-                            grassGrowthRate={realGrowthRate}
-                            ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
-                          />
-                          <div className="flex items-center gap-1">
+                      <div className="px-4 pb-4 pt-1 space-y-2">
+                        {/* Fila 1: chip de clima + NDVI + botón Gestionar */}
+                        <div className="flex items-center justify-between gap-2" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center gap-2">
+                            {/* Chip de clima con icóno + estado de crecimiento */}
+                            <WeatherConditionChip
+                              mode="paddock"
+                              entityName={paddock.name}
+                              grassGrowthRate={realGrowthRate}
+                              ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
+                            />
                             {canNdvi && ndviVal != null && (
-                              <span className="text-[9px] font-bold text-gray-600 ml-1">
+                              <span className="text-[9px] font-bold text-gray-600">
                                 NDVI {Number(ndviVal).toFixed(2)}
                               </span>
                             )}
                           </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); openModal(paddock) }}
+                            className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all shrink-0"
+                          >
+                            Gestionar
+                          </button>
                         </div>
-                        <button
-                          onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                          className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all shrink-0"
-                        >
-                          Gestionar
-                        </button>
+
+                        {/* Fila 2: 6 indicadores de estado tipo tablero */}
+                        <div className="flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+                          {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff, label }) => {
+                            const isOn = key === 'hasPests'
+                              ? (td.hasPests || (td.weed_types?.length ?? 0) > 0)
+                              : key === 'hasWater'
+                              ? (td.hasWater || td.has_water_point)
+                              : Boolean(td[key])
+                            return (
+                              <div
+                                key={key}
+                                title={label}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-all ${
+                                  isOn ? bgOn : 'bg-gray-50'
+                                }`}
+                              >
+                                <Icon
+                                  className={`w-3 h-3 transition-all ${
+                                    isOn ? color : 'text-gray-300'
+                                  }`}
+                                />
+                                <span className={`text-[9px] font-bold ${
+                                  isOn ? color.replace('text-', 'text-').replace('-400', '-600').replace('-500', '-700') : 'text-gray-300'
+                                }`}>{label}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     )}
 

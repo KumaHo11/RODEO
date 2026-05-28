@@ -7,6 +7,7 @@
  *  - Mes de parición configurado por el usuario
  *
  * Basado en estándares INTA / Ovis 21 para Hemisferio Sur.
+ * Integra las tablas oficiales Cocimano (1975) via evMatrix.ts.
  *
  * ─── Servicio Core Inyectable ────────────────────────
  * TODAS las funciones de cálculo EV de la plataforma se
@@ -14,6 +15,10 @@
  * los Reportes de Historial DEBEN consumir estas funciones
  * para garantizar consistencia total de datos.
  */
+
+// Re-exportar la función central de cálculo Cocimano para consumo externo
+export { calcularEV, calcularEVRodeo, RATION_SUGERIDA_POR_CATEGORIA, LACTANCIA_RANGES, ESTADIOS_GESTACION } from './evMatrix'
+export type { CalcEVParams, CalcEVResult, CalcEVRodeoResult, LactanciaRange, EstadioGestacion } from './evMatrix'
 
 /** Factores base de EV por categoría (respecto a vaca de 450 kg a mantenimiento) */
 export const EV_BASE: Record<string, number> = {
@@ -48,39 +53,57 @@ export const PHYSIOLOGICAL_CATEGORIES = [
   'VACA_CON_TERNERO',
   'VACA_PRENADA',
   'VACA_VACIA',
+  'VACA_SECA',
   'TERNERO',
   'RECRIA_NOVILLO',
+  'RECRIA_VAQUILLONA',
+  'TORO_DESCANSO',
+  'TORO_SERVICIO',
 ] as const
 
 export type PhysiologicalCategory = typeof PHYSIOLOGICAL_CATEGORIES[number]
 
-/** EV base por categoría fisiológica (sin escalar por peso — peso escala vía fórmula) */
+/**
+ * EV base por categoría fisiológica.
+ * Estos valores son el punto de partida aproximado para rodeos legacy
+ * que no tienen datos de peso/ADPV. La función calcularEV() de evMatrix.ts
+ * provee valores exactos Cocimano cuando se conoce el peso real.
+ */
 export const PHYSIO_EV_BASE: Record<PhysiologicalCategory, number> = {
-  VACA_CON_TERNERO: 1.35,
-  VACA_PRENADA:     1.10,
-  VACA_VACIA:       0.80,
-  TERNERO:          0.45,
-  RECRIA_NOVILLO:   1.00,
+  VACA_CON_TERNERO:  1.18,  // Ref. 400 kg, 3-4 meses lactancia
+  VACA_PRENADA:      0.91,  // Ref. 400 kg, 8vo mes gestación
+  VACA_VACIA:        0.73,  // Ref. 400 kg, mantenimiento
+  VACA_SECA:         0.73,  // Alias VACA_VACIA
+  TERNERO:           0.54,  // Ref. 150 kg, ADPV 0 g/día
+  RECRIA_NOVILLO:    0.69,  // Ref. 200 kg, ADPV 0 g/día
+  RECRIA_VAQUILLONA: 0.54,  // Ref. 200 kg, ADPV 0 g/día
+  TORO_DESCANSO:     0.98,  // Ref. 600 kg, ADPV 0 g/día
+  TORO_SERVICIO:     1.32,  // Ref. 600 kg, ADPV 500 g/día
 }
 
 /** Etiquetas en español para la UI */
 export const PHYSIO_LABEL: Record<PhysiologicalCategory, string> = {
-  VACA_CON_TERNERO: 'Vaca con Ternero al Pie',
-  VACA_PRENADA:     'Vaca Preñada',
-  VACA_VACIA:       'Vaca Vacía / Seca',
-  TERNERO:          'Ternero/a',
-  RECRIA_NOVILLO:   'Recría / Novillo',
+  VACA_CON_TERNERO:  'Vaca con ternero al pie',
+  VACA_PRENADA:      'Vaca preñada',
+  VACA_VACIA:        'Vaca vacía',
+  VACA_SECA:         'Vaca seca',
+  TERNERO:           'Ternero/a',
+  RECRIA_NOVILLO:    'Novillo',
+  RECRIA_VAQUILLONA: 'Vaquillona',
+  TORO_DESCANSO:     'Toro en descanso',
+  TORO_SERVICIO:     'Toro en servicio',
 }
 
 /**
- * Categorías de crecimiento activo (requieren GDP para proyección).
- * En estas categorías la GDP es obligatoria.
- * Para vacas, la GDP también puede usarse para proyectar variación de peso
- * corporal en gestación/post-parto.
+ * Categorías de crecimiento activo (requieren GDP/ADPV para el cálculo exacto).
+ * En estas categorías el ADPV es obligatorio para la tabla Cocimano.
  */
 export const GROWTH_PHYSIO_CATEGORIES = new Set<PhysiologicalCategory>([
   'TERNERO',
   'RECRIA_NOVILLO',
+  'RECRIA_VAQUILLONA',
+  'TORO_DESCANSO',
+  'TORO_SERVICIO',
 ])
 
 /**
@@ -359,6 +382,136 @@ function vacaFenologiaFactor(monthOffset: number, paritionSeason: ParitionSeason
   if (dif <= 11) return 1.18  // Gestación tardía (último trimestre)
   return 1.00
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SERVICIO CORE INYECTABLE — obtenerEvRodeoParaFecha
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Hito biológico del calendario ganadero.
+ * Usado por el Planificador Manual, el Planificador Sugerido y la Calculadora Rápida.
+ */
+export interface BioMilestone {
+  type: 'weaning_head' | 'weaning_body' | 'weaning_tail' | 'service' | 'parition'
+  date: string             // YYYY-MM-DD — fecha exacta del hito
+  herdId: string           // Rodeo al que aplica
+  pct?: number             // % del rodeo afectado (destete escalonado, 0-100)
+  estimatedWeightKg?: number // Peso estimado al momento del hito (terneros)
+  durationDays?: number    // Duración (para temporada de servicio)
+}
+
+/**
+ * Interfaz extendida del rodeo para el motor de EV dinámico.
+ * Compatible con los campos de HerdModal (physiological_category, daily_gain_kg, last_weigh_date).
+ */
+export interface HerdForEVCalc {
+  id: string
+  total_ev?: number | string | null
+  head_count?: number | string | null
+  animal_count?: number | string | null
+  avg_weight_kg?: number | string | null
+  categoria?: string | null
+  physiological_category?: string | null
+  daily_gain_kg?: number | string | null
+  last_weigh_date?: string | null
+}
+
+/**
+ * ─── FUNCIÓN CENTRAL INYECTABLE ───────────────────────────────────────────────
+ * Calcula el EV total de un rodeo en una fecha objetivo específica.
+ *
+ * Considera (en orden de prioridad):
+ *  1. GDP acumulada desde el último pesaje → peso proyectado
+ *  2. Categoría fisiológica del rodeo (physiological_category)
+ *  3. Hitos biológicos configurados por el usuario (destete, servicio, parición)
+ *  4. Fallback a calculateBaseEV() para rodeos legacy sin physiological_category
+ *
+ * Esta función es la ÚNICA fuente de verdad para cálculos de EV en fecha.
+ * Consumida por: Planificador Manual, Planificador Sugerido, Dashboard, Calculadora.
+ *
+ * @param herd          Datos del rodeo
+ * @param targetDateISO Fecha objetivo en formato 'YYYY-MM-DD'
+ * @param milestones    Hitos biológicos configurados por el usuario (opcional)
+ */
+export function obtenerEvRodeoParaFecha(
+  herd: HerdForEVCalc,
+  targetDateISO: string,
+  milestones?: BioMilestone[],
+): number {
+  const headCount = Number(herd.head_count ?? herd.animal_count) || 0
+  if (headCount === 0) return 0
+
+  const baseWeightKg = Number(herd.avg_weight_kg) || EV_REFERENCE_WEIGHT_KG
+  const gdpKgDay     = Number(herd.daily_gain_kg) || 0
+  const physioRaw    = herd.physiological_category as PhysiologicalCategory | null | undefined
+
+  // ── 1. Calcular peso proyectado en la fecha objetivo ────────────────────────
+  const refDateStr = herd.last_weigh_date || new Date().toISOString().split('T')[0]
+  const refDate  = new Date(refDateStr  + 'T00:00:00')
+  const tgtDate  = new Date(targetDateISO + 'T00:00:00')
+  const daysDiff = Math.round((tgtDate.getTime() - refDate.getTime()) / 86_400_000)
+
+  const projectedWeight = gdpKgDay > 0 && daysDiff > 0
+    ? calculateProjectedWeight(baseWeightKg, gdpKgDay, daysDiff)
+    : baseWeightKg
+
+  // ── 2. Determinar categoría fisiológica activa en la fecha objetivo ─────────
+  // Por defecto, la categoría fisiológica configurada en el rodeo
+  let activePhysio: PhysiologicalCategory | null = physioRaw || null
+  let activeHeadCount = headCount
+
+  // ── 3. Aplicar hitos biológicos del usuario ─────────────────────────────────
+  if (milestones && milestones.length > 0) {
+    const herdMilestones = milestones
+      .filter(m => m.herdId === herd.id && m.date <= targetDateISO)
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    for (const m of herdMilestones) {
+      if (m.type === 'service') {
+        // Servicio → proyectar parición 9 meses después
+        const paritionDate = new Date(m.date + 'T00:00:00')
+        paritionDate.setMonth(paritionDate.getMonth() + 9)
+        const paritionISO = paritionDate.toISOString().split('T')[0]
+        if (targetDateISO >= paritionISO) {
+          // Post-parición: vaca con ternero al pie
+          activePhysio = 'VACA_CON_TERNERO'
+        } else if (targetDateISO >= m.date) {
+          // Pre-parición: vaca preñada (gestación)
+          activePhysio = 'VACA_PRENADA'
+        }
+      }
+
+      if (m.type === 'weaning_head' || m.type === 'weaning_body' || m.type === 'weaning_tail') {
+        // Post-destete: madres pasan a VACA_VACIA
+        // Solo aplica si la categoría actual es de vacas con cría
+        if (
+          activePhysio === 'VACA_CON_TERNERO' ||
+          activePhysio === 'VACA_PRENADA' ||
+          activePhysio === null ||
+          (herd.categoria && ['VACAS', 'VAQUILLONAS'].includes(String(herd.categoria).toUpperCase()))
+        ) {
+          activePhysio = 'VACA_VACIA'
+        }
+      }
+
+      if (m.type === 'parition') {
+        // Parición explícita configurada como hito
+        activePhysio = 'VACA_CON_TERNERO'
+      }
+    }
+  }
+
+  // ── 4. Calcular EV final ─────────────────────────────────────────────────────
+  if (activePhysio) {
+    // Ruta fisiológica: EV_Base_Fisiológico × (Peso_Proyectado / 400)^0.75 × Cabezas
+    return calculateProjectedEV(activePhysio, projectedWeight, activeHeadCount)
+  }
+
+  // Fallback legacy: EV canónico INTA por categoría comercial
+  return calculateBaseEV(herd.categoria ?? null, projectedWeight, activeHeadCount)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 /** Tasa de crecimiento mensual de peso vivo para categorías jóvenes (kg/mes) */
 const GROWTH_RATE_KG_MONTH: Record<string, number> = {

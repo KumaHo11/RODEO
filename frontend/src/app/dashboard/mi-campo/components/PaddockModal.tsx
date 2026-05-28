@@ -380,6 +380,7 @@ export default function PaddockModal({
   const [electricityType, setElectricityType]     = useState<string>(paddock.technical_data?.electricity_type ?? '')
   const [hasPredators, setHasPredators]           = useState<boolean>(paddock.technical_data?.has_predators ?? false)
   const [relativeQuality, setRelativeQuality]     = useState<number>(paddock.technical_data?.relative_quality ?? 0)
+  const [hasWaterRisk, setHasWaterRisk]           = useState<boolean>(paddock.technical_data?.has_water_risk ?? false)
 
   // Online/offline detection
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
@@ -524,6 +525,7 @@ export default function PaddockModal({
       weeds:                weedTypes,
       hasInfraIssues:       fenceType === 'none' || fenceType === 'poor',
       hasPredators,
+      has_water_risk:       hasWaterRisk,
       relative_quality:     relativeQuality > 0 ? relativeQuality : undefined,
     }
     await onSave(paddock.id, name.trim(), td,
@@ -1067,7 +1069,7 @@ export default function PaddockModal({
                 </p>
               )}
 
-              {/* Rendimiento Relativo */}
+              {/* Coeficiente del Potrero */}
               {(msHa !== '' && areaHa !== '') && (() => {
                 const _ms = Number(msHa)
 
@@ -1083,8 +1085,8 @@ export default function PaddockModal({
                 return (
                   <div className="rounded-xl bg-green-50 border border-green-100 p-3.5 space-y-3">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">Rendimiento Relativo</p>
-                      <Tooltip text="Indicador de rendimiento del potrero." />
+                      <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">Coeficiente del Potrero</p>
+                      <Tooltip text="El Coeficiente del Potrero mide la productividad relativa de este lote comparado con el promedio del campo. Se calcula dividiendo los kg MS/ha de este potrero entre el promedio de todos los potreros activos. Un valor mayor a 1 indica que este potrero produce más que la media del campo; menor a 1, por debajo. Es la base del ajuste proporcional en las planificaciones simétricas futuras." />
                     </div>
                     <div className="grid grid-cols-1 gap-2">
                       {_coef !== null && (
@@ -1112,42 +1114,23 @@ export default function PaddockModal({
                 )
               })()}
 
-              {/* Calidad relativa */}
+
+              {/* Ranking del Potrero (1–5) */}
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <span className={LABEL_CLS}>Calidad Relativa del Forraje</span>
-                  <Tooltip text="Escala del 1 al 10: qué tan nutritivo y productivo es el pasto de este potrero comparado con los demás. 1-3 = pobre. 4-6 = regular. 7-10 = excelente. Sirve para priorizar cuál potrero pastorear primero." />
+                  <span className={LABEL_CLS}>Ranking del Potrero</span>
+                  <Tooltip text="Escala del 1 al 5: calidad y productividad general de este potrero. 1 = muy bajo, 5 = excelente. Reemplaza la escala anterior de calidad relativa y es el valor utilizado en las planificaciones simétricas." />
                 </div>
                 <SimpleNumberInput
                   label=""
                   min={1}
-                  max={10}
+                  max={5}
                   step={1}
                   value={qualityScore}
                   onChange={e => setQuality(Number(e.target.value))}
                 />
               </div>
 
-              {/* Composición botánica */}
-              <div className="space-y-3 pt-1 border-t border-gray-100">
-                <p className={LABEL_CLS}>Composición botánica</p>
-                <SearchableMultiSelect
-                  label="Tipo de pasto"
-                  options={GRASS_TYPES}
-                  selected={grassTypes}
-                  onChange={setGrassTypes}
-                  placeholder="Buscar o agregar tu tipo de pasto…"
-                  allowCustom
-                />
-                <SearchableMultiSelect
-                  label="Malezas"
-                  options={WEED_TYPES}
-                  selected={weedTypes}
-                  onChange={setWeedTypes}
-                  placeholder="Buscar o agregar maleza…"
-                  allowCustom
-                />
-              </div>
             </div>
           )}
 
@@ -1264,8 +1247,41 @@ export default function PaddockModal({
                 <Toggle checked={hasPredators} onChange={() => setHasPredators(v => !v)} />
               </div>
 
+              {/* ── Riesgo Hídrico ─────────────────────────────────────────── */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-sky-100 bg-sky-50">
+                <div>
+                  <p className="text-sm font-bold text-sky-800">Riesgo Hídrico</p>
+                  <p className="text-[10px] text-sky-500 font-medium mt-0.5">
+                    {hasWaterRisk ? 'Riesgo activo — crítico para planificación' : 'Sin riesgo hídrico detectado'}
+                  </p>
+                </div>
+                <Toggle checked={hasWaterRisk} onChange={() => setHasWaterRisk(v => !v)} />
+              </div>
+
+              {/* ── Composición botánica (movido desde Datos Operativos) ──────── */}
+              <div className="space-y-3 pt-1 border-t border-gray-100">
+                <p className={LABEL_CLS}>Composición botánica</p>
+                <SearchableMultiSelect
+                  label="Tipo de pasto"
+                  options={GRASS_TYPES}
+                  selected={grassTypes}
+                  onChange={setGrassTypes}
+                  placeholder="Buscar o agregar tu tipo de pasto…"
+                  allowCustom
+                />
+                <SearchableMultiSelect
+                  label="Malezas"
+                  options={WEED_TYPES}
+                  selected={weedTypes}
+                  onChange={setWeedTypes}
+                  placeholder="Buscar o agregar maleza…"
+                  allowCustom
+                />
+              </div>
+
             </div>
           )}
+
 
           {/* ════ TAB 3 — REGISTROS ════ */}
           {activeTab === 'registros' && (

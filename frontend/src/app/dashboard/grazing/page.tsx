@@ -114,7 +114,10 @@ import {
   getDynamicHerdEV as _getDynamicHerdEV,
   EV_BASE,
   calculateBaseEV,
+  obtenerEvRodeoParaFecha,
+  type BioMilestone,
 } from '@/lib/grazing/evProjection'
+import { BASE_GROWTH_RATE_KG_HA_DAY } from '@/lib/grazing/forageCurves'
 
 // Calculate dynamic headcount — wrapper local para uso en callbacks del Gantt
 const calculateDynamicHeadcount = (herdId: string, baseCount: number, dateStr: string, unifiedEvents: any[]) => {
@@ -328,6 +331,7 @@ function InteractiveGantt({
   onPaddockToggle,
   drawingHerdEV = 0,
   drawingHerdsLabel = '',
+  bioMilestones = [],
 }: {
   plans: any[]
   paddocks: any[]
@@ -379,6 +383,8 @@ function InteractiveGantt({
   drawingHerdEV?: number
   /** Label legible de rodeos en modo dibujo (para tooltip) */
   drawingHerdsLabel?: string
+  /** Hitos biológicos compartidos (destete, servicio, parición) para EV dinámico */
+  bioMilestones?: BioMilestone[]
 }) {
   // Sort paddocks by suggested order when paddockOrder is provided
   const orderedPaddocks = paddockOrder.length > 0
@@ -1685,19 +1691,42 @@ function InteractiveGantt({
                       </div>
                       {/* Month header columns — fixed width matching Gantt */}
                       <div className="flex flex-1">
-                        {MONTHS_FOOTER.map(m => (
+                        {MONTHS_FOOTER.map(m => {
+                          // ── Alerta preventiva de demanda vs crecimiento forrajero ──
+                          const monthIdx = m.month // 0=Ene … 11=Dic
+                          const growthRateKgHaDay = BASE_GROWTH_RATE_KG_HA_DAY[monthIdx] ?? 0
+                          const totalHa = paddocks.reduce((s: number, p: any) => s + (Number(p.area_ha) || 0), 0)
+                          const estimatedGrowthKgDay = growthRateKgHaDay * totalHa * 0.50
+                          const totalEvMesHdr = activeHerdsInWindow.reduce((sum, h) => {
+                            const herdEntry = h.admission_date || '2000-01-01'
+                            const herdExit = h.exit_date || '2100-01-01'
+                            if (herdEntry > m.endDate || herdExit < m.startDate) return sum
+                            return sum + obtenerEvRodeoParaFecha(h, m.startDate, bioMilestones)
+                          }, 0)
+                          const demandKgDay = totalEvMesHdr * dailyAllocationKg
+                          const isHighDemand = estimatedGrowthKgDay > 0 && demandKgDay > estimatedGrowthKgDay * 1.1
+                          const isAlertDemand = estimatedGrowthKgDay > 0 && demandKgDay > estimatedGrowthKgDay
+                          return (
                           <div
                             key={m.key}
-                            className="border-r border-gray-300 flex items-center justify-center px-0.5 overflow-hidden shrink-0"
+                            className={`border-r border-gray-300 flex flex-col items-center justify-center px-0.5 overflow-hidden shrink-0 gap-0.5 ${isHighDemand ? 'bg-red-50' : isAlertDemand ? 'bg-amber-50' : ''}`}
                             style={{ width: `${m.widthPct}%`, minWidth: 60 }}
                           >
+                            {(isHighDemand || isAlertDemand) && (
+                              <span
+                                title={`Demanda: ${demandKgDay.toFixed(0)} kg MS/día · Crecimiento estimado: ${estimatedGrowthKgDay.toFixed(0)} kg MS/día`}
+                                className={`text-[7px] font-black px-1 rounded ${isHighDemand ? 'text-red-700' : 'text-amber-700'}`}
+                              >⚠ Alta demanda</span>
+                            )}
                             <div className="flex w-full">
                               {(['Núm.', 'Peso', '%EQ', 'Total EQ'] as const).map(col => (
                                 <span key={col} className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-center truncate">{col}</span>
                               ))}
                             </div>
                           </div>
-                        ))}
+                          )
+                        })}
+
                       </div>
                     </div>
 
@@ -1756,13 +1785,13 @@ function InteractiveGantt({
                             const headCount = herdActiveThisMonth ? getDynamicHeadcount(herd.id, currentHeadCount, m.startDate) : 0
                             const peso = Number(herd.avg_weight_kg) || 0
                             const catKey = herd.categoria as string
-                            // ── Fórmula canónica INTA: EV_BASE[cat] × (peso/450)^0.75 ──────────────
-                            // Reemplaza la fórmula incorrecta (base 400 × CATEGORIA_DEMAND_FACTOR)
-                            // que producía 2.17 para TOROS en lugar del correcto ~1.55 a 600 kg.
+                            // ── EV Dinámico por mes: usa obtenerEvRodeoParaFecha (GDP + physio + hitos) ──
                             const pesoDefault = CATEGORIA_PESO_DEFAULT[catKey as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450
                             const effectivePeso = peso > 0 ? peso : pesoDefault
-                            const evPerHead = (EV_BASE[catKey] ?? 1.0) * Math.pow(effectivePeso / 450, 0.75)
-                            const ev = headCount > 0 ? headCount * evPerHead : 0
+                            const ev = herdActiveThisMonth && headCount > 0
+                              ? obtenerEvRodeoParaFecha(herd, m.startDate, bioMilestones)
+                              : 0
+                            const evPerHead = headCount > 0 && ev > 0 ? ev / headCount : (EV_BASE[catKey] ?? 1.0) * Math.pow(effectivePeso / 450, 0.75)
                             const active = monthPlansForHerd.length > 0 && herdActiveThisMonth
                             return (
                               <div
@@ -1858,17 +1887,13 @@ function InteractiveGantt({
                             const herdExit = h.exit_date || '2100-01-01'
                             if (herdEntry <= m.endDate && herdExit >= m.startDate) {
                               const hc = getDynamicHeadcount(h.id, Number(h.head_count) || 0, m.startDate)
-                              const p = Number(h.avg_weight_kg) || 0
-                              const cat = h.categoria as string
-                              const fac = CATEGORIA_DEMAND_FACTOR[cat as keyof typeof CATEGORIA_DEMAND_FACTOR] ?? 1.0
-                              const evPH = (() => {
-                                const pesoD = CATEGORIA_PESO_DEFAULT[cat as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 400
-                                const effP = p > 0 ? p : pesoD
-                                return Math.pow(effP / 400, 0.75) * fac
-                              })()
+                              // ── Total row: mismo motor que filas individuales ──
+                              const evHerd = hc > 0
+                                ? obtenerEvRodeoParaFecha(h, m.startDate, bioMilestones)
+                                : 0
 
                               totalCabMes += hc
-                              totalEvMes += hc * evPH
+                              totalEvMes += evHerd
                             }
                           })
                           return (
@@ -2441,6 +2466,19 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [eventToDelete, setEventToDelete] = useState<any | null>(null)
   /** IDs de rodeos seleccionados para el modo de dibujo continuo */
   const [drawingHerdIds, setDrawingHerdIds] = useState<string[]>([])
+  /** Hitos biológicos compartidos entre Planificador Manual y Sugerido */
+  const [bioMilestones, setBioMilestones] = useState<BioMilestone[]>(() => {
+    try {
+      const stored = localStorage.getItem('rodeo_bio_milestones')
+      if (stored) return JSON.parse(stored)
+    } catch {}
+    return []
+  })
+  const saveBioMilestones = (ms: BioMilestone[]) => {
+    setBioMilestones(ms)
+    try { localStorage.setItem('rodeo_bio_milestones', JSON.stringify(ms)) } catch {}
+  }
+  const [showBioMilestonesPanel, setShowBioMilestonesPanel] = useState(false)
   /** Muestra el selector de rodeos antes de activar el modo dibujo */
   const [showHerdSelector, setShowHerdSelector] = useState(false)
   /** Mini-popover de confirmación rápida post-dibujo */
@@ -3613,9 +3651,11 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     const paddock = paddocks.find((p: any) => p.id === paddockId)
     const msHa = Number(paddock?.dry_matter_kg_ha) || 0
     const areaHa = Number(paddock?.area_ha) || 0
+    // ── EV proyectado para la fecha de entrada del bloque dibujado ──
     const drawingEV = drawingHerdIds.reduce((sum: number, hId: string) => {
       const h = herds.find((hh: any) => hh.id === hId)
-      return sum + Number(h?.total_ev || 0)
+      if (!h) return sum
+      return sum + obtenerEvRodeoParaFecha(h, entryDate, bioMilestones)
     }, 0)
     const usableMs = msHa > 0 ? calculateUsableForage(msHa, targetRemnant, areaHa) : -1
     const dailyDemand = drawingEV * dailyAllocationKg
@@ -4305,6 +4345,195 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             </div>
 
 
+            {/* ── Hitos Biológicos ── */}
+            <div className="relative">
+              <button
+                onClick={() => setShowBioMilestonesPanel(p => !p)}
+                title="Hitos biológicos (destete, servicio, parición)"
+                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-bold transition-all ${
+                  showBioMilestonesPanel || bioMilestones.length > 0
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50 border-transparent hover:border-amber-100'
+                }`}
+              >
+                <span className="text-sm leading-none">🐄</span>
+                {bioMilestones.length > 0 && (
+                  <span className="text-[9px] font-black bg-amber-200 text-amber-800 rounded-full px-1.5">{bioMilestones.length}</span>
+                )}
+              </button>
+              {showBioMilestonesPanel && (
+                <>
+                  <div className="fixed inset-0 z-[49]" onClick={() => setShowBioMilestonesPanel(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-100 shadow-2xl rounded-2xl overflow-hidden z-[50] animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-4 pt-4 pb-3 border-b border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Hitos Biológicos</p>
+                          <p className="text-[9px] text-gray-400 mt-0.5">Compartidos entre planificación manual y sugerida</p>
+                        </div>
+                        {bioMilestones.length > 0 && (
+                          <button
+                            onClick={() => saveBioMilestones([])}
+                            className="text-[9px] font-bold text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                          >Limpiar todo</button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 space-y-4 max-h-[70vh] overflow-y-auto">
+
+                      {/* Módulo Servicio */}
+                      <div className="space-y-2">
+                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1">
+                          <span>🐂</span> Temporada de Servicio
+                        </p>
+                        <div className="bg-red-50 rounded-xl p-3 space-y-2.5 border border-red-100">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rodeo</label>
+                              <select
+                                id="bio-service-herd"
+                                className="w-full text-[10px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-red-400"
+                                defaultValue=""
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  if (!val) return
+                                  const dateEl = document.getElementById('bio-service-date') as HTMLInputElement
+                                  if (!dateEl?.value) return
+                                  const existing = bioMilestones.filter(m => !(m.type === 'service' && m.herdId === val))
+                                  saveBioMilestones([...existing, { type: 'service', herdId: val, date: dateEl.value }])
+                                }}
+                              >
+                                <option value="">— Seleccionar —</option>
+                                {herds.map((h: any) => (
+                                  <option key={h.id} value={h.id}>{h.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Inicio</label>
+                              <input
+                                id="bio-service-date"
+                                type="date"
+                                className="w-full text-[10px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-red-400"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            className="w-full text-[10px] font-bold text-red-700 bg-red-100 hover:bg-red-200 rounded-lg py-1.5 transition-colors"
+                            onClick={() => {
+                              const herdEl = document.getElementById('bio-service-herd') as HTMLSelectElement
+                              const dateEl = document.getElementById('bio-service-date') as HTMLInputElement
+                              if (!herdEl?.value || !dateEl?.value) return
+                              const existing = bioMilestones.filter(m => !(m.type === 'service' && m.herdId === herdEl.value))
+                              saveBioMilestones([...existing, { type: 'service', herdId: herdEl.value, date: dateEl.value }])
+                            }}
+                          >+ Agregar servicio</button>
+                          {/* Servicios configurados */}
+                          {bioMilestones.filter(m => m.type === 'service').map((m, i) => {
+                            const h = herds.find((hh: any) => hh.id === m.herdId)
+                            const parition = new Date(m.date + 'T00:00:00')
+                            parition.setMonth(parition.getMonth() + 9)
+                            return (
+                              <div key={i} className="flex items-center justify-between px-2.5 py-2 bg-white rounded-lg border border-red-100">
+                                <div>
+                                  <p className="text-[10px] font-bold text-gray-700">{h?.name || m.herdId}</p>
+                                  <p className="text-[9px] text-gray-400">Servicio: {m.date} · Parición: {parition.toISOString().split('T')[0]}</p>
+                                </div>
+                                <button onClick={() => saveBioMilestones(bioMilestones.filter((_, j) => j !== bioMilestones.indexOf(m)))} className="text-red-400 hover:text-red-600 p-1">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Módulo Destete Escalonado */}
+                      <div className="space-y-2">
+                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1">
+                          <span>✂</span> Destete Escalonado
+                        </p>
+                        <div className="bg-amber-50 rounded-xl p-3 space-y-2.5 border border-amber-100">
+                          {(['weaning_head', 'weaning_body', 'weaning_tail'] as const).map((wType) => {
+                            const labels = { weaning_head: 'Cabeza', weaning_body: 'Cuerpo', weaning_tail: 'Cola' }
+                            return (
+                              <div key={wType} className="space-y-1.5">
+                                <p className="text-[9px] font-black text-amber-700">{labels[wType]}</p>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  <div>
+                                    <label className="text-[8px] font-bold text-gray-400">Rodeo</label>
+                                    <select
+                                      id={`bio-${wType}-herd`}
+                                      className="w-full text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none focus:border-amber-400"
+                                      defaultValue=""
+                                    >
+                                      <option value="">Rodeo</option>
+                                      {herds.map((h: any) => (
+                                        <option key={h.id} value={h.id}>{h.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-bold text-gray-400">Fecha</label>
+                                    <input
+                                      id={`bio-${wType}-date`}
+                                      type="date"
+                                      className="w-full text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none focus:border-amber-400"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-bold text-gray-400">Peso (kg)</label>
+                                    <input
+                                      id={`bio-${wType}-weight`}
+                                      type="number" min="50" max="400" placeholder="170"
+                                      className="w-full text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none focus:border-amber-400"
+                                    />
+                                  </div>
+                                </div>
+                                <button
+                                  className="w-full text-[9px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg py-1 transition-colors"
+                                  onClick={() => {
+                                    const hEl = document.getElementById(`bio-${wType}-herd`) as HTMLSelectElement
+                                    const dEl = document.getElementById(`bio-${wType}-date`) as HTMLInputElement
+                                    const wEl = document.getElementById(`bio-${wType}-weight`) as HTMLInputElement
+                                    if (!hEl?.value || !dEl?.value) return
+                                    const existing = bioMilestones.filter(m => !(m.type === wType && m.herdId === hEl.value))
+                                    saveBioMilestones([...existing, {
+                                      type: wType,
+                                      herdId: hEl.value,
+                                      date: dEl.value,
+                                      estimatedWeightKg: wEl?.value ? Number(wEl.value) : undefined,
+                                    }])
+                                  }}
+                                >+ Agregar {labels[wType]}</button>
+                              </div>
+                            )
+                          })}
+                          {/* Destetes configurados */}
+                          {bioMilestones.filter(m => m.type.startsWith('weaning')).map((m, i) => {
+                            const h = herds.find((hh: any) => hh.id === m.herdId)
+                            const typeLabel = m.type === 'weaning_head' ? 'Cabeza' : m.type === 'weaning_body' ? 'Cuerpo' : 'Cola'
+                            return (
+                              <div key={i} className="flex items-center justify-between px-2.5 py-2 bg-white rounded-lg border border-amber-100">
+                                <div>
+                                  <p className="text-[10px] font-bold text-gray-700">{h?.name || m.herdId} — {typeLabel}</p>
+                                  <p className="text-[9px] text-gray-400">{m.date}{m.estimatedWeightKg ? ` · ${m.estimatedWeightKg} kg` : ''}</p>
+                                </div>
+                                <button onClick={() => saveBioMilestones(bioMilestones.filter((_, j) => j !== bioMilestones.indexOf(m)))} className="text-amber-500 hover:text-amber-700 p-1">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Exportar CSV */}
             <button
               onClick={handleExportHistory}
@@ -4440,15 +4669,19 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             seasonPlanNames={seasonPlanNames}
             ganttLayers={ganttLayers}
             onPaddockToggle={handlePaddockToggle}
-            drawingHerdEV={herds
-              .filter((h: any) => drawingHerdIds.includes(h.id))
-              .reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
-            }
+            drawingHerdEV={(() => {
+              // EV proyectado para HOY (punto de referencia del modo dibujo antes de fijar fecha)
+              const today = new Date().toISOString().split('T')[0]
+              return herds
+                .filter((h: any) => drawingHerdIds.includes(h.id))
+                .reduce((s: number, h: any) => s + obtenerEvRodeoParaFecha(h, today, bioMilestones), 0)
+            })()}
             drawingHerdsLabel={herds
               .filter((h: any) => drawingHerdIds.includes(h.id))
               .map((h: any) => h.name)
               .join(', ')
             }
+            bioMilestones={bioMilestones}
           />
 
 
@@ -6585,6 +6818,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           paddocks={paddocks}
           herds={herds}
           isSuggestedMode={true}
+          bioMilestones={bioMilestones}
           onClose={() => setShowSeasonPlan(false)}
           onSaved={(seasonPlan) => {
             setShowSeasonPlan(false)

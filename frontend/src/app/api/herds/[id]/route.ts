@@ -73,6 +73,9 @@ export async function PATCH(
       physiological_category: 'physiological_category',
       last_weigh_date: 'last_weigh_date',
       daily_gain_kg: 'daily_gain_kg',
+      // v10: Lote de Manejo fields
+      grupo_manejo_id: 'grupo_manejo_id',
+      grupo_manejo_nombre: 'grupo_manejo_nombre',
     }
 
     const optSets: string[] = []

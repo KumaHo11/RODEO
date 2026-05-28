@@ -21,14 +21,50 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { query, mutate } from '@/lib/db'
 
-// ── GET ───────────────────────────────────────────────────────────────────────
+// ── buildHierarchy — Groups flat herds into LoteData[] + ungrouped[] —————————
+
+function buildHierarchy(herds: any[]) {
+  const grouped = new Map<string, any[]>()
+  const ungrouped: any[] = []
+
+  for (const h of herds) {
+    if (h.grupo_manejo_id) {
+      const key = h.grupo_manejo_id
+      if (!grouped.has(key)) grouped.set(key, [])
+      grouped.get(key)!.push(h)
+    } else {
+      ungrouped.push(h)
+    }
+  }
+
+  const lotes = Array.from(grouped.entries()).map(([id, hijos]) => {
+    const nombre       = hijos[0]?.grupo_manejo_nombre ?? hijos[0]?.name ?? 'Lote'
+    const totalCabezas = hijos.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
+    const totalEV      = hijos.reduce((s: number, h: any) => s + (Number(h.total_ev)   || 0), 0)
+    const consumoKgMs  = Math.round(totalEV * 11)
+    return {
+      grupo_manejo_id: id,
+      nombre,
+      hijos,
+      totales: {
+        head_count:        Math.round(totalCabezas),
+        total_ev:          Math.round(totalEV * 10) / 10,
+        consumo_kg_ms_dia: consumoKgMs,
+      },
+    }
+  })
+
+  return { lotes, ungrouped }
+}
+
+// ── GET ────────────────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    // First: guaranteed core columns
+    // First: guaranteed core columns + v8 + v10 columns
     let herds: any[]
     try {
       herds = await query(
@@ -38,14 +74,14 @@ export async function GET(req: NextRequest) {
                 bcs_score, bcs_label, bcs_data, photo_url,
                 parent_herd_id, herd_notes, exit_date,
                 physiological_category, last_weigh_date, daily_gain_kg,
+                grupo_manejo_id, grupo_manejo_nombre,
                 created_at, updated_at
          FROM herds
          WHERE org_id = $1
-         ORDER BY created_at DESC`,
+         ORDER BY grupo_manejo_nombre NULLS LAST, created_at DESC`,
         [auth.orgId]
       )
     } catch {
-      // Fallback: try without new physiological columns (pre-v8 schema)
       try {
         herds = await query(
           `SELECT id, org_id, name, species, breed, categoria, head_count,
@@ -53,6 +89,7 @@ export async function GET(req: NextRequest) {
                   age_years, age_months, admission_date,
                   bcs_score, bcs_label, bcs_data, photo_url,
                   parent_herd_id, herd_notes, exit_date,
+                  physiological_category, last_weigh_date, daily_gain_kg,
                   created_at, updated_at
            FROM herds
            WHERE org_id = $1
@@ -60,19 +97,37 @@ export async function GET(req: NextRequest) {
           [auth.orgId]
         )
       } catch {
-        // Final fallback to guaranteed-only columns (pre-migration DB)
-        herds = await query(
-          `SELECT id, org_id, name, species, breed, categoria, head_count,
-                  avg_weight_kg, total_ev, created_at, updated_at
-           FROM herds
-           WHERE org_id = $1
-           ORDER BY created_at DESC`,
-          [auth.orgId]
-        )
+        try {
+          herds = await query(
+            `SELECT id, org_id, name, species, breed, categoria, head_count,
+                    avg_weight_kg, total_ev,
+                    age_years, age_months, admission_date,
+                    bcs_score, bcs_label, bcs_data, photo_url,
+                    parent_herd_id, herd_notes, exit_date,
+                    created_at, updated_at
+             FROM herds
+             WHERE org_id = $1
+             ORDER BY created_at DESC`,
+            [auth.orgId]
+          )
+        } catch {
+          // Final fallback: guaranteed-only columns
+          herds = await query(
+            `SELECT id, org_id, name, species, breed, categoria, head_count,
+                    avg_weight_kg, total_ev, created_at, updated_at
+             FROM herds
+             WHERE org_id = $1
+             ORDER BY created_at DESC`,
+            [auth.orgId]
+          )
+        }
       }
     }
 
-    return NextResponse.json({ herds })
+    // Build hierarchical structure server-side
+    const { lotes, ungrouped } = buildHierarchy(herds)
+
+    return NextResponse.json({ herds, lotes, ungrouped })
   } catch (err: any) {
     console.error('GET /api/herds error:', err)
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
@@ -96,6 +151,8 @@ export async function POST(req: NextRequest) {
       is_temporary, notes,
       // Physiological fields (v8 migration)
       physiological_category, last_weigh_date, daily_gain_kg,
+      // Lote de Manejo fields (v10 migration)
+      grupo_manejo_id, grupo_manejo_nombre,
     } = body
 
     if (!name || !head_count) {
@@ -172,6 +229,26 @@ export async function POST(req: NextRequest) {
         )
       } catch (physErr: any) {
         console.warn('POST /api/herds physiological columns skipped (run v8 migration):', physErr.message)
+      }
+    }
+
+    // Step 4: UPDATE lote de manejo fields (v10) — silently skip if not migrated
+    if (id && (grupo_manejo_id !== undefined || grupo_manejo_nombre !== undefined)) {
+      try {
+        await mutate(
+          `UPDATE herds
+           SET grupo_manejo_id = $1,
+               grupo_manejo_nombre = $2,
+               updated_at = NOW()
+           WHERE id = $3`,
+          [
+            grupo_manejo_id     ?? null,
+            grupo_manejo_nombre ?? null,
+            id,
+          ]
+        )
+      } catch (loteErr: any) {
+        console.warn('POST /api/herds lote columns skipped (run v10 migration):', loteErr.message)
       }
     }
 
