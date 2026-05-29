@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { useRouter } from 'next/navigation'
 import { Check, Loader2, X, Leaf, MapPin, PenLine } from 'lucide-react'
 import RodeoLogo from '@/components/RodeoLogo'
+import type { ParsedKmlFeature } from '@/lib/kmlParser'
 
 // Lazy-load the singleton map (never unmounts while step 1 or 2 is active)
 import type { OnboardingMapSingletonProps, DrawnShape } from './components/OnboardingMapSingleton'
@@ -104,17 +105,47 @@ function OnboardingWizard() {
     setPendingShape(null)
     setPaddockModalName('')
     setPaddockModalForraje('')
-  }, [pendingShape, paddockModalName, paddockModalForraje, data.paddocks, updateData])
+    // Mark KML feature as accepted if this came from a KML click
+    if (pendingKmlIndex !== null) {
+      setAcceptedKmlIndices(prev => new Set([...prev, pendingKmlIndex]))
+      setPendingKmlIndex(null)
+    }
+  }, [pendingShape, paddockModalName, paddockModalForraje, data.paddocks, updateData, pendingKmlIndex])
 
   const cancelPaddock = useCallback(() => {
-    // Remove the drawn layer from the map
-    try { pendingShape?.layer?.remove?.() } catch {}
+    // Only remove layer if it was a hand-drawn shape (not KML)
+    if (pendingKmlIndex === null) {
+      try { pendingShape?.layer?.remove?.() } catch {}
+    }
     setPendingShape(null)
     setPaddockModalName('')
     setPaddockModalForraje('')
-  }, [pendingShape])
+    setPendingKmlIndex(null)
+  }, [pendingShape, pendingKmlIndex])
 
   const [midDrawArea, setMidDrawArea] = useState<number | null>(null)
+
+  // ─── KML state ─────────────────────────────────────────────────────────────
+  const [kmlFeatures, setKmlFeatures] = useState<ParsedKmlFeature[]>([])
+  const [acceptedKmlIndices, setAcceptedKmlIndices] = useState<Set<number>>(new Set())
+  const [pendingKmlIndex, setPendingKmlIndex] = useState<number | null>(null)
+
+  const handleKmlParsed = useCallback((features: ParsedKmlFeature[]) => {
+    setKmlFeatures(features)
+    setAcceptedKmlIndices(new Set())
+  }, [])
+
+  const handleKmlPolygonClick = useCallback((index: number, feature: ParsedKmlFeature) => {
+    setPendingKmlIndex(index)
+    const nextName = feature.name || `Potrero ${paddocksLenRef.current + 1}`
+    setPendingShape({
+      geojson: feature.geojson,
+      area_ha: feature.area_ha,
+      layer: null as any, // no Leaflet layer to remove for KML imports
+    })
+    setPaddockModalName(nextName)
+    setPaddockModalForraje('')
+  }, [])
 
   const handleShapeEdited = useCallback((layerId: number, geojson: any, area_ha: number) => {
     if ((data as any).fieldLayerId === layerId) {
@@ -221,7 +252,7 @@ function OnboardingWizard() {
                     transition={{ duration: 0.28, ease: 'easeOut' }}
                     className="absolute inset-0 flex flex-col overflow-hidden"
                   >
-                    <Step2Panel midDrawArea={midDrawArea} />
+                    <Step2Panel midDrawArea={midDrawArea} onKmlParsed={handleKmlParsed} />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -239,6 +270,9 @@ function OnboardingWizard() {
                 onMidDraw={setMidDrawArea}
                 onShapeEdited={handleShapeEdited}
                 onShapeRemoved={handleShapeRemoved}
+                kmlFeatures={kmlFeatures}
+                acceptedKmlIndices={acceptedKmlIndices}
+                onKmlPolygonClick={handleKmlPolygonClick}
               />
 
               {/* Mid-draw floating badge */}

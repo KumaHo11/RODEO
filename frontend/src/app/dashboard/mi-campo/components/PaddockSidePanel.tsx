@@ -491,19 +491,27 @@ export default function PaddockSidePanel({
                           </span>
                         </div>
                       </div>
-                      {/* Toggle ON/OFF */}
-                      <button
-                        type="button"
-                        onClick={e => toggleDisable(e, paddock.id)}
-                        title={isActive ? 'Potrero activo para planificación — click para desactivar y excluirlo del plan de pastoreo' : 'Potrero inactivo — click para incluirlo en la planificación de pastoreo'}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none ${
-                          isActive ? 'bg-green-500 border-green-500' : 'bg-red-400 border-red-400'
-                        }`}
-                      >
-                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                          isActive ? 'translate-x-4' : 'translate-x-0'
-                        }`} />
-                      </button>
+                      {/* Toggle ON/OFF con tooltip visible */}
+                      <div className="relative group/toggle shrink-0">
+                        <button
+                          type="button"
+                          onClick={e => toggleDisable(e, paddock.id)}
+                          className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none ${
+                            isActive ? 'bg-green-500 border-green-500' : 'bg-red-400 border-red-400'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            isActive ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </button>
+                        {/* Tooltip custom */}
+                        <div className="absolute right-0 top-7 w-48 bg-gray-900 text-white text-[10px] font-medium px-2.5 py-1.5 rounded-lg shadow-lg opacity-0 group-hover/toggle:opacity-100 pointer-events-none transition-opacity z-50 leading-tight">
+                          {isActive
+                            ? 'Potrero activo para planificación. Click para excluirlo del plan de pastoreo.'
+                            : 'Potrero inactivo. Click para incluirlo en la planificación de pastoreo.'}
+                          <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 rotate-45" />
+                        </div>
+                      </div>
                     </div>
 
                     {isActive && (
@@ -560,12 +568,12 @@ export default function PaddockSidePanel({
                           </div>
                         )}
 
-                        {/* ══ ZONA 3: CONTEXTO AMBIENTAL ════════════════ */}
+                        {/* ══ ZONA 3: CONTEXTO AMBIENTAL — click selecciona potrero (panel derecho) */}
                         <div className="px-4 pb-3 flex items-center gap-2" onClick={e => e.stopPropagation()}>
                           <ClimateIcon
                             ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
                             growthRate={realGrowthRate}
-                            onClick={e => { e.stopPropagation(); openModal(paddock) }}
+                            onClick={e => { e.stopPropagation(); onSelectPaddock(paddock.id) }}
                           />
                         </div>
 
@@ -613,13 +621,13 @@ export default function PaddockSidePanel({
                              <button
                                type="button"
                                onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                               title="Abrir editor del potrero"
-                               className="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all shadow-sm"
+                               title="Editar potrero"
+                               className="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-all shadow-sm"
                              >
                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
                                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                                </svg>
-                               Editar potrero
+                               Editar
                              </button>
                            </div>
                          </div>

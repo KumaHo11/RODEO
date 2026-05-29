@@ -135,7 +135,7 @@ export default function SubHerdCard({ herd, onManage, onDelete }: SubHerdCardPro
               onClick={e => { e.stopPropagation(); onManage() }}
               className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-lg transition-all shrink-0 whitespace-nowrap"
             >
-              Gestionar
+              Editar
             </button>
 
             <button

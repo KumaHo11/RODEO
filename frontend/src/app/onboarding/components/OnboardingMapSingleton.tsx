@@ -20,6 +20,7 @@ import 'leaflet/dist/leaflet.css'
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css'
 import { PADDOCK_COLORS } from './paddockColors'
 import turfArea from '@turf/area'
+import type { ParsedKmlFeature } from '@/lib/kmlParser'
 
 // Fix default Leaflet icons
 if (typeof window !== 'undefined') {
@@ -62,6 +63,10 @@ export interface OnboardingMapSingletonProps {
   onMidDraw: (areaHa: number | null) => void
   onShapeEdited?: (layerId: number, geojson: any, areaHa: number) => void
   onShapeRemoved?: (layerId: number) => void
+  // KML import
+  kmlFeatures?: ParsedKmlFeature[]
+  acceptedKmlIndices?: Set<number>
+  onKmlPolygonClick?: (index: number, feature: ParsedKmlFeature) => void
 }
 
 // ------------------------------------------------------------------------------
@@ -77,6 +82,9 @@ function MapController({
   onMidDraw,
   onShapeEdited,
   onShapeRemoved,
+  kmlFeatures,
+  acceptedKmlIndices,
+  onKmlPolygonClick,
 }: OnboardingMapSingletonProps) {
   const map           = useMap()
   const modeRef       = useRef<MapMode>(mode)
@@ -84,6 +92,8 @@ function MapController({
   const paddockRef    = useRef(paddockCount)
   const didFlyRef     = useRef(false)       // only fly once on first location set
   const geomanInited  = useRef(false)
+  // KML layers registry: index → Leaflet layer
+  const kmlLayersRef  = useRef<Record<number, L.Layer>>({})
 
   useEffect(() => { modeRef.current = mode },       [mode])
   useEffect(() => { drawPhaseRef.current = drawPhase }, [drawPhase])
@@ -168,6 +178,43 @@ function MapController({
       onShapeDrawn({ id: layerId, geojson, area_ha, layer })
     })
   }, [map]) // intentionally no deps — setup runs once
+
+  // -- KML Features rendering ------------------------------------------------
+  useEffect(() => {
+    // Remove old KML layers
+    Object.values(kmlLayersRef.current).forEach(l => {
+      try { map.removeLayer(l) } catch {}
+    })
+    kmlLayersRef.current = {}
+
+    if (!kmlFeatures || kmlFeatures.length === 0) return
+
+    kmlFeatures.forEach((feat, idx) => {
+      const isAccepted = acceptedKmlIndices?.has(idx) ?? false
+      const layer = L.geoJSON(feat.geojson, {
+        style: isAccepted
+          ? { color: '#16a34a', fillColor: '#16a34a', fillOpacity: 0.35, weight: 2, dashArray: undefined }
+          : { color: '#0891b2', fillColor: '#06b6d4', fillOpacity: 0.25, weight: 2.5, dashArray: '6, 4' },
+      })
+
+      if (!isAccepted) {
+        layer.on('click', () => {
+          onKmlPolygonClick?.(idx, feat)
+        })
+        // Highlight on hover
+        layer.on('mouseover', () => {
+          layer.setStyle({ fillOpacity: 0.45, weight: 3 })
+        })
+        layer.on('mouseout', () => {
+          layer.setStyle({ fillOpacity: 0.25, weight: 2.5 })
+        })
+      }
+
+      layer.addTo(map)
+      kmlLayersRef.current[idx] = layer
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, kmlFeatures, acceptedKmlIndices])
 
   // -- Mode switching — hide/show Geoman controls ----------------------------─
   useEffect(() => {
