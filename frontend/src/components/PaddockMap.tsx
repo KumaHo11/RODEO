@@ -11,7 +11,9 @@ import { usePlan } from '@/hooks/usePlan'
 import { apiFetch } from '@/lib/apiFetch'
 import { area } from '@turf/area'
 import { toast } from 'sonner'
-import { Lock } from 'lucide-react'
+import { Lock, Upload, Map, Search, Plus, Link2, X, Check, Loader2, AlertTriangle } from 'lucide-react'
+import { parseKmlFile } from '@/lib/kmlParser'
+import type { ParsedKmlFeature } from '@/lib/kmlParser'
 
 const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png'
 const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png'
@@ -142,6 +144,333 @@ const getNdviStatus = (ndvi: number) => {
 
 interface DraftPaddock { geojson: any; layer: any; area_ha: number }
 
+// ─── KML Layer Renderer ─────────────────────────────────────────────────────────
+function KmlLayerRenderer({
+  features,
+  acceptedIndices,
+  onPolygonClick,
+}: {
+  features: ParsedKmlFeature[]
+  acceptedIndices: Set<number>
+  onPolygonClick: (idx: number, feat: ParsedKmlFeature) => void
+}) {
+  const map = useMap()
+  const layersRef = useRef<Record<number, L.Layer>>({})
+
+  useEffect(() => {
+    // Clear old layers
+    Object.values(layersRef.current).forEach(l => { try { map.removeLayer(l) } catch {} })
+    layersRef.current = {}
+
+    features.forEach((feat, idx) => {
+      const accepted = acceptedIndices.has(idx)
+      const layer = L.geoJSON(feat.geojson, {
+        style: accepted
+          ? { color: '#16a34a', fillColor: '#16a34a', fillOpacity: 0.4, weight: 2.5, dashArray: undefined }
+          : { color: '#0891b2', fillColor: '#06b6d4', fillOpacity: 0.2, weight: 2.5, dashArray: '8, 5' },
+      })
+
+      if (!accepted) {
+        layer.on('click', () => onPolygonClick(idx, feat))
+        layer.on('mouseover', () => layer.setStyle({ fillOpacity: 0.4, weight: 3 }))
+        layer.on('mouseout',  () => layer.setStyle({ fillOpacity: 0.2, weight: 2.5 }))
+      }
+
+      // Label tooltip
+      layer.bindTooltip(
+        `<div style="font-weight:800;font-size:11px;color:#0e7490">${feat.name}<br/><span style="font-weight:500;font-size:10px">${feat.area_ha.toFixed(1)} ha · KML</span></div>`,
+        { permanent: false, direction: 'center', className: 'kml-tooltip' }
+      )
+
+      layer.addTo(map)
+      layersRef.current[idx] = layer
+    })
+
+    // Fit map to KML features if any
+    if (features.length > 0) {
+      try {
+        const allLayers = Object.values(layersRef.current)
+        const group = L.featureGroup(allLayers as L.Layer[])
+        map.fitBounds(group.getBounds(), { padding: [60, 60], maxZoom: 16 })
+      } catch {}
+    }
+
+    return () => {
+      Object.values(layersRef.current).forEach(l => { try { map.removeLayer(l) } catch {} })
+      layersRef.current = {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, features, acceptedIndices])
+
+  return null
+}
+
+// ─── KML Action Modal ──────────────────────────────────────────────────────────
+function KmlActionModal({
+  feature,
+  existingPaddocks,
+  onClose,
+  onCreated,
+  onAssigned,
+}: {
+  feature: ParsedKmlFeature
+  existingPaddocks: any[]
+  onClose: () => void
+  onCreated: () => void
+  onAssigned: () => void
+}) {
+  const [view, setView] = useState<'choose' | 'create' | 'assign'>('choose')
+
+  // Create form state
+  const [newName, setNewName]       = useState(feature.name)
+  const [newStatus, setNewStatus]   = useState<'RESTING' | 'GRAZING'>('RESTING')
+  const [newForraje, setNewForraje] = useState('')
+  const [saving, setSaving]         = useState(false)
+
+  // Assign state
+  const [search, setSearch]         = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [assigning, setAssigning]   = useState(false)
+
+  const filtered = existingPaddocks.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return
+    setSaving(true)
+    try {
+      const res = await apiFetch('/api/paddocks', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newName.trim(),
+          area_ha: feature.area_ha,
+          geojson: feature.geojson.geometry ?? feature.geojson,
+          current_status: newStatus,
+          dry_matter_kg_ha: newForraje !== '' ? Number(newForraje) : undefined,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        toast.error(`Error: ${err.error || 'Error desconocido'}`)
+      } else {
+        toast.success(`Potrero "${newName.trim()}" creado desde KML ✅`)
+        onCreated()
+      }
+    } catch { toast.error('Error al crear el potrero') }
+    setSaving(false)
+  }
+
+  const handleAssign = async () => {
+    if (!selectedId) return
+    setAssigning(true)
+    try {
+      const geomJson = feature.geojson.geometry ?? feature.geojson
+      const res = await apiFetch(`/api/paddocks/${selectedId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ geojson: geomJson, area_ha: feature.area_ha }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        toast.error(`Error: ${err.error || 'Error desconocido'}`)
+      } else {
+        const name = existingPaddocks.find(p => p.id === selectedId)?.name ?? 'Potrero'
+        toast.success(`Límite KML asignado a "${name}" ✅`)
+        onAssigned()
+      }
+    } catch { toast.error('Error al asignar el polígono') }
+    setAssigning(false)
+  }
+
+  return (
+    <div
+      className="absolute inset-0 z-[2000] flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-[340px] max-h-[90vh] overflow-y-auto border border-gray-100"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="text-[10px] font-black text-cyan-500 tracking-widest uppercase">Polígono KML importado</p>
+            <p className="text-sm font-black text-gray-900 mt-0.5">{feature.name}</p>
+            <p className="text-[11px] text-gray-500 font-medium">{feature.area_ha.toFixed(2)} ha calculadas</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-full hover:bg-gray-200 text-gray-500 transition-all">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Choose view */}
+        {view === 'choose' && (
+          <div className="p-5 space-y-3">
+            <p className="text-xs font-bold text-gray-600 text-center">¿Qué hacés con este polígono?</p>
+
+            <button
+              onClick={() => setView('create')}
+              className="w-full flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-all group text-left"
+            >
+              <div className="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-green-200 transition-all">
+                <Plus className="w-4 h-4 text-green-700" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-green-800">Agregar como nuevo potrero</p>
+                <p className="text-[10px] text-green-600 font-normal mt-0.5">Crea un potrero nuevo con este polígono como límite</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setView('assign')}
+              className="w-full flex items-center gap-3 p-3.5 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-all group text-left"
+            >
+              <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-200 transition-all">
+                <Link2 className="w-4 h-4 text-blue-700" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-blue-800">Asignar a potrero existente</p>
+                <p className="text-[10px] text-blue-600 font-normal mt-0.5">Vincula este polígono a uno de tus potreros ya creados</p>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Create new paddock view */}
+        {view === 'create' && (
+          <div className="p-5 space-y-4">
+            <button onClick={() => setView('choose')} className="text-[10px] font-bold text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors">
+              ← Volver
+            </button>
+
+            <div>
+              <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase block mb-1.5">Nombre del potrero *</label>
+              <input
+                autoFocus type="text" value={newName} onChange={e => setNewName(e.target.value)}
+                placeholder="Ej: Lote Norte"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-800 placeholder:font-normal placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase block mb-1.5">Estado inicial</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['RESTING', 'GRAZING'] as const).map(s => (
+                  <button key={s} onClick={() => setNewStatus(s)}
+                    className={`py-2.5 rounded-xl border text-[11px] font-black transition-all ${
+                      newStatus === s
+                        ? s === 'RESTING' ? 'bg-green-600 border-green-600 text-white' : 'bg-orange-500 border-orange-500 text-white'
+                        : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}
+                  >
+                    {s === 'RESTING' ? '🌱 En descanso' : '🐄 En pastoreo'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase block mb-1.5">
+                Forraje disponible <span className="font-normal normal-case">(opcional)</span>
+              </label>
+              <div className="relative">
+                <input type="number" min="0" max="10000" step="50" value={newForraje}
+                  onChange={e => setNewForraje(e.target.value)} placeholder="Ej: 1200"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-800 placeholder:font-normal placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all pr-20"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400">kg MS/ha</span>
+              </div>
+              {newForraje !== '' && Number(newForraje) > 0 && feature.area_ha > 0 && (
+                <p className="text-[10px] text-green-600 font-bold mt-1 ml-1">
+                  ≈ {Math.round(Number(newForraje) * feature.area_ha).toLocaleString()} kg MS totales
+                </p>
+              )}
+            </div>
+
+            <div className="bg-gray-50 rounded-xl border border-gray-100 px-3.5 py-2.5 flex items-center justify-between">
+              <span className="text-[10px] font-black text-gray-400 uppercase">Área calculada</span>
+              <span className="text-sm font-black text-gray-900">{feature.area_ha.toFixed(2)} ha</span>
+            </div>
+
+            <button
+              onClick={handleCreate} disabled={!newName.trim() || saving}
+              className="w-full bg-green-600 hover:bg-green-700 active:scale-[0.98] text-white font-black py-3 rounded-2xl transition-all text-sm shadow-lg shadow-green-600/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {saving
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
+                : <><Check className="w-4 h-4" /> Crear potrero</>}
+            </button>
+          </div>
+        )}
+
+        {/* Assign to existing view */}
+        {view === 'assign' && (
+          <div className="p-5 space-y-3">
+            <button onClick={() => setView('choose')} className="text-[10px] font-bold text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors">
+              ← Volver
+            </button>
+
+            {existingPaddocks.length === 0 ? (
+              <div className="text-center py-6">
+                <AlertTriangle className="w-6 h-6 text-amber-400 mx-auto mb-2" />
+                <p className="text-xs font-bold text-gray-500">No tenés potreros creados</p>
+                <p className="text-[10px] text-gray-400 mt-1">Primero creá un potrero y después asigná el polígono.</p>
+              </div>
+            ) : (
+              <>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <input autoFocus type="text" value={search} onChange={e => setSearch(e.target.value)}
+                    placeholder="Buscar potrero..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-3 py-2.5 text-sm font-medium text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                  {filtered.length === 0 && <p className="text-center text-xs text-gray-400 py-4">Sin resultados</p>}
+                  {filtered.map(p => (
+                    <button key={p.id} onClick={() => setSelectedId(p.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-left transition-all ${
+                        selectedId === p.id
+                          ? 'bg-blue-50 border-blue-300 text-blue-800'
+                          : 'bg-gray-50 border-gray-100 text-gray-700 hover:border-blue-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${p.current_status === 'GRAZING' ? 'bg-orange-400' : 'bg-green-500'}`} />
+                        <span className="text-xs font-bold">{p.name}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-medium shrink-0">{Number(p.area_ha || 0).toFixed(1)} ha</span>
+                    </button>
+                  ))}
+                </div>
+
+                {selectedId && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    <p className="text-[10px] text-amber-700 font-bold">
+                      ⚠️ El límite geográfico del potrero seleccionado será reemplazado por el polígono del KML.
+                    </p>
+                  </div>
+                )}
+
+                <button onClick={handleAssign} disabled={!selectedId || assigning}
+                  className="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-black py-3 rounded-2xl transition-all text-sm shadow-lg shadow-blue-600/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {assigning
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Asignando...</>
+                    : <><Link2 className="w-4 h-4" /> Asignar polígono</>}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 // ─── MAIN COMPONENT ────────────────────────────────────────────────────────────
 export default function PaddockMap() {
   const { user } = useAuth()
@@ -150,6 +479,7 @@ export default function PaddockMap() {
   const [geoData, setGeoData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [boundaries, setBoundaries] = useState<any>(null)
+  const [paddocksRaw, setPaddocksRaw] = useState<any[]>([]) // for assign modal list
 
   // Stable layer registry: id → Leaflet layer (survives re-renders)
   const paddockLayersRef = useRef<Record<string, any>>({})
@@ -165,6 +495,38 @@ export default function PaddockMap() {
   const [editingBoundary, setEditingBoundary] = useState(false)
   const [savingBoundary, setSavingBoundary] = useState(false)
   const [activeFromDate, setActiveFromDate] = useState('')
+
+  // KML import states
+  const [mapTab, setMapTab] = useState<'map' | 'kml'>('map')
+  const [kmlFeatures, setKmlFeatures] = useState<ParsedKmlFeature[]>([])
+  const [kmlAccepted, setKmlAccepted] = useState<Set<number>>(new Set())
+  const [kmlModalFeature, setKmlModalFeature] = useState<{ feat: ParsedKmlFeature; idx: number } | null>(null)
+  const [kmlLoading, setKmlLoading] = useState(false)
+  const [kmlError, setKmlError] = useState<string | null>(null)
+  const kmlFileRef = useRef<HTMLInputElement>(null)
+
+  const handleKmlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setKmlLoading(true)
+    setKmlError(null)
+    const result = await parseKmlFile(file)
+    setKmlLoading(false)
+    if (kmlFileRef.current) kmlFileRef.current.value = ''
+    if (result.error) {
+      setKmlError(result.error)
+      toast.error(result.error)
+      return
+    }
+    setKmlFeatures(result.features)
+    setKmlAccepted(new Set())
+    toast.success(`${result.features.length} polígono${result.features.length !== 1 ? 's' : ''} importado${result.features.length !== 1 ? 's' : ''} del KML`)
+  }
+
+  const handleKmlPolygonClick = useCallback((idx: number, feat: ParsedKmlFeature) => {
+    setSelectedPaddock(null) // close existing paddock panel
+    setKmlModalFeature({ feat, idx })
+  }, [])
 
   const center: [number, number] = [-34.604, -58.3805]
 
@@ -187,6 +549,7 @@ export default function PaddockMap() {
         }
       }))
       setGeoData({ type: 'FeatureCollection', features })
+      setPaddocksRaw(json.paddocks || [])
     }
 
     const orgRes = await apiFetch('/api/organizations')

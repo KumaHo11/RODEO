@@ -133,8 +133,11 @@ export default function SubHerdCard({ herd, onManage, onDelete }: SubHerdCardPro
 
             <button
               onClick={e => { e.stopPropagation(); onManage() }}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-lg transition-all shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-lg transition-all shrink-0 whitespace-nowrap"
             >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
               Editar
             </button>
 

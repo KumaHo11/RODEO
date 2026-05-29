@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous, Cloud, Sun, CloudSun, CloudRain, Info } from 'lucide-react'
+import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
@@ -105,36 +105,6 @@ const getNdviLabel = (ndvi: number) => {
   if (ndvi >= 0.4) return { label: 'Bueno',   color: 'text-lime-700 bg-lime-100' }
   if (ndvi >= 0.2) return { label: 'Regular', color: 'text-yellow-700 bg-yellow-100' }
   return             { label: 'Bajo',    color: 'text-red-700 bg-red-100' }
-}
-
-// Helper: icono de clima compacto para la card
-function ClimateIcon({ ndvi, growthRate, onClick }: {
-  ndvi?: number | null
-  growthRate?: number
-  onClick: (e: React.MouseEvent) => void
-}) {
-  const val = ndvi ?? 0
-  let Icon = Cloud
-  let colorCls = 'text-gray-400'
-  let tip = 'Sin datos de clima'
-  if (val >= 0.6) { Icon = Sun; colorCls = 'text-green-500'; tip = 'Crecimiento óptimo' }
-  else if (val >= 0.4) { Icon = CloudSun; colorCls = 'text-lime-500'; tip = 'Crecimiento bueno' }
-  else if (val >= 0.2) { Icon = Cloud; colorCls = 'text-yellow-500'; tip = 'Crecimiento lento' }
-  else { Icon = CloudRain; colorCls = 'text-gray-400'; tip = 'Sin actividad' }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={`${tip} — click para ver detalle en el modal`}
-      className={`flex items-center gap-1 px-2 py-0.5 rounded-full border border-gray-100 bg-white hover:bg-gray-50 transition-all ${colorCls}`}
-    >
-      <Icon className="w-3 h-3" />
-      {ndvi != null && (
-        <span className="text-[9px] font-bold text-gray-400">{Number(ndvi).toFixed(2)}</span>
-      )}
-      <Info className="w-2.5 h-2.5 text-gray-300" />
-    </button>
-  )
 }
 
 export default function PaddockSidePanel({
@@ -568,12 +538,13 @@ export default function PaddockSidePanel({
                           </div>
                         )}
 
-                        {/* ══ ZONA 3: CONTEXTO AMBIENTAL — click selecciona potrero (panel derecho) */}
+                        {/* ══ ZONA 3: CONTEXTO AMBIENTAL — drawer lateral de clima */}
                         <div className="px-4 pb-3 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                          <ClimateIcon
+                          <WeatherConditionChip
+                            mode="paddock"
+                            entityName={paddock.name}
+                            grassGrowthRate={realGrowthRate}
                             ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
-                            growthRate={realGrowthRate}
-                            onClick={e => { e.stopPropagation(); onSelectPaddock(paddock.id) }}
                           />
                         </div>
 

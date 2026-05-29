@@ -16,17 +16,20 @@ import { useAuth } from '@/components/AuthProvider'
 import {
   ArrowRight, ArrowLeft, Trash2, Ruler, MapPin,
   SkipForward, AlertTriangle, CheckCircle2, Loader2,
-  RefreshCw, PenLine, Plus, Upload, FileSpreadsheet
+  RefreshCw, PenLine, Plus, Upload, FileSpreadsheet, Map
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PADDOCK_COLORS } from './paddockColors'
 import * as XLSX from 'xlsx'
+import { parseKmlFile } from '@/lib/kmlParser'
+import type { ParsedKmlFeature } from '@/lib/kmlParser'
 
 interface Props {
   midDrawArea: number | null
+  onKmlParsed?: (features: ParsedKmlFeature[]) => void
 }
 
-export default function Step2Panel({ midDrawArea }: Props) {
+export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
   const { data, updateData, nextStep, prevStep } = useOnboarding()
   const { user } = useAuth()
 
@@ -35,6 +38,10 @@ export default function Step2Panel({ midDrawArea }: Props) {
   const [draftName, setDraftName] = useState(data.fieldName || '')
   const [showSkipWarning, setShowSkipWarning] = useState(false)
   const fileRef = React.useRef<HTMLInputElement>(null)
+  const kmlFileRef = React.useRef<HTMLInputElement>(null)
+  const [kmlLoading, setKmlLoading] = useState(false)
+  const [kmlError, setKmlError] = useState<string | null>(null)
+  const [kmlCount, setKmlCount] = useState(0)
 
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -80,6 +87,23 @@ export default function Step2Panel({ midDrawArea }: Props) {
     }
     reader.readAsArrayBuffer(file)
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const handleKmlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setKmlLoading(true)
+    setKmlError(null)
+    const result = await parseKmlFile(file)
+    setKmlLoading(false)
+    if (kmlFileRef.current) kmlFileRef.current.value = ''
+    if (result.error) {
+      setKmlError(result.error)
+      setKmlCount(0)
+      return
+    }
+    setKmlCount(result.features.length)
+    onKmlParsed?.(result.features)
   }
 
   const phase   = data.fieldBoundary ? 'paddock' : 'field'
@@ -262,6 +286,26 @@ export default function Step2Panel({ midDrawArea }: Props) {
                   <button onClick={() => fileRef.current?.click()} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 text-[10px] font-bold rounded-lg hover:bg-gray-50 transition-colors">
                     <Upload className="w-3 h-3"/> Importar potreros (Excel)
                   </button>
+                  <button
+                    onClick={() => kmlFileRef.current?.click()}
+                    disabled={kmlLoading}
+                    className="mt-1.5 flex items-center gap-1.5 px-3 py-1.5 bg-cyan-50 border border-cyan-200 text-cyan-700 text-[10px] font-bold rounded-lg hover:bg-cyan-100 transition-colors disabled:opacity-50"
+                  >
+                    {kmlLoading
+                      ? <><Loader2 className="w-3 h-3 animate-spin" /> Procesando KML...</>
+                      : <><Map className="w-3 h-3" /> Importar potreros (KML)</>}
+                  </button>
+                  {kmlCount > 0 && (
+                    <p className="text-[10px] text-cyan-700 font-bold mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      {kmlCount} polígono{kmlCount !== 1 ? 's' : ''} cargado{kmlCount !== 1 ? 's' : ''} — hacé click en el mapa
+                    </p>
+                  )}
+                  {kmlError && (
+                    <p className="text-[10px] text-red-600 font-bold mt-1 flex items-start gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />{kmlError}
+                    </p>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -325,16 +369,31 @@ export default function Step2Panel({ midDrawArea }: Props) {
             <p className="text-xs font-bold text-gray-400">El perímetro aparecerá aquí</p>
             <p className="text-[10px] text-gray-300 font-normal">Dibujá el contorno en el mapa →</p>
             
-            <div className="mt-4 flex flex-col items-center">
-              <span className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-2">O si ya lo tenés</span>
+            <div className="mt-4 flex flex-col items-center gap-2">
+              <span className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-1">O si ya lo tenés</span>
               <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold rounded-lg hover:bg-green-100 transition-colors">
                 <FileSpreadsheet className="w-3 h-3"/> Cargar potreros desde Excel
               </button>
+              <button
+                onClick={() => kmlFileRef.current?.click()}
+                disabled={kmlLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-50 text-cyan-700 border border-cyan-200 text-[10px] font-bold rounded-lg hover:bg-cyan-100 transition-colors disabled:opacity-50"
+              >
+                {kmlLoading
+                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Procesando...</>
+                  : <><Map className="w-3 h-3" /> Cargar potreros desde KML</>}
+              </button>
+              {kmlError && (
+                <p className="text-[10px] text-red-600 font-bold mt-1 flex items-start gap-1 text-left max-w-[220px]">
+                  <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />{kmlError}
+                </p>
+              )}
             </div>
           </div>
         )}
 
         <input type="file" ref={fileRef} accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} />
+        <input type="file" ref={kmlFileRef} accept=".kml" className="hidden" onChange={handleKmlUpload} />
 
         {/* Skip warning */}
         <AnimatePresence>
