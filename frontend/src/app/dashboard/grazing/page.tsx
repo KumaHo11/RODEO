@@ -6185,6 +6185,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                     ? Math.max(0, Math.floor(pUsableMs / (totalPlanEV * dailyAllocationKg)))
                     : null
                   const qualityScore = selectedPaddock.technical_data?.quality_score ?? selectedPaddock.technical_data?.relative_quality ?? null
+                  const forageQualitySel = selectedPaddock.technical_data?.forage_quality ?? null
                   return (
                     <div className="flex items-center justify-between px-3 py-2.5 rounded-xl border-2 border-green-600 bg-white shadow-sm">
                       <div className="flex items-center gap-2.5">
@@ -6199,7 +6200,12 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                                 qualityScore >= 7 ? 'text-green-700 border-green-200'
                                 : qualityScore >= 4 ? 'text-amber-600 border-amber-200'
                                 : 'text-red-600 border-red-200'
-                              }`}>{qualityScore}/10</span>
+                              }`}>#{qualityScore}/10</span>
+                            )}
+                            {forageQualitySel != null && (
+                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-lg border bg-amber-50 text-amber-700 border-amber-200">
+                                {'★'.repeat(forageQualitySel)}{'☆'.repeat(5 - forageQualitySel)}
+                              </span>
                             )}
                           </div>
                           <p className="text-[10px] text-gray-400">
@@ -6240,6 +6246,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       ? Math.round((paddockActiveDays / pDah) * 100)
                       : null
                     const qualityScore = p.technical_data?.quality_score ?? p.technical_data?.relative_quality ?? null
+                    const forageQuality = p.technical_data?.forage_quality ?? null
                     return (
                       <button
                         key={p.id}
@@ -6262,7 +6269,12 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                                     qualityScore >= 7 ? 'text-green-700 border-green-200'
                                     : qualityScore >= 4 ? 'text-amber-600 border-amber-200'
                                     : 'text-red-600 border-red-200'
-                                  }`}>{qualityScore}/10</span>
+                                  }`}>#{qualityScore}/10</span>
+                              )}
+                              {forageQuality != null && (
+                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-lg border bg-amber-50 text-amber-700 border-amber-200">
+                                  {'★'.repeat(forageQuality)}{'☆'.repeat(5 - forageQuality)}
+                                </span>
                               )}
                             </div>
                             <p className="text-[10px] text-gray-400">{pAreaHa.toFixed(1)} ha · {pMsHa > 0 ? `${pMsHa.toLocaleString('es')} kg MS/ha` : 'Sin datos MS'}</p>

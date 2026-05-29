@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { Search, MapPin, Droplets, Wrench, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous } from 'lucide-react'
+import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
@@ -59,13 +59,45 @@ interface Props {
   planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
 }
 
+// Badges de estado — semántica estricta
+// Alertas críticas: color activo cuando isOn=true, ocultos cuando isOn=false
+// Informativos: gris sutil siempre, solo se muestran si isOn=true
 const TECH_ICONS = [
-  { key: 'hasWater',       Icon: Droplets,    color: 'text-blue-400',   bgOn: 'bg-blue-50',   bgOff: 'bg-gray-100', label: 'Agua' },
-  { key: 'hasInfraIssues', Icon: Wrench,      color: 'text-orange-400', bgOn: 'bg-orange-50', bgOff: 'bg-gray-100', label: 'Infra' },
-  { key: 'hasPredators',   Icon: ShieldAlert, color: 'text-red-400',    bgOn: 'bg-red-50',    bgOff: 'bg-gray-100', label: 'Depr.' },
-  { key: 'hasPests',       Icon: Leaf,        color: 'text-lime-500',   bgOn: 'bg-lime-50',   bgOff: 'bg-gray-100', label: 'Maleza' },
-  { key: 'has_shade',      Icon: TreeDeciduous, color: 'text-cyan-500', bgOn: 'bg-cyan-50',   bgOff: 'bg-gray-100', label: 'Sombra' },
-  { key: 'has_water_risk', Icon: Waves,       color: 'text-sky-500',    bgOn: 'bg-sky-50',    bgOff: 'bg-gray-100', label: 'R.Híd.' },
+  {
+    key: 'hasWater',
+    Icon: Droplets,
+    label: 'Agua',
+    activeClass: 'bg-blue-50 text-blue-600 border border-blue-200',
+    inactiveClass: 'bg-gray-50 text-gray-300 border border-gray-100',
+  },
+  {
+    key: 'hasPredators',
+    Icon: ShieldAlert,
+    label: 'Depredadores',
+    activeClass: 'bg-red-50 text-red-600 border border-red-200',
+    inactiveClass: 'bg-gray-50 text-gray-300 border border-gray-100',
+  },
+  {
+    key: 'hasPests',
+    Icon: Leaf,
+    label: 'Maleza',
+    activeClass: 'bg-amber-50 text-amber-600 border border-amber-200',
+    inactiveClass: 'bg-gray-50 text-gray-300 border border-gray-100',
+  },
+  {
+    key: 'has_shade',
+    Icon: TreeDeciduous,
+    label: 'Sombra',
+    activeClass: 'bg-green-50 text-green-600 border border-green-200',
+    inactiveClass: 'bg-gray-50 text-gray-300 border border-gray-100',
+  },
+  {
+    key: 'has_water_risk',
+    Icon: Waves,
+    label: 'R.Hídrico',
+    activeClass: 'bg-sky-50 text-sky-600 border border-sky-200',
+    inactiveClass: 'bg-gray-50 text-gray-300 border border-gray-100',
+  },
 ]
 
 const getNdviLabel = (ndvi: number) => {
@@ -286,7 +318,7 @@ export default function PaddockSidePanel({
                       </p>
                       {avgQuality != null && (
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${qualityBadgeColor}`}>
-                          Calidad {avgQuality}/10
+                          Ranking {avgQuality}/10
                         </span>
                       )}
                     </div>
@@ -389,15 +421,10 @@ export default function PaddockSidePanel({
                 // MS: SOLO del dato ingresado por el usuario (no NDVI)
                 const ms         = Number(paddock.dry_matter_kg_ha) || 0
                 const totalMsCard = ms > 0 && paddock.area_ha ? Math.round(ms * Number(paddock.area_ha)) : null
-                const msColor    = ms >= 1500 ? 'text-green-700' : ms >= 800 ? 'text-amber-700' : 'text-red-600'
                 const qualityScore = (paddock.technical_data as any)?.quality_score as number | undefined
-                // Clamp ranking to 1-5 scale
-                const rankDisplay = qualityScore != null ? Math.min(5, Math.max(1, Math.round(qualityScore))) : undefined
-                const qColor = rankDisplay != null
-                  ? rankDisplay >= 4 ? 'bg-green-100 text-green-800 border-green-200'
-                  : rankDisplay >= 3 ? 'bg-amber-100 text-amber-800 border-amber-200'
-                  : 'bg-red-100 text-red-800 border-red-200'
-                  : ''
+                const forageQuality = (paddock.technical_data as any)?.forage_quality as number | undefined
+                // Scale for 1-10 ranking
+                const rankDisplay = qualityScore != null ? Math.min(10, Math.max(1, Math.round(qualityScore))) : undefined
                 const climateSnap = latestByPaddock.get(paddock.id)
                 const realGrowthRate = climateSnap ? Number(climateSnap.grass_growth_rate) : (paddock.dry_matter_kg_ha ? Number(paddock.dry_matter_kg_ha) * 0.012 : undefined)
 
@@ -416,24 +443,41 @@ export default function PaddockSidePanel({
                     {/* ── Header: nombre + estado + toggle ── */}
                     <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        {/* Nombre — jerarquía principal, tamaño grande */}
-                        <h3 className={`text-xl font-black leading-tight truncate ${
+                        <h3 className={`text-lg font-black leading-tight truncate ${
                           isActive ? 'text-gray-950' : 'text-gray-400'
                         }`}>
                           {paddock.name}
                         </h3>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            paddock.current_status === 'GRAZING' ? 'bg-orange-400' : isActive ? 'bg-green-400' : 'bg-gray-300'
-                          }`} />
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                            {paddock.current_status === 'GRAZING' ? 'En pastoreo' : 'Descansando'}
-                          </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-1">
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              paddock.current_status === 'GRAZING' ? 'bg-orange-400' : isActive ? 'bg-green-400' : 'bg-gray-300'
+                            }`} />
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                              {paddock.current_status === 'GRAZING' ? 'En pastoreo' : 'Descansando'}
+                            </p>
+                          </div>
+                          {/* Ha inline */}
+                          <span className="text-[9px] text-gray-300">·</span>
+                          <span className="text-[10px] font-bold text-gray-500 tabular-nums">
+                            {Number(paddock.area_ha || 0).toFixed(1)} ha
+                          </span>
+                          {/* Ranking e— muy compacto */}
+                          {rankDisplay != null && (
+                            <>
+                              <span className="text-[9px] text-gray-300">·</span>
+                              <span className="text-[9px] font-bold text-gray-400">{rankDisplay}/10</span>
+                            </>
+                          )}
+                          {/* Calidad forrajera: estrella + número */}
+                          {forageQuality != null && (
+                            <span className="text-[9px] font-bold text-amber-400">★{forageQuality}</span>
+                          )}
                         </div>
                       </div>
 
-                      <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        {/* Toggle inhabilitado */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Toggle habilitar/inhabilitar */}
                         <button
                           type="button"
                           onClick={e => toggleDisable(e, paddock.id)}
@@ -449,116 +493,101 @@ export default function PaddockSidePanel({
                       </div>
                     </div>
 
-                    {/* ── Hectáreas — sin línea divisora ── */}
-                    {isActive && (
-                      <div className="px-4 pb-2 pt-0">
-                        <div className="flex items-baseline gap-1.5">
-                          <p className="text-sm font-black text-gray-700 tabular-nums">
-                            {Number(paddock.area_ha || 0).toFixed(1)}
-                          </p>
-                          <p className="text-xs font-bold text-gray-400">ha</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── MS + calidad ── */}
-                    {isActive && (
+                    {/* ── Métricas MS ── */}
+                    {isActive && ms > 0 && (
                       <div className="px-4 pb-3">
-                        <div className="flex items-stretch gap-4 pt-3">
-                          {ms > 0 ? (
-                            <>
-                              <div>
-                                <p className="text-[9px] font-black text-gray-500 tracking-widest uppercase mb-1">MS/ha</p>
-                                <div className="flex items-baseline gap-1">
-                                  <p className={`text-2xl font-black tabular-nums leading-none ${msColor}`}>
-                                    {ms.toLocaleString('es')}
-                                  </p>
-                                  <span className="text-xs font-bold text-gray-400">kg</span>
-                                </div>
-                              </div>
-                              {totalMsCard != null && (
-                                <>
-                                  <div className="w-px bg-gray-100 self-stretch" />
-                                  <div>
-                                    <p className="text-[9px] font-black text-gray-500 tracking-widest uppercase mb-1">Total MS</p>
-                                    <p className="text-sm font-black text-gray-600 tabular-nums">
-                                      {totalMsCard.toLocaleString('es')} <span className="font-medium text-gray-400">kg</span>
-                                    </p>
-                                  </div>
-                                </>
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-xs text-gray-300 italic pt-1">Sin datos de MS</p>
-                          )}
-                          {rankDisplay != null && (
-                            <div className="ml-auto self-center">
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${qColor}`}>
-                                ★ {rankDisplay}/5
-                              </span>
+                        <div className="flex items-stretch gap-4">
+                          <div>
+                            <p className="text-[8px] font-black text-gray-400 tracking-widest uppercase mb-0.5">MS/ha</p>
+                            <div className="flex items-baseline gap-0.5">
+                              <p className="text-2xl font-black tabular-nums leading-none text-gray-900">
+                                {ms.toLocaleString('es')}
+                              </p>
+                              <span className="text-[10px] font-bold text-gray-400">kg</span>
                             </div>
+                          </div>
+                          {totalMsCard != null && (
+                            <>
+                              <div className="w-px bg-gray-100 self-stretch" />
+                              <div>
+                                <p className="text-[8px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Total</p>
+                                <p className="text-base font-black text-gray-700 tabular-nums">
+                                  {totalMsCard.toLocaleString('es')} <span className="font-medium text-gray-400 text-[10px]">kg</span>
+                                </p>
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
                     )}
+                    {isActive && ms === 0 && (
+                      <div className="px-4 pb-3">
+                        <p className="text-[10px] text-gray-300 italic">Sin datos de MS</p>
+                      </div>
+                    )}
 
-                    {/* ── Bottom: semáforo climático + indicadores técnicos + Detalles ── */}
+                    {/* ── Footer: clima + infra badges ── */}
                     {isActive && (
-                      <div className="px-4 pb-4 pt-1 space-y-2">
-                        {/* Fila 1: chip de clima + NDVI + botón Gestionar */}
-                        <div className="flex items-center justify-between gap-2" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center gap-2">
-                            {/* Chip de clima con icóno + estado de crecimiento */}
-                            <WeatherConditionChip
-                              mode="paddock"
-                              entityName={paddock.name}
-                              grassGrowthRate={realGrowthRate}
-                              ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
-                            />
-                            {canNdvi && ndviVal != null && (
-                              <span className="text-[9px] font-bold text-gray-600">
-                                NDVI {Number(ndviVal).toFixed(2)}
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                            className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all shrink-0"
-                          >
-                            Gestionar
-                          </button>
+                      <div className="px-4 pb-4" onClick={e => e.stopPropagation()}>
+                        {/* Fila 1: Clima + NDVI */}
+                        <div className="flex items-center gap-2 flex-wrap pt-1">
+                          <WeatherConditionChip
+                            mode="paddock"
+                            entityName={paddock.name}
+                            grassGrowthRate={realGrowthRate}
+                            ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
+                          />
+                          {canNdvi && ndviVal != null && (
+                            <span className="text-[9px] font-bold text-gray-400">
+                              NDVI {Number(ndviVal).toFixed(2)}
+                            </span>
+                          )}
                         </div>
-
-                        {/* Fila 2: 6 indicadores de estado tipo tablero */}
-                        <div className="flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
-                          {TECH_ICONS.map(({ key, Icon, color, bgOn, bgOff, label }) => {
+                        {/* Línea divisora — debajo del clima */}
+                        <div className="h-px bg-gray-100 my-2.5" />
+                        {/* Fila 2: Chips de infra — siempre visibles, color cuando activo */}
+                        <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
+                          {TECH_ICONS.map(({ key, Icon, label, activeClass, inactiveClass }) => {
                             const isOn = key === 'hasPests'
                               ? (td.hasPests || (td.weed_types?.length ?? 0) > 0)
                               : key === 'hasWater'
                               ? (td.hasWater || td.has_water_point)
+                              : key === 'hasPredators'
+                              ? (td.hasPredators || td.has_predators)
+                              : key === 'has_shade'
+                              ? (td.has_shade || td.hasShade)
+                              : key === 'has_water_risk'
+                              ? (td.has_water_risk || td.hasWaterRisk)
                               : Boolean(td[key])
                             return (
                               <div
                                 key={key}
                                 title={label}
-                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-all ${
-                                  isOn ? bgOn : 'bg-gray-50'
-                                }`}
+                                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full transition-all ${isOn ? activeClass : inactiveClass}`}
                               >
-                                <Icon
-                                  className={`w-3 h-3 transition-all ${
-                                    isOn ? color : 'text-gray-300'
-                                  }`}
-                                />
-                                <span className={`text-[9px] font-bold ${
-                                  isOn ? color.replace('text-', 'text-').replace('-400', '-600').replace('-500', '-700') : 'text-gray-300'
-                                }`}>{label}</span>
+                                <Icon className="w-2.5 h-2.5" />
+                                <span className="text-[8px] font-bold">{label}</span>
                               </div>
                             )
                           })}
                         </div>
+                        {/* Botón editar — abajo a la derecha, verde sutil */}
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); openModal(paddock) }}
+                            title="Editar potrero"
+                            className="flex items-center gap-1 text-[9px] font-bold px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-2.5 h-2.5">
+                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                            </svg>
+                            Editar
+                          </button>
+                        </div>
                       </div>
                     )}
+
 
                     {/* Disabled badge */}
                   </div>

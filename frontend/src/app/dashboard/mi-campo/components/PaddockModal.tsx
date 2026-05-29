@@ -55,26 +55,62 @@ interface Props {
 
 // ─── Datos parametrizados ─────────────────────────────────────────────────────
 
-const GRASS_TYPES = [
-  'Pasto bandera / Banderita (Bouteloua megapotamica)',
-  'Cebadilla criolla / Cebadilla australiana (Bromus catharticus var. catharticus)',
-  'Cebadilla pampeana (Bromus catharticus var. rupestris)',
-  'Raigrás / Raigrás criollo (Lolium multiflorum)',
-  'Flechilla fina (Nassella tenuis)',
-  'Flechilla grande (Nassella longiglumis)',
-  'Flechilla negra (Piptochaetium napostaense)',
-  'Unquillo (Poa ligularis)',
-  'Pasto plateado / Pasto de hoja (Digitaria californica)',
-  'Pasto escoba (Schizachyrium plumigerum)',
-  'Pata de gallo (Eustachys retusa)',
-  'Penacho blanco (Bothriochloa edwardsiana)',
-  'Pasto puna dulce / Estipa de hoja ancha (Amelichloa caudata)',
-  'Vicia (Vicia villosa)',
-  'Alfilerillo (Erodium cicutarium)',
-  'Trébol de carretilla (Medicago minima var. minima)',
-  'Arvejilla (Adesmia muricata var. muricata)',
-  'Avena negra / Avena salvaje (Avena barbata y Avena fatua)',
-]
+// Recurso forrajero → especies por categoría
+const FORAGE_CATEGORIES = [
+  'Pastizales naturales',
+  'Verdeos',
+  'Pasturas implantadas o perennes',
+] as const
+
+type ForageCategory = typeof FORAGE_CATEGORIES[number] | ''
+
+const FORAGE_SPECIES: Record<Exclude<ForageCategory, ''>, string[]> = {
+  'Pastizales naturales': [
+    'Flechilla fina (Nassella tenuis)',
+    'Flechilla grande (Nassella longiglumis)',
+    'Flechilla negra (Piptochaetium napostaense)',
+    'Pasto bandera / Banderita (Bouteloua megapotamica)',
+    'Unquillo (Poa ligularis)',
+    'Cebadilla criolla (Bromus catharticus var. catharticus)',
+    'Cebadilla pampeana (Bromus catharticus var. rupestris)',
+    'Pasto plateado / Pasto de hoja (Digitaria californica)',
+    'Pasto escoba (Schizachyrium plumigerum)',
+    'Pata de gallo (Eustachys retusa)',
+    'Penacho blanco (Bothriochloa edwardsiana)',
+    'Pasto puna dulce / Estipa de hoja ancha (Amelichloa caudata)',
+    'Vicia (Vicia villosa)',
+    'Alfilerillo (Erodium cicutarium)',
+    'Trébol de carretilla (Medicago minima var. minima)',
+    'Arvejilla (Adesmia muricata var. muricata)',
+    'Avena negra / Avena salvaje (Avena barbata y Avena fatua)',
+  ],
+  'Verdeos': [
+    'Avena (Avena sativa)',
+    'Centeno (Secale cereale)',
+    'Raigrás Anual (Lolium multiflorum)',
+    'Cebada Forrajera (Hordeum vulgare)',
+    'Sorgo Forrajero (Sorghum bicolor)',
+    'Maíz Forrajero (Zea mays)',
+    'Mijo Perla (Pennisetum glaucum)',
+    'Trébol Alejandríno (Trifolium alexandrinum)',
+    'Nabo Forrajero (Raphanus sativus)',
+    'Rabanito Forrajero (Brassica rapa)',
+  ],
+  'Pasturas implantadas o perennes': [
+    'Alfalfa (Medicago sativa)',
+    'Raigrás Perenne (Lolium perenne)',
+    'Festuca Alta (Festuca arundinacea)',
+    'Dactylis / Pasto ovillo (Dactylis glomerata)',
+    'Agropíro de crêsta (Agropyron cristatum)',
+    'Agropíro alargado (Thinopyrum ponticum)',
+    'Trébol Blanco (Trifolium repens)',
+    'Trébol Rojo (Trifolium pratense)',
+    'Lotus (Lotus corniculatus)',
+    'Grama Rhodes (Chloris gayana)',
+    'Grama Buffel (Cenchrus ciliaris)',
+    'Pastos Kikuyo (Pennisetum clandestinum)',
+  ],
+}
 
 const WEED_TYPES = [
   'Roseta (Cenchrus spinifex)',
@@ -328,6 +364,49 @@ async function compressImage(file: File, maxDim = 1200): Promise<File> {
   })
 }
 
+// ─── Calculadora de agua inline ───────────────────────────────────────────────
+
+function WaterCalcInline({ area, onSelect }: { area: number; onSelect: (liters: number) => void }) {
+  const [animales, setAnimales] = useState(50)
+  const [litrosPorAnimal, setLitrosPorAnimal] = useState(60)
+  const total = Math.ceil(animales * litrosPorAnimal * 1.2) // +20% margen
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[9px] font-black text-gray-500 tracking-widest uppercase block mb-1">N.º animales</label>
+          <input type="number" min={1} value={animales}
+            onChange={e => setAnimales(Math.max(1, Number(e.target.value)))}
+            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:ring-1 focus:ring-green-500 outline-none"
+          />
+        </div>
+        <div>
+          <label className="text-[9px] font-black text-gray-500 tracking-widest uppercase block mb-1">L/animal/día</label>
+          <input type="number" min={10} step={5} value={litrosPorAnimal}
+            onChange={e => setLitrosPorAnimal(Math.max(10, Number(e.target.value)))}
+            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:ring-1 focus:ring-green-500 outline-none"
+          />
+        </div>
+      </div>
+      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between">
+        <div>
+          <p className="text-[9px] font-black text-green-700 tracking-widest uppercase">Capacidad estimada</p>
+          <p className="text-2xl font-black text-green-800">{total.toLocaleString('es')} <span className="text-sm font-bold text-green-600">litros</span></p>
+          <p className="text-[9px] text-green-500 font-medium mt-0.5">Incluye +20% de margen de seguridad</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => onSelect(total)}
+        className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl transition-all"
+      >
+        Usar este valor
+      </button>
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function PaddockModal({
@@ -362,8 +441,12 @@ export default function PaddockModal({
     paddock.dry_matter_kg_ha != null && Number(paddock.dry_matter_kg_ha) > 0 ? String(paddock.dry_matter_kg_ha) : ''
   )
   const [qualityScore, setQuality]  = useState<number>(paddock.technical_data?.quality_score ?? 5)
+  const [forageQuality, setForageQuality] = useState<number>(paddock.technical_data?.forage_quality ?? 0)
   const [grassTypes, setGrassTypes] = useState<string[]>(paddock.technical_data?.grass_types ?? [])
   const [weedTypes, setWeedTypes]   = useState<string[]>(paddock.technical_data?.weed_types ?? [])
+  const [forageCategory, setForageCategory] = useState<ForageCategory>(
+    (paddock.technical_data?.forage_category as ForageCategory) ?? ''
+  )
 
   const totalMs = areaHa !== '' && msHa !== '' && !isNaN(Number(areaHa)) && !isNaN(Number(msHa))
     ? Number(areaHa) * Number(msHa) : null
@@ -372,6 +455,7 @@ export default function PaddockModal({
   // Tab 2 — Infraestructura
   const [hasWaterPoint, setHasWaterPoint]         = useState<boolean>(paddock.technical_data?.has_water_point ?? (paddock.technical_data?.water_sources?.length > 0))
   const [waterCapacityLiters, setWaterCapacityLiters] = useState<number | ''>(paddock.technical_data?.water_capacity_liters ?? '')
+  const [waterCalcOpen, setWaterCalcOpen]         = useState(false)
   const [fenceType, setFenceType]                 = useState<string>(paddock.technical_data?.fence_type ?? paddock.technical_data?.fence_status ?? '')
   const [fenceDropdownOpen, setFenceDropdownOpen] = useState(false)
   const [hasShade, setHasShade]                   = useState<boolean>(paddock.technical_data?.has_shade ?? false)
@@ -508,6 +592,8 @@ export default function PaddockModal({
     const td: Record<string, any> = {
       ...(paddock.technical_data || {}),
       quality_score:        qualityScore,
+      forage_quality:       forageQuality,
+      forage_category:       forageCategory || undefined,
       grass_types:          grassTypes,
       weed_types:           weedTypes,
       // Nuevos campos de infraestructura (blueprint)
@@ -1061,74 +1147,181 @@ export default function PaddockModal({
                 </div>
               </div>
 
-              {/* Total MS */}
+              {/* Total MS — dato inline, no parece input */}
               {totalMs !== null && (
-                <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
-                  Total de materia seca:{' '}
-                  <span className="text-gray-700 normal-case tracking-normal font-bold">{totalMs.toLocaleString('es')} kg MS</span>
-                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total MS:</span>
+                  <span className="text-sm font-black text-gray-700">{totalMs.toLocaleString('es')} kg</span>
+                </div>
               )}
 
               {/* Coeficiente del Potrero */}
               {(msHa !== '' && areaHa !== '') && (() => {
                 const _ms = Number(msHa)
-
-                // Coeficiente de Rendimiento
                 const _activePaddocks = paddocks.filter(p => Number(p.dry_matter_kg_ha) > 0)
                 const _modAvg = _activePaddocks.length > 0
                   ? _activePaddocks.reduce((s, p) => s + Number(p.dry_matter_kg_ha), 0) / _activePaddocks.length
                   : 0
                 const _coef = _modAvg > 0 && _ms > 0 ? _ms / _modAvg : null
-
                 if (_coef === null) return null
-
                 return (
-                  <div className="rounded-xl bg-green-50 border border-green-100 p-3.5 space-y-3">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">Coeficiente del Potrero</p>
-                      <Tooltip text="El Coeficiente del Potrero mide la productividad relativa de este lote comparado con el promedio del campo. Se calcula dividiendo los kg MS/ha de este potrero entre el promedio de todos los potreros activos. Un valor mayor a 1 indica que este potrero produce más que la media del campo; menor a 1, por debajo. Es la base del ajuste proporcional en las planificaciones simétricas futuras." />
+                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                    <p className={`text-2xl font-black leading-none ${
+                      _coef >= 1.1 ? 'text-green-700' : _coef >= 0.9 ? 'text-gray-700' : 'text-amber-700'
+                    }`}>{_coef.toFixed(2)}</p>
+                    <div>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Coeficiente</p>
+                      <p className="text-[10px] font-medium text-gray-400">
+                        {_coef >= 1.1 ? 'Sobre el promedio' : _coef >= 0.9 ? 'En la media' : 'Bajo el promedio'}
+                      </p>
                     </div>
-                    <div className="grid grid-cols-1 gap-2">
-                      {_coef !== null && (
-                        <div className={`bg-white rounded-xl border p-3 text-center ${
-                          _coef >= 1.1 ? 'border-green-200' : _coef >= 0.9 ? 'border-gray-200' : 'border-amber-200'
-                        }`}>
-                          <div className="flex items-center justify-center gap-1 mb-0.5">
-                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Coeficiente</p>
-                            <Tooltip text="Rendimiento relativo de este potrero frente al promedio del campo. Mayor a 1 = sobre el promedio. Menor a 1 = por debajo del promedio." />
-                          </div>
-                          <p className={`text-2xl font-black leading-none ${
-                            _coef >= 1.1 ? 'text-green-700' : _coef >= 0.9 ? 'text-gray-700' : 'text-amber-700'
-                          }`}>
-                            {_coef.toFixed(2)}
-                          </p>
-                          <p className={`text-[9px] font-bold mt-0.5 ${
-                            _coef >= 1.1 ? 'text-green-500' : _coef >= 0.9 ? 'text-gray-400' : 'text-amber-500'
-                          }`}>
-                            {_coef >= 1.1 ? 'Sobre el promedio' : _coef >= 0.9 ? 'En la media' : 'Bajo el promedio'}
-                          </p>
-                        </div>
-                      )}
+                    <div className="ml-auto">
+                      <Tooltip text="Productividad relativa vs. el promedio del campo. Mayor a 1 = sobre la media." />
                     </div>
                   </div>
                 )
               })()}
 
-
-              {/* Ranking del Potrero (1–5) */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className={LABEL_CLS}>Ranking del Potrero</span>
-                  <Tooltip text="Escala del 1 al 5: calidad y productividad general de este potrero. 1 = muy bajo, 5 = excelente. Reemplaza la escala anterior de calidad relativa y es el valor utilizado en las planificaciones simétricas." />
+              {/* Evaluación — Ranking + Calidad en grid */}
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+                  <p className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Evaluación del potrero</p>
                 </div>
-                <SimpleNumberInput
-                  label=""
-                  min={1}
-                  max={5}
-                  step={1}
-                  value={qualityScore}
-                  onChange={e => setQuality(Number(e.target.value))}
-                />
+                <div className="px-4 py-3 grid grid-cols-2 gap-4">
+                  {/* Ranking 1-10: dots */}
+                  <div>
+                    <div className="flex items-center gap-1 mb-2">
+                      <span className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Ranking</span>
+                      <Tooltip text="Valor 1-10 de este potrero vs. el resto del campo. 10 = excelente." />
+                    </div>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                        <button key={n} type="button" onClick={() => setQuality(n)}
+                          className={`w-5 h-5 rounded-full text-[8px] font-black transition-all ${
+                            n <= qualityScore ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-green-100'
+                          }`}>{n}</button>
+                      ))}
+                    </div>
+                    <p className="text-[9px] text-gray-400 font-medium mt-1">
+                      {qualityScore >= 8 ? 'Excelente' : qualityScore >= 6 ? 'Bueno' : qualityScore >= 4 ? 'Regular' : 'Bajo'}
+                    </p>
+                  </div>
+                  {/* Calidad forrajera: estrellas 1-5 */}
+                  <div>
+                    <div className="flex items-center gap-1 mb-2">
+                      <span className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Calidad</span>
+                      <Tooltip text="Calidad proteíca del recurso forrajero. 1 = muy baja · 5 = excelente." />
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      {[1,2,3,4,5].map(star => (
+                        <button key={star} type="button" onClick={() => setForageQuality(star)}
+                          className={`text-xl transition-all hover:scale-110 ${
+                            star <= forageQuality ? 'text-amber-400' : 'text-gray-200'
+                          }`}>★</button>
+                      ))}
+                    </div>
+                    <p className="text-[9px] text-gray-400 font-medium mt-1">
+                      {forageQuality >= 5 ? 'Excelente' : forageQuality >= 4 ? 'Buena' : forageQuality >= 3 ? 'Media' : forageQuality >= 2 ? 'Baja' : 'Muy baja'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Composición botánica */}
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                  <p className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Composición botánica</p>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+
+                  {/* Paso 1: Recurso forrajero */}
+                  <div>
+                    <label className="text-[9px] font-black text-gray-500 tracking-widest uppercase block mb-2">Recurso forrajero</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FORAGE_CATEGORIES.map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            setForageCategory(forageCategory === cat ? '' : cat)
+                            setGrassTypes([]) // reset species on category change
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                            forageCategory === cat
+                              ? 'bg-green-600 text-white border-green-600'
+                              : 'bg-white text-gray-500 border-gray-200 hover:border-green-300 hover:text-green-700'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Paso 2: Especie — solo cuando hay categoría seleccionada */}
+                  {forageCategory !== '' && (
+                    <div>
+                      <label className="text-[9px] font-black text-gray-500 tracking-widest uppercase block mb-2">
+                        Especie
+                        <span className="ml-1.5 text-[9px] font-medium text-green-600 normal-case tracking-normal">Puede seleccionar más de una</span>
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {FORAGE_SPECIES[forageCategory].map(species => {
+                          const isSelected = grassTypes.includes(species)
+                          return (
+                            <button
+                              key={species}
+                              type="button"
+                              onClick={() => {
+                                setGrassTypes(prev =>
+                                  isSelected ? prev.filter(s => s !== species) : [...prev, species]
+                                )
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all ${
+                                isSelected
+                                  ? 'bg-green-50 text-green-700 border-green-400'
+                                  : 'bg-white text-gray-500 border-gray-200 hover:border-green-300'
+                              }`}
+                            >
+                              {species}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Malezas — toggle */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] font-black text-gray-500 tracking-widest uppercase">¿Hay malezas?</span>
+                      <Toggle
+                        checked={weedTypes.length > 0}
+                        onChange={() => { if (weedTypes.length > 0) setWeedTypes([]); }}
+                      />
+                    </div>
+                    {weedTypes.length > 0 && (
+                      <SearchableMultiSelect
+                        label=""
+                        options={WEED_TYPES}
+                        selected={weedTypes}
+                        onChange={setWeedTypes}
+                        placeholder="Buscar o agregar maleza…"
+                        allowCustom
+                      />
+                    )}
+                    {weedTypes.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setWeedTypes([''])}
+                        className="text-[9px] text-gray-400 hover:text-green-600 transition-colors font-medium"
+                      >
+                        + Agregar maleza
+                      </button>
+                    )}
+                  </div>
+
+                </div>
               </div>
 
             </div>
@@ -1136,147 +1329,117 @@ export default function PaddockModal({
 
           {/* ════ TAB 2 — INFRAESTRUCTURA ════ */}
           {activeTab === 'infraestructura' && (
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-5 py-4 pb-24 space-y-3">
 
-              {/* ── A. Módulo de Agua ───────────────────────────────────────── */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50">
+              {/* ─ AGUA ─────────────────────────────────────── */}
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
                   <div>
-                    <p className="text-sm font-bold text-gray-800">¿Tiene aguada?</p>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">Bebedero, laguna, arroyo u otra fuente permanente</p>
+                    <p className="text-[10px] font-black text-gray-700 tracking-widest uppercase">¿Tiene aguada?</p>
+                    <p className="text-[9px] text-gray-400 font-medium">Bebedero, laguna, arroyo u otra fuente</p>
                   </div>
                   <Toggle checked={hasWaterPoint} onChange={() => { setHasWaterPoint(v => !v); if (hasWaterPoint) setWaterCapacityLiters('') }} />
                 </div>
                 {hasWaterPoint && (
-                  <div className="space-y-1.5 pl-1">
-                    <label className={LABEL_CLS}>Capacidad de agua (litros)</label>
-                    <input
-                      type="number" min={0} step={100}
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Capacidad (litros)</label>
+                      <button type="button" onClick={() => setWaterCalcOpen(true)}
+                        className="flex items-center gap-1 text-[9px] font-bold text-blue-600 hover:text-blue-800 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                          <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 7a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm-3 3a1 1 0 100 2 1 1 0 000-2zm-2-2a1 1 0 110 2 1 1 0 010-2zM7 11a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
+                        </svg>
+                        ¿Cuánta necesito?
+                      </button>
+                    </div>
+                    <input type="number" min={0} step={100}
                       value={waterCapacityLiters}
                       onChange={e => setWaterCapacityLiters(e.target.value === '' ? '' : Number(e.target.value))}
                       placeholder="Ej: 5000"
-                      className={INPUT_CLS}
-                      autoFocus
+                      className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:ring-1 focus:ring-blue-400 outline-none placeholder:text-gray-300"
                     />
                   </div>
                 )}
               </div>
 
-              {/* ── B. Módulo de Alambrado (Dropdown Editable) ─────────────── */}
-              <div className="space-y-1.5">
-                <label className={LABEL_CLS}>Tipo de alambrado</label>
-                <div className="relative">
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        value={fenceType}
-                        onChange={e => setFenceType(e.target.value)}
-                        onFocus={() => setFenceDropdownOpen(true)}
-                        onBlur={() => setTimeout(() => setFenceDropdownOpen(false), 150)}
-                        placeholder="Seleccioná o escribí el tipo…"
-                        className={INPUT_CLS}
-                      />
-                      {fenceDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[10001]">
-                          {['Fijo convencional', 'Eléctrico permanente', 'Eléctrico móvil'].map(opt => (
-                            <button
-                              key={opt}
-                              type="button"
-                              onMouseDown={() => { setFenceType(opt); setFenceDropdownOpen(false) }}
-                              className="w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-green-50 transition-colors border-b border-gray-50 last:border-0"
-                            >
-                              {opt}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+              {/* ─ ALAMBRADO ────────────────────────────────── */}
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <p className="text-[10px] font-black text-gray-700 tracking-widest uppercase">Alambrado</p>
+                </div>
+                <div className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {['Fijo convencional', 'Eléctrico permanente', 'Eléctrico móvil', 'Sin alambrado'].map(opt => (
+                      <button key={opt} type="button"
+                        onClick={() => setFenceType(fenceType === opt ? '' : opt)}
+                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                          fenceType === opt ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-500 border-gray-200 hover:border-green-300'
+                        }`}>{opt}</button>
+                    ))}
                   </div>
-                  {fenceType && (
-                    <button
-                      type="button"
-                      onClick={() => setFenceType('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
-                    >×</button>
-                  )}
                 </div>
               </div>
 
-              {/* ── C. Módulo de Sombra ─────────────────────────────────────── */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50">
-                <div>
-                  <p className="text-sm font-bold text-gray-800">Sombra disponible</p>
-                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">Árboles, cortinas forestales u otra sombra natural</p>
+              {/* ─ ESTADO / ALERTAS ─────────────────────────── */}
+              <div className="rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-[10px] font-black text-gray-700 tracking-widest uppercase">Sombra disponible</p>
+                    <p className="text-[9px] text-gray-400 font-medium">Árboles, cortinas forestales</p>
+                  </div>
+                  <Toggle checked={hasShade} onChange={() => setHasShade(v => !v)} />
                 </div>
-                <Toggle checked={hasShade} onChange={() => setHasShade(v => !v)} />
-              </div>
-
-              {/* ── Accesos ─────────────────────────────────────────────────── */}
-              <SearchableMultiSelect
-                label="Accesos y conectividad"
-                options={ACCESS_OPTIONS_DEFAULT}
-                selected={accessList}
-                onChange={setAccessList}
-                placeholder="Buscar tipo de acceso…"
-                allowCustom
-              />
-
-              {/* ── Electricidad ─────────────────────────────────────────────── */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className={LABEL_CLS}>Electricidad</label>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-[10px] font-black text-gray-700 tracking-widest uppercase">Electricidad</p>
+                    <p className="text-[9px] text-gray-400 font-medium">{hasElectricity ? (electricityType || 'Activa') : 'Sin electricidad'}</p>
+                  </div>
                   <Toggle checked={hasElectricity} onChange={() => { setHasElectricity(v => !v); if (hasElectricity) setElectricityType('') }} />
                 </div>
                 {hasElectricity && (
-                  <input
-                    type="text" value={electricityType}
-                    onChange={e => setElectricityType(e.target.value)}
-                    placeholder="Tipo: Solar, Red eléctrica, Generador…"
-                    className={INPUT_CLS}
-                  />
+                  <div className="px-4 py-2.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      {['Solar', 'Red eléctrica', 'Generador'].map(opt => (
+                        <button key={opt} type="button"
+                          onClick={() => setElectricityType(electricityType === opt ? '' : opt)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                            electricityType === opt ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-500 border-gray-200 hover:border-green-300'
+                          }`}>{opt}</button>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </div>
-
-              {/* ── Depredadores ─────────────────────────────────────────────── */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-gray-50">
-                <div>
-                  <p className="text-sm font-bold text-gray-700">Presencia de depredadores</p>
-                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">{hasPredators ? 'Alerta activa' : 'Sin reportes'}</p>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-[10px] font-black text-red-700 tracking-widest uppercase">Depredadores</p>
+                    <p className="text-[9px] text-gray-400 font-medium">{hasPredators ? 'Alerta activa' : 'Sin reportes'}</p>
+                  </div>
+                  <Toggle checked={hasPredators} onChange={() => setHasPredators(v => !v)} />
                 </div>
-                <Toggle checked={hasPredators} onChange={() => setHasPredators(v => !v)} />
-              </div>
-
-              {/* ── Riesgo Hídrico ─────────────────────────────────────────── */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl border border-sky-100 bg-sky-50">
-                <div>
-                  <p className="text-sm font-bold text-sky-800">Riesgo Hídrico</p>
-                  <p className="text-[10px] text-sky-500 font-medium mt-0.5">
-                    {hasWaterRisk ? 'Riesgo activo — crítico para planificación' : 'Sin riesgo hídrico detectado'}
-                  </p>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-[10px] font-black text-blue-700 tracking-widest uppercase">Riesgo hídrico</p>
+                    <p className="text-[9px] text-gray-400 font-medium">{hasWaterRisk ? 'Crítico para planificación' : 'Sin riesgo detectado'}</p>
+                  </div>
+                  <Toggle checked={hasWaterRisk} onChange={() => setHasWaterRisk(v => !v)} />
                 </div>
-                <Toggle checked={hasWaterRisk} onChange={() => setHasWaterRisk(v => !v)} />
               </div>
 
-              {/* ── Composición botánica (movido desde Datos Operativos) ──────── */}
-              <div className="space-y-3 pt-1 border-t border-gray-100">
-                <p className={LABEL_CLS}>Composición botánica</p>
-                <SearchableMultiSelect
-                  label="Tipo de pasto"
-                  options={GRASS_TYPES}
-                  selected={grassTypes}
-                  onChange={setGrassTypes}
-                  placeholder="Buscar o agregar tu tipo de pasto…"
-                  allowCustom
-                />
-                <SearchableMultiSelect
-                  label="Malezas"
-                  options={WEED_TYPES}
-                  selected={weedTypes}
-                  onChange={setWeedTypes}
-                  placeholder="Buscar o agregar maleza…"
-                  allowCustom
-                />
+              {/* ─ ACCESOS ──────────────────────────────────── */}
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <p className="text-[10px] font-black text-gray-700 tracking-widest uppercase">Accesos</p>
+                </div>
+                <div className="px-4 py-3">
+                  <SearchableMultiSelect
+                    label=""
+                    options={ACCESS_OPTIONS_DEFAULT}
+                    selected={accessList}
+                    onChange={setAccessList}
+                    placeholder="Buscar tipo de acceso…"
+                    allowCustom
+                  />
+                </div>
               </div>
 
             </div>
@@ -1955,6 +2118,27 @@ export default function PaddockModal({
     </div>
   )
 
+  {/* Water calculator modal */}
+  const waterCalcModal = waterCalcOpen ? (
+    <div className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="text-base font-black text-gray-900">Calculadora de Agua</h4>
+          <button onClick={() => setWaterCalcOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-500 font-medium">Estimá la capacidad de agua necesaria en función del rodeo.</p>
+        <WaterCalcInline area={Number(areaHa) || 0} onSelect={lit => { setWaterCapacityLiters(lit); setWaterCalcOpen(false) }} />
+      </div>
+    </div>
+  ) : null
+
   if (typeof document === 'undefined') return null
-  return createPortal(modalContent, document.body)
+  return (
+    <>
+      {createPortal(modalContent, document.body)}
+      {createPortal(waterCalcModal ?? <></>, document.body)}
+    </>
+  )
 }
