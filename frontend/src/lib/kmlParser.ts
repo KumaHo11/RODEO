@@ -10,7 +10,7 @@ import { area as turfArea } from '@turf/area'
 export interface ParsedKmlFeature {
   /** Name from the KML <name> tag of the Placemark */
   name: string
-  /** GeoJSON Feature with Polygon or MultiPolygon geometry */
+  /** GeoJSON Geometry (Polygon or MultiPolygon) — always 2D, Z stripped */
   geojson: any
   /** Calculated area in hectares */
   area_ha: number
@@ -20,6 +20,37 @@ export interface KmlParseResult {
   features: ParsedKmlFeature[]
   error?: string
 }
+
+// ─── Z-coordinate stripping ─────────────────────────────────────────────────
+// KML files often include altitude as the 3rd coordinate [lon, lat, alt].
+// PostgreSQL's geometry column is 2D-only, so we must drop the Z before saving.
+// Error without this: "Geometry has Z dimension but column does not"
+
+function strip2DCoord(coord: number[]): number[] {
+  return [coord[0], coord[1]]
+}
+
+function strip2DRing(ring: number[][]): number[][] {
+  return ring.map(strip2DCoord)
+}
+
+function strip2DGeometry(geom: any): any {
+  if (!geom) return geom
+  if (geom.type === 'Polygon') {
+    return { ...geom, coordinates: geom.coordinates.map(strip2DRing) }
+  }
+  if (geom.type === 'MultiPolygon') {
+    return {
+      ...geom,
+      coordinates: geom.coordinates.map((poly: number[][][]) =>
+        poly.map(strip2DRing)
+      ),
+    }
+  }
+  return geom
+}
+
+// ─── parseKmlText ────────────────────────────────────────────────────────────
 
 /**
  * Parses a raw KML string and extracts all polygon features.
@@ -57,13 +88,19 @@ export function parseKmlText(text: string): KmlParseResult {
       if (!geom) continue
       if (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon') continue
 
-      const area_ha = parseFloat((turfArea(feature) / 10000).toFixed(2))
+      // Strip Z dimension before storing — PostgreSQL column is 2D only
+      const geom2D = strip2DGeometry(geom)
+      const area_ha = parseFloat(
+        (turfArea({ type: 'Feature', geometry: geom2D, properties: {} }) / 10000).toFixed(2)
+      )
       const name: string =
         feature.properties?.name ||
         feature.properties?.Name ||
         `Polígono ${features.length + 1}`
 
-      features.push({ name, geojson: feature, area_ha })
+      // Store plain 2D Geometry (not the full Feature) so callers can pass it
+      // directly to the backend as `geojson` or `boundary`.
+      features.push({ name, geojson: geom2D, area_ha })
     }
 
     if (features.length === 0) {
@@ -83,6 +120,8 @@ export function parseKmlText(text: string): KmlParseResult {
     }
   }
 }
+
+// ─── parseKmlFile ────────────────────────────────────────────────────────────
 
 /**
  * Reads a File object and resolves with a KmlParseResult.
