@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous } from 'lucide-react'
+import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous, Cloud, Sun, CloudSun, CloudRain, Info } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
@@ -105,6 +105,36 @@ const getNdviLabel = (ndvi: number) => {
   if (ndvi >= 0.4) return { label: 'Bueno',   color: 'text-lime-700 bg-lime-100' }
   if (ndvi >= 0.2) return { label: 'Regular', color: 'text-yellow-700 bg-yellow-100' }
   return             { label: 'Bajo',    color: 'text-red-700 bg-red-100' }
+}
+
+// Helper: icono de clima compacto para la card
+function ClimateIcon({ ndvi, growthRate, onClick }: {
+  ndvi?: number | null
+  growthRate?: number
+  onClick: (e: React.MouseEvent) => void
+}) {
+  const val = ndvi ?? 0
+  let Icon = Cloud
+  let colorCls = 'text-gray-400'
+  let tip = 'Sin datos de clima'
+  if (val >= 0.6) { Icon = Sun; colorCls = 'text-green-500'; tip = 'Crecimiento óptimo' }
+  else if (val >= 0.4) { Icon = CloudSun; colorCls = 'text-lime-500'; tip = 'Crecimiento bueno' }
+  else if (val >= 0.2) { Icon = Cloud; colorCls = 'text-yellow-500'; tip = 'Crecimiento lento' }
+  else { Icon = CloudRain; colorCls = 'text-gray-400'; tip = 'Sin actividad' }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`${tip} — click para ver detalle en el modal`}
+      className={`flex items-center gap-1 px-2 py-0.5 rounded-full border border-gray-100 bg-white hover:bg-gray-50 transition-all ${colorCls}`}
+    >
+      <Icon className="w-3 h-3" />
+      {ndvi != null && (
+        <span className="text-[9px] font-bold text-gray-400">{Number(ndvi).toFixed(2)}</span>
+      )}
+      <Info className="w-2.5 h-2.5 text-gray-300" />
+    </button>
+  )
 }
 
 export default function PaddockSidePanel({
@@ -465,7 +495,7 @@ export default function PaddockSidePanel({
                       <button
                         type="button"
                         onClick={e => toggleDisable(e, paddock.id)}
-                        title={isActive ? 'Inhabilitar potrero' : 'Habilitar potrero'}
+                        title={isActive ? 'Potrero activo para planificación — click para desactivar y excluirlo del plan de pastoreo' : 'Potrero inactivo — click para incluirlo en la planificación de pastoreo'}
                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none ${
                           isActive ? 'bg-green-500 border-green-500' : 'bg-red-400 border-red-400'
                         }`}
@@ -480,7 +510,7 @@ export default function PaddockSidePanel({
                       <>
                         {/* ══ ZONA 2: PRODUCCIÓN (MS) ═══════════════════ */}
                         {ms > 0 ? (
-                          <div className="mx-4 mb-3 bg-gray-50 rounded-xl px-3 py-2.5 flex items-stretch gap-4">
+                          <div className="px-4 pb-3 flex items-stretch gap-4">
                             <div>
                               <p className="text-[8px] font-black text-gray-400 tracking-widest uppercase mb-0.5">MS/ha</p>
                               <div className="flex items-baseline gap-0.5">
@@ -492,7 +522,7 @@ export default function PaddockSidePanel({
                             </div>
                             {totalMsCard != null && (
                               <>
-                                <div className="w-px bg-gray-200 self-stretch" />
+                                <div className="w-px bg-gray-100 self-stretch" />
                                 <div>
                                   <p className="text-[8px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Total MS</p>
                                   <p className="text-base font-black text-gray-700 tabular-nums">
@@ -501,21 +531,22 @@ export default function PaddockSidePanel({
                                 </div>
                               </>
                             )}
-                            {/* Evaluación compacta dentro del bloque producción */}
+                            {/* Evaluación — Rank general (número) + Cal. pasto (estrellas) */}
                             {(rankDisplay != null || (forageQuality != null && forageQuality > 0)) && (
                               <>
-                                <div className="w-px bg-gray-200 self-stretch ml-auto" />
-                                <div className="flex flex-col justify-center gap-0.5">
+                                <div className="w-px bg-gray-100 self-stretch ml-auto" />
+                                <div className="flex flex-col justify-center gap-1">
                                   {rankDisplay != null && (
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Rank</span>
-                                      <span className="text-[10px] font-black text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">{rankDisplay}/10</span>
+                                    <div className="flex items-center gap-1" title="Ranking general del potrero respecto al resto (1-10)">
+                                      <span className="text-[7px] font-black text-gray-400 uppercase tracking-widest leading-none">Ranking</span>
+                                      <span className="text-[11px] font-black text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full tabular-nums">{rankDisplay}/10</span>
                                     </div>
                                   )}
                                   {forageQuality != null && forageQuality > 0 && (
-                                    <div className="flex items-center gap-0.5">
+                                    <div className="flex items-center gap-0.5" title="Calidad del pasto (proteína y calidad forrajera, 1-5)">
+                                      <span className="text-[7px] font-black text-gray-400 uppercase tracking-widest leading-none mr-0.5">Cal.</span>
                                       {[1,2,3,4,5].map(s => (
-                                        <span key={s} className={`text-[10px] ${s <= forageQuality ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
+                                        <span key={s} className={`text-[10px] leading-none ${s <= forageQuality ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
                                       ))}
                                     </div>
                                   )}
@@ -524,32 +555,25 @@ export default function PaddockSidePanel({
                             )}
                           </div>
                         ) : (
-                          <div className="mx-4 mb-3">
+                          <div className="px-4 pb-3">
                             <p className="text-[10px] text-gray-300 italic">Sin datos de MS cargados</p>
                           </div>
                         )}
 
                         {/* ══ ZONA 3: CONTEXTO AMBIENTAL ════════════════ */}
-                        <div className="mx-4 mb-3 flex items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
-                          <WeatherConditionChip
-                            mode="paddock"
-                            entityName={paddock.name}
-                            grassGrowthRate={realGrowthRate}
+                        <div className="px-4 pb-3 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          <ClimateIcon
                             ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
+                            growthRate={realGrowthRate}
+                            onClick={e => { e.stopPropagation(); openModal(paddock) }}
                           />
-                          {canNdvi && ndviVal != null && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">
-                              NDVI {Number(ndviVal).toFixed(2)}
-                            </span>
-                          )}
-                         </div>
+                        </div>
 
                          {/* ══ ZONA 4: INFRAESTRUCTURA + EDITAR ══════════ */}
                          <div className="border-t border-gray-100 px-4 py-3" onClick={e => e.stopPropagation()}>
-                           <p className="text-[8px] font-black text-gray-300 tracking-widest uppercase mb-2">Infraestructura</p>
-                           <div className="flex items-center justify-between gap-2">
-                             <div className="flex items-center gap-1.5 flex-wrap flex-1">
-                               {TECH_ICONS.map(({ key, Icon, label, activeClass, inactiveClass }) => {
+                           {/* Chips: solo los activos */}
+                           <div className="flex items-center flex-wrap gap-1.5 min-h-[20px] mb-2">
+                               {TECH_ICONS.map(({ key, Icon, label, activeClass }) => {
                                  const isOn = key === 'hasPests'
                                    ? (td.hasPests || (td.weed_types?.length ?? 0) > 0)
                                    : key === 'hasWater'
@@ -561,28 +585,41 @@ export default function PaddockSidePanel({
                                    : key === 'has_water_risk'
                                    ? (td.has_water_risk || td.hasWaterRisk)
                                    : Boolean(td[key])
+                                 if (!isOn) return null
                                  return (
                                    <div
                                      key={key}
                                      title={label}
-                                     className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full transition-all ${isOn ? activeClass : inactiveClass}`}
+                                     className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${activeClass}`}
                                    >
                                      <Icon className="w-2.5 h-2.5" />
                                      <span className="text-[8px] font-bold">{label}</span>
                                    </div>
                                  )
                                })}
-                             </div>
+                               {!TECH_ICONS.some(({ key }) => {
+                                 if (key === 'hasPests') return td.hasPests || (td.weed_types?.length ?? 0) > 0
+                                 if (key === 'hasWater') return td.hasWater || td.has_water_point
+                                 if (key === 'hasPredators') return td.hasPredators || td.has_predators
+                                 if (key === 'has_shade') return td.has_shade || td.hasShade
+                                 if (key === 'has_water_risk') return td.has_water_risk || td.hasWaterRisk
+                                 return Boolean(td[key])
+                               }) && (
+                                 <span className="text-[9px] text-gray-300 italic">Sin datos de infraestructura</span>
+                               )}
+                           </div>
+                           {/* Botón Editar — fila propia, separado visualmente */}
+                           <div className="flex justify-end border-t border-gray-50 pt-2 mt-1">
                              <button
                                type="button"
                                onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                               title="Editar potrero"
-                               className="shrink-0 flex items-center gap-1 text-[9px] font-bold px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all"
+                               title="Abrir editor del potrero"
+                               className="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all shadow-sm"
                              >
-                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-2.5 h-2.5">
+                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
                                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                                </svg>
-                               Editar
+                               Editar potrero
                              </button>
                            </div>
                          </div>

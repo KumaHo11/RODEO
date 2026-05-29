@@ -212,6 +212,7 @@ function SearchableMultiSelect({
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen]   = useState(false)
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const inputRef          = useRef<HTMLInputElement>(null)
   const containerRef      = useRef<HTMLDivElement>(null)
 
@@ -226,12 +227,24 @@ function SearchableMultiSelect({
   const add = (item: string) => {
     onChange([...selected, item])
     setQuery('')
-    // Immediately re-focus input — dropdown stays open because blur never fires
     inputRef.current?.focus()
   }
   const remove = (item: string) => onChange(selected.filter(s => s !== item))
 
-  // Close only on outside click
+  // Calcular posición del dropdown al abrir
+  const updatePos = useCallback(() => {
+    if (containerRef.current) {
+      const r = containerRef.current.getBoundingClientRect()
+      setDropPos({ top: r.bottom + 4, left: r.left, width: r.width })
+    }
+  }, [])
+
+  const handleOpen = () => {
+    updatePos()
+    setOpen(true)
+  }
+
+  // Close on outside click
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -242,7 +255,48 @@ function SearchableMultiSelect({
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  const showDropdown = open && (filtered.length > 0 || canAddCustom)
+  // Reposicionar si el scroll cambia
+  useEffect(() => {
+    if (!open) return
+    const handle = () => updatePos()
+    window.addEventListener('scroll', handle, true)
+    window.addEventListener('resize', handle)
+    return () => { window.removeEventListener('scroll', handle, true); window.removeEventListener('resize', handle) }
+  }, [open, updatePos])
+
+  const showDropdown = open && (filtered.length > 0 || canAddCustom) && dropPos != null
+
+  const dropdownEl = showDropdown ? createPortal(
+    <div
+      style={{ position: 'fixed', top: dropPos!.top, left: dropPos!.left, width: dropPos!.width, zIndex: 99999 }}
+      className="bg-white border border-gray-200 rounded-xl shadow-2xl max-h-52 overflow-y-auto"
+      onMouseDown={e => e.preventDefault()}
+    >
+      {filtered.map(opt => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => add(opt)}
+          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 active:bg-green-100 transition-colors border-b border-gray-50 last:border-0"
+        >
+          <span className="font-medium">{opt.split(' (')[0]}</span>
+          {opt.includes('(') && (
+            <span className="text-gray-400 text-[11px] ml-1">({opt.split('(')[1].replace(')', '')})</span>
+          )}
+        </button>
+      ))}
+      {canAddCustom && (
+        <button
+          type="button"
+          onClick={() => { add(query.trim()); setOpen(false) }}
+          className="w-full text-left px-4 py-2.5 text-sm text-green-700 hover:bg-green-50 transition-colors font-bold border-t border-gray-100"
+        >
+          + Agregar &ldquo;{query.trim()}&rdquo;
+        </button>
+      )}
+    </div>,
+    document.body
+  ) : null
 
   return (
     <div className="space-y-1.5">
@@ -257,45 +311,15 @@ function SearchableMultiSelect({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={e => { setQuery(e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
+          onChange={e => { setQuery(e.target.value); handleOpen() }}
+          onFocus={handleOpen}
           onBlur={() => {
-            // Delay close so onMouseDown on options fires first
             setTimeout(() => setOpen(false), 150)
           }}
           placeholder={placeholder}
           className={INPUT_CLS}
         />
-        {showDropdown && (
-          // onMouseDown preventDefault stops the input blur so the list stays open
-          <div
-            className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[10001] max-h-52 overflow-y-auto"
-            onMouseDown={e => e.preventDefault()}
-          >
-            {filtered.map(opt => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => add(opt)}
-                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 active:bg-green-100 transition-colors border-b border-gray-50 last:border-0"
-              >
-                <span className="font-medium">{opt.split(' (')[0]}</span>
-                {opt.includes('(') && (
-                  <span className="text-gray-400 text-[11px] ml-1">({opt.split('(')[1].replace(')', '')})</span>
-                )}
-              </button>
-            ))}
-            {canAddCustom && (
-              <button
-                type="button"
-                onClick={() => { add(query.trim()); setOpen(false) }}
-                className="w-full text-left px-4 py-2.5 text-sm text-green-700 hover:bg-green-50 transition-colors font-bold border-t border-gray-100"
-              >
-                + Agregar &ldquo;{query.trim()}&rdquo;
-              </button>
-            )}
-          </div>
-        )}
+        {dropdownEl}
       </div>
     </div>
   )
@@ -1258,37 +1282,16 @@ export default function PaddockModal({
                     </div>
                   </div>
 
-                  {/* Paso 2: Especie — solo cuando hay categoría seleccionada */}
+                  {/* Paso 2: Especie — dropdown multiselect cuando hay categoría */}
                   {forageCategory !== '' && (
-                    <div>
-                      <label className="text-[9px] font-black text-gray-500 tracking-widest uppercase block mb-2">
-                        Especie
-                        <span className="ml-1.5 text-[9px] font-medium text-green-600 normal-case tracking-normal">Puede seleccionar más de una</span>
-                      </label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {FORAGE_SPECIES[forageCategory].map(species => {
-                          const isSelected = grassTypes.includes(species)
-                          return (
-                            <button
-                              key={species}
-                              type="button"
-                              onClick={() => {
-                                setGrassTypes(prev =>
-                                  isSelected ? prev.filter(s => s !== species) : [...prev, species]
-                                )
-                              }}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all ${
-                                isSelected
-                                  ? 'bg-green-50 text-green-700 border-green-400'
-                                  : 'bg-white text-gray-500 border-gray-200 hover:border-green-300'
-                              }`}
-                            >
-                              {species}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
+                    <SearchableMultiSelect
+                      label="Especie"
+                      options={FORAGE_SPECIES[forageCategory]}
+                      selected={grassTypes}
+                      onChange={setGrassTypes}
+                      placeholder="Buscar especie…"
+                      allowCustom
+                    />
                   )}
 
                   {/* Malezas — toggle */}
