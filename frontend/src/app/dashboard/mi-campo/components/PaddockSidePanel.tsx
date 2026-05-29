@@ -10,8 +10,8 @@ import BitacoraModal from '../../bitacora/components/BitacoraModal'
 import PaddockModal from './PaddockModal'
 import WeatherConditionChip from '@/components/WeatherConditionChip'
 import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
-import { kml as kmlToGeo } from '@tmcw/togeojson'
-import { area as turfArea } from '@turf/area'
+import { parseKmlFile } from '@/lib/kmlParser'
+import type { ParsedKmlFeature } from '@/lib/kmlParser'
 
 interface Paddock {
   id: string
@@ -57,6 +57,8 @@ interface Props {
   onEditPolygon?: (paddockId: string) => void
   defaultEditPaddockId?: string
   planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
+  /** Called when KML is parsed — features are shown on the map interactively */
+  onKmlFeaturesLoaded?: (features: ParsedKmlFeature[]) => void
 }
 
 // Badges de estado — semántica estricta
@@ -112,6 +114,7 @@ export default function PaddockSidePanel({
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0,
   onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField, onDataRefresh,
   onFieldImageUploaded, onAssignPolygon, onEditPolygon, defaultEditPaddockId, planningDefaults,
+  onKmlFeaturesLoaded,
 }: Props) {
   const [search, setSearch]     = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -215,29 +218,19 @@ export default function PaddockSidePanel({
   // ── KML Import ─────────────────────────────────────────────────────────────
   const handleKmlImport = useCallback(async (file: File) => {
     setKmlImporting(true); setKmlMessage(null)
-    try {
-      const text    = await file.text()
-      const parser  = new DOMParser()
-      const dom     = parser.parseFromString(text, 'text/xml')
-      const geojson = kmlToGeo(dom)
-      const features = geojson.features.filter(
-        (f: any) => f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon'
-      )
-      if (features.length === 0) { setKmlMessage('No se encontraron polígonos en el KML.'); return }
-      let created = 0
-      for (let i = 0; i < features.length; i++) {
-        const feat   = features[i]
-        const rawName = feat.properties?.name || feat.properties?.Name || ''
-        const paddockName = rawName.trim() || `Potrero ${i + 1}`
-        const areaHa = parseFloat((turfArea(feat) / 10000).toFixed(2))
-        await apiFetch('/api/paddocks', { method: 'POST', body: JSON.stringify({ name: paddockName, area_ha: areaHa, boundary: feat.geometry }) })
-        created++
-      }
-      setKmlMessage(`${created} potrero${created !== 1 ? 's' : ''} importado${created !== 1 ? 's' : ''} correctamente.`)
-      onDataRefresh?.()
-    } catch { setKmlMessage('Error al procesar el KML.') }
-    finally { setKmlImporting(false) }
-  }, [onDataRefresh])
+    const result = await parseKmlFile(file)
+    setKmlImporting(false)
+    if (result.error) {
+      setKmlMessage(result.error)
+      return
+    }
+    if (result.features.length === 0) {
+      setKmlMessage('No se encontraron polígonos en el KML.')
+      return
+    }
+    setKmlMessage(`${result.features.length} polígono${result.features.length !== 1 ? 's' : ''} cargado${result.features.length !== 1 ? 's' : ''}. Hacé click en el mapa para asignarlos.`)
+    onKmlFeaturesLoaded?.(result.features)
+  }, [onKmlFeaturesLoaded])
 
 
 

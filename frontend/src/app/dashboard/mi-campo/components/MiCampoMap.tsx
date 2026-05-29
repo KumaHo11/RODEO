@@ -56,6 +56,10 @@ interface Props {
   onFieldBoundaryDrawModeChange?: (active: boolean) => void
   // Initial map center (org location from onboarding step 1)
   initialCenter?: [number, number]
+  // KML import overlay
+  kmlFeatures?: Array<{ name: string; area_ha: number; geojson: any }>
+  kmlAcceptedIndices?: Set<number>
+  onKmlPolygonClick?: (idx: number, feat: { name: string; area_ha: number; geojson: any }) => void
 }
 
 function MapController({
@@ -64,6 +68,7 @@ function MapController({
   drawModeActive = false, onDrawModeChange, onDeletePaddock,
   fieldBoundaryDrawMode = false, onFieldBoundaryDrawn, onFieldBoundaryDrawModeChange,
   initialCenter,
+  kmlFeatures = [], kmlAcceptedIndices = new Set(), onKmlPolygonClick,
 }: Props) {
   const map = useMap()
   const layerGroupRef = useRef<L.LayerGroup | null>(null)
@@ -269,6 +274,49 @@ function MapController({
       hasInitialFitRef.current = true
     }
   }, [paddocks, selectedPaddockId, map])
+
+  // ── KML import overlay ───────────────────────────────────────────────────────
+  const kmlLayerGroupRef = useRef<L.LayerGroup | null>(null)
+  useEffect(() => {
+    if (!kmlLayerGroupRef.current) {
+      kmlLayerGroupRef.current = L.layerGroup().addTo(map)
+    } else {
+      kmlLayerGroupRef.current.clearLayers()
+    }
+    kmlFeatures.forEach((feat, idx) => {
+      const accepted = kmlAcceptedIndices.has(idx)
+      const geom = feat.geojson
+      if (!geom) return
+      const featureOrCollection = geom.type === 'Feature' || geom.type === 'FeatureCollection'
+        ? geom
+        : { type: 'Feature', geometry: geom, properties: {} }
+      try {
+        const layer = L.geoJSON(featureOrCollection, {
+          style: {
+            color: accepted ? '#16a34a' : '#0891b2',
+            weight: 2.5,
+            opacity: 0.9,
+            fillColor: accepted ? '#bbf7d0' : '#cffafe',
+            fillOpacity: 0.45,
+            dashArray: accepted ? undefined : '6 3',
+          },
+        })
+        layer.bindTooltip(
+          `<strong>${feat.name}</strong><br/>${feat.area_ha.toFixed(1)} ha${accepted ? ' — ✅ asignado' : ' — click para asignar'}`,
+          { permanent: false, className: 'text-xs font-bold rounded-lg' }
+        )
+        if (!accepted) {
+          layer.on('click', () => onKmlPolygonClick?.(idx, feat))
+        }
+        kmlLayerGroupRef.current!.addLayer(layer)
+
+        // Fly to KML polygons on first load
+        const gLayer = L.geoJSON(featureOrCollection)
+        const bounds = gLayer.getBounds()
+        if (bounds.isValid()) map.flyToBounds(bounds, { padding: [40, 40], duration: 1.5 })
+      } catch {}
+    })
+  }, [kmlFeatures, kmlAcceptedIndices, map, onKmlPolygonClick])
 
   // -- Herd badges on GRAZING paddocks ─────────────────────────────────────
   useEffect(() => {

@@ -9,9 +9,10 @@ import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { getPaddockNDVI, SatelliteData } from '@/lib/services/satellite'
-import { X, Check, Plus, Satellite, Image as ImageIcon, MapPin, Building2, Loader2 as Spin, Search, AlertTriangle } from 'lucide-react'
+import { X, Check, Plus, Satellite, Image as ImageIcon, MapPin, Building2, Loader2 as Spin, Search, AlertTriangle, Link2, Loader2 } from 'lucide-react'
 import { useConfirm } from '@/components/ui/ConfirmModal'
 import { toast } from 'sonner'
+import type { ParsedKmlFeature } from '@/lib/kmlParser'
 
 const MiCampoMap = dynamic(() => import('./components/MiCampoMap'), {
   ssr: false,
@@ -67,6 +68,11 @@ export default function MiCampoPage() {
   const [mapView, setMapView] = useState<'satellite' | 'image'>('satellite')
   // -- Dynamic map center (updated when user picks a location) ─────────────
   const [mapCenter, setMapCenter] = useState<[number, number] | undefined>(undefined)
+
+  // -- KML import state ────────────────────────────────────────────────────────
+  const [kmlFeatures, setKmlFeatures] = useState<ParsedKmlFeature[]>([])
+  const [kmlAccepted, setKmlAccepted] = useState<Set<number>>(new Set())
+  const [kmlModalFeature, setKmlModalFeature] = useState<{ feat: ParsedKmlFeature; idx: number } | null>(null)
 
   // -- Field setup modal ──────────────────────────────────────────────────────
   const [setupFieldModal, setSetupFieldModal] = useState(false)
@@ -521,6 +527,12 @@ export default function MiCampoPage() {
                   ? [org.location.coordinates[1], org.location.coordinates[0]] as [number, number]
                   : undefined)
             }
+            kmlFeatures={kmlFeatures}
+            kmlAcceptedIndices={kmlAccepted}
+            onKmlPolygonClick={(idx, feat) => {
+              setMapView('satellite')
+              setKmlModalFeature({ feat, idx })
+            }}
           />
         )}
 
@@ -613,16 +625,42 @@ export default function MiCampoPage() {
           onDataRefresh={loadData}
           herds={herds}
           planningDefaults={planningDefaults}
+          onKmlFeaturesLoaded={(features) => {
+            setKmlFeatures(features)
+            setKmlAccepted(new Set())
+            setMapView('satellite') // switch to map so polygons are visible
+            toast.info(`${features.length} polígono${features.length !== 1 ? 's' : ''} importado${features.length !== 1 ? 's' : ''}. Hacé click en un polígono del mapa para asignarlo.`, { duration: 6000 })
+          }}
         />
       </div>
 
-      {/* ── Unified Creation Modal ───────────────────────────────────────── */}
+      {/* ── Unified Creation Modal ────────────────────────────────────── */}
       {creationModal && (
         <PaddockModal
           isCreating
           paddock={DRAFT_PADDOCK('', creationAreaHa)}
           onClose={() => setCreationModal(false)}
           onSave={handleCreatePaddock}
+        />
+      )}
+
+      {/* ── KML polygon action modal ─────────────────────────────────── */}
+      {kmlModalFeature && (
+        <KmlPolygonActionModal
+          feature={kmlModalFeature.feat}
+          idx={kmlModalFeature.idx}
+          existingPaddocks={paddocks}
+          onClose={() => setKmlModalFeature(null)}
+          onCreated={() => {
+            setKmlAccepted(prev => new Set([...prev, kmlModalFeature.idx]))
+            setKmlModalFeature(null)
+            loadData()
+          }}
+          onAssigned={() => {
+            setKmlAccepted(prev => new Set([...prev, kmlModalFeature.idx]))
+            setKmlModalFeature(null)
+            loadData()
+          }}
         />
       )}
 
@@ -653,7 +691,197 @@ export default function MiCampoPage() {
   )
 }
 
-// ── FieldSetupModalInline ───────────────────────────────────────────────────────────
+// ── KmlPolygonActionModal ────────────────────────────────────────────────────────────
+function KmlPolygonActionModal({
+  feature, idx, existingPaddocks, onClose, onCreated, onAssigned,
+}: {
+  feature: ParsedKmlFeature
+  idx: number
+  existingPaddocks: any[]
+  onClose: () => void
+  onCreated: () => void
+  onAssigned: () => void
+}) {
+  const [mode, setMode] = useState<'choose' | 'create' | 'assign'>('choose')
+  const [name, setName] = useState(feature.name || '')
+  const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const filtered = existingPaddocks.filter(p =>
+    p.name?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const handleCreate = async () => {
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      const res = await apiFetch('/api/paddocks', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name.trim(),
+          area_ha: feature.area_ha,
+          boundary: feature.geojson,
+          current_status: 'RESTING',
+        }),
+      })
+      if (res.ok) {
+        toast.success(`Potrero "${name.trim()}" creado`)
+        onCreated()
+      } else {
+        toast.error('Error al crear el potrero')
+      }
+    } catch { toast.error('Error al crear el potrero') }
+    setSaving(false)
+  }
+
+  const handleAssign = async () => {
+    if (!selectedId) return
+    setSaving(true)
+    try {
+      const res = await apiFetch(`/api/paddocks/${selectedId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          geojson: feature.geojson,
+          area_ha: feature.area_ha,
+        }),
+      })
+      if (res.ok) {
+        const p = existingPaddocks.find(p => p.id === selectedId)
+        toast.success(`Polígono asignado a "${p?.name || 'potrero'}"`)
+        onAssigned()
+      } else {
+        toast.error('Error al asignar el polígono')
+      }
+    } catch { toast.error('Error al asignar el polígono') }
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="text-base font-black text-gray-900">Polígono KML</h3>
+            <p className="text-[11px] text-cyan-600 font-bold mt-0.5">{feature.name} · {feature.area_ha.toFixed(2)} ha</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5">
+          {mode === 'choose' && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500 font-medium">¿Qué querés hacer con este polígono?</p>
+              <button
+                onClick={() => setMode('create')}
+                className="w-full flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-all text-left"
+              >
+                <div className="w-9 h-9 bg-green-600 rounded-xl flex items-center justify-center shrink-0">
+                  <Plus className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-900">Agregar como nuevo potrero</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">Crea un potrero con los límites de este polígono</p>
+                </div>
+              </button>
+              <button
+                onClick={() => setMode('assign')}
+                className="w-full flex items-center gap-3 p-3.5 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-all text-left"
+              >
+                <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shrink-0">
+                  <Link2 className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-900">Asignar a potrero existente</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">Usa este polígono como límite de un potrero ya creado</p>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {mode === 'create' && (
+            <div className="space-y-3">
+              <button onClick={() => setMode('choose')} className="text-[10px] text-gray-400 hover:text-gray-600 font-bold">← Volver</button>
+              <div>
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 block">Nombre del potrero</label>
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Ej. Lote Norte"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-green-500 outline-none"
+                  autoFocus
+                />
+              </div>
+              <div className="bg-cyan-50 border border-cyan-100 rounded-xl px-3 py-2 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-cyan-700">Área calculada</span>
+                <span className="text-sm font-black text-cyan-900">{feature.area_ha.toFixed(2)} ha</span>
+              </div>
+              <button
+                onClick={handleCreate}
+                disabled={!name.trim() || saving}
+                className="w-full py-2.5 bg-green-600 text-white text-sm font-black rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</> : <><Check className="w-4 h-4" /> Crear potrero</>}
+              </button>
+            </div>
+          )}
+
+          {mode === 'assign' && (
+            <div className="space-y-3">
+              <button onClick={() => setMode('choose')} className="text-[10px] text-gray-400 hover:text-gray-600 font-bold">← Volver</button>
+              <div>
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 block">Buscar potrero existente</label>
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar por nombre..."
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  autoFocus
+                />
+              </div>
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {filtered.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedId(p.id)}
+                    className={`w-full text-left px-3 py-2 rounded-xl border text-sm font-semibold transition-all ${
+                      selectedId === p.id
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'bg-gray-50 border-gray-100 text-gray-700 hover:border-blue-200 hover:bg-blue-50'
+                    }`}
+                  >
+                    {p.name} <span className={`text-[10px] ${selectedId === p.id ? 'text-blue-200' : 'text-gray-400'}`}>{Number(p.area_ha || 0).toFixed(1)} ha</span>
+                  </button>
+                ))}
+                {filtered.length === 0 && (
+                  <p className="text-[11px] text-gray-400 text-center py-4">No se encontraron potreros</p>
+                )}
+              </div>
+              {selectedId && (
+                <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-xl p-2">
+                  <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-amber-700 font-medium">Se reemplazará el polígono actual del potrero seleccionado.</p>
+                </div>
+              )}
+              <button
+                onClick={handleAssign}
+                disabled={!selectedId || saving}
+                className="w-full py-2.5 bg-blue-600 text-white text-sm font-black rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Asignando...</> : <><Check className="w-4 h-4" /> Asignar polígono</>}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── FieldSetupModalInline ────────────────────────────────────────────────────────────
 // Extraído para mantener MiCampoPage limpio.
 // Usa Nominatim (igual que onboarding Step1Field) para autocomplete de ubicación.
 function FieldSetupModalInline({
