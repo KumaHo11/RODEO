@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous } from 'lucide-react'
+import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous, Info } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
@@ -538,13 +538,36 @@ export default function PaddockSidePanel({
                           </div>
                         )}
 
-                        {/* ══ ZONA 3: CONTEXTO AMBIENTAL — drawer lateral de clima */}
+                        {/* ══ ZONA 3: CONTEXTO AMBIENTAL — pill compacta + drawer lateral */}
                         <div className="px-4 pb-3 flex items-center gap-2" onClick={e => e.stopPropagation()}>
                           <WeatherConditionChip
                             mode="paddock"
                             entityName={paddock.name}
                             grassGrowthRate={realGrowthRate}
                             ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
+                            customTrigger={({ onClick, cond }) => {
+                              const ndviVal = ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi
+                              if (!cond) return (
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-gray-100 bg-gray-50">
+                                  <div className="w-3 h-3 rounded-full bg-gray-200 animate-pulse" />
+                                  <span className="text-[9px] text-gray-300 font-bold">...</span>
+                                </div>
+                              )
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); onClick() }}
+                                  title="Ver detalle climático del potrero"
+                                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full border border-gray-100 bg-white hover:bg-gray-50 transition-all ${cond.text}`}
+                                >
+                                  <span className="[&>svg]:w-3 [&>svg]:h-3">{cond.icon}</span>
+                                  {ndviVal != null && (
+                                    <span className="text-[9px] font-bold text-gray-400">{Number(ndviVal).toFixed(2)}</span>
+                                  )}
+                                  <Info className="w-2.5 h-2.5 text-gray-300" />
+                                </button>
+                              )
+                            }}
                           />
                         </div>
 

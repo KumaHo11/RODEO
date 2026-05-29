@@ -64,6 +64,12 @@ export interface WeatherConditionChipProps {
   waterBalance?: number
   /** Clases adicionales */
   className?: string
+  /**
+   * Render prop opcional: reemplaza el chip visual por un trigger custom.
+   * Recibe { onClick, cond } y debe devolver el elemento clickeable.
+   * El drawer de detalle sigue siendo manejado internamente.
+   */
+  customTrigger?: (args: { onClick: () => void; cond: ConditionResult | null }) => React.ReactNode
 }
 
 // ── Lógica de condición climática ─────────────────────────────────────────────
@@ -415,7 +421,7 @@ function ClimateDetailDrawer({
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export default function WeatherConditionChip({
-  mode, entityName, grassGrowthRate, ndvi, waterBalance, className = '',
+  mode, entityName, grassGrowthRate, ndvi, waterBalance, className = '', customTrigger,
 }: WeatherConditionChipProps) {
   const { current, isLoading } = useWeather()
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -428,6 +434,30 @@ export default function WeatherConditionChip({
     return classifyCondition(current.tempC, current.humidityPct, current.windSpeedKmh, current.weatherCode)
   }, [current])
 
+  // ── Modo custom trigger ───────────────────────────────────────────────────
+  if (customTrigger) {
+    if (isLoading || !cond || !current) {
+      return <>{customTrigger({ onClick: () => {}, cond: null })}</>
+    }
+    return (
+      <>
+        {customTrigger({ onClick: () => setDrawerOpen(true), cond })}
+        {drawerOpen && mounted && (
+          <ClimateDetailDrawer
+            mode={mode}
+            entityName={entityName}
+            grassGrowthRate={grassGrowthRate}
+            ndvi={ndvi}
+            waterBalance={waterBalance}
+            cond={cond}
+            onClose={() => setDrawerOpen(false)}
+          />
+        )}
+      </>
+    )
+  }
+
+  // ── Chip default ──────────────────────────────────────────────────────────
   if (isLoading || !cond || !current) {
     return (
       <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-100 bg-gray-50 ${className}`}>

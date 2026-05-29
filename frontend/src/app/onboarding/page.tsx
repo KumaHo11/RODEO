@@ -91,6 +91,11 @@ function OnboardingWizard() {
     }
   }, [updateData])
 
+  // ─── KML state ─────────────────────────────────────────────────────────────
+  const [kmlFeatures, setKmlFeatures] = useState<ParsedKmlFeature[]>([])
+  const [acceptedKmlIndices, setAcceptedKmlIndices] = useState<Set<number>>(new Set())
+  const [pendingKmlIndex, setPendingKmlIndex] = useState<number | null>(null)
+
   // -- Paddock naming modal state --------------------------------------------
   const commitPaddock = useCallback(() => {
     if (!pendingShape || !paddockModalName.trim()) return
@@ -124,11 +129,6 @@ function OnboardingWizard() {
   }, [pendingShape, pendingKmlIndex])
 
   const [midDrawArea, setMidDrawArea] = useState<number | null>(null)
-
-  // ─── KML state ─────────────────────────────────────────────────────────────
-  const [kmlFeatures, setKmlFeatures] = useState<ParsedKmlFeature[]>([])
-  const [acceptedKmlIndices, setAcceptedKmlIndices] = useState<Set<number>>(new Set())
-  const [pendingKmlIndex, setPendingKmlIndex] = useState<number | null>(null)
 
   const handleKmlParsed = useCallback((features: ParsedKmlFeature[]) => {
     setKmlFeatures(features)
