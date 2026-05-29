@@ -269,7 +269,7 @@ function SearchableMultiSelect({
         {showDropdown && (
           // onMouseDown preventDefault stops the input blur so the list stays open
           <div
-            className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[10001] max-h-52 overflow-y-auto"
+            className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[10001] max-h-52 overflow-y-auto"
             onMouseDown={e => e.preventDefault()}
           >
             {filtered.map(opt => (

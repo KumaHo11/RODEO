@@ -421,26 +421,24 @@ export default function PaddockSidePanel({
                 // MS: SOLO del dato ingresado por el usuario (no NDVI)
                 const ms         = Number(paddock.dry_matter_kg_ha) || 0
                 const totalMsCard = ms > 0 && paddock.area_ha ? Math.round(ms * Number(paddock.area_ha)) : null
-                const qualityScore = (paddock.technical_data as any)?.quality_score as number | undefined
+                const rankDisplay = (paddock.technical_data as any)?.quality_score != null ? Math.min(10, Math.max(1, Math.round((paddock.technical_data as any)?.quality_score))) : undefined
                 const forageQuality = (paddock.technical_data as any)?.forage_quality as number | undefined
-                // Scale for 1-10 ranking
-                const rankDisplay = qualityScore != null ? Math.min(10, Math.max(1, Math.round(qualityScore))) : undefined
                 const climateSnap = latestByPaddock.get(paddock.id)
                 const realGrowthRate = climateSnap ? Number(climateSnap.grass_growth_rate) : (paddock.dry_matter_kg_ha ? Number(paddock.dry_matter_kg_ha) * 0.012 : undefined)
 
                 return (
                   <div
                     key={paddock.id}
-                    className={`w-full rounded-2xl border transition-all overflow-hidden cursor-pointer group ${ 
+                    className={`w-full rounded-2xl border transition-all overflow-hidden cursor-pointer group ${
                       !isActive
                         ? 'bg-gray-50 border-gray-200 opacity-60 shadow-sm'
                         : isSelected
-                          ? 'bg-white border-green-300 shadow-lg'
+                          ? 'bg-white border-green-300 shadow-lg ring-1 ring-green-200'
                           : 'bg-white border-gray-200 shadow-md hover:shadow-lg hover:border-gray-300'
                     }`}
                     onClick={() => isActive && onSelectPaddock(paddock.id)}
                   >
-                    {/* ── Header: nombre + estado + toggle ── */}
+                    {/* ══ ZONA 1: IDENTIDAD ══════════════════════════════ */}
                     <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <h3 className={`text-lg font-black leading-tight truncate ${
@@ -448,7 +446,7 @@ export default function PaddockSidePanel({
                         }`}>
                           {paddock.name}
                         </h3>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-2 mt-1">
                           <div className="flex items-center gap-1">
                             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                               paddock.current_status === 'GRAZING' ? 'bg-orange-400' : isActive ? 'bg-green-400' : 'bg-gray-300'
@@ -457,80 +455,82 @@ export default function PaddockSidePanel({
                               {paddock.current_status === 'GRAZING' ? 'En pastoreo' : 'Descansando'}
                             </p>
                           </div>
-                          {/* Ha inline */}
-                          <span className="text-[9px] text-gray-300">·</span>
+                          <span className="text-[9px] text-gray-200">·</span>
                           <span className="text-[10px] font-bold text-gray-500 tabular-nums">
                             {Number(paddock.area_ha || 0).toFixed(1)} ha
                           </span>
-                          {/* Ranking e— muy compacto */}
-                          {rankDisplay != null && (
-                            <>
-                              <span className="text-[9px] text-gray-300">·</span>
-                              <span className="text-[9px] font-bold text-gray-400">{rankDisplay}/10</span>
-                            </>
-                          )}
-                          {/* Calidad forrajera: estrella + número */}
-                          {forageQuality != null && (
-                            <span className="text-[9px] font-bold text-amber-400">★{forageQuality}</span>
-                          )}
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Toggle habilitar/inhabilitar */}
-                        <button
-                          type="button"
-                          onClick={e => toggleDisable(e, paddock.id)}
-                          title={isActive ? 'Inhabilitar potrero' : 'Habilitar potrero'}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none ${
-                            isActive ? 'bg-green-500 border-green-500' : 'bg-red-400 border-red-400'
-                          }`}
-                        >
-                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                            isActive ? 'translate-x-4' : 'translate-x-0'
-                          }`} />
-                        </button>
-                      </div>
+                      {/* Toggle ON/OFF */}
+                      <button
+                        type="button"
+                        onClick={e => toggleDisable(e, paddock.id)}
+                        title={isActive ? 'Inhabilitar potrero' : 'Habilitar potrero'}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none ${
+                          isActive ? 'bg-green-500 border-green-500' : 'bg-red-400 border-red-400'
+                        }`}
+                      >
+                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                          isActive ? 'translate-x-4' : 'translate-x-0'
+                        }`} />
+                      </button>
                     </div>
 
-                    {/* ── Métricas MS ── */}
-                    {isActive && ms > 0 && (
-                      <div className="px-4 pb-3">
-                        <div className="flex items-stretch gap-4">
-                          <div>
-                            <p className="text-[8px] font-black text-gray-400 tracking-widest uppercase mb-0.5">MS/ha</p>
-                            <div className="flex items-baseline gap-0.5">
-                              <p className="text-2xl font-black tabular-nums leading-none text-gray-900">
-                                {ms.toLocaleString('es')}
-                              </p>
-                              <span className="text-[10px] font-bold text-gray-400">kg</span>
-                            </div>
-                          </div>
-                          {totalMsCard != null && (
-                            <>
-                              <div className="w-px bg-gray-100 self-stretch" />
-                              <div>
-                                <p className="text-[8px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Total</p>
-                                <p className="text-base font-black text-gray-700 tabular-nums">
-                                  {totalMsCard.toLocaleString('es')} <span className="font-medium text-gray-400 text-[10px]">kg</span>
-                                </p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {isActive && ms === 0 && (
-                      <div className="px-4 pb-3">
-                        <p className="text-[10px] text-gray-300 italic">Sin datos de MS</p>
-                      </div>
-                    )}
-
-                    {/* ── Footer: clima + infra badges ── */}
                     {isActive && (
-                      <div className="px-4 pb-4" onClick={e => e.stopPropagation()}>
-                        {/* Fila 1: Clima + NDVI */}
-                        <div className="flex items-center gap-2 flex-wrap pt-1">
+                      <>
+                        {/* ══ ZONA 2: PRODUCCIÓN (MS) ═══════════════════ */}
+                        {ms > 0 ? (
+                          <div className="mx-4 mb-3 bg-gray-50 rounded-xl px-3 py-2.5 flex items-stretch gap-4">
+                            <div>
+                              <p className="text-[8px] font-black text-gray-400 tracking-widest uppercase mb-0.5">MS/ha</p>
+                              <div className="flex items-baseline gap-0.5">
+                                <p className="text-2xl font-black tabular-nums leading-none text-gray-900">
+                                  {ms.toLocaleString('es')}
+                                </p>
+                                <span className="text-[10px] font-bold text-gray-400">kg</span>
+                              </div>
+                            </div>
+                            {totalMsCard != null && (
+                              <>
+                                <div className="w-px bg-gray-200 self-stretch" />
+                                <div>
+                                  <p className="text-[8px] font-black text-gray-400 tracking-widest uppercase mb-0.5">Total MS</p>
+                                  <p className="text-base font-black text-gray-700 tabular-nums">
+                                    {totalMsCard.toLocaleString('es')} <span className="font-medium text-gray-400 text-[10px]">kg</span>
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                            {/* Evaluación compacta dentro del bloque producción */}
+                            {(rankDisplay != null || (forageQuality != null && forageQuality > 0)) && (
+                              <>
+                                <div className="w-px bg-gray-200 self-stretch ml-auto" />
+                                <div className="flex flex-col justify-center gap-0.5">
+                                  {rankDisplay != null && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Rank</span>
+                                      <span className="text-[10px] font-black text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">{rankDisplay}/10</span>
+                                    </div>
+                                  )}
+                                  {forageQuality != null && forageQuality > 0 && (
+                                    <div className="flex items-center gap-0.5">
+                                      {[1,2,3,4,5].map(s => (
+                                        <span key={s} className={`text-[10px] ${s <= forageQuality ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="mx-4 mb-3">
+                            <p className="text-[10px] text-gray-300 italic">Sin datos de MS cargados</p>
+                          </div>
+                        )}
+
+                        {/* ══ ZONA 3: CONTEXTO AMBIENTAL ════════════════ */}
+                        <div className="mx-4 mb-3 flex items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
                           <WeatherConditionChip
                             mode="paddock"
                             entityName={paddock.name}
@@ -538,65 +538,69 @@ export default function PaddockSidePanel({
                             ndvi={ndviData[paddock.id]?.averageNdvi ?? paddock.current_ndvi}
                           />
                           {canNdvi && ndviVal != null && (
-                            <span className="text-[9px] font-bold text-gray-400">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">
                               NDVI {Number(ndviVal).toFixed(2)}
                             </span>
                           )}
-                        </div>
-                        {/* Línea divisora — debajo del clima */}
-                        <div className="h-px bg-gray-100 my-2.5" />
-                        {/* Fila 2: Chips de infra — siempre visibles, color cuando activo */}
-                        <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
-                          {TECH_ICONS.map(({ key, Icon, label, activeClass, inactiveClass }) => {
-                            const isOn = key === 'hasPests'
-                              ? (td.hasPests || (td.weed_types?.length ?? 0) > 0)
-                              : key === 'hasWater'
-                              ? (td.hasWater || td.has_water_point)
-                              : key === 'hasPredators'
-                              ? (td.hasPredators || td.has_predators)
-                              : key === 'has_shade'
-                              ? (td.has_shade || td.hasShade)
-                              : key === 'has_water_risk'
-                              ? (td.has_water_risk || td.hasWaterRisk)
-                              : Boolean(td[key])
-                            return (
-                              <div
-                                key={key}
-                                title={label}
-                                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full transition-all ${isOn ? activeClass : inactiveClass}`}
-                              >
-                                <Icon className="w-2.5 h-2.5" />
-                                <span className="text-[8px] font-bold">{label}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                        {/* Botón editar — abajo a la derecha, verde sutil */}
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                            title="Editar potrero"
-                            className="flex items-center gap-1 text-[9px] font-bold px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-2.5 h-2.5">
-                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                            </svg>
-                            Editar
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                         </div>
 
+                         {/* ══ ZONA 4: INFRAESTRUCTURA + EDITAR ══════════ */}
+                         <div className="border-t border-gray-100 px-4 py-3" onClick={e => e.stopPropagation()}>
+                           <p className="text-[8px] font-black text-gray-300 tracking-widest uppercase mb-2">Infraestructura</p>
+                           <div className="flex items-center justify-between gap-2">
+                             <div className="flex items-center gap-1.5 flex-wrap flex-1">
+                               {TECH_ICONS.map(({ key, Icon, label, activeClass, inactiveClass }) => {
+                                 const isOn = key === 'hasPests'
+                                   ? (td.hasPests || (td.weed_types?.length ?? 0) > 0)
+                                   : key === 'hasWater'
+                                   ? (td.hasWater || td.has_water_point)
+                                   : key === 'hasPredators'
+                                   ? (td.hasPredators || td.has_predators)
+                                   : key === 'has_shade'
+                                   ? (td.has_shade || td.hasShade)
+                                   : key === 'has_water_risk'
+                                   ? (td.has_water_risk || td.hasWaterRisk)
+                                   : Boolean(td[key])
+                                 return (
+                                   <div
+                                     key={key}
+                                     title={label}
+                                     className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full transition-all ${isOn ? activeClass : inactiveClass}`}
+                                   >
+                                     <Icon className="w-2.5 h-2.5" />
+                                     <span className="text-[8px] font-bold">{label}</span>
+                                   </div>
+                                 )
+                               })}
+                             </div>
+                             <button
+                               type="button"
+                               onClick={e => { e.stopPropagation(); openModal(paddock) }}
+                               title="Editar potrero"
+                               className="shrink-0 flex items-center gap-1 text-[9px] font-bold px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all"
+                             >
+                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-2.5 h-2.5">
+                                 <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                               </svg>
+                               Editar
+                             </button>
+                           </div>
+                         </div>
+                       </>
+                     )}
 
-                    {/* Disabled badge */}
-                  </div>
-                )
-              })
-            )}
+                     {!isActive && (
+                       <div className="px-4 pb-3">
+                         <p className="text-[10px] text-gray-300 italic">Potrero inhabilitado</p>
+                       </div>
+                     )}
+                   </div>
+                 )
+               })
+             )}
+
           </div>
         </div>
-
 
         {/* ── Footer — sin botón "Configurar campo" ────────────────────────── */}
         {paddocks.length > 0 && (
