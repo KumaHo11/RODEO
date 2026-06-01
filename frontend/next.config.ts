@@ -8,6 +8,10 @@ const withPWA = withPWAInit({
   // No recargar automáticamente al volver online — la sincronización manual evita perder datos
   reloadOnOnline: false,
   disable: false,
+  // Fallback: sirve el shell HTML cacheado para rutas de navegación offline
+  fallbacks: {
+    document: "/_offline",
+  },
   workboxOptions: {
     disableDevLogs: true,
     runtimeCaching: [

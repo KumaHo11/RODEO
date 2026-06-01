@@ -1715,9 +1715,11 @@ export default function PaddockModal({
                         <p className="text-xs font-bold text-violet-400 mt-1">Sin análisis</p>
                       )}
                       <button type="button"
-                        onClick={() => { setNoteExpanded(true); setNoteMode('image') }}
-                        className="mt-2 text-[9px] font-black text-violet-600 hover:text-violet-800 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" /> Analizar foto
+                        onClick={() => { if (!isOnline) return; setNoteExpanded(true); setNoteMode('image') }}
+                        disabled={!isOnline}
+                        title={!isOnline ? 'Requiere conexión a internet' : undefined}
+                        className={`mt-2 text-[9px] font-black flex items-center gap-1 transition-colors ${!isOnline ? 'text-gray-400 cursor-not-allowed' : 'text-violet-600 hover:text-violet-800'}`}>
+                        <Sparkles className="w-3 h-3" /> {!isOnline ? 'Sin conexión' : 'Analizar foto'}
                       </button>
                     </div>
                   </div>

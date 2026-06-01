@@ -179,14 +179,14 @@ export default function BitacoraPage() {
       if (res.ok) {
         fetchedNotes = (await res.json()).notes || []
         try {
-          localStorage.setItem('rodeo_cached_notes', JSON.stringify(fetchedNotes))
+          localStorage.setItem('rodeo_cached_notes_bitacora', JSON.stringify(fetchedNotes))
         } catch { /* ignore */ }
       } else {
         throw new Error('API error')
       }
     } catch {
       try {
-        fetchedNotes = JSON.parse(localStorage.getItem('rodeo_cached_notes') || '[]')
+        fetchedNotes = JSON.parse(localStorage.getItem('rodeo_cached_notes_bitacora') || '[]')
       } catch { /* ignore */ }
     }
 
@@ -194,7 +194,10 @@ export default function BitacoraPage() {
     try {
       const queue = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
       const pendingFieldNotes = queue.filter(
-        (q: any) => q.type === 'field_note' && (q.data?.paddock_id == null || q.data?.paddock_id === '')
+        (q: any) =>
+          q.type === 'field_note' &&
+          (q.data?.paddock_id === null || q.data?.paddock_id === undefined || q.data?.paddock_id === '') &&
+          !q.data?.herd_id // excluir también notas de rodeo
       )
       
       const localNotes = await Promise.all(pendingFieldNotes.map(async (item: any) => {

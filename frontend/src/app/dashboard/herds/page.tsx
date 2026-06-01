@@ -6,7 +6,7 @@ import { apiFetch } from '@/lib/apiFetch'
 import {
   Plus, Search, Trash2, List, Download,
   ChevronUp, ChevronDown, Filter, X, Calendar, Layers,
-  Info, FileSpreadsheet,
+  Info, FileSpreadsheet, WifiOff,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import HerdModal, { type HerdData } from '@/components/HerdModal'
@@ -334,20 +334,48 @@ export default function HerdsPage() {
   const maxHerds = getLimit('max_herds')
   const canCreateMore = herds.length < maxHerds
 
+  const [isOfflineData, setIsOfflineData] = useState(false)
+
   // ── Data loading ──────────────────────────────────────────────────────────
 
   const loadHerds = async () => {
     if (!user) return
     setLoading(true)
-    const res = await apiFetch('/api/herds')
-    if (res.ok) {
-      const data = await res.json()
-      setHerds(data.herds || [])
-      setLotes(data.lotes || [])
-      setUngrouped(data.ungrouped || data.herds || [])
+    try {
+      const res = await apiFetch('/api/herds')
+      if (res.ok) {
+        const data = await res.json()
+        const herdsData = data.herds || []
+        setHerds(herdsData)
+        setLotes(data.lotes || [])
+        setUngrouped(data.ungrouped || herdsData)
+        setIsOfflineData(false)
+        // Guardar en caché local para uso offline
+        try {
+          localStorage.setItem('rodeo_cached_herds', JSON.stringify({
+            herds: herdsData,
+            lotes: data.lotes || [],
+            ungrouped: data.ungrouped || herdsData,
+          }))
+        } catch { /* ignore quota errors */ }
+      } else {
+        throw new Error('API error')
+      }
+    } catch {
+      // Fallback: usar datos cacheados localmente
+      try {
+        const cached = JSON.parse(localStorage.getItem('rodeo_cached_herds') || 'null')
+        if (cached) {
+          setHerds(cached.herds || [])
+          setLotes(cached.lotes || [])
+          setUngrouped(cached.ungrouped || cached.herds || [])
+          setIsOfflineData(true)
+        }
+      } catch { /* ignore */ }
     }
     setLoading(false)
   }
+
 
   const loadHistorial = async () => {
     setLoadingMov(true)
@@ -614,6 +642,7 @@ export default function HerdsPage() {
           <h1 className="text-3xl font-black tracking-tight text-gray-950">Rodeos</h1>
           <p className="text-sm text-gray-500 font-medium mt-1">Gestión de lotes de manejo, estados fisiológicos y carga animal.</p>
         </div>
+
         <div className="flex items-center gap-2 overflow-x-auto pb-1 shrink-0">
           {/* View toggle */}
           <div className="bg-gray-100 rounded-xl p-0.5 flex gap-0.5 shrink-0">
@@ -659,7 +688,17 @@ export default function HerdsPage() {
       </div>
 
       {/* ── KPIs ── */}
+      {/* ── Banner de datos sin conexión ── */}
+      {isOfflineData && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700">
+          <WifiOff className="w-4 h-4 shrink-0" />
+          <p className="text-xs font-bold">Mostrando últimos datos guardados · Sin conexión</p>
+        </div>
+      )}
+
+      {/* ── Stats ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
         <div className="sm:col-span-1 bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-5 text-white shadow-md shadow-green-200">
           <p className="text-[10px] font-black tracking-widest uppercase text-green-100 mb-2">Establecimiento</p>
           <p className="text-4xl font-black tabular-nums leading-none">{totalAnimals.toLocaleString('es-AR')}</p>

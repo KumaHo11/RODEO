@@ -46,6 +46,7 @@ export default function MiCampoPage() {
   const [fieldBoundary, setFieldBoundary]   = useState<any>(null)
   const [selectedPaddockId, setSelectedPaddockId] = useState<string | null>(null)
   const [loading, setLoading]               = useState(true)
+  const [isOfflineData, setIsOfflineData]   = useState(false)
   const [ndviData, setNdviData]             = useState<Record<string, SatelliteData>>({})
   const [ndviLoading, setNdviLoading]       = useState(false)
   const [activeGrazingPlans, setActiveGrazingPlans] = useState<{paddock_id: string; herd_name: string; head_count: number}[]>([])
@@ -95,79 +96,101 @@ export default function MiCampoPage() {
   const loadData = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    const [paddocksRes, orgRes, plansRes, herdsRes, climateRes] = await Promise.all([
-      apiFetch('/api/paddocks'),
-      apiFetch('/api/organizations'),
-      apiFetch('/api/grazing-plans'),
-      apiFetch('/api/herds'),
-      apiFetch('/api/climate-adjustment').catch(() => ({ ok: false } as Response)),
-    ])
-    const paddocksData = paddocksRes.ok ? (await paddocksRes.json()).paddocks || [] : []
-    const orgData      = orgRes.ok      ? (await orgRes.json()).organization : null
-    const plansData    = plansRes.ok    ? (await plansRes.json()).plans || []  : []
-    const herdsData    = herdsRes.ok    ? (await herdsRes.json()).herds || []  : []
-    const climateData  = climateRes.ok  ? (await climateRes.json()).snapshots || [] : []
+    try {
+      const [paddocksRes, orgRes, plansRes, herdsRes, climateRes] = await Promise.all([
+        apiFetch('/api/paddocks'),
+        apiFetch('/api/organizations'),
+        apiFetch('/api/grazing-plans'),
+        apiFetch('/api/herds'),
+        apiFetch('/api/climate-adjustment').catch(() => ({ ok: false } as Response)),
+      ])
+      const paddocksData = paddocksRes.ok ? (await paddocksRes.json()).paddocks || [] : []
+      const orgData      = orgRes.ok      ? (await orgRes.json()).organization : null
+      const plansData    = plansRes.ok    ? (await plansRes.json()).plans || []  : []
+      const herdsData    = herdsRes.ok    ? (await herdsRes.json()).herds || []  : []
+      const climateData  = climateRes.ok  ? (await climateRes.json()).snapshots || [] : []
 
-    // Indexar snapshots climáticos por paddock_id (el más reciente primero)
-    const snapMap: Record<string, any> = {}
-    climateData.forEach((s: any) => {
-      if (!snapMap[s.paddock_id]) {
-        snapMap[s.paddock_id] = s
-      }
-    })
-    setClimateSnapshots(snapMap)
+      if (!paddocksRes.ok && !orgRes.ok) throw new Error('offline')
 
-    setOrg(orgData)
-    if (orgData?.boundaries) setFieldBoundary(orgData.boundaries)
-    if (orgData?.default_daily_allocation_kg || orgData?.default_target_remnant_kg_ha) {
-      setPlanningDefaults({
-        dailyAllocationKg:  Number(orgData.default_daily_allocation_kg  ?? 12),
-        targetRemnantKgHa:  Number(orgData.default_target_remnant_kg_ha ?? 600),
-      })
-    }
+      // Guardar datos críticos en caché local
+      try {
+        if (paddocksRes.ok) localStorage.setItem('rodeo_cached_paddocks', JSON.stringify(paddocksData))
+        if (orgRes.ok) localStorage.setItem('rodeo_cached_org', JSON.stringify(orgData))
+      } catch { /* ignore quota errors */ }
 
-    // Construir indicadores de pastoreo activo para el mapa
-    // Acepta status ACTIVE/active, y PLANNED con entry_date ya pasada
-    const today = new Date().toISOString().split('T')[0]
-    console.log('[mapa] all plans statuses:', plansData.map((p: any) => ({ id: p.id, status: p.status, paddock_id: p.paddock_id, entry: p.entry_date, exit: p.exit_date })))
-    const activePlans = plansData
-      .filter((p: any) => {
-        const s = (p.status ?? '').toUpperCase()
-        if (s === 'ACTIVE') return true
-        // Plan programado cuya ventana de pastoreo ya empezó
-        if ((s === 'PLANNED' || s === 'PROGRAMADO') && p.entry_date <= today && (!p.exit_date || p.exit_date >= today)) return true
-        return false
-      })
-      .map((p: any) => {
-        let ids: string[] = []
-        if (p.herd_id) ids.push(p.herd_id)
-        try {
-          const extras: string[] = typeof p.herd_ids === 'string'
-            ? JSON.parse(p.herd_ids)
-            : Array.isArray(p.herd_ids) ? p.herd_ids : []
-          ids = Array.from(new Set([...ids, ...extras]))
-        } catch {}
-
-        const matchedHerds = ids.length > 0
-          ? herdsData.filter((h: any) => ids.includes(h.id))
-          : p.herds ? [p.herds] : []
-
-        const totalHead = matchedHerds.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
-        const names = matchedHerds.map((h: any) => h.name).filter(Boolean)
-        const herdLabel = names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0] || 'Rodeo'
-
-        return {
-          paddock_id: p.paddock_id,
-          herd_name: herdLabel,
-          head_count: totalHead || p.herds?.head_count || 0,
+      // Indexar snapshots climáticos por paddock_id (el más reciente primero)
+      const snapMap: Record<string, any> = {}
+      climateData.forEach((s: any) => {
+        if (!snapMap[s.paddock_id]) {
+          snapMap[s.paddock_id] = s
         }
       })
-    console.log('[mapa] activePlans calculados:', activePlans)
-    setActiveGrazingPlans(activePlans)
-    setHerds(herdsData)
-    setPaddocks(paddocksData)
-    setLoading(false)
-    loadNdviForPaddocks(paddocksData)
+      setClimateSnapshots(snapMap)
+
+      setOrg(orgData)
+      if (orgData?.boundaries) setFieldBoundary(orgData.boundaries)
+      if (orgData?.default_daily_allocation_kg || orgData?.default_target_remnant_kg_ha) {
+        setPlanningDefaults({
+          dailyAllocationKg:  Number(orgData.default_daily_allocation_kg  ?? 12),
+          targetRemnantKgHa:  Number(orgData.default_target_remnant_kg_ha ?? 600),
+        })
+      }
+
+      // Construir indicadores de pastoreo activo para el mapa
+      const today = new Date().toISOString().split('T')[0]
+      console.log('[mapa] all plans statuses:', plansData.map((p: any) => ({ id: p.id, status: p.status, paddock_id: p.paddock_id, entry: p.entry_date, exit: p.exit_date })))
+      const activePlans = plansData
+        .filter((p: any) => {
+          const s = (p.status ?? '').toUpperCase()
+          if (s === 'ACTIVE') return true
+          if ((s === 'PLANNED' || s === 'PROGRAMADO') && p.entry_date <= today && (!p.exit_date || p.exit_date >= today)) return true
+          return false
+        })
+        .map((p: any) => {
+          let ids: string[] = []
+          if (p.herd_id) ids.push(p.herd_id)
+          try {
+            const extras: string[] = typeof p.herd_ids === 'string'
+              ? JSON.parse(p.herd_ids)
+              : Array.isArray(p.herd_ids) ? p.herd_ids : []
+            ids = Array.from(new Set([...ids, ...extras]))
+          } catch {}
+
+          const matchedHerds = ids.length > 0
+            ? herdsData.filter((h: any) => ids.includes(h.id))
+            : p.herds ? [p.herds] : []
+
+          const totalHead = matchedHerds.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
+          const names = matchedHerds.map((h: any) => h.name).filter(Boolean)
+          const herdLabel = names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0] || 'Rodeo'
+
+          return {
+            paddock_id: p.paddock_id,
+            herd_name: herdLabel,
+            head_count: totalHead || p.herds?.head_count || 0,
+          }
+        })
+      console.log('[mapa] activePlans calculados:', activePlans)
+      setActiveGrazingPlans(activePlans)
+      setHerds(herdsData)
+      setPaddocks(paddocksData)
+      setIsOfflineData(false)
+      setLoading(false)
+      loadNdviForPaddocks(paddocksData)
+    } catch {
+      // Fallback: usar datos cacheados localmente
+      try {
+        const cachedPaddocks = JSON.parse(localStorage.getItem('rodeo_cached_paddocks') || '[]')
+        const cachedOrg = JSON.parse(localStorage.getItem('rodeo_cached_org') || 'null')
+        setPaddocks(cachedPaddocks)
+        if (cachedOrg) {
+          setOrg(cachedOrg)
+          if (cachedOrg.boundaries) setFieldBoundary(cachedOrg.boundaries)
+        }
+        setIsOfflineData(true)
+      } catch { /* ignore */ }
+      setLoading(false)
+    }
   }, [user])
 
   const loadNdviForPaddocks = async (paddocks: any[]) => {
@@ -575,6 +598,13 @@ export default function MiCampoPage() {
 
       {/* ── Side Panel — mobile scrolls below map, desktop left 35% ─────────── */}
       <div className="order-2 md:order-1 w-full md:w-[35%] md:shrink-0 flex flex-col md:overflow-hidden px-3 pb-4 pt-3 md:p-0 gap-3">
+        {/* Banner de datos sin conexión */}
+        {isOfflineData && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 mx-0 md:mx-1 mt-1 md:mt-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <p className="text-[10px] font-bold">Datos sin conexión · Mostrando última versión guardada</p>
+          </div>
+        )}
         <PaddockSidePanel
           paddocks={paddocks}
           org={org}
