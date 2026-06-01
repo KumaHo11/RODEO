@@ -9,6 +9,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock, Search, FileText, Image as ImageIcon, Filter, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
+import { isOffline } from '@/lib/connectivity'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
@@ -796,8 +797,8 @@ export default function PaddockModal({
     setNoteSaving(true)
     const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
 
-    // ── Offline Path ──
-    if (!navigator.onLine) {
+    // ── Offline Path ──  (navigator.onLine no es confiable en iOS)
+    if (await isOffline()) {
       const offlineId = crypto.randomUUID()
       const offlineTitle = noteTitle.trim() || (noteText || audioTranscript).slice(0, 60) || 'Nota de campo'
       
@@ -884,120 +885,179 @@ export default function PaddockModal({
       return true
     }
 
-    // ── Online Path ──
-    let photo_url: string | null = null
-    if (noteImage) {
-      try {
-        const compressedImage = await compressImage(noteImage)
+    // ── Online Path —— con auto-fallback a offline si la red falla ──
+    // iOS puede reportar navigator.onLine=true estando sin internet.
+    // Si cualquier fetch falla con TypeError (error de red), encolamos offline.
+    try {
+      let photo_url: string | null = null
+      if (noteImage) {
+        try {
+          const compressedImage = await compressImage(noteImage)
+          const fd = new FormData()
+          fd.append('file', compressedImage)
+          fd.append('folder', 'field-notes')
+          const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+          if (up.ok) {
+            const upData = await up.json().catch(() => ({}))
+            photo_url = upData.url || null
+          } else {
+            console.warn('[saveQuickNote] photo upload failed:', up.status)
+          }
+        } catch (err) {
+          console.error('[saveQuickNote] compress/upload error:', err)
+          throw err // re-throw para que caiga en el catch externo (fallback offline)
+        }
+
+        if (!photo_url) {
+          toast.error('No se pudo subir la foto al servidor. Verificá tu conexión e intentá de nuevo.')
+          setNoteSaving(false)
+          return false
+        }
+      }
+
+      // 1. Upload audio file
+      let audio_url: string | null = null
+      if (effectiveBlob) {
+        const blobType = effectiveBlob.type || 'audio/webm'
+        const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
         const fd = new FormData()
-        fd.append('file', compressedImage)
-        fd.append('folder', 'field-notes')
+        fd.append('file', new File([effectiveBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
+        fd.append('folder', 'field-notes-audio')
         const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
         if (up.ok) {
           const upData = await up.json().catch(() => ({}))
-          photo_url = upData.url || null
+          audio_url = upData.url || null
         } else {
-          console.warn('[saveQuickNote] photo upload failed:', up.status)
+          const errTxt = await up.text().catch(() => String(up.status))
+          console.warn('[saveQuickNote] audio upload failed:', errTxt)
+          toast.error('No se pudo subir el audio. Verificá tu conexión e intentá de nuevo.')
+          setNoteSaving(false)
+          return false
         }
-      } catch (err) {
-        console.error('[saveQuickNote] compress error:', err)
       }
 
-      if (!photo_url) {
-        toast.error('No se pudo subir la foto al servidor. Verificá tu conexión e intentá de nuevo.')
+      // 2. Build content
+      const resolvedContent = noteText || audioTranscript || null
+      const resolvedTitle = noteTitle.trim() ||
+        resolvedContent?.slice(0, 60) ||
+        noteImage?.name ||
+        (effectiveBlob ? `Audio · ${timestamp}` : 'Nota de campo')
+
+      // 3. Save note immediately
+      const saveRes = await apiFetch('/api/field-notes', {
+        method: 'POST',
+        body: JSON.stringify({
+          paddock_id: paddock.id,
+          category: noteResult ? 'BIOMASA' : 'GENERAL',
+          tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
+          title: resolvedTitle,
+          content: resolvedContent,
+          photo_url,
+          audio_url,
+          analysis_result: noteResult || null,
+        }),
+      })
+
+      if (!saveRes.ok) {
+        const errData = await saveRes.json().catch(() => ({}))
+        console.error('[saveQuickNote] POST failed:', errData)
+        toast.error('No se pudo guardar el registro. Intentá de nuevo.')
         setNoteSaving(false)
         return false
       }
-    }
 
-    // 1. Upload audio file (use ref blob for reliability)
-    let audio_url: string | null = null
-    if (effectiveBlob) {
-      const blobType = effectiveBlob.type || 'audio/webm'
-      const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
-      const fd = new FormData()
-      fd.append('file', new File([effectiveBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
-      fd.append('folder', 'field-notes-audio')
-      const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-      if (up.ok) {
-        const upData = await up.json().catch(() => ({}))
-        audio_url = upData.url || null
-        console.log('[saveQuickNote] audio uploaded:', audio_url)
-      } else {
-        const errTxt = await up.text().catch(() => String(up.status))
-        console.warn('[saveQuickNote] audio upload failed:', errTxt)
-        toast.error('No se pudo subir el audio. Verificá tu conexión e intentá de nuevo.')
-        setNoteSaving(false)
-        return false
+      const savedNote = await saveRes.json().catch(() => ({}))
+      const savedNoteId: string | null = savedNote?.note?.id ?? null
+
+      // 4. AI transcription in background (non-blocking)
+      if (effectiveBlob && savedNoteId) {
+        const capturedBlob = effectiveBlob
+        ;(async () => {
+          try {
+            const blobType = capturedBlob.type || 'audio/webm'
+            const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
+            const tf = new FormData()
+            tf.append('file', new File([capturedBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 20000)
+            const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf, signal: controller.signal }).catch(() => null)
+            clearTimeout(timeoutId)
+            if (!tr?.ok) return
+            const d = await tr.json().catch(() => ({}))
+            if (d.transcript && d.transcript !== '[Sin voz detectable]') {
+              await apiFetch(`/api/field-notes/${savedNoteId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ content: d.transcript }),
+              }).catch(() => null)
+            }
+          } catch { /* background — ignore */ }
+        })()
       }
-    }
 
-    // 2. Build content — use live Web Speech transcript initially, AI will improve it in background
-    const resolvedContent = noteText || audioTranscript || null
-    const resolvedTitle = noteTitle.trim() ||
-      resolvedContent?.slice(0, 60) ||
-      noteImage?.name ||
-      (effectiveBlob ? `Audio · ${timestamp}` : 'Nota de campo')
-
-    // 3. Save note immediately (don't block on AI transcription)
-    const saveRes = await apiFetch('/api/field-notes', {
-      method: 'POST',
-      body: JSON.stringify({
-        paddock_id: paddock.id,
-        category: noteResult ? 'BIOMASA' : 'GENERAL',
-        tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-        title: resolvedTitle,
-        content: resolvedContent,
-        photo_url,
-        audio_url,
-        analysis_result: noteResult || null,
-      }),
-    })
-
-    if (!saveRes.ok) {
-      const errData = await saveRes.json().catch(() => ({}))
-      console.error('[saveQuickNote] POST failed:', errData)
-      toast.error('No se pudo guardar el registro. Intentá de nuevo.')
       setNoteSaving(false)
-      return false
+      setNoteSaved(true)
+      setTimeout(() => setNoteSaved(false), 3000)
+      audioBlobRef.current = null
+      resetNoteCapture()
+      loadNotes()
+      return true
+
+    } catch (networkErr: any) {
+      // ── Auto-fallback offline cuando la red falla (común en iOS) ──────────
+      const isNetErr = networkErr instanceof TypeError || networkErr?.message?.includes('fetch') || networkErr?.name === 'AbortError'
+      if (!isNetErr) {
+        console.error('[saveQuickNote] unexpected error:', networkErr)
+        toast.error('Error al guardar. Intentá de nuevo.')
+        setNoteSaving(false)
+        return false
+      }
+
+      console.warn('[saveQuickNote] network error → saving offline:', networkErr.message)
+      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      const offlineId = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
+      const offlineTitle = noteTitle.trim() || noteText?.slice(0, 60) || audioTranscript?.slice(0, 60) || 'Nota de campo'
+
+      if (effectiveBlob) {
+        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+        await savePendingAudio({
+          id: offlineId, blob: effectiveBlob, durationSecs: 0,
+          lat: null, lng: null, createdAt: new Date().toISOString(),
+          title: offlineTitle, transcript: audioTranscript
+        }).catch(() => {})
+        addToOfflineQueue({
+          type: 'field_note',
+          data: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
+          timestamp: Date.now(), mediaType: 'audio', mediaId: offlineId,
+        } as any)
+      } else if (noteImage) {
+        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+        await savePendingPhoto({
+          id: offlineId, blob: noteImage, lat: null, lng: null,
+          createdAt: new Date().toISOString(), title: offlineTitle,
+        }).catch(() => {})
+        addToOfflineQueue({
+          type: 'field_note',
+          data: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
+          timestamp: Date.now(), mediaType: 'photo', mediaId: offlineId,
+        } as any)
+      } else {
+        addToOfflineQueue({
+          type: 'field_note',
+          data: { paddock_id: paddock.id, category: noteResult ? 'BIOMASA' : 'GENERAL', tags: noteResult ? ['BIOMASA'] : ['GENERAL'], title: offlineTitle, content: noteText || null, sync_status: 'PENDING' },
+          timestamp: Date.now(),
+        })
+      }
+
+      toast.success('Sin conexión — nota guardada. Se sincronizará al reconectar.')
+      setNoteSaving(false)
+      setNoteSaved(true)
+      setTimeout(() => setNoteSaved(false), 3000)
+      audioBlobRef.current = null
+      resetNoteCapture()
+      return true
     }
-
-    const savedNote = await saveRes.json().catch(() => ({}))
-    const savedNoteId: string | null = savedNote?.note?.id ?? null
-
-    // 4. AI transcription in background — PATCH the note when done (non-blocking)
-    if (effectiveBlob && savedNoteId) {
-      const capturedBlob = effectiveBlob
-      ;(async () => {
-        try {
-          const blobType = capturedBlob.type || 'audio/webm'
-          const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
-          const tf = new FormData()
-          tf.append('file', new File([capturedBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 20000) // 20s max
-          const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf, signal: controller.signal }).catch(() => null)
-          clearTimeout(timeoutId)
-          if (!tr?.ok) return
-          const d = await tr.json().catch(() => ({}))
-          if (d.transcript && d.transcript !== '[Sin voz detectable]') {
-            await apiFetch(`/api/field-notes/${savedNoteId}`, {
-              method: 'PATCH',
-              body: JSON.stringify({ content: d.transcript }),
-            }).catch(() => null)
-          }
-        } catch { /* background — ignore errors */ }
-      })()
-    }
-
-    setNoteSaving(false)
-    setNoteSaved(true)
-    setTimeout(() => setNoteSaved(false), 3000)
-    audioBlobRef.current = null
-    resetNoteCapture()
-    loadNotes()
-    return true
   }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes, noteTitle, recording, resetNoteCapture])
+
 
 
   // ── Eliminar nota (solo creador) ─────────────────────────────────────────────

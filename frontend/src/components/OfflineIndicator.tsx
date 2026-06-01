@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { WifiOff, Wifi, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { invalidateConnectivityCache } from '@/lib/connectivity'
 
 type SyncStatus = 'online' | 'offline' | 'syncing' | 'synced'
 
@@ -29,11 +30,13 @@ export default function OfflineIndicator() {
     readPending()
 
     const handleOffline = () => {
+      invalidateConnectivityCache()
       setStatus('offline')
       setVisible(true)
     }
 
     const handleOnline = async () => {
+      invalidateConnectivityCache()
       // Prevenir doble-sync: iOS puede disparar 'online' varias veces seguidas
       if (isSyncingGlobal) return
       isSyncingGlobal = true
