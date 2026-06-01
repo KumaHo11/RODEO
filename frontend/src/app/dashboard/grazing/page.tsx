@@ -2164,7 +2164,7 @@ function InteractiveGantt({
             <button
               onClick={() => {
                 setShowHerdDecisionModal(false)
-                router.push('/dashboard/herds')
+                window.location.href = '/dashboard/herds'
               }}
               className="w-full flex items-start gap-3 p-4 border border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all text-left group"
             >

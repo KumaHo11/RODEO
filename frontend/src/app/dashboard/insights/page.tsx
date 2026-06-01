@@ -111,6 +111,7 @@ export default function InsightsPage() {
 }
 
 function InsightsContent({ user, profile }: { user: any; profile: any }) {
+  const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
