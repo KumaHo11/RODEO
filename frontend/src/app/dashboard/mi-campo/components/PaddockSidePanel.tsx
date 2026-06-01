@@ -439,15 +439,6 @@ export default function PaddockSidePanel({
                           {paddock.name}
                         </h3>
                         <div className="flex items-center gap-2 mt-1">
-                          <div className="flex items-center gap-1">
-                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              !isActive ? 'bg-gray-300' : isGrazing ? 'bg-green-500' : 'bg-blue-400'
-                            }`} />
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                              {isGrazing ? 'Pastando' : 'Descansando'}
-                            </p>
-                          </div>
-                          <span className="text-[9px] text-gray-200">·</span>
                           <span className="text-[10px] font-bold text-gray-500 tabular-nums">
                             {Number(paddock.area_ha || 0).toFixed(1)} ha
                           </span>
