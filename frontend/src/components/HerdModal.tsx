@@ -315,6 +315,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
   const [saving,    setSaving]    = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [offlineSaved, setOfflineSaved] = useState(false)
   const canSave = !!name.trim() && Number(count) > 0 && (!isTemporary || !!exitDate)
 
   const handleSave = async () => {
@@ -348,8 +349,9 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           data: { herd_id: herd.id, ...payload },
           timestamp: Date.now(),
         } as any)
-        import('sonner').then(({ toast }) => toast.success('Rodeo guardado offline. Se sincronizará al conectar.'))
-        onSaved(); onClose()
+        setSaving(false)
+        setOfflineSaved(true)
+        onSaved()
         return
       }
 
@@ -2907,6 +2909,31 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           )}
         </div>
 
+        {/* Offline-saved confirmation overlay */}
+        {offlineSaved && (
+          <div className="absolute inset-0 z-[10001] bg-white/90 backdrop-blur-sm flex items-center justify-center p-6">
+            <div className="bg-white rounded-2xl shadow-2xl border border-green-100 p-6 max-w-sm w-full text-center space-y-4 animate-in zoom-in-95 duration-200">
+              <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto">
+                <Check className="w-7 h-7 text-green-600" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-gray-900">Cambios guardados</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  Los cambios fueron guardados correctamente en el dispositivo.
+                  Cuando la aplicación esté online, se sincronizarán automáticamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setOfflineSaved(false); onClose() }}
+                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all text-sm"
+              >
+                OK, continuar
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer — Tab 1 save / general */}
         {(tab === 'operativo' || (tab === 'registros' && sessionNoteCount > 0)) && (
           <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex justify-end gap-3">
@@ -2916,8 +2943,15 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             </button>
             {tab === 'operativo' && (
               <button type="button" onClick={handleSave} disabled={saving || !canSave}
-                className="px-5 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40">
-                {saving ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear rodeo')}
+                className="relative px-5 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40 min-w-[110px]">
+                {saving && (
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  </span>
+                )}
+                <span className={saving ? 'invisible' : ''}>
+                  {isEditing ? 'Actualizar' : 'Crear rodeo'}
+                </span>
               </button>
             )}
             {tab === 'registros' && sessionNoteCount > 0 && (

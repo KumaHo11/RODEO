@@ -14,9 +14,11 @@ import React, { useState, useCallback } from 'react'
 import { useOnboarding } from '../OnboardingContext'
 import {
   Search, Loader2, ArrowRight, MapPin, Building2,
-  Navigation, Upload, LocateFixed, X, Crosshair,
+  Upload, LocateFixed, X, CheckCircle2,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { parseKmlFile } from '@/lib/kmlParser'
+import type { ParsedKmlFeature } from '@/lib/kmlParser'
 
 // ─── KML / GeoJSON file extractor ─────────────────────────────────────────────
 async function parseSpatialFile(file: File): Promise<{ lat: number; lng: number; address: string } | null> {
@@ -41,17 +43,21 @@ async function parseSpatialFile(file: File): Promise<{ lat: number; lng: number;
   return null
 }
 
-export default function Step1Panel() {
+interface Step1PanelProps {
+  /** Called when a KML file is uploaded and successfully parsed (so Step 2 can pre-load paddocks) */
+  onKmlFeaturesLoaded?: (features: ParsedKmlFeature[]) => void
+}
+
+export default function Step1Panel({ onKmlFeaturesLoaded }: Step1PanelProps) {
   const { data, updateData, nextStep } = useOnboarding()
 
   const [searchQuery, setSearchQuery] = useState(data.location?.address || '')
   const [searching,   setSearching]   = useState(false)
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [showSugg,    setShowSugg]    = useState(false)
-  const [inputMode,   setInputMode]   = useState<'search' | 'coords' | 'file'>('search')
-  const [latInput,    setLatInput]    = useState(data.location?.lat?.toString() || '')
-  const [lngInput,    setLngInput]    = useState(data.location?.lng?.toString() || '')
+  const [inputMode,   setInputMode]   = useState<'search' | 'file'>('search')
   const [fileError,   setFileError]   = useState('')
+  const [kmlLoaded,   setKmlLoaded]   = useState<{ count: number; name: string } | null>(null)
   const [geolocating, setGeolocating] = useState(false)
 
   // Nominatim autocomplete
@@ -104,18 +110,24 @@ export default function Step1Panel() {
     )
   }
 
-  const applyCoords = () => {
-    const lat = parseFloat(latInput), lng = parseFloat(lngInput)
-    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return
-    updateData({ location: { lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` } })
-  }
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError('')
+    setKmlLoaded(null)
     const file = e.target.files?.[0]; if (!file) return
+    // 1. Extract location centroid
     const result = await parseSpatialFile(file)
-    if (result) { updateData({ location: result }); setSearchQuery(result.address); setInputMode('search') }
-    else setFileError('No se pudo leer el archivo. Asegurate de que es un .kml o .geojson válido.')
+    if (result) { updateData({ location: result }); setSearchQuery(result.address) }
+    else { setFileError('No se pudo leer el archivo. Asegurate de que es un .kml o .geojson válido.') }
+    // 2. If KML, also parse full features so Step 2 can pre-load paddocks
+    if (file.name.toLowerCase().endsWith('.kml')) {
+      const parsed = await parseKmlFile(file)
+      if (!parsed.error && parsed.features.length > 0) {
+        onKmlFeaturesLoaded?.(parsed.features)
+        setKmlLoaded({ count: parsed.features.length, name: file.name })
+        setInputMode('search') // switch back to search view showing the location
+      }
+    }
     e.target.value = ''
   }
 
@@ -154,16 +166,15 @@ export default function Step1Panel() {
           </label>
 
           <div className="flex rounded-xl overflow-hidden border border-gray-200 divide-x divide-gray-200">
-            {[
-              { id: 'search', icon: Search,    label: 'Buscar'      },
-              { id: 'coords', icon: Crosshair, label: 'Coordenadas' },
-              { id: 'file',   icon: Upload,    label: 'KML/GeoJSON' },
-            ].map(m => (
-              <button key={m.id} type="button" onClick={() => setInputMode(m.id as any)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-black transition-all ${
+            {([
+              { id: 'search', icon: Search, label: 'Buscar en el mapa' },
+              { id: 'file',   icon: Upload, label: 'Subir archivo KML' },
+            ] as const).map(m => (
+              <button key={m.id} type="button" onClick={() => setInputMode(m.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[10px] font-black transition-all ${
                   inputMode === m.id ? 'bg-green-600 text-white' : 'bg-white text-gray-400 hover:bg-gray-50 hover:text-gray-600'
                 }`}>
-                <m.icon className="w-3 h-3 shrink-0" /><span className="hidden sm:inline">{m.label}</span>
+                <m.icon className="w-3 h-3 shrink-0" /><span>{m.label}</span>
               </button>
             ))}
           </div>
@@ -206,41 +217,40 @@ export default function Step1Panel() {
               </motion.div>
             )}
 
-            {/* COORDS */}
-            {inputMode === 'coords' && (
-              <motion.div key="coords" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Latitud</label>
-                    <input type="number" step="any" placeholder="-34.6037" value={latInput} onChange={e => setLatInput(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-500/30 focus:border-green-500 outline-none placeholder:text-gray-300 font-mono" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Longitud</label>
-                    <input type="number" step="any" placeholder="-60.5" value={lngInput} onChange={e => setLngInput(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-500/30 focus:border-green-500 outline-none placeholder:text-gray-300 font-mono" />
-                  </div>
-                </div>
-                <button type="button" onClick={applyCoords} disabled={!latInput || !lngInput}
-                  className="w-full py-2.5 bg-green-600 text-white rounded-xl text-xs font-black hover:bg-green-700 disabled:opacity-30 transition-all flex items-center justify-center gap-2">
-                  <Navigation className="w-3.5 h-3.5" /> Fijar punto central
-                </button>
-                <p className="text-[10px] text-gray-400 font-normal text-center">También podés hacer click en el mapa →</p>
-              </motion.div>
-            )}
 
             {/* FILE */}
             {inputMode === 'file' && (
               <motion.div key="file" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
-                <label className="flex flex-col items-center justify-center gap-3 py-8 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-all group">
-                  <Upload className="w-6 h-6 text-gray-300 group-hover:text-green-500 transition-colors" />
-                  <div className="text-center">
-                    <p className="text-xs font-black text-gray-500 group-hover:text-green-700 transition-colors">Subir archivo .kml o .geojson</p>
-                    <p className="text-[10px] text-gray-400 font-normal mt-0.5">El sistema extrae la ubicación automáticamente</p>
+                <label className="flex flex-col items-center justify-center gap-4 py-14 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-all group">
+                  <div className="w-14 h-14 rounded-2xl bg-gray-50 group-hover:bg-green-50 border border-gray-100 group-hover:border-green-200 flex items-center justify-center transition-all">
+                    <Upload className="w-7 h-7 text-gray-300 group-hover:text-green-500 transition-colors" />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-black text-gray-600 group-hover:text-green-700 transition-colors">Subir archivo KML</p>
+                    <p className="text-xs text-gray-400 font-normal">Arrastrá o hacé clic para seleccionar</p>
+                    <p className="text-[10px] text-gray-300 font-normal">Soporta .kml y .geojson — la ubicación se extrae automáticamente</p>
                   </div>
                   <input type="file" accept=".kml,.geojson,.json" className="hidden" onChange={handleFile} />
                 </label>
                 {fileError && <p className="text-[10px] text-red-500 font-bold flex items-center gap-1.5"><X className="w-3 h-3 shrink-0" />{fileError}</p>}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* KML loaded badge */}
+          <AnimatePresence>
+            {kmlLoaded && (
+              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="flex items-start gap-2.5 px-3 py-2.5 bg-green-50 border border-green-200 rounded-xl">
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black text-green-700">
+                    {kmlLoaded.count} potrero{kmlLoaded.count !== 1 ? 's' : ''} detectado{kmlLoaded.count !== 1 ? 's' : ''} en el KML
+                  </p>
+                  <p className="text-[10px] text-green-600 font-normal mt-0.5">
+                    En el paso 2 van a aparecer marcados en el mapa automáticamente.
+                  </p>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

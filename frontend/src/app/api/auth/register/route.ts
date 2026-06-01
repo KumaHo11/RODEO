@@ -79,9 +79,19 @@ export async function POST(req: NextRequest) {
 
     // 4. Generar link de verificación de email con Firebase Admin
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+    // actionUrl points to our custom handler (/auth/action) so Firebase redirects
+    // to our branded page instead of the generic Firebase "email verified" screen.
+    // handleCodeInApp: true makes Firebase embed the oobCode in the URL so our page
+    // can call applyActionCode() directly.
     let verifyUrl = `${appUrl}/login?verified=1`  // fallback if admin link fails
 
     try {
+      // handleCodeInApp: false → Firebase verifies on their server and redirects
+      // to `url` (our login page with ?verified=1 success banner) after the user
+      // clicks "Continue" on Firebase's confirmation page.
+      // To fully bypass Firebase's page, set "Customize action URL" in Firebase
+      // Console → Authentication → Templates → point to /auth/action.
       verifyUrl = await adminAuth.generateEmailVerificationLink(email!, {
         url: `${appUrl}/login?verified=1`,
         handleCodeInApp: false,

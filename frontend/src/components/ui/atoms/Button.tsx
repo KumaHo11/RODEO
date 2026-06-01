@@ -38,7 +38,7 @@ export function Button({
   return (
     <button
       className={twMerge(
-        'inline-flex items-center justify-center gap-2 font-bold transition-all active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none',
+        'relative inline-flex items-center justify-center gap-2 font-bold transition-all active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none',
         'rounded-xl',
         variants[variant],
         sizes[size],
@@ -47,11 +47,18 @@ export function Button({
       disabled={disabled || isLoading}
       {...props}
     >
-      {isLoading ? (
-        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-      ) : leftIcon}
-      {children}
-      {!isLoading && rightIcon}
+      {/* Spinner — absolutely centred, only visible when loading */}
+      {isLoading && (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        </span>
+      )}
+      {/* Content — invisible while loading so button keeps its natural width */}
+      <span className={`inline-flex items-center gap-2 ${isLoading ? 'invisible' : ''}`}>
+        {leftIcon}
+        {children}
+        {rightIcon}
+      </span>
     </button>
   );
 }

@@ -6,8 +6,8 @@ import { useAuth } from '@/components/AuthProvider'
 import { finishOnboarding } from '../actions'
 import {
   Plus, Trash2, ArrowLeft, ClipboardList, Scale, Leaf,
-  SkipForward, AlertTriangle, X, CheckCircle2, Loader2, TrendingUp,
-  ChevronDown, Calendar, Hash, Clock, Info, Activity,
+  CheckCircle2, Loader2, TrendingUp,
+  ChevronDown, Hash, Clock, Info,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import SuccessModal from './SuccessModal'
@@ -17,10 +17,6 @@ import {
   CATEGORIA_LABEL_RAE, CATEGORIA_KEY_FROM_LABEL, CATEGORIA_REF,
   type CategoriaComercial,
 } from '@/lib/categorias'
-import {
-  PHYSIOLOGICAL_CATEGORIES, PHYSIO_LABEL, PHYSIO_EV_BASE, GROWTH_PHYSIO_CATEGORIES,
-  type PhysiologicalCategory,
-} from '@/lib/grazing/evProjection'
 
 // ── Non-bovine species (forage / EV purposes — no market valuation) ────────────
 const OTHER_SPECIES = [
@@ -39,11 +35,14 @@ function todayISO() {
   return new Date().toISOString().split('T')[0]
 }
 
-// ── Standard bovine categories as RAE-labeled options ─────────────────────────
-const BOVINE_OPTIONS = CATEGORIAS_COMERCIALES.map(k => ({
-  key: k,
-  label: CATEGORIA_LABEL_RAE[k as CategoriaComercial] ?? k,
-}))
+// ── Standard bovine categories as RAE-labeled options (+ Otro) ───────────────
+const BOVINE_OPTIONS = [
+  ...CATEGORIAS_COMERCIALES.map(k => ({
+    key: k,
+    label: CATEGORIA_LABEL_RAE[k as CategoriaComercial] ?? k,
+  })),
+  { key: 'OTRO', label: 'Otro' },
+]
 
 // ── Category Combobox ──────────────────────────────────────────────────────────
 interface CatComboboxProps {
@@ -69,10 +68,9 @@ function CatCombobox({ value, onChange }: CatComboboxProps) {
   }, [])
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return BOVINE_OPTIONS
-    return BOVINE_OPTIONS.filter(o => o.label.toLowerCase().startsWith(q))
-  }, [query])
+    // Always show all options when open (don't filter by typing for better UX)
+    return BOVINE_OPTIONS
+  }, [])
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value
@@ -231,7 +229,7 @@ function BreedCombobox({ value, onChange, breeds }: BreedComboboxProps) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Step3Herds() {
-  const { data, updateData, prevStep } = useOnboarding()
+  const { data, updateData, prevStep, setIsCompleting } = useOnboarding()
   const { user } = useAuth()
 
   // ── Category state (combobox) ──────────────────────────────────────────────
@@ -270,33 +268,19 @@ export default function Step3Herds() {
   const [breed,         setBreed]         = useState('')
   const [count,         setCount]         = useState<number | ''>('')
   const [weight,        setWeight]        = useState(currentDefaultWeight)
-  const [admissionDate, setAdmissionDate] = useState(todayISO())
   const [ageValue,      setAgeValue]      = useState<number | ''>(6)
   const [ageUnit,       setAgeUnit]       = useState<'months' | 'years'>('months')
 
-  // ── v8: Campos fisiológicos ────────────────────────────────────────────────
-  const [physioCategory, setPhysioCategory] = useState<PhysiologicalCategory | ''>('')
-  const [lastWeighDate,  setLastWeighDate]  = useState('')
-  const [dailyGainKg,    setDailyGainKg]   = useState<number | ''>('')
-
-  const [showSkipWarning, setShowSkipWarning] = useState(false)
   const [submitting,     setSubmitting]       = useState(false)
   const [error,          setError]            = useState<string | null>(null)
   const [showSuccess,    setShowSuccess]      = useState(false)
   const [isRedirecting,  setIsRedirecting]    = useState(false)
 
+  // admissionDate auto-set to today — stored in DB but not shown in form
+  const admissionDate = todayISO()
+
   // Update weight default when category changes
   useEffect(() => { setWeight(currentDefaultWeight) }, [currentDefaultWeight])
-
-  // GDP defaults inteligentes según categoría fisiológica
-  useEffect(() => {
-    if (physioCategory === '') return
-    if (GROWTH_PHYSIO_CATEGORIES.has(physioCategory)) {
-      if (dailyGainKg === '' || dailyGainKg === 0) setDailyGainKg(0.5)
-    } else if (physioCategory === 'VACA_CON_TERNERO') {
-      setDailyGainKg(0)
-    }
-  }, [physioCategory]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Category change handler ────────────────────────────────────────────────
   const handleCatChange = (label: string, key: string | null) => {
@@ -314,17 +298,11 @@ export default function Step3Herds() {
   }
 
   // ── Computed EV ──
-  // Prioridad 1: categoría fisiológica seleccionada → EV = Cabezas × EV_base
-  // Prioridad 2: fallback con peso y factor de demanda comercial
   const currentEV = useMemo(() => {
     const n = Number(count) || 0
     if (n <= 0) return 0
-    if (physioCategory) {
-      const evBase = PHYSIO_EV_BASE[physioCategory] ?? 1.0
-      return parseFloat((evBase * n).toFixed(1))
-    }
     return calcEV(currentDemandFactor, weight, n)
-  }, [physioCategory, count, currentDemandFactor, weight])
+  }, [count, currentDemandFactor, weight])
 
   const currentMsDay = useMemo(() => Math.round(currentEV * MS_PER_EV_DAY), [currentEV])
 
@@ -362,17 +340,13 @@ export default function Step3Herds() {
         ageMonths:            ageMonths,
         admissionDate,
         totalEV:              ev,
-        physiologicalCategory: physioCategory || null,
-        lastWeighDate:        lastWeighDate || null,
-        dailyGainKg:          dailyGainKg !== '' ? Number(dailyGainKg) : null,
+        physiologicalCategory: null,
+        lastWeighDate:        null,
+        dailyGainKg:          null,
       }],
     })
     setName(''); setBreed(''); setCount(''); setWeight(currentDefaultWeight)
     setAgeValue(6); setAgeUnit('months')
-    setAdmissionDate(todayISO())
-    setPhysioCategory('')
-    setLastWeighDate('')
-    setDailyGainKg('')
   }
 
   const removeHerd = (i: number) => updateData({ herds: data.herds.filter((_: any, idx: number) => idx !== i) })
@@ -399,6 +373,7 @@ export default function Step3Herds() {
 
       if (res.success) {
         setShowSuccess(true)
+        setIsCompleting(true)
         try {
           const idToken = await user.getIdToken()
           await fetch('/api/auth/onboarding-step', {
@@ -443,12 +418,6 @@ export default function Step3Herds() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowSkipWarning(true)}
-              className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 border border-amber-200 hover:border-amber-300 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <SkipForward className="w-3 h-3" /> Saltar
-            </button>
-            <button
               onClick={prevStep}
               className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 hover:text-gray-700 transition-colors"
             >
@@ -456,33 +425,6 @@ export default function Step3Herds() {
             </button>
           </div>
         </div>
-
-        {/* ─── Skip warning ─── */}
-        <AnimatePresence>
-          {showSkipWarning && (
-            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="mb-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 shrink-0">
-              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-xs font-black text-amber-800">¿Finalizar sin inventario?</p>
-                <p className="text-[10px] text-amber-600 font-normal mt-0.5 leading-relaxed">
-                  Podés cargar los rodeos después desde la sección <strong>Rodeos</strong> del Dashboard.
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <button onClick={() => handleFinish(true)} disabled={submitting}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white text-[10px] font-black rounded-lg hover:bg-amber-600 transition-all disabled:opacity-50">
-                    {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <SkipForward className="w-3 h-3" />}
-                    Finalizar igual
-                  </button>
-                  <button onClick={() => setShowSkipWarning(false)}
-                    className="px-3 py-1.5 bg-white text-amber-600 border border-amber-200 text-[10px] font-black rounded-lg hover:bg-amber-50 transition-all">
-                    Registrar ahora
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {error && (
           <div className="mb-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl shrink-0">
@@ -502,13 +444,13 @@ export default function Step3Herds() {
 
             <div className="flex-1 px-5 py-4 overflow-y-auto space-y-4 min-h-0">
 
-              {/* ── Categoría comercial ── */}
+              {/* ── Categoría ── */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase">
-                  Categoría comercial
+                  Categoría
                 </label>
                 <CatCombobox value={catLabel} onChange={handleCatChange} />
-                {catKey === null && catLabel.trim() && (
+                {catKey === null && catLabel.trim() && catLabel !== 'Otro' && (
                   <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
                     <Info className="w-3 h-3 shrink-0" />
                     Categoría personalizada — sin cotización del Mercado de Cañuelas
@@ -545,65 +487,6 @@ export default function Step3Herds() {
                 </div>
               </div>
 
-              {/* ── v8: Estado Fisiológico ── */}
-              {!otherSpecies && (
-                <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3.5 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-md bg-teal-100 flex items-center justify-center shrink-0">
-                      <Activity className="w-3 h-3 text-teal-600" />
-                    </div>
-                    <p className="text-[10px] font-black text-teal-700 tracking-widest uppercase">Estado Fisiológico</p>
-                    <span className="text-[8px] text-teal-400 font-medium">(opcional — mejora el cálculo de EV)</span>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase">Categoría fisiológica</label>
-                    <select
-                      className="w-full bg-white border border-teal-100 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all"
-                      value={physioCategory}
-                      onChange={e => setPhysioCategory(e.target.value as PhysiologicalCategory | '')}
-                    >
-                      <option value="">— Opcional: seleccionar estado —</option>
-                      {PHYSIOLOGICAL_CATEGORIES.map(cat => (
-                        <option key={cat} value={cat}>
-                          {PHYSIO_LABEL[cat]} · EV base {PHYSIO_EV_BASE[cat].toFixed(2)}
-                        </option>
-                      ))}
-                    </select>
-                    {physioCategory && (
-                      <p className="text-[9px] text-teal-600 font-medium">
-                        EV = {count || '?'} cab × {PHYSIO_EV_BASE[physioCategory]?.toFixed(2)} = <strong>{currentEV.toFixed(1)} EV</strong>
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase flex items-center gap-1">
-                        <Calendar className="w-2.5 h-2.5 text-teal-400" /> Último pesaje
-                      </label>
-                      <input type="date"
-                        value={lastWeighDate}
-                        onChange={e => setLastWeighDate(e.target.value)}
-                        className="w-full bg-white border border-teal-100 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase flex items-center gap-1">
-                        <TrendingUp className="w-2.5 h-2.5 text-teal-400" /> GDP kg/día
-                        {physioCategory === 'VACA_CON_TERNERO' && <span className="text-[8px] text-gray-400 font-normal">inh.</span>}
-                      </label>
-                      <input type="number" step="0.05" min="0" max="3"
-                        value={dailyGainKg}
-                        onChange={e => setDailyGainKg(e.target.value === '' ? '' : Number(e.target.value))}
-                        disabled={physioCategory === 'VACA_CON_TERNERO'}
-                        placeholder={physioCategory === 'VACA_CON_TERNERO' ? '0.000' : 'ej: 0.500'}
-                        className={`w-full bg-white border border-teal-100 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all ${
-                          physioCategory === 'VACA_CON_TERNERO' ? 'opacity-40 cursor-not-allowed' : ''
-                        }`} />
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* ── Nombre del rodeo ── */}
               <div className="space-y-1.5">
@@ -619,22 +502,6 @@ export default function Step3Herds() {
                 />
               </div>
 
-              {/* ── Fecha de ingreso ── */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase flex items-center gap-1.5">
-                  <Calendar className="w-3 h-3 text-gray-400" />
-                  Fecha de ingreso
-                </label>
-                <input
-                  type="date"
-                  value={admissionDate}
-                  onChange={e => setAdmissionDate(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                />
-                <p className="text-[10px] text-gray-400 italic">
-                  Fecha oficial de alta del rodeo en la plataforma
-                </p>
-              </div>
 
               {/* ── Stock + Raza ── */}
               <div className="grid grid-cols-2 gap-3">
@@ -681,11 +548,11 @@ export default function Step3Herds() {
                 )}
               </div>
 
-              {/* ── Edad ── */}
+              {/* ── Edad (opcional) ── */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-600 tracking-widest uppercase flex items-center gap-1.5">
                   <Clock className="w-3 h-3 text-gray-400" />
-                  Edad
+                  Edad en meses <span className="font-normal normal-case text-[9px] text-gray-300">(opcional)</span>
                 </label>
                 <div className="flex items-center gap-2">
                   {/* Unit toggle */}
@@ -732,20 +599,13 @@ export default function Step3Herds() {
               </div>
 
               {/* ── EV preview ── */}
-              {Number(count) > 0 && (
+                            {Number(count) > 0 && (
                 <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50 rounded-xl border border-green-100">
                       <Scale className="w-3.5 h-3.5 text-green-500 shrink-0" />
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1">
-                          <p className="text-[10px] font-black text-green-600 uppercase tracking-widest">Ev lote</p>
-                          {physioCategory && (
-                            <span className="text-[7px] font-black bg-teal-100 text-teal-700 px-1 rounded">
-                              {PHYSIO_EV_BASE[physioCategory]?.toFixed(2)}×
-                            </span>
-                          )}
-                        </div>
+                        <p className="text-[10px] font-black text-green-600 uppercase tracking-widest">Ev lote</p>
                         <p className="text-base font-black text-green-700 leading-none">{currentEV} <span className="text-[9px] font-normal">EV</span></p>
                       </div>
                     </div>
@@ -757,11 +617,6 @@ export default function Step3Herds() {
                       </div>
                     </div>
                   </div>
-                  {physioCategory && (
-                    <p className="text-[9px] text-teal-600/70 mt-1.5">
-                      {PHYSIO_LABEL[physioCategory]} · EV = {count} × {PHYSIO_EV_BASE[physioCategory]?.toFixed(2)} = {currentEV} EV
-                    </p>
-                  )}
                 </motion.div>
               )}
             </div>
@@ -861,15 +716,7 @@ export default function Step3Herds() {
                           <p className="text-sm font-black text-gray-900">{h.name}</p>
                           <p className="text-[10px] text-gray-500 font-normal">
                             {h.headCount} cab. · {h.breed || 'Sin raza'} · {h.avgWeight} kg
-                            {h.admissionDate && <> · <Calendar className="w-2.5 h-2.5 inline mb-0.5 ml-0.5 text-gray-400" /> {h.admissionDate}</>}
                           </p>
-                          {h.physiologicalCategory && (
-                            <span className="inline-flex items-center gap-1 mt-0.5 text-[8px] font-black bg-teal-50 text-teal-600 border border-teal-100 px-1.5 py-0.5 rounded-full">
-                              <Activity className="w-2 h-2" />
-                              {PHYSIO_LABEL[h.physiologicalCategory as PhysiologicalCategory]}
-                              {h.dailyGainKg ? ` · GDP ${h.dailyGainKg} kg/d` : ''}
-                            </span>
-                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
@@ -901,8 +748,8 @@ export default function Step3Herds() {
             {/* Finish CTA */}
             <div className="px-5 py-4 border-t border-gray-100 shrink-0 space-y-2">
               <motion.button
-                onClick={() => handleFinish(false)}
-                disabled={submitting || data.herds.length === 0}
+                onClick={() => handleFinish(data.herds.length === 0)}
+                disabled={submitting}
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
                 className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-600/20 disabled:opacity-30 disabled:grayscale"
@@ -911,9 +758,9 @@ export default function Step3Herds() {
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando tu campo...</>
                   : <><CheckCircle2 className="w-4 h-4" /> Finalizar y entrar al Dashboard</>}
               </motion.button>
-              {data.herds.length === 0 && (
+              {data.herds.length === 0 && !submitting && (
                 <p className="text-center text-[9px] text-gray-400">
-                  Agregá al menos 1 lote o usá <strong>"Saltar"</strong> para continuar sin hacienda
+                  Se guardará sin hacienda — podés cargarla después desde <strong>Rodeos</strong>
                 </p>
               )}
             </div>

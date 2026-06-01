@@ -54,8 +54,7 @@ const templates = {
         </a>
       </div>
       <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center">
-        Si no creaste esta cuenta, ignorá este mensaje.<br/>
-        Link: <a href="${p.verifyUrl}" style="color:#16a34a">${p.verifyUrl}</a>
+        Si no creaste esta cuenta, ignorá este mensaje.
       </p>
     `),
   }),

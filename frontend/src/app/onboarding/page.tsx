@@ -43,7 +43,7 @@ const STEPS = [
 // Main wizard
 // ------------------------------------------------------------------------------
 function OnboardingWizard() {
-  const { data, updateData, step } = useOnboarding()
+  const { data, updateData, step, isCompleting } = useOnboarding()
   const { user, isLoading, profile } = useAuth()
   const router = useRouter()
 
@@ -135,6 +135,57 @@ function OnboardingWizard() {
     setAcceptedKmlIndices(new Set())
   }, [])
 
+  /** Called from Step1Panel when a KML is uploaded there.
+   *  Auto-accepts ALL polygons as paddocks immediately — the user already
+   *  chose the file in Step 1, so we don't need a per-polygon confirm flow.
+   *  Also flies the map to the KML centroid (higher priority than typed location). */
+  const handleKmlAutoAccept = useCallback((features: ParsedKmlFeature[]) => {
+    setKmlFeatures(features)
+    const allIndices = new Set(features.map((_, i) => i))
+    setAcceptedKmlIndices(allIndices)
+
+    // Immediately commit all features as paddocks in context
+    const paddocks = features.map((feat, i) => ({
+      layerId: undefined as any,
+      name: feat.name || `Potrero ${i + 1}`,
+      geojson: feat.geojson,
+      area_ha: feat.area_ha,
+    }))
+
+    // Compute a centroid from all polygon rings to fly the map there.
+    // This overrides whatever location the user typed — KML has higher priority.
+    let kmlLocation: { lat: number; lng: number; address: string } | null = null
+    try {
+      let latSum = 0, lngSum = 0, count = 0
+      for (const feat of features) {
+        const geom = feat.geojson
+        const rings: number[][][] = geom.type === 'Polygon'
+          ? geom.coordinates
+          : geom.type === 'MultiPolygon'
+            ? geom.coordinates.flat()
+            : []
+        for (const ring of rings) {
+          for (const [lng, lat] of ring) {
+            lngSum += lng; latSum += lat; count++
+          }
+        }
+      }
+      if (count > 0) {
+        kmlLocation = {
+          lat: latSum / count,
+          lng: lngSum / count,
+          address: `Importado desde KML · ${features.length} potrero${features.length !== 1 ? 's' : ''}`,
+        }
+      }
+    } catch {}
+
+    updateData({
+      paddocks,
+      totalArea: parseFloat(paddocks.reduce((s, p) => s + p.area_ha, 0).toFixed(2)),
+      ...(kmlLocation ? { location: kmlLocation } : {}),
+    })
+  }, [updateData])
+
   const handleKmlPolygonClick = useCallback((index: number, feature: ParsedKmlFeature) => {
     setPendingKmlIndex(index)
     const nextName = feature.name || `Potrero ${paddocksLenRef.current + 1}`
@@ -179,14 +230,17 @@ function OnboardingWizard() {
     <div className="flex flex-col h-screen bg-gray-50 font-sans text-gray-900 overflow-hidden">
 
       {/* -- Header -- */}
+      {!isCompleting && (
       <header className="bg-white border-b border-gray-100 px-6 py-4 shadow-sm z-30 flex items-center justify-between shrink-0">
         <RodeoLogo variant="light" size="md" showTagline={false} />
         <div className="hidden sm:block">
           <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Configuración inicial</p>
         </div>
       </header>
+      )}
 
       {/* -- Stepper -- */}
+      {!isCompleting && (
       <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-3 sm:py-4 flex justify-center z-20 shrink-0">
         <div className="flex items-center gap-0">
           {STEPS.map((s, idx) => {
@@ -220,6 +274,7 @@ function OnboardingWizard() {
           })}
         </div>
       </div>
+      )}
 
       {/* -- Main content -- */}
       <main className="flex-1 flex overflow-hidden min-h-0">
@@ -240,7 +295,7 @@ function OnboardingWizard() {
                     transition={{ duration: 0.28, ease: 'easeOut' }}
                     className="absolute inset-0 flex flex-col overflow-y-auto"
                   >
-                    <Step1Panel />
+                    <Step1Panel onKmlFeaturesLoaded={handleKmlAutoAccept} />
                   </motion.div>
                 )}
                 {step === 2 && (

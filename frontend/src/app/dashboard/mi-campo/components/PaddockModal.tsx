@@ -457,6 +457,7 @@ export default function PaddockModal({
   const canNdvi      = hasFeature('ndvi_access')    // NDVI satelital
   const [activeTab, setActiveTab] = useState<'operativo' | 'infraestructura' | 'registros' | 'historial'>('operativo')
   const [saving, setSaving]       = useState(false)
+  const [offlineSaved, setOfflineSaved] = useState(false)
 
   // Tab 1
   const [name, setName]             = useState(paddock.name)
@@ -641,6 +642,31 @@ export default function PaddockModal({
       has_water_risk:       hasWaterRisk,
       relative_quality:     relativeQuality > 0 ? relativeQuality : undefined,
     }
+
+    // ── Offline path: save locally and show confirmation ─────────────────────
+    if (!navigator.onLine && !isCreating) {
+      try {
+        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        const updates: Record<string, any> = { technical_data: td }
+        if (msHa !== '') updates.dry_matter_kg_ha = Number(msHa)
+        addToOfflineQueue({
+          type: 'paddock_update',
+          data: { paddock_id: paddock.id, name: name.trim(), ...updates },
+          timestamp: Date.now(),
+        } as any)
+        // Update local state optimistically so the map reflects the change
+        await onSave(paddock.id, name.trim(), td,
+          msHa   !== '' ? Number(msHa)   : undefined,
+          areaHa !== '' ? Number(areaHa) : undefined,
+        )
+      } finally {
+        setSaving(false)
+        setOfflineSaved(true)
+      }
+      return
+    }
+
+    // ── Online path ──────────────────────────────────────────────────────────
     await onSave(paddock.id, name.trim(), td,
       msHa   !== '' ? Number(msHa)   : undefined,
       areaHa !== '' ? Number(areaHa) : undefined,
@@ -2073,6 +2099,31 @@ export default function PaddockModal({
           )}
         </div>
 
+        {/* Offline-saved confirmation overlay */}
+        {offlineSaved && (
+          <div className="absolute inset-0 z-[10001] bg-white/90 backdrop-blur-sm flex items-center justify-center p-6">
+            <div className="bg-white rounded-2xl shadow-2xl border border-green-100 p-6 max-w-sm w-full text-center space-y-4 animate-in zoom-in-95 duration-200">
+              <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto">
+                <Check className="w-7 h-7 text-green-600" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-gray-900">Cambios guardados</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  Los cambios fueron guardados correctamente en el dispositivo.
+                  Cuando la aplicación esté online, se sincronizarán automáticamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setOfflineSaved(false); onClose() }}
+                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all text-sm"
+              >
+                OK, continuar
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer — con contador de sesión */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between shrink-0">
           {!isCreating ? (
@@ -2113,12 +2164,19 @@ export default function PaddockModal({
             <button
               onClick={handleSave}
               disabled={saving || !name.trim()}
-              className="px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all flex items-center gap-2"
+              className="relative px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all min-w-[140px]"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              {isCreating
-                ? sessionNoteCount > 0 ? `Crear potrero (+${sessionNoteCount} registros)` : 'Crear potrero'
-                : sessionNoteCount > 0 ? `Guardar (+${sessionNoteCount} nuevos)` : 'Guardar cambios'}
+              {saving && (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                </span>
+              )}
+              <span className={`inline-flex items-center gap-2 ${saving ? 'invisible' : ''}`}>
+                <Check className="w-4 h-4" />
+                {isCreating
+                  ? sessionNoteCount > 0 ? `Crear potrero (+${sessionNoteCount} registros)` : 'Crear potrero'
+                  : sessionNoteCount > 0 ? `Guardar (+${sessionNoteCount} nuevos)` : 'Guardar cambios'}
+              </span>
             </button>
           </div>
         </div>

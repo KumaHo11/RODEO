@@ -1,124 +1,218 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import RodeoLogo from '@/components/RodeoLogo'
 import Link from 'next/link'
-import { Globe, ArrowRight, CheckCircle, Mail, Loader2, Eye, EyeOff } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Globe, ArrowRight, Mail, Loader2, Eye, EyeOff, Phone, AlertCircle } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { auth } from '@/lib/firebase/client'
 import { createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth'
-import { useRouter } from 'next/navigation'
 
 interface Country {
   name: { common: string }
   cca2: string
+  idd?: { root?: string; suffixes?: string[] }
 }
 
-export default function RegisterPage() {
-  const [firstName, setFirstName]           = useState('')
-  const [lastName, setLastName]             = useState('')
-  const [email, setEmail]                   = useState('')
-  const [phone, setPhone]                   = useState('')
-  const [country, setCountry]               = useState('')
-  const [countryCode, setCountryCode]       = useState('')
-  const [password, setPassword]             = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [countries, setCountries]           = useState<Country[]>([])
-  const [loading, setLoading]               = useState(false)
-  const [errorMsg, setErrorMsg]             = useState<string | null>(null)
-  const [successMsg, setSuccessMsg]         = useState<string | null>(null)
-  const [showPassword, setShowPassword]     = useState(false)
-  const [showConfirm, setShowConfirm]       = useState(false)
-  const router = useRouter()
+/** Map country code → WhatsApp dial prefix */
+function getDialCode(cca2: string, idd?: Country['idd']): string {
+  const KNOWN: Record<string, string> = {
+    AR: '+54', UY: '+598', PY: '+595', BO: '+591', CL: '+56',
+    PE: '+51', EC: '+593', CO: '+57', VE: '+58', BR: '+55',
+    US: '+1',  CA: '+1',  MX: '+52', GT: '+502', HN: '+504',
+    SV: '+503', NI: '+505', CR: '+506', PA: '+507', CU: '+53',
+    DO: '+1',  PR: '+1',  ES: '+34', FR: '+33', DE: '+49',
+    IT: '+39', PT: '+351', GB: '+44', AU: '+61', NZ: '+64', ZA: '+27',
+  }
+  if (KNOWN[cca2]) return KNOWN[cca2]
+  if (idd?.root) return `${idd.root}${idd.suffixes?.[0] ?? ''}`
+  return ''
+}
 
+// ─── Field error helper ────────────────────────────────────────────────────────
+function FieldError({ msg }: { msg: string | null }) {
+  return (
+    <AnimatePresence>
+      {msg && (
+        <motion.p
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.15 }}
+          className="flex items-center gap-1.5 text-[11px] font-bold text-red-500 mt-1"
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          {msg}
+        </motion.p>
+      )}
+    </AnimatePresence>
+  )
+}
+
+// ─── Base input class builder ──────────────────────────────────────────────────
+function inputCls(hasError: boolean, extra = '') {
+  return [
+    'w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-sm outline-none',
+    'transition-all duration-150 placeholder:text-gray-300 font-medium',
+    hasError
+      ? 'border-red-300 ring-1 ring-red-300 bg-red-50/30 focus:border-red-400 focus:ring-red-400'
+      : 'border-gray-100 focus:border-green-500 focus:ring-1 focus:ring-green-500',
+    extra,
+  ].join(' ')
+}
+
+// ─── Validation rules ──────────────────────────────────────────────────────────
+function validateEmail(v: string) {
+  if (!v.trim()) return 'El correo es obligatorio'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Ingresá un correo válido'
+  return null
+}
+function validateName(v: string, label: string) {
+  if (!v.trim()) return `El ${label} es obligatorio`
+  if (v.trim().length < 2) return `Mínimo 2 caracteres`
+  return null
+}
+function validatePhone(v: string) {
+  if (!v.trim()) return 'El teléfono es obligatorio'
+  if (v.replace(/\D/g, '').length < 6) return 'Ingresá al menos 6 dígitos'
+  return null
+}
+function validatePassword(v: string) {
+  if (!v) return 'La contraseña es obligatoria'
+  if (v.length < 6) return 'Mínimo 6 caracteres'
+  return null
+}
+function validateConfirm(v: string, pass: string) {
+  if (!v) return 'Confirmá tu contraseña'
+  if (v !== pass) return 'Las contraseñas no coinciden'
+  return null
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
+export default function RegisterPage() {
+  const [firstName,        setFirstName]        = useState('')
+  const [lastName,         setLastName]         = useState('')
+  const [email,            setEmail]            = useState('')
+  const [phoneLocal,       setPhoneLocal]       = useState('')
+  const [country,          setCountry]          = useState('')
+  const [countryCode,      setCountryCode]      = useState('AR')
+  const [dialCode,         setDialCode]         = useState('+54')
+  const [password,         setPassword]         = useState('')
+  const [confirmPassword,  setConfirmPassword]  = useState('')
+  const [countries,        setCountries]        = useState<Country[]>([])
+  const [loading,          setLoading]          = useState(false)
+  const [successMsg,       setSuccessMsg]       = useState<string | null>(null)
+  const [serverError,      setServerError]      = useState<string | null>(null)
+  const [showPassword,     setShowPassword]     = useState(false)
+  const [showConfirm,      setShowConfirm]      = useState(false)
+
+  // Per-field error state — only shown after the field is touched/blurred
+  const [errors, setErrors] = useState<Record<string, string | null>>({})
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+
+  const setError = (field: string, msg: string | null) =>
+    setErrors(prev => ({ ...prev, [field]: msg }))
+  const touch = (field: string) =>
+    setTouched(prev => ({ ...prev, [field]: true }))
+  const fieldError = (field: string) => touched[field] ? errors[field] ?? null : null
+
+  // ─── Country list ─────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch('https://restcountries.com/v3.1/all?fields=name,cca2')
-      .then(res => res.json())
-      .then(data => {
-        const sorted = data.sort((a: Country, b: Country) =>
-          a.name.common.localeCompare(b.name.common)
-        )
+    fetch('https://restcountries.com/v3.1/all?fields=name,cca2,idd')
+      .then(r => r.json())
+      .then((data: Country[]) => {
+        const sorted = data.sort((a, b) => a.name.common.localeCompare(b.name.common))
         setCountries(sorted)
-        const arg = sorted.find((c: Country) => c.cca2 === 'AR')
-        if (arg) {
-          setCountry(arg.name.common)
-          setCountryCode(arg.cca2)
-        }
+        const arg = sorted.find(c => c.cca2 === 'AR')
+        if (arg) { setCountry(arg.name.common); setCountryCode('AR'); setDialCode(getDialCode('AR', arg.idd)) }
       })
-      .catch(err => console.error('Error fetching countries', err))
+      .catch(console.error)
   }, [])
 
+  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const name = e.target.value
+    setCountry(name)
+    const found = countries.find(c => c.name.common === name)
+    if (found) { setCountryCode(found.cca2); setDialCode(getDialCode(found.cca2, found.idd)) }
+  }
+
+  const fullPhone = dialCode && phoneLocal
+    ? `${dialCode} ${phoneLocal.replace(/^0+/, '')}`
+    : phoneLocal
+
+  // ─── Blur handlers (validate on leave) ───────────────────────────────────
+  const onBlur = useCallback((field: string, value: string) => {
+    touch(field)
+    switch (field) {
+      case 'firstName':      setError(field, validateName(value, 'nombre')); break
+      case 'lastName':       setError(field, validateName(value, 'apellido')); break
+      case 'email':          setError(field, validateEmail(value)); break
+      case 'phone':          setError(field, validatePhone(value)); break
+      case 'password':       setError(field, validatePassword(value)); break
+      case 'confirmPassword': setError(field, validateConfirm(value, password)); break
+    }
+  }, [password])
+
+  // ─── Submit ───────────────────────────────────────────────────────────────
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    setErrorMsg(null)
-    setSuccessMsg(null)
+    setServerError(null)
 
-    if (password !== confirmPassword) {
-      setErrorMsg('Las contraseñas no coinciden.')
-      return
+    // Mark all fields touched and validate
+    const allTouched = ['firstName','lastName','email','phone','password','confirmPassword']
+    setTouched(Object.fromEntries(allTouched.map(f => [f, true])))
+    const newErrors = {
+      firstName:       validateName(firstName, 'nombre'),
+      lastName:        validateName(lastName, 'apellido'),
+      email:           validateEmail(email),
+      phone:           validatePhone(phoneLocal),
+      password:        validatePassword(password),
+      confirmPassword: validateConfirm(confirmPassword, password),
     }
-    if (password.length < 6) {
-      setErrorMsg('La contraseña debe tener al menos 6 caracteres.')
-      return
-    }
+    setErrors(newErrors)
+    if (Object.values(newErrors).some(Boolean)) return
 
     setLoading(true)
-
     try {
-      // 1. Crear usuario en Firebase Auth directamente (sin Admin SDK)
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const firebaseUser = userCredential.user
-
-      // Actualizar displayName en Firebase
-      await updateProfile(firebaseUser, {
-        displayName: `${firstName} ${lastName}`.trim()
-      })
-
-      // 2. Obtener el ID Token para enviarlo a la API
+      await updateProfile(firebaseUser, { displayName: `${firstName} ${lastName}`.trim() })
       const idToken = await firebaseUser.getIdToken()
 
-      // 3. Crear perfil en Cloud SQL via API route
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idToken,
-          firstName, lastName,
-          phone, country, countryCode,
-        }),
+        body: JSON.stringify({ idToken, firstName, lastName, phone: fullPhone, country, countryCode }),
       })
-
       const data = await res.json()
 
       if (!res.ok) {
-        // Si falla la creación del perfil, eliminar el usuario de Firebase para no dejar inconsistencias
         await firebaseUser.delete().catch(() => {})
-        setErrorMsg(data.error || 'Error al configurar la cuenta.')
+        setServerError(data.error || 'Error al configurar la cuenta.')
         return
       }
 
-      // 4. Sign out immediately — user must verify email before logging in
-      //    This prevents AuthProvider from auto-redirecting to dashboard.
       await signOut(auth)
-
       setSuccessMsg(
-        `¡Cuenta creada! Te enviamos un correo de verificación a ${email}. Revisá tu bandeja (y la carpeta spam) y hacé clic en el link para activar tu cuenta.`
+        `¡Cuenta creada! Te enviamos un correo de verificación a ${email}. Revisá tu bandeja (y spam) y hacé clic en el botón para activar tu cuenta.`
       )
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
-        setErrorMsg('Este correo ya está registrado. Por favor, inicia sesión.')
+        setServerError('Este correo ya está registrado. Por favor, inicia sesión.')
       } else if (err.code === 'auth/weak-password') {
-        setErrorMsg('La contraseña debe tener al menos 6 caracteres.')
+        setServerError('La contraseña debe tener al menos 6 caracteres.')
       } else {
-        setErrorMsg('Error de conexión. Intenta nuevamente.')
+        setServerError('Error de conexión. Intenta nuevamente.')
       }
     } finally {
       setLoading(false)
     }
   }
 
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen flex-col lg:flex-row bg-white font-sans text-gray-900">
+
       {/* Visual Side */}
       <div className="hidden lg:flex lg:w-1/2 bg-green-700 items-center justify-center overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)] relative">
         <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
@@ -130,17 +224,15 @@ export default function RegisterPage() {
       {/* Form Side */}
       <div className="flex-1 flex items-center justify-center p-8 lg:p-24 overflow-y-auto">
         <div className="w-full max-w-sm">
-          <div className="mb-12">
-            <h2 className="text-3xl font-black tracking-tight text-gray-950 mb-2">Crea tu cuenta</h2>
-            <p className="text-gray-500 text-sm">Comienza la transformación regenerativa de tu campo.</p>
+
+          <div className="mb-10">
+            <h1 className="text-3xl font-black tracking-tight text-gray-950 mb-2">Crea tu cuenta</h1>
+            <p className="text-gray-500 text-sm">Comenzá la transformación regenerativa de tu campo.</p>
           </div>
 
           {successMsg ? (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
+            /* ── Success state ── */
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
                   <Mail className="w-5 h-5 text-green-600" />
@@ -164,107 +256,168 @@ export default function RegisterPage() {
               </Link>
             </motion.div>
           ) : (
-            <form className="space-y-5" onSubmit={handleRegister}>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 tracking-widest">Nombre</label>
+            /* ── Form — noValidate disables all browser native tooltips ── */
+            <form className="space-y-4" onSubmit={handleRegister} noValidate autoComplete="off">
+
+              {/* Name row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Nombre</label>
                   <input
-                    type="text" required
-                    className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all"
-                    value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                    type="text"
+                    autoComplete="given-name"
+                    placeholder="Juan"
+                    className={inputCls(!!fieldError('firstName'))}
+                    value={firstName}
+                    onChange={e => { setFirstName(e.target.value); if (touched.firstName) setError('firstName', validateName(e.target.value, 'nombre')) }}
+                    onBlur={() => onBlur('firstName', firstName)}
                   />
+                  <FieldError msg={fieldError('firstName')} />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 tracking-widest">Apellido</label>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Apellido</label>
                   <input
-                    type="text" required
-                    className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all"
-                    value={lastName} onChange={(e) => setLastName(e.target.value)}
+                    type="text"
+                    autoComplete="family-name"
+                    placeholder="García"
+                    className={inputCls(!!fieldError('lastName'))}
+                    value={lastName}
+                    onChange={e => { setLastName(e.target.value); if (touched.lastName) setError('lastName', validateName(e.target.value, 'apellido')) }}
+                    onBlur={() => onBlur('lastName', lastName)}
                   />
+                  <FieldError msg={fieldError('lastName')} />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400">Correo electrónico</label>
+              {/* Email */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Correo electrónico</label>
                 <input
-                  type="email" required
-                  className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all"
-                  value={email} onChange={(e) => setEmail(e.target.value)}
+                  type="email"
+                  autoComplete="email"
+                  placeholder="tu@email.com"
+                  className={inputCls(!!fieldError('email'))}
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); if (touched.email) setError('email', validateEmail(e.target.value)) }}
+                  onBlur={() => onBlur('email', email)}
                 />
+                <FieldError msg={fieldError('email')} />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400">País</label>
-                  <div className="relative">
-                    <select
-                      required
-                      className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 appearance-none"
-                      value={country}
-                      onChange={(e) => {
-                        setCountry(e.target.value)
-                        const code = countries.find(c => c.name.common === e.target.value)?.cca2 || ''
-                        setCountryCode(code)
+              {/* Country */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">País</label>
+                <div className="relative">
+                  <select
+                    className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 appearance-none font-medium transition-all"
+                    value={country}
+                    onChange={handleCountryChange}
+                  >
+                    {countries.length === 0
+                      ? <option>Cargando...</option>
+                      : countries.map(c => <option key={c.cca2} value={c.name.common}>{c.name.common}</option>)
+                    }
+                  </select>
+                  <Globe className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Phone — WhatsApp with dial code */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase flex items-center gap-1">
+                  <Phone className="w-3 h-3" /> Teléfono WhatsApp
+                </label>
+                <div className="flex gap-2">
+                  {/* Dial badge */}
+                  <div className={`flex items-center justify-center px-3 py-2.5 border rounded-lg text-sm font-black shrink-0 min-w-[64px] transition-all
+                    ${fieldError('phone') ? 'border-red-300 bg-red-50/30 text-red-600' : 'border-gray-200 bg-gray-100 text-gray-700'}`}>
+                    {dialCode || '—'}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="tel"
+                      autoComplete="tel-national"
+                      placeholder="11 2345 6789"
+                      className={inputCls(!!fieldError('phone'))}
+                      value={phoneLocal}
+                      onChange={e => {
+                        const v = e.target.value.replace(/[^\d\s\-]/g, '')
+                        setPhoneLocal(v)
+                        if (touched.phone) setError('phone', validatePhone(v))
                       }}
-                    >
-                      {countries.length === 0
-                        ? <option>Cargando...</option>
-                        : countries.map(c => <option key={c.cca2} value={c.name.common}>{c.name.common}</option>)
-                      }
-                    </select>
-                    <Globe className="absolute right-3 top-2.5 w-4 h-4 text-gray-300 pointer-events-none" />
+                      onBlur={() => onBlur('phone', phoneLocal)}
+                    />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400">Teléfono</label>
-                  <input
-                    type="tel"
-                    className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all"
-                    value={phone} onChange={(e) => setPhone(e.target.value)}
-                  />
-                </div>
+                <FieldError msg={fieldError('phone')} />
+                {!fieldError('phone') && dialCode && phoneLocal && (
+                  <p className="text-[10px] text-gray-400 font-medium">
+                    WhatsApp: <span className="font-black text-green-600">{fullPhone}</span>
+                  </p>
+                )}
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400">Contraseña</label>
+              {/* Password */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Contraseña</label>
                 <div className="relative">
                   <input
-                    type={showPassword ? 'text' : 'password'} required
-                    className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 pr-10 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all"
-                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    placeholder="Mínimo 6 caracteres"
+                    className={inputCls(!!fieldError('password'), 'pr-10')}
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); if (touched.password) setError('password', validatePassword(e.target.value)) }}
+                    onBlur={() => onBlur('password', password)}
                   />
                   <button type="button" onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <FieldError msg={fieldError('password')} />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400">Confirmar contraseña</label>
+              {/* Confirm password */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Confirmar contraseña</label>
                 <div className="relative">
                   <input
-                    type={showConfirm ? 'text' : 'password'} required
-                    className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 pr-10 text-sm outline-none focus:ring-1 focus:ring-green-600 transition-all"
-                    value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                    type={showConfirm ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    placeholder="Repetí tu contraseña"
+                    className={inputCls(!!fieldError('confirmPassword'), 'pr-10')}
+                    value={confirmPassword}
+                    onChange={e => { setConfirmPassword(e.target.value); if (touched.confirmPassword) setError('confirmPassword', validateConfirm(e.target.value, password)) }}
+                    onBlur={() => onBlur('confirmPassword', confirmPassword)}
                   />
                   <button type="button" onClick={() => setShowConfirm(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <FieldError msg={fieldError('confirmPassword')} />
               </div>
 
-              {errorMsg && (
-                <p className="text-red-600 text-[11px] font-medium bg-red-50 p-3 rounded-lg border border-red-100 animate-in fade-in slide-in-from-top-1">
-                  {errorMsg}
-                </p>
-              )}
+              {/* Server-level error */}
+              <AnimatePresence>
+                {serverError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3"
+                  >
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-red-700 text-xs font-bold">{serverError}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg shadow-green-600/20 hover:bg-green-700 hover:scale-[1.01] transition-all disabled:opacity-50 mt-4 flex items-center justify-center gap-2"
+                className="w-full bg-green-600 text-white py-3.5 rounded-xl font-black text-sm shadow-lg shadow-green-600/20 hover:bg-green-700 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
               >
                 {loading
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Creando cuenta...</>

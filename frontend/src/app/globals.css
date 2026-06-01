@@ -180,3 +180,29 @@ body {
    9999   - Critical overlays (map, drawer)
 */
 
+/* ── iOS: Prevent auto-zoom on input focus ────────────────────────────────────
+   iOS Safari triggers automatic viewport zoom when an input has font-size < 16px.
+   This rule enforces a minimum 16px for all form fields inside modals and the
+   dashboard on mobile, while still allowing user-initiated pinch-zoom.         */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="date"],
+  input[type="time"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* ── Modal containers: full-screen on mobile, no horizontal overflow ─────────*/
+[data-modal-content] {
+  max-height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}

@@ -54,7 +54,7 @@ export interface DrawnShape {
 export interface OnboardingMapSingletonProps {
   mode: MapMode
   // Locate mode
-  location: { lat: number; lng: number } | null
+  location: { lat: number; lng: number; address?: string } | null
   onLocationChange: (lat: number, lng: number) => void
   // Draw mode
   drawPhase: 'field' | 'paddock'     // what are we drawing?
@@ -90,7 +90,6 @@ function MapController({
   const modeRef       = useRef<MapMode>(mode)
   const drawPhaseRef  = useRef(drawPhase)
   const paddockRef    = useRef(paddockCount)
-  const didFlyRef     = useRef(false)       // only fly once on first location set
   const geomanInited  = useRef(false)
   // KML layers registry: index → Leaflet layer
   const kmlLayersRef  = useRef<Record<number, L.Layer>>({})
@@ -99,12 +98,15 @@ function MapController({
   useEffect(() => { drawPhaseRef.current = drawPhase }, [drawPhase])
   useEffect(() => { paddockRef.current = paddockCount }, [paddockCount])
 
-  // -- On location set: fly map there (only once, or if location changes) ------
+  // -- On location set: fly map there whenever address changes ----------------
+  const lastAddressRef = useRef<string>('')
   useEffect(() => {
     if (!location) return
-    if (!didFlyRef.current) {
+    // Always fly when the address string changes (covers first set AND KML override)
+    const addrKey = location.address ?? `${location.lat},${location.lng}`
+    if (addrKey !== lastAddressRef.current) {
+      lastAddressRef.current = addrKey
       map.flyTo([location.lat, location.lng], 13, { duration: 1.0 })
-      didFlyRef.current = true
     }
   }, [location, map])
 
@@ -120,6 +122,36 @@ function MapController({
     return () => { map.off('click', handler) }
   }, [map, onLocationChange])
 
+  // -- Inject readable labels onto Geoman toolbar buttons -------------------
+  const injectToolbarLabels = useCallback(() => {
+    const LABEL_MAP: Record<string, string> = {
+      'Draw Polygon':  'Criar',
+      'Edit Layers':   'Editar',
+      'Delete Layers': 'Eliminar',
+    }
+    setTimeout(() => {
+      document.querySelectorAll<HTMLElement>('.leaflet-pm-toolbar .leaflet-buttons-control-button').forEach(btn => {
+        if (btn.querySelector('.rodeo-pm-label')) return
+        const rawTitle = btn.getAttribute('title')
+          ?? btn.querySelector('[title]')?.getAttribute('title')
+          ?? ''
+        const label = LABEL_MAP[rawTitle]
+        if (!label) return
+        const span = document.createElement('span')
+        span.className = 'rodeo-pm-label'
+        span.textContent = label
+        Object.assign(span.style, {
+          display: 'block', fontSize: '8px', fontWeight: '800', color: '#374151',
+          textAlign: 'center', lineHeight: '1', marginTop: '2px',
+          letterSpacing: '0.04em', pointerEvents: 'none', whiteSpace: 'nowrap',
+        })
+        btn.style.height = 'auto'
+        btn.style.paddingBottom = '3px'
+        btn.appendChild(span)
+      })
+    }, 350)
+  }, [])
+
   // -- Geoman setup (once) ----------------------------------------------------
   useEffect(() => {
     if (geomanInited.current) return
@@ -132,6 +164,7 @@ function MapController({
       cutPolygon: false, dragMode: false, editMode: true,
       removalMode: true, drawPolygon: true,
     })
+    injectToolbarLabels()
 
     map.pm.setGlobalOptions({ snappable: true, snapDistance: 15, allowSelfIntersection: false })
 
@@ -219,11 +252,9 @@ function MapController({
   // -- Mode switching — hide/show Geoman controls ----------------------------─
   useEffect(() => {
     if (mode === 'locate') {
-      // Disable drawing
       map.pm.disableDraw()
       map.pm.removeControls()
     } else {
-      // Enable drawing
       map.pm.addControls({
         position: 'topleft',
         drawMarker: false, drawPolyline: false, drawRectangle: false,
@@ -231,13 +262,14 @@ function MapController({
         cutPolygon: false, dragMode: false, editMode: true,
         removalMode: true, drawPolygon: true,
       })
+      injectToolbarLabels()
       // Auto-start polygon drawing after a brief delay
       const t = setTimeout(() => {
         try { map.pm.enableDraw('Polygon') } catch {}
       }, 600)
       return () => clearTimeout(t)
     }
-  }, [mode, map])
+  }, [mode, map, injectToolbarLabels])
 
   return null
 }
