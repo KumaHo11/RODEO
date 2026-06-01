@@ -605,6 +605,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               : `Rodeo destino: ${paricionRodeosDestino.find(h => h.id === paricionHerdDestinoId)?.name ?? paricionHerdDestinoId}`,
           ].filter(Boolean).join(' '),
           status: 'completado',
+          source: 'rodeo',
         }),
       })
 
@@ -732,6 +733,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             herd_id: herd.id, herd_ids: [herd.id],
             description: evDesc || null,
             status: 'completado',
+            source: 'rodeo',
           }),
         })
 
@@ -912,6 +914,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             actNote ? `Notas: ${actNote}` : '',
           ].filter(Boolean).join(' '),
           status: 'completado',
+          source: 'rodeo',
         }),
       })
 
@@ -1191,6 +1194,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           description: eventDesc,
           photo_url,
           status: 'completado',
+          source: 'rodeo',
         }),
       }),
     ])
@@ -1382,6 +1386,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         photo_url,
         audio_url,
         status: 'completado',
+        source: 'rodeo',
       }),
     })
 
@@ -1423,6 +1428,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       herd_id: herd.id, herd_ids: [herd.id],
       status: 'pendiente',
       assigned_to: newEvAssignee || null,
+      source: 'rodeo' as const,
     }
 
     if (!navigator.onLine) {

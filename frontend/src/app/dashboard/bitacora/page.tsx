@@ -11,7 +11,7 @@ import {
 import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
@@ -128,6 +128,7 @@ function NoteRow({ note }: { note: any }) {
 export default function BitacoraPage() {
   const { user } = useAuth()
   const pathname = usePathname()
+  const router = useRouter()
   const { hasFeature } = usePlan()
   const canVoice = hasFeature('voice_bitacora')
   const [notes, setNotes] = useState<any[]>([])
@@ -687,7 +688,7 @@ export default function BitacoraPage() {
                 <p className="text-sm font-black text-gray-700">Grabación de audio</p>
                 <p className="text-xs text-gray-400 mt-1">Disponible desde el plan <span className="font-bold text-gray-600">Planificador</span></p>
               </div>
-              <button onClick={() => window.location.href = '/dashboard/planes'}
+              <button onClick={() => router.push('/dashboard/planes')}
                 className="mt-1 px-5 py-2 text-xs font-black text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-all">
                 Ver planes y contratar
               </button>

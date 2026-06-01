@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     const auth = await getOrgId(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    // Try with bulls fields (post-migration); fallback to without
+    // Try with all optional columns; fallback gracefully
     let events: any[]
     try {
       events = await query(
@@ -43,37 +43,50 @@ export async function GET(req: NextRequest) {
                 TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
                 TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
                 herd_id, herd_ids, paddock_id, description, status,
-                assigned_to, bulls_count, bulls_weight, created_at, photo_url, audio_url
+                assigned_to, bulls_count, bulls_weight, source, created_at, photo_url, audio_url
          FROM farm_events
          WHERE org_id = $1
          ORDER BY created_at DESC`,
         [auth.orgId]
       )
     } catch {
-      // Try without bulls columns (pre-migration)
       try {
         events = await query(
           `SELECT id, org_id, title, event_type,
                   TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
                   TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
                   herd_id, herd_ids, paddock_id, description, status,
-                  assigned_to, created_at, photo_url, audio_url
+                  assigned_to, bulls_count, bulls_weight, created_at, photo_url, audio_url
            FROM farm_events
            WHERE org_id = $1
            ORDER BY created_at DESC`,
           [auth.orgId]
         )
       } catch {
-        events = await query(
-          `SELECT id, org_id, title, event_type,
-                  TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
-                  TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
-                  herd_id, herd_ids, paddock_id, description, status, created_at, photo_url, audio_url
-           FROM farm_events
-           WHERE org_id = $1
-           ORDER BY created_at DESC`,
-          [auth.orgId]
-        )
+        try {
+          events = await query(
+            `SELECT id, org_id, title, event_type,
+                    TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
+                    TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
+                    herd_id, herd_ids, paddock_id, description, status,
+                    assigned_to, created_at, photo_url, audio_url
+             FROM farm_events
+             WHERE org_id = $1
+             ORDER BY created_at DESC`,
+            [auth.orgId]
+          )
+        } catch {
+          events = await query(
+            `SELECT id, org_id, title, event_type,
+                    TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
+                    TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
+                    herd_id, herd_ids, paddock_id, description, status, created_at, photo_url, audio_url
+             FROM farm_events
+             WHERE org_id = $1
+             ORDER BY created_at DESC`,
+            [auth.orgId]
+          )
+        }
       }
     }
 
@@ -99,6 +112,7 @@ export async function POST(req: NextRequest) {
       title, event_type, event_date, end_date,
       herd_id, herd_ids, paddock_id, description, status,
       assigned_to, bulls_count, bulls_weight, photo_url, audio_url,
+      source, // 'agenda' (default) | 'rodeo' | 'planner'
     } = body
 
     if (!title || !event_type || !event_date) {
@@ -143,6 +157,18 @@ export async function POST(req: NextRequest) {
         )
       } catch (optErr: any) {
         console.warn('farm-events bulls_count/bulls_weight skipped (run migration):', optErr.message)
+      }
+    }
+
+    // Step 4: source (optional — silently skips if column doesn't exist yet)
+    if (id && source) {
+      try {
+        await mutate(
+          `UPDATE farm_events SET source = $1 WHERE id = $2`,
+          [source, id]
+        )
+      } catch (optErr: any) {
+        console.warn('farm-events source skipped (run migration):', optErr.message)
       }
     }
 

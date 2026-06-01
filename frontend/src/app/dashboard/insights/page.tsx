@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { FeatureGate } from '@/components/FeatureGate'
@@ -794,7 +795,7 @@ function InsightsContent({ user, profile }: { user: any; profile: any }) {
 
                 <div className="flex gap-3 pt-2">
                   <button 
-                    onClick={() => window.location.href = '/dashboard/grazing'}
+                    onClick={() => router.push('/dashboard/grazing')}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-emerald-200"
                   >
                     Planificar Movimiento
@@ -903,6 +904,7 @@ function InsightsContent({ user, profile }: { user: any; profile: any }) {
 
 // ── Sub-component ──────────────────────────────────────────────────────────────
 function InsightCardComponent({ card }: { card: InsightCard }) {
+  const router = useRouter()
   const [expanded, setExpanded] = useState(false)
 
   const trendIcon = {
@@ -944,11 +946,7 @@ function InsightCardComponent({ card }: { card: InsightCard }) {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                // We'll use the ID from the card's custom data or similar
-                // For now, let's assume the ID is passed via a custom property if we had one
-                // Since InsightCard doesn't have it, let's just use a placeholder or better: 
-                // fix the mapping to include it if possible.
-                window.location.href = `/dashboard/grazing`;
+                router.push('/dashboard/grazing')
               }}
               className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
             >

@@ -4,7 +4,7 @@
  * Garantiza que la app funcione completamente offline después de la primera carga.
  */
 
-const CACHE_VERSION = 'v3'
+const CACHE_VERSION = 'v4'
 const SHELL_CACHE   = `rodeo-shell-${CACHE_VERSION}`
 const API_CACHE     = `rodeo-api-${CACHE_VERSION}`
 const ASSET_CACHE   = `rodeo-assets-${CACHE_VERSION}`
@@ -170,45 +170,71 @@ async function cacheFirstWithNetworkFallback(request, cacheName) {
 }
 
 /**
- * Navegación HTML: NetworkFirst → si falla → busca shell cacheado más cercano.
- * Evita que el usuario vea la pantalla del dinosaurio.
+ * Navegación HTML: detecta offline INMEDIATAMENTE sin esperar timeout.
+ * Si estamos offline → va directo al caché (sin esperar 5s).
+ * Si estamos online → NetworkFirst con timeout corto → fallback a caché.
+ * Garantiza que jamás aparezca el dinosaurio.
  */
 async function navigationHandler(request) {
   const cache = await caches.open(SHELL_CACHE)
+
+  // ── Fast-path offline: skip network entirely ──────────────────────────────
+  // navigator.onLine está disponible en SW scope y es la señal más rápida
+  if (!self.navigator.onLine) {
+    return serveFromShellCache(cache, request)
+  }
+
+  // ── Online path: network first con timeout corto ───────────────────────────
   try {
-    const networkResponse = await fetchWithTimeout(request, 5000)
+    const networkResponse = await fetchWithTimeout(request, 4000)
     if (networkResponse && networkResponse.ok) {
-      cache.put(request, networkResponse.clone())
+      // Clonar y cachear en background sin bloquear la respuesta
+      const clone = networkResponse.clone()
+      cache.put(request, clone).catch(() => {})
       return networkResponse
     }
     throw new Error('network-error')
   } catch {
-    // 1. Intentar la URL exacta en caché
-    const exactMatch = await cache.match(request)
-    if (exactMatch) return exactMatch
-
-    // 2. Intentar las rutas padres (e.g. /dashboard/mi-campo → /dashboard → /)
-    const url = new URL(request.url)
-    const segments = url.pathname.split('/').filter(Boolean)
-    for (let i = segments.length - 1; i >= 0; i--) {
-      const parentPath = '/' + segments.slice(0, i).join('/')
-      const parentMatch = await cache.match(new Request(url.origin + (parentPath || '/')))
-      if (parentMatch) return parentMatch
-    }
-
-    // 3. Shell raíz
-    const rootMatch = await cache.match(new Request(url.origin + '/dashboard'))
-    if (rootMatch) return rootMatch
-
-    // 4. Página offline como último recurso
-    const offlinePage = await cache.match(new Request(url.origin + '/_offline'))
-    if (offlinePage) return offlinePage
-
-    return new Response('<h1>Sin conexión</h1>', {
-      status: 503,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+    // Red falló (timeout, error de conexión, etc.) → caché
+    return serveFromShellCache(cache, request)
   }
+}
+
+/**
+ * Busca la mejor respuesta cacheada disponible para una navegación:
+ * 1. URL exacta → 2. Rutas padre → 3. /dashboard → 4. / → 5. HTML mínimo
+ */
+async function serveFromShellCache(cache, request) {
+  // 1. URL exacta
+  const exactMatch = await cache.match(request)
+  if (exactMatch) return exactMatch
+
+  // 2. Rutas padre (e.g. /dashboard/mi-campo → /dashboard → /)
+  const url = new URL(request.url)
+  const segments = url.pathname.split('/').filter(Boolean)
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const parentPath = '/' + segments.slice(0, i).join('/')
+    const parentMatch = await cache.match(new Request(url.origin + (parentPath || '/')))
+    if (parentMatch) return parentMatch
+  }
+
+  // 3. Shell principal del dashboard
+  const dashboardMatch = await cache.match(new Request(url.origin + '/dashboard'))
+  if (dashboardMatch) return dashboardMatch
+
+  // 4. Raíz
+  const rootMatch = await cache.match(new Request(url.origin + '/'))
+  if (rootMatch) return rootMatch
+
+  // 5. Página offline
+  const offlinePage = await cache.match(new Request(url.origin + '/_offline'))
+  if (offlinePage) return offlinePage
+
+  // 6. HTML mínimo de emergencia (nunca mostrar el dinosaurio)
+  return new Response(
+    '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RODEO — Sin conexión</title><style>body{font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f9fafb;color:#374151;gap:16px;padding:24px}h1{font-size:1.5rem;font-weight:900;color:#111827;margin:0}p{font-size:.875rem;color:#6b7280;text-align:center;margin:0}button{background:#16a34a;color:#fff;border:none;padding:12px 24px;border-radius:12px;font-size:.875rem;font-weight:700;cursor:pointer}</style></head><body><h1>Sin conexión</h1><p>RODEO está cargando en modo offline.<br>Tus datos están guardados en el dispositivo.</p><button onclick="location.reload()">Reintentar</button></body></html>',
+    { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  )
 }
 
 /**
