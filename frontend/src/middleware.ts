@@ -14,17 +14,46 @@ const JWKS = createRemoteJWKSet(
   new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
 )
 
-async function verifyFirebaseToken(token: string) {
+/**
+ * Resultado de la verificación del token Firebase.
+ * - { payload } → token válido y verificado
+ * - { networkError: true } → no se pudo alcanzar los servidores de Google (offline)
+ * - null → token ausente, inválido o expirado
+ */
+type VerifyResult =
+  | { payload: { sub: string; email?: string; system_role?: string; [key: string]: unknown } }
+  | { networkError: true }
+  | null
+
+async function verifyFirebaseToken(token: string): Promise<VerifyResult> {
   try {
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,
       audience: FIREBASE_PROJECT_ID,
     })
-    return payload as { sub: string; email?: string; system_role?: string; [key: string]: unknown }
-  } catch {
+    return { payload: payload as { sub: string; email?: string; system_role?: string; [key: string]: unknown } }
+  } catch (err: any) {
+    // Distinguir error de red (offline) de token realmente inválido
+    // jose lanza TypeError o errores de fetch cuando no puede contactar el JWKS endpoint
+    const isNetworkError =
+      err instanceof TypeError ||                        // fetch failed
+      err?.code === 'ERR_JWKS_TIMEOUT' ||               // jose timeout
+      err?.code === 'ERR_JWKS_MULTIPLE_MATCHING_KEYS' ||
+      err?.message?.includes('fetch') ||
+      err?.message?.includes('network') ||
+      err?.message?.includes('ENOTFOUND') ||
+      err?.message?.includes('ECONNREFUSED') ||
+      err?.message?.includes('Failed to fetch')
+
+    if (isNetworkError) {
+      console.warn('[middleware] JWKS fetch failed (offline?) — allowing pass-through')
+      return { networkError: true }
+    }
+    // Token realmente inválido (firma incorrecta, expirado, malformado)
     return null
   }
 }
+
 
 /**
  * Detecta si la request viene del subdominio admin.
@@ -48,45 +77,33 @@ export async function middleware(request: NextRequest) {
 
   // ── ADMIN SUBDOMAIN ────────────────────────────────────────────────────
   if (adminSubdomain) {
-    // Reescribir todas las rutas al prefijo /admin/*
     const adminPath = pathname === '/' ? '/admin/dashboard' : `/admin${pathname}`
 
-    // Rutas públicas del admin (login)
     if (pathname === '/login' || pathname === '/admin-login') {
       const token = request.cookies.get('__session')?.value
       if (token) {
-        const payload = await verifyFirebaseToken(token)
-        if (payload?.system_role === 'SUPER_ADMIN') {
+        const result = await verifyFirebaseToken(token)
+        if (result && !('networkError' in result) && result.payload.system_role === 'SUPER_ADMIN') {
           return NextResponse.redirect(new URL('/admin/dashboard', request.url))
         }
       }
-      // Rewrite a la vista de login del admin
       return NextResponse.rewrite(new URL('/admin/login', request.url))
     }
 
-    // Todas las demás rutas del admin requieren autenticación + SUPER_ADMIN
     const token = request.cookies.get('__session')?.value
-    if (!token) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
+    if (!token) return NextResponse.redirect(new URL('/login', request.url))
 
-    const payload = await verifyFirebaseToken(token)
-    if (!payload) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
+    const result = await verifyFirebaseToken(token)
+    // Si hay error de red (offline), permitir paso sin redirigir
+    if (!result) return NextResponse.redirect(new URL('/login', request.url))
+    if ('networkError' in result) return response
 
-    // Verificar system_role en custom claims del JWT
-    // Firebase Admin SDK debe setear este claim al crear el Super Admin
-    if (payload.system_role !== 'SUPER_ADMIN') {
-      // Redirigir al dashboard normal si está autenticado pero no es Super Admin
+    if (result.payload.system_role !== 'SUPER_ADMIN') {
       return NextResponse.redirect(new URL(`${process.env.NEXT_PUBLIC_APP_URL || 'https://rodeo.app'}/dashboard`, request.url))
     }
-
-    // Rewrite a /admin/* si no está ya en ese prefijo
     if (!pathname.startsWith('/admin')) {
       return NextResponse.rewrite(new URL(adminPath, request.url))
     }
-
     return response
   }
 
@@ -96,13 +113,16 @@ export async function middleware(request: NextRequest) {
   if (pathname === '/') {
     const token = request.cookies.get('__session')?.value
     if (token) {
-      const payload = await verifyFirebaseToken(token)
-      if (payload) {
-        // Super Admin en app principal → redirect al admin
-        if (payload.system_role === 'SUPER_ADMIN') {
+      const result = await verifyFirebaseToken(token)
+      if (result && !('networkError' in result)) {
+        if (result.payload.system_role === 'SUPER_ADMIN') {
           const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || '/admin/dashboard'
           return NextResponse.redirect(new URL(adminUrl, request.url))
         }
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+      // networkError → tiene cookie → asumir sesión válida, ir al dashboard
+      if (result && 'networkError' in result) {
         return NextResponse.redirect(new URL('/dashboard', request.url))
       }
     }
@@ -120,8 +140,10 @@ export async function middleware(request: NextRequest) {
       loginUrl.searchParams.set('next', pathname)
       return NextResponse.redirect(loginUrl)
     }
-    const payload = await verifyFirebaseToken(token)
-    if (!payload || payload.system_role !== 'SUPER_ADMIN') {
+    const result = await verifyFirebaseToken(token)
+    if (!result) return NextResponse.redirect(new URL('/dashboard', request.url))
+    if ('networkError' in result) return response // offline → permitir
+    if (result.payload.system_role !== 'SUPER_ADMIN') {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
     return response
@@ -132,11 +154,15 @@ export async function middleware(request: NextRequest) {
   if (authRoutes.some(r => pathname.startsWith(r))) {
     const token = request.cookies.get('__session')?.value
     if (token) {
-      const payload = await verifyFirebaseToken(token)
-      if (payload) {
-        if (payload.system_role === 'SUPER_ADMIN') {
+      const result = await verifyFirebaseToken(token)
+      if (result && !('networkError' in result)) {
+        if (result.payload.system_role === 'SUPER_ADMIN') {
           return NextResponse.redirect(new URL('/admin/dashboard', request.url))
         }
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+      // networkError → hay cookie activa → redirect al dashboard
+      if (result && 'networkError' in result) {
         return NextResponse.redirect(new URL('/dashboard', request.url))
       }
     }
@@ -148,21 +174,28 @@ export async function middleware(request: NextRequest) {
   if (protectedRoutes.some(r => pathname.startsWith(r))) {
     const token = request.cookies.get('__session')?.value
 
+    // Sin token en cookie → definitivamente no autenticado
     if (!token) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('next', pathname)
       return NextResponse.redirect(loginUrl)
     }
 
-    const payload = await verifyFirebaseToken(token)
-    if (!payload) {
+    const result = await verifyFirebaseToken(token)
+
+    // Token inválido (firma mala, expirado) → login
+    if (!result) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('next', pathname)
       return NextResponse.redirect(loginUrl)
     }
 
-    // Super Admin no debería estar en /dashboard — redirect al admin
-    if (payload.system_role === 'SUPER_ADMIN') {
+    // Error de red (offline) + hay cookie → permitir paso sin verificar firma
+    // El cliente (Firebase SDK) ya validó la sesión en su momento
+    if ('networkError' in result) return response
+
+    // Super Admin no debería estar en /dashboard
+    if (result.payload.system_role === 'SUPER_ADMIN') {
       return NextResponse.redirect(new URL('/admin/dashboard', request.url))
     }
 
@@ -173,9 +206,9 @@ export async function middleware(request: NextRequest) {
   if (pathname === '/landing') {
     const token = request.cookies.get('__session')?.value
     if (token) {
-      const payload = await verifyFirebaseToken(token)
-      if (payload) {
-        if (payload.system_role === 'SUPER_ADMIN') {
+      const result = await verifyFirebaseToken(token)
+      if (result && !('networkError' in result)) {
+        if (result.payload.system_role === 'SUPER_ADMIN') {
           return NextResponse.redirect(new URL('/admin/dashboard', request.url))
         }
         return NextResponse.redirect(new URL('/dashboard', request.url))
@@ -185,6 +218,7 @@ export async function middleware(request: NextRequest) {
 
   return response
 }
+
 
 export const config = {
   matcher: [
