@@ -4949,7 +4949,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
       {/* ─── MINI POPOVER: Info del bloque planificado ────────────────────── */}
       {planPopover && (() => {
-        const plan = planPopover.plan
+        const plan = plans.find((p: any) => p.id === planPopover.plan.id) || planPopover.plan
         const paddock = paddocks.find((p: any) => p.id === plan.paddock_id) || plan.paddocks
         // Season plan padre (solo para planificaciones sugeridas con season_plan_id)
         const parentSeasonPlan = plan.ai_analysis?.season_plan_id
