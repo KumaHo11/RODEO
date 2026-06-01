@@ -167,7 +167,7 @@ export default function GrowthProjectionChart({
             <YAxis
               yAxisId="ev"
               orientation="right"
-              tick={{ fontSize: 9, fill: '#2dd4bf', fontWeight: 700 }}
+              tick={{ fontSize: 9, fill: '#7c3aed', fontWeight: 700 }}
               axisLine={false}
               tickLine={false}
               domain={['dataMin - 1', 'dataMax + 1']}
@@ -202,11 +202,11 @@ export default function GrowthProjectionChart({
               type="monotone"
               dataKey="evTotal"
               name="EV total"
-              stroke="#0d9488"
+              stroke="#7c3aed"
               strokeWidth={2}
               strokeDasharray="5 3"
               dot={false}
-              activeDot={{ r: 4, fill: '#0d9488' }}
+              activeDot={{ r: 4, fill: '#7c3aed' }}
             />
           </LineChart>
         </ResponsiveContainer>

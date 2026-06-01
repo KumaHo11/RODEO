@@ -81,8 +81,8 @@ export async function dispatchClimateAlert(payload: ClimateAlertPayload): Promis
 
   const titleMap: Record<AlertLevel, string> = {
     ok:       '',
-    warning:  `Ajuste Clima: ${paddockName}`,
-    critical: `ALERTA CRÍTICA: Sobrepastoreo en ${paddockName}`,
+    warning:  `Ajuste climático: revisá ${paddockName}`,
+    critical: `Ajuste sugerido: ${paddockName}`,
   }
 
   const notificationTitle = titleMap[alertLevel]

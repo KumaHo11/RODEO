@@ -938,6 +938,28 @@ function FieldSetupModalInline({
   const [showSuggs, setShowSuggs]         = useState(false)
   const [locSearching, setLocSearching]   = useState(false)
   const [showPhotoWarning, setShowPhotoWarning] = useState(!!(setupImgUrl || fieldImg))
+  const locationContainerRef              = useRef<HTMLDivElement>(null)
+  const locationInputRef                  = useRef<HTMLInputElement>(null)
+  const [locDropPos, setLocDropPos]       = useState<{ top: number; left: number; width: number } | null>(null)
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (locationContainerRef.current && !locationContainerRef.current.contains(e.target as Node)) {
+        setShowSuggs(false)
+      }
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  // Update dropdown position when showing
+  const updateLocPos = useCallback(() => {
+    if (locationInputRef.current) {
+      const r = locationInputRef.current.getBoundingClientRect()
+      setLocDropPos({ top: r.bottom + 4, left: r.left, width: r.width })
+    }
+  }, [])
 
   // Nominatim autocomplete con debounce 500ms — idéntico al onboarding Step1Field
   useEffect(() => {
@@ -949,10 +971,12 @@ function FieldSetupModalInline({
         )
         setLocationSuggs(await res.json())
         setShowSuggs(true)
+        updateLocPos()   // ensure portal position is fresh
       } catch {}
     }, 500)
     return () => clearTimeout(t)
-  }, [setupFieldLocation])
+  }, [setupFieldLocation, updateLocPos])
+
 
   const selectSuggestion = (s: any) => {
     setSetupFieldLocation(s.display_name)
@@ -1016,14 +1040,17 @@ function FieldSetupModalInline({
           </div>
 
           {/* Ubicación con Nominatim autocomplete */}
-          <div className="space-y-1.5 relative">
+          <div className="space-y-1.5" ref={locationContainerRef}>
             <label className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest">
               <MapPin className="w-3.5 h-3.5" /> Ubicación
             </label>
             <form onSubmit={handleSearchLocation} className="relative">
-              <input type="text" value={setupFieldLocation}
+              <input
+                ref={locationInputRef}
+                type="text" value={setupFieldLocation}
                 onChange={e => setSetupFieldLocation(e.target.value)}
-                onFocus={() => locationSuggs.length > 0 && setShowSuggs(true)}
+                onFocus={() => { locationSuggs.length > 0 && setShowSuggs(true); updateLocPos() }}
+                onBlur={() => setTimeout(() => setShowSuggs(false), 200)}
                 placeholder="Ciudad, provincia o país..."
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-4 pr-11 py-2.5 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-400 outline-none transition-all placeholder:font-normal placeholder:text-gray-300"
               />
@@ -1032,15 +1059,22 @@ function FieldSetupModalInline({
                 {locSearching ? <Spin className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
               </button>
             </form>
-            {showSuggs && locationSuggs.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden">
+            {/* Portal dropdown — escapes overflow clipping of the modal scroll container */}
+            {showSuggs && locationSuggs.length > 0 && locDropPos && typeof document !== 'undefined' && createPortal(
+              <div
+                style={{ position: 'fixed', top: locDropPos.top, left: locDropPos.left, width: locDropPos.width, zIndex: 99999 }}
+                className="bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto"
+              >
                 {locationSuggs.map((s: any, i: number) => (
-                  <button key={i} onClick={() => selectSuggestion(s)}
+                  <button key={i}
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => selectSuggestion(s)}
                     className="w-full text-left px-4 py-2.5 text-xs font-normal text-gray-600 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
                     {s.display_name}
                   </button>
                 ))}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
 

@@ -347,19 +347,19 @@ export function calculateClimateAdjustment(
 
   if (adjustedRemainingDays <= 3) {
     alertLevel = 'critical'
-    alertMessage = `Sobrepastoreo inminente: quedan solo ${adjustedRemainingDays} día${adjustedRemainingDays !== 1 ? 's' : ''} de estadía. Mover el rodeo inmediatamente.`
+    alertMessage = `El ajuste climático sugiere que quedan aproximadamente ${adjustedRemainingDays} día${adjustedRemainingDays !== 1 ? 's' : ''} de estadía disponible. Te recomendamos revisar si conviene anticipar el movimiento del rodeo en los próximos días.`
   } else if (soilConditionCritical) {
     alertLevel = 'critical'
-    alertMessage = `NDVI crítico (${input.currentNdvi.toFixed(3)}): suelo desnudo detectado. Sin rebrote hasta que el satélite confirme cobertura. C_adj: ×${climateMultiplier.toFixed(2)}.`
+    alertMessage = `El satélite detecta cobertura vegetal muy baja en este potrero (NDVI ${input.currentNdvi.toFixed(2)}). El rebrote puede ser más lento de lo habitual. Revisá la planificación si tenías previsto un descanso corto.`
   } else if (adjustedRemainingDays <= 7 || deltaFromPlan <= -5) {
     alertLevel = 'warning'
     const bhInfo = wb.balanceHidricoMm < 0
-      ? `Déficit hídrico de ${Math.abs(wb.balanceHidricoMm).toFixed(0)} mm.`
+      ? `El balance hídrico muestra un déficit de ${Math.abs(wb.balanceHidricoMm).toFixed(0)} mm en los últimos días.`
       : ''
-    alertMessage = `Condiciones limitantes: estadía ajustada a ${adjustedRemainingDays} días (${Math.abs(deltaFromPlan)}d menos). ${bhInfo}`.trim()
+    alertMessage = `En base a las condiciones climáticas actuales, la estadía en este potrero podría ajustarse a ${adjustedRemainingDays} días (${Math.abs(deltaFromPlan)}d menos de lo planificado). ${bhInfo} Es un buen momento para revisar el plan.`.trim()
   } else if (deltaFromPlan >= 5 && wb.balanceHidricoMm > 10) {
     alertLevel = 'ok'
-    alertMessage = `Balance hídrico positivo (${wb.balanceHidricoMm.toFixed(0)} mm). La estadía puede extenderse ${deltaFromPlan} días más.`
+    alertMessage = `Las condiciones climáticas son favorables (balance hídrico ${wb.balanceHidricoMm.toFixed(0)} mm). La estadía planificada podría extenderse hasta ${deltaFromPlan} días adicionales si el pasto lo permite.`
   } else {
     alertLevel = 'ok'
   }

@@ -235,16 +235,16 @@ export function runCalculator(input: CalculatorInput): CalculatorResult {
 
   if (autonomiaDias <= 5) {
     alertLevel = 'critical'
-    alertMessage = `Autonomía crítica: ${autonomiaDias} días. Se recomienda mover el rodeo de inmediato.`
+    alertMessage = `La autonomía forrajera estimada es de ${autonomiaDias} días. Es un buen momento para revisar el plan y evaluar si conviene adelantar el movimiento del rodeo.`
   } else if (autonomiaDias <= 15 || balanceNetoKgHaDia < -5) {
     alertLevel = 'warning'
-    alertMessage = `Autonomía limitada (${autonomiaDias} días). El consumo supera el crecimiento en ${Math.abs(balanceNetoKgHaDia).toFixed(1)} kg MS/ha/día.`
+    alertMessage = `La autonomía actual es de ${autonomiaDias} días. El consumo supera el crecimiento en ${Math.abs(balanceNetoKgHaDia).toFixed(1)} kg MS/ha/día — revisá la planificación en los próximos días.`
   } else if (ndvi < 0.15) {
     alertLevel = 'critical'
-    alertMessage = `NDVI crítico (${ndvi.toFixed(2)}). Cobertura vegetal insuficiente — sin rebrote estimado.`
+    alertMessage = `La cobertura vegetal detectada es muy baja (NDVI ${ndvi.toFixed(2)}). El rebrote puede ser más lento de lo habitual — considerá ajustar los tiempos de descanso.`
   } else if (balanceNetoKgHaDia > 0 && autonomiaDias > 30) {
     alertLevel = 'ok'
-    alertMessage = `Balance positivo. El pasto crece a ${tasaCrecimientoKgHaDia} kg MS/ha/día.`
+    alertMessage = `El balance forrajero es positivo. El pasto crece a ${tasaCrecimientoKgHaDia} kg MS/ha/día — las condiciones están dentro de lo planificado.`
   }
 
   return {

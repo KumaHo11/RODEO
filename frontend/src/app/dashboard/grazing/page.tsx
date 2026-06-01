@@ -466,8 +466,11 @@ function InteractiveGantt({
   }, [paddocks])
 
   // Virtual events from movements combined with farmEvents
+  // BCS / condición corporal events are excluded from the Gantt visual timeline
+  const BCS_EVENT_TYPES = new Set(['bcs', 'condicion_corporal', 'body_condition'])
+
   const unifiedEvents = useMemo(() => {
-    const vEvents = (movements || []).map(m => {
+    const vEvents = (movements || []).filter(m => !BCS_EVENT_TYPES.has(m.event_type)).map(m => {
       const qty = m.quantity || 0
       let title: string
       if (m.event_type === 'ajuste_entrada') {
@@ -476,8 +479,6 @@ function InteractiveGantt({
         title = `Se retiraron ${qty} animales`
       } else if (m.event_type === 'ajuste') {
         title = `Ajuste de stock: ${qty > 0 ? '+' : ''}${qty} animales`
-      } else if (m.event_type === 'bcs') {
-        title = `Condición Corporal (BCS)`
       } else if (m.event_type === 'compra') {
         title = `Compra: ${qty} animales`
       } else if (m.event_type === 'venta') {
@@ -503,7 +504,9 @@ function InteractiveGantt({
         description: m.notes,
       }
     })
-    return [...farmEvents, ...vEvents]
+    // Also filter bcs/condicion_corporal from farmEvents themselves
+    const filteredFarmEvents = farmEvents.filter(e => !BCS_EVENT_TYPES.has(e.event_type))
+    return [...filteredFarmEvents, ...vEvents]
   }, [farmEvents, movements])
 
   // Use the global calculateDynamicHeadcount
@@ -1714,8 +1717,11 @@ function InteractiveGantt({
                           >
                             {(isHighDemand || isAlertDemand) && (
                               <span
-                                title={`Demanda: ${demandKgDay.toFixed(0)} kg MS/día · Crecimiento estimado: ${estimatedGrowthKgDay.toFixed(0)} kg MS/día`}
-                                className={`text-[7px] font-black px-1 rounded ${isHighDemand ? 'text-red-700' : 'text-amber-700'}`}
+                                title={isHighDemand
+                                  ? `⚠ ALTA DEMANDA — La carga animal supera el crecimiento forrajero en más de un 10%.\n\nDemanda estimada: ${demandKgDay.toFixed(0)} kg MS/día\nCrecimiento proyectado: ${estimatedGrowthKgDay.toFixed(0)} kg MS/día\n\nEsto puede indicar que el forraje disponible no alcanzará para sostener todos los rodeos durante este mes. Considerá reducir la carga animal, acortar las estadías o rotar más rápido.`
+                                  : `⚠ DEMANDA AJUSTADA — La carga animal supera el crecimiento forrajero proyectado para este mes.\n\nDemanda estimada: ${demandKgDay.toFixed(0)} kg MS/día\nCrecimiento proyectado: ${estimatedGrowthKgDay.toFixed(0)} kg MS/día\n\nMonitoreá el remanente al salir de cada potrero para detectar sobrepastoreo temprano.`
+                                }
+                                className={`text-[7px] font-black px-1 rounded cursor-help ${isHighDemand ? 'text-red-700 bg-red-100' : 'text-amber-700 bg-amber-100'}`}
                               >⚠ Alta demanda</span>
                             )}
                             <div className="flex w-full">
@@ -1945,7 +1951,7 @@ function InteractiveGantt({
                })()}
 
         {/* ── Legend: Plan Original / Plan Modificado / Plan Real + Agenda + Hoy */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-t border-gray-100 bg-gray-50/80 flex-wrap">
+        <div className="sticky bottom-0 z-30 flex items-center gap-3 px-4 py-2.5 border-t border-gray-200 bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.06)] flex-wrap">
           <div className="flex items-center gap-3 mr-2">
             {/* Track 1 — Plan Original */}
             <div className="flex items-center gap-1.5">
@@ -4345,194 +4351,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             </div>
 
 
-            {/* ── Hitos Biológicos ── */}
-            <div className="relative">
-              <button
-                onClick={() => setShowBioMilestonesPanel(p => !p)}
-                title="Hitos biológicos (destete, servicio, parición)"
-                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-bold transition-all ${
-                  showBioMilestonesPanel || bioMilestones.length > 0
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50 border-transparent hover:border-amber-100'
-                }`}
-              >
-                <span className="text-sm leading-none">🐄</span>
-                {bioMilestones.length > 0 && (
-                  <span className="text-[9px] font-black bg-amber-200 text-amber-800 rounded-full px-1.5">{bioMilestones.length}</span>
-                )}
-              </button>
-              {showBioMilestonesPanel && (
-                <>
-                  <div className="fixed inset-0 z-[49]" onClick={() => setShowBioMilestonesPanel(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-100 shadow-2xl rounded-2xl overflow-hidden z-[50] animate-in fade-in zoom-in-95 duration-150">
-                    <div className="px-4 pt-4 pb-3 border-b border-gray-100">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Hitos Biológicos</p>
-                          <p className="text-[9px] text-gray-400 mt-0.5">Compartidos entre planificación manual y sugerida</p>
-                        </div>
-                        {bioMilestones.length > 0 && (
-                          <button
-                            onClick={() => saveBioMilestones([])}
-                            className="text-[9px] font-bold text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                          >Limpiar todo</button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="px-4 py-3 space-y-4 max-h-[70vh] overflow-y-auto">
+            {/* ── Hitos Biológicos — UI removida del planificador; cálculos internos se preservan ── */}
 
-                      {/* Módulo Servicio */}
-                      <div className="space-y-2">
-                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1">
-                          <span>🐂</span> Temporada de Servicio
-                        </p>
-                        <div className="bg-red-50 rounded-xl p-3 space-y-2.5 border border-red-100">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rodeo</label>
-                              <select
-                                id="bio-service-herd"
-                                className="w-full text-[10px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-red-400"
-                                defaultValue=""
-                                onChange={(e) => {
-                                  const val = e.target.value
-                                  if (!val) return
-                                  const dateEl = document.getElementById('bio-service-date') as HTMLInputElement
-                                  if (!dateEl?.value) return
-                                  const existing = bioMilestones.filter(m => !(m.type === 'service' && m.herdId === val))
-                                  saveBioMilestones([...existing, { type: 'service', herdId: val, date: dateEl.value }])
-                                }}
-                              >
-                                <option value="">— Seleccionar —</option>
-                                {herds.map((h: any) => (
-                                  <option key={h.id} value={h.id}>{h.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Inicio</label>
-                              <input
-                                id="bio-service-date"
-                                type="date"
-                                className="w-full text-[10px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-red-400"
-                              />
-                            </div>
-                          </div>
-                          <button
-                            className="w-full text-[10px] font-bold text-red-700 bg-red-100 hover:bg-red-200 rounded-lg py-1.5 transition-colors"
-                            onClick={() => {
-                              const herdEl = document.getElementById('bio-service-herd') as HTMLSelectElement
-                              const dateEl = document.getElementById('bio-service-date') as HTMLInputElement
-                              if (!herdEl?.value || !dateEl?.value) return
-                              const existing = bioMilestones.filter(m => !(m.type === 'service' && m.herdId === herdEl.value))
-                              saveBioMilestones([...existing, { type: 'service', herdId: herdEl.value, date: dateEl.value }])
-                            }}
-                          >+ Agregar servicio</button>
-                          {/* Servicios configurados */}
-                          {bioMilestones.filter(m => m.type === 'service').map((m, i) => {
-                            const h = herds.find((hh: any) => hh.id === m.herdId)
-                            const parition = new Date(m.date + 'T00:00:00')
-                            parition.setMonth(parition.getMonth() + 9)
-                            return (
-                              <div key={i} className="flex items-center justify-between px-2.5 py-2 bg-white rounded-lg border border-red-100">
-                                <div>
-                                  <p className="text-[10px] font-bold text-gray-700">{h?.name || m.herdId}</p>
-                                  <p className="text-[9px] text-gray-400">Servicio: {m.date} · Parición: {parition.toISOString().split('T')[0]}</p>
-                                </div>
-                                <button onClick={() => saveBioMilestones(bioMilestones.filter((_, j) => j !== bioMilestones.indexOf(m)))} className="text-red-400 hover:text-red-600 p-1">
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Módulo Destete Escalonado */}
-                      <div className="space-y-2">
-                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1">
-                          <span>✂</span> Destete Escalonado
-                        </p>
-                        <div className="bg-amber-50 rounded-xl p-3 space-y-2.5 border border-amber-100">
-                          {(['weaning_head', 'weaning_body', 'weaning_tail'] as const).map((wType) => {
-                            const labels = { weaning_head: 'Cabeza', weaning_body: 'Cuerpo', weaning_tail: 'Cola' }
-                            return (
-                              <div key={wType} className="space-y-1.5">
-                                <p className="text-[9px] font-black text-amber-700">{labels[wType]}</p>
-                                <div className="grid grid-cols-3 gap-1.5">
-                                  <div>
-                                    <label className="text-[8px] font-bold text-gray-400">Rodeo</label>
-                                    <select
-                                      id={`bio-${wType}-herd`}
-                                      className="w-full text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none focus:border-amber-400"
-                                      defaultValue=""
-                                    >
-                                      <option value="">Rodeo</option>
-                                      {herds.map((h: any) => (
-                                        <option key={h.id} value={h.id}>{h.name}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="text-[8px] font-bold text-gray-400">Fecha</label>
-                                    <input
-                                      id={`bio-${wType}-date`}
-                                      type="date"
-                                      className="w-full text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none focus:border-amber-400"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-[8px] font-bold text-gray-400">Peso (kg)</label>
-                                    <input
-                                      id={`bio-${wType}-weight`}
-                                      type="number" min="50" max="400" placeholder="170"
-                                      className="w-full text-[9px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none focus:border-amber-400"
-                                    />
-                                  </div>
-                                </div>
-                                <button
-                                  className="w-full text-[9px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg py-1 transition-colors"
-                                  onClick={() => {
-                                    const hEl = document.getElementById(`bio-${wType}-herd`) as HTMLSelectElement
-                                    const dEl = document.getElementById(`bio-${wType}-date`) as HTMLInputElement
-                                    const wEl = document.getElementById(`bio-${wType}-weight`) as HTMLInputElement
-                                    if (!hEl?.value || !dEl?.value) return
-                                    const existing = bioMilestones.filter(m => !(m.type === wType && m.herdId === hEl.value))
-                                    saveBioMilestones([...existing, {
-                                      type: wType,
-                                      herdId: hEl.value,
-                                      date: dEl.value,
-                                      estimatedWeightKg: wEl?.value ? Number(wEl.value) : undefined,
-                                    }])
-                                  }}
-                                >+ Agregar {labels[wType]}</button>
-                              </div>
-                            )
-                          })}
-                          {/* Destetes configurados */}
-                          {bioMilestones.filter(m => m.type.startsWith('weaning')).map((m, i) => {
-                            const h = herds.find((hh: any) => hh.id === m.herdId)
-                            const typeLabel = m.type === 'weaning_head' ? 'Cabeza' : m.type === 'weaning_body' ? 'Cuerpo' : 'Cola'
-                            return (
-                              <div key={i} className="flex items-center justify-between px-2.5 py-2 bg-white rounded-lg border border-amber-100">
-                                <div>
-                                  <p className="text-[10px] font-bold text-gray-700">{h?.name || m.herdId} — {typeLabel}</p>
-                                  <p className="text-[9px] text-gray-400">{m.date}{m.estimatedWeightKg ? ` · ${m.estimatedWeightKg} kg` : ''}</p>
-                                </div>
-                                <button onClick={() => saveBioMilestones(bioMilestones.filter((_, j) => j !== bioMilestones.indexOf(m)))} className="text-amber-500 hover:text-amber-700 p-1">
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
 
             {/* Exportar CSV */}
             <button
@@ -5776,6 +5596,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       {showHerdSelector && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-200">
+            {/* Header */}
             <div className="px-6 pt-6 pb-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <div>
@@ -5789,10 +5610,15 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               </div>
               <p className="text-[11px] text-gray-500 mt-1">Estos rodeos se asignarán a cada bloque que traces.</p>
             </div>
+
+            {/* Rodeos */}
             <div className="px-6 py-4">
               <div className="flex flex-wrap gap-2">
                 {herds.map((h: any) => {
                   const sel = drawingHerdIds.includes(h.id)
+                  // Ración sugerida para este rodeo: EV × dailyAllocationKg
+                  const hEv = Number(h.total_ev || 0)
+                  const hRacionKg = hEv > 0 ? (hEv * dailyAllocationKg).toFixed(0) : null
                   return (
                     <button
                       key={h.id}
@@ -5806,8 +5632,11 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${ sel ? 'bg-white' : 'bg-gray-300' }`} />
-                      {h.name}
-                      <span className="text-[10px] opacity-70">{Number(h.total_ev || 0).toFixed(1)} EV</span>
+                      <span>{h.name}</span>
+                      <span className="text-[10px] opacity-70">{hEv.toFixed(1)} EV</span>
+                      {sel && hRacionKg && (
+                        <span className="text-[9px] bg-white/20 rounded px-1 ml-0.5">{hRacionKg} kg/d</span>
+                      )}
                     </button>
                   )
                 })}
@@ -5816,6 +5645,86 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 <p className="text-xs text-gray-400 text-center py-4">No hay rodeos configurados aún.</p>
               )}
             </div>
+
+            {/* Parámetros de planificación */}
+            <div className="px-6 pb-4 border-t border-gray-100 pt-4 space-y-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Parámetros del plan</p>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Ración diaria */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-600">Ración diaria</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      step={0.5}
+                      min={6}
+                      max={25}
+                      value={rawDailyAlloc}
+                      onChange={e => {
+                        setRawDailyAlloc(e.target.value)
+                        const n = parseFloat(e.target.value)
+                        if (!isNaN(n) && n > 0) setDailyAllocationKg(n)
+                      }}
+                      onBlur={() => {
+                        const n = parseFloat(rawDailyAlloc)
+                        if (isNaN(n) || n <= 0) setRawDailyAlloc(String(dailyAllocationKg))
+                      }}
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-1 focus:ring-green-500 outline-none"
+                    />
+                    <span className="text-[9px] text-gray-400 whitespace-nowrap">kg MS/EV/d</span>
+                  </div>
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded inline-flex ${
+                    dailyAllocationKg <= 11 ? 'bg-red-50 text-red-600'
+                    : dailyAllocationKg <= 13 ? 'bg-green-100 text-green-700'
+                    : 'bg-blue-50 text-blue-600'
+                  }`}>
+                    {dailyAllocationKg <= 11 ? 'Déficit' : dailyAllocationKg <= 13 ? 'Normal' : 'Abundante'}
+                  </span>
+                </div>
+
+                {/* Remanente objetivo */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-600">Remanente objetivo</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      step={50}
+                      min={0}
+                      value={rawTargetRemnant}
+                      onChange={e => {
+                        setRawTargetRemnant(e.target.value)
+                        const n = parseFloat(e.target.value)
+                        if (!isNaN(n) && n >= 0) setTargetRemnant(n)
+                      }}
+                      onBlur={() => {
+                        const n = parseFloat(rawTargetRemnant)
+                        if (isNaN(n) || n < 0) setRawTargetRemnant(String(targetRemnant))
+                      }}
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-1 focus:ring-green-500 outline-none"
+                    />
+                    <span className="text-[9px] text-gray-400 whitespace-nowrap">kg MS/ha</span>
+                  </div>
+                  <span className="text-[9px] text-gray-400">Pasto que queda al salir</span>
+                </div>
+              </div>
+
+              {/* Resumen: EV total seleccionado y ración total */}
+              {drawingHerdIds.length > 0 && (() => {
+                const selEV = herds
+                  .filter((h: any) => drawingHerdIds.includes(h.id))
+                  .reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
+                const totalRacionKg = (selEV * dailyAllocationKg).toFixed(0)
+                return (
+                  <div className="bg-green-50 border border-green-100 rounded-xl px-3 py-2 text-[10px] text-green-700 font-bold flex items-center justify-between">
+                    <span>EV total: <strong>{selEV.toFixed(1)}</strong></span>
+                    <span className="text-gray-300">·</span>
+                    <span>Consumo/día: <strong>{totalRacionKg} kg MS</strong></span>
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* Footer */}
             <div className="px-6 pb-6 flex items-center gap-3">
               <button
                 onClick={() => setShowHerdSelector(false)}

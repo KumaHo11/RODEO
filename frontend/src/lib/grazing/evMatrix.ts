@@ -42,7 +42,8 @@ export const RATION_SUGERIDA_POR_CATEGORIA: Record<string, number> = {
   TORO_DESCANSO:     12,   // Mantenimiento en reposo
   TORO_SERVICIO:     15,   // Alta demanda energética en servicio
   TERNERO:           10,   // Menor masa, menor demanda absoluta
-  RECRIA_NOVILLO:    12,   // Crecimiento activo
+  NOVILLITO:         11,   // Recría liviana (< 300 kg)
+  RECRIA_NOVILLO:    12,   // Crecimiento activo (300-450 kg)
   RECRIA_VAQUILLONA: 11,   // Crecimiento moderado
 }
 
@@ -336,9 +337,10 @@ export function calcularEV(params: CalcEVParams): CalcEVResult {
     }
   }
 
-  // ── RECRÍA / NOVILLOS (tabla Novillos) ──────────────────────────────────────
+  // ── RECRÍA / NOVILLOS / NOVILLITO (tabla Novillos) ──────────────────────────────────────────
   if (
     cat === 'RECRIA_NOVILLO' || cat === 'NOVILLOS' || cat === 'NOVILLITOS' ||
+    cat === 'NOVILLITO' ||
     cat === 'TERNERO' || cat === 'TERNEROS' || cat === 'TERNERAS'
   ) {
     const ev = interpolarCrecimiento(NOVILLO_TABLA, NOVILLO_PESOS, NOVILLO_ADPV_G, pesoKg, adpvKgDay)
@@ -346,7 +348,7 @@ export function calcularEV(params: CalcEVParams): CalcEVResult {
       evUnitario: parseFloat(ev.toFixed(3)),
       racionSugeridaKgDia,
       fuente: 'cocimano',
-      descripcion: `Novillo/Ternero · ${pesoKg} kg · ADPV ${(adpvKgDay * 1000).toFixed(0)} g/día`,
+      descripcion: `Novillo/Novillito/Ternero · ${pesoKg} kg · ADPV ${(adpvKgDay * 1000).toFixed(0)} g/día`,
     }
   }
 

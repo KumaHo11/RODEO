@@ -142,12 +142,13 @@ export default function PaddockSidePanel({
   const toggleDisable = async (e: React.MouseEvent, paddockId: string) => {
     e.stopPropagation()
     const next = !(activeMap[paddockId] ?? true)
+    // Optimistic update only — no full reload to avoid skeleton flash
     setActiveMap(prev => ({ ...prev, [paddockId]: next }))
     await apiFetch(`/api/paddocks/${paddockId}`, {
       method: 'PATCH',
       body: JSON.stringify({ is_active: next }),
     })
-    onDataRefresh?.()
+    // Do NOT call onDataRefresh() here — would trigger full list skeleton
   }
 
   // KML import
@@ -309,11 +310,6 @@ export default function PaddockSidePanel({
                           <span className="ml-1 text-gray-400">· {getNdviLabel(avgNdvi).label}</span>
                         )}
                       </p>
-                      {avgQuality != null && (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${qualityBadgeColor}`}>
-                          Ranking {avgQuality}/10
-                        </span>
-                      )}
                     </div>
                   )}
                 </>
@@ -418,6 +414,9 @@ export default function PaddockSidePanel({
                 const forageQuality = (paddock.technical_data as any)?.forage_quality as number | undefined
                 const climateSnap = latestByPaddock.get(paddock.id)
                 const realGrowthRate = climateSnap ? Number(climateSnap.grass_growth_rate) : (paddock.dry_matter_kg_ha ? Number(paddock.dry_matter_kg_ha) * 0.012 : undefined)
+                // Derive GRAZING status from herds currently assigned to this paddock
+                const hasActiveHerd = herds.some((h: any) => h.current_paddock_id === paddock.id)
+                const isGrazing = hasActiveHerd || paddock.current_status === 'GRAZING'
 
                 return (
                   <div
@@ -442,10 +441,10 @@ export default function PaddockSidePanel({
                         <div className="flex items-center gap-2 mt-1">
                           <div className="flex items-center gap-1">
                             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              paddock.current_status === 'GRAZING' ? 'bg-orange-400' : isActive ? 'bg-green-400' : 'bg-gray-300'
+                              !isActive ? 'bg-gray-300' : isGrazing ? 'bg-green-500' : 'bg-blue-400'
                             }`} />
                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                              {paddock.current_status === 'GRAZING' ? 'En pastoreo' : 'Descansando'}
+                              {isGrazing ? 'Pastando' : 'Descansando'}
                             </p>
                           </div>
                           <span className="text-[9px] text-gray-200">·</span>
@@ -604,12 +603,12 @@ export default function PaddockSidePanel({
                                )}
                            </div>
                            {/* Botón Editar — fila propia, separado visualmente */}
-                           <div className="flex justify-end border-t border-gray-50 pt-2 mt-1">
+                           <div className="flex justify-end border-t border-gray-50 pt-2 mt-1 pb-1">
                              <button
                                type="button"
                                onClick={e => { e.stopPropagation(); openModal(paddock) }}
                                title="Editar potrero"
-                               className="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-all shadow-sm"
+                               className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-all shadow-sm"
                              >
                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
                                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />

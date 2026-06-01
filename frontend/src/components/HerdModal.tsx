@@ -17,6 +17,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '@/lib/apiFetch'
 import { CatCombobox, BreedCombobox } from '@/components/HerdComboboxes'
+import { CustomSelect } from '@/components/CustomSelect'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
 import {
   CATEGORIA_PESO_DEFAULT,
@@ -120,9 +121,10 @@ const EVENT_TYPES_QUICK = [
   { id: 'diagnostico_prenez',    label: 'Diagnóstico de preñez', color: 'bg-teal-500' },
 ]
 
-const LABEL = 'text-[10px] font-black text-gray-700 tracking-widest uppercase'
-const INPUT  = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-base md:text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all'
-const TEXTAREA = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-base md:text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none resize-none transition-all'
+const LABEL    = 'text-xs font-black text-gray-600 tracking-wider uppercase'
+const CARD_TIT = 'text-xs font-black text-green-700 tracking-wide'
+const INPUT    = 'w-full bg-white border-2 border-gray-200 rounded-xl px-3.5 py-3 text-base text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all'
+const TEXTAREA = 'w-full bg-white border-2 border-gray-200 rounded-xl px-3.5 py-3 text-base text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none resize-none transition-all'
 
 // ── Activity options — uniform grid layout ─────────────────────────────────────
 
@@ -139,11 +141,11 @@ type ActivityId = 'paricion' | 'compra' | 'mortandad' | 'venta' | 'destete'
 // Categorías que NO tienen Parición ni Destete (terneros, novillos, toros)
 const ACTIVIDADES_EXCLUIDAS: Record<string, Set<string>> = {
   paricion: new Set([
-    'TERNERO', 'RECRIA_NOVILLO', 'RECRIA_VAQUILLONA', 'TORO',          // fisiológica
+    'TERNERO', 'NOVILLITO', 'RECRIA_NOVILLO', 'RECRIA_VAQUILLONA', 'TORO',          // fisiológica
     'TERNEROS', 'TERNERAS', 'NOVILLOS', 'NOVILLITOS', 'TOROS', 'TORITOS' // comercial
   ]),
   destete: new Set([
-    'TERNERO', 'RECRIA_NOVILLO', 'RECRIA_VAQUILLONA', 'TORO',
+    'TERNERO', 'NOVILLITO', 'RECRIA_NOVILLO', 'RECRIA_VAQUILLONA', 'TORO',
     'TERNEROS', 'TERNERAS', 'NOVILLOS', 'NOVILLITOS', 'TOROS', 'TORITOS'
   ]),
 }
@@ -1525,7 +1527,16 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         if (historyTypeFilter === 'audio' && type !== 'audio') return false;
         if (historyTypeFilter === 'foto' && type !== 'foto') return false;
         if (historyTypeFilter === 'texto' && type !== 'texto') return false;
-        if (historyTypeFilter === 'otros' && ['audio', 'foto', 'texto'].includes(type)) return false;
+        if (historyTypeFilter === 'actividades') {
+          // Actividades = events that are not notas (paricion, compra, venta, mortandad, destete, etc.)
+          const isActivity = !isNota && !['bcs', 'condicion_corporal'].includes(ev.event_type);
+          if (!isActivity) return false;
+        }
+        if (historyTypeFilter === 'condición corporal') {
+          // BCS events
+          const isBcs = ev.event_type === 'bcs' || ev.event_type === 'condicion_corporal' || ev.title?.toLowerCase().includes('bcs') || ev.title?.toLowerCase().includes('condición');
+          if (!isBcs) return false;
+        }
       }
 
       if (historyMonthFilter) {
@@ -1556,46 +1567,47 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   }, [agendaEvents, monthNames]);
 
   const modalContent = (
-    <div className="fixed inset-0 z-[9999] bg-white sm:bg-black/40 sm:backdrop-blur-sm flex flex-col sm:items-center sm:justify-center sm:p-4 pb-20 sm:pb-0">
+    <div className="fixed inset-0 z-[9999] bg-white sm:bg-black/40 sm:backdrop-blur-sm flex flex-col sm:items-center sm:justify-center sm:p-4 pb-6 sm:pb-0">
       <div className="bg-white w-full h-full sm:rounded-2xl sm:shadow-2xl sm:w-full sm:max-w-5xl sm:max-h-[92vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
             {catColors && (
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${catColors.bg}`}>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${catColors.bg}`}>
                 <span className={`text-xs font-black ${catColors.text}`}>{displayCat.slice(0, 3).toUpperCase()}</span>
               </div>
             )}
             <div>
-              <h3 className="text-xl font-black text-gray-950">
+              <h3 className="text-xl font-black text-gray-950 tracking-tight">
                 {isEditing ? herd.name : 'Nuevo rodeo'}
               </h3>
-              <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
-                {isEditing ? `${liveHerd?.head_count ?? herd?.head_count} cabezas · ${displayCat}` : 'Alta de rodeo'}
+              <p className="text-xs text-gray-500 font-medium mt-0.5">
+                {isEditing ? `${liveHerd?.head_count ?? herd?.head_count} CABEZAS · ${displayCat.toUpperCase()}` : 'Configurá los datos del rodeo'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {isEditing && (
-              <span className="flex items-center gap-1 text-[10px] text-gray-400 font-bold bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+              <span className="flex items-center gap-1 text-xs text-gray-500 font-bold bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
                 <Edit3 className="w-3 h-3" /> Editando
               </span>
             )}
             <button onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all"
+              aria-label="Cerrar modal">
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-100 shrink-0 px-2 pt-2">
+        <div className="flex border-b border-gray-100 shrink-0 px-2 pt-1">
           {TABS.map(({ id, label }) => (
             <button key={id} onClick={() => setTab(id)}
-              className={`flex-1 py-2.5 text-[10px] font-black tracking-wide rounded-t-lg transition-all border-b-2 uppercase overflow-hidden whitespace-nowrap text-ellipsis px-1 ${
+              className={`flex-1 py-3.5 text-xs font-black tracking-wide rounded-t-lg transition-all border-b-[3px] uppercase overflow-hidden whitespace-nowrap text-ellipsis px-1 ${
                 tab === id
-                  ? 'text-green-700 border-green-600 bg-green-50/50'
+                  ? 'text-green-700 border-green-600 bg-green-50/60'
                   : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-gray-50'
               }`}>
               {label}
@@ -1613,7 +1625,6 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               {/* ――― SECCIÓN 1: Identificación y mercado ――― */}
               <div className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100">
-                  <div className="w-1.5 h-4 rounded-full bg-gray-300 shrink-0" />
                   <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
                     Identificación y mercado
                   </p>
@@ -1705,7 +1716,6 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               {/* ――― SECCIÓN 2: Perfil biológico ――― */}
               <div className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100">
-                  <div className="w-1.5 h-4 rounded-full bg-teal-400 shrink-0" />
                   <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
                     Perfil biológico
                   </p>
@@ -1719,33 +1729,34 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       <label className={LABEL} style={{ marginBottom: 0 }}>Estado fisiológico</label>
                       <Tooltip text="En qué etapa productiva está el rodeo. Determina sus requerimientos reales de materia seca, independientemente de la categoría comercial." />
                     </div>
-                    <select
-                      className={INPUT}
+                    <CustomSelect
                       value={physioPanel.physioCategory}
-                      onChange={e => setPhysioPanel(prev => ({
+                      onChange={val => setPhysioPanel(prev => ({
                         ...prev,
-                        physioCategory: e.target.value as any,
+                        physioCategory: val as any,
                         lactanciaRange: '',
                         estadioGestacion: '',
                         customRacionKgDia: null,
                       }))}
-                    >
-                      <option value="">— Seleccionar estado —</option>
-                      <optgroup label="Vacas">
-                        <option value="VACA_CON_TERNERO">Vaca con ternero al pie</option>
-                        <option value="VACA_PRENADA">Vaca preñada</option>
-                        <option value="VACA_VACIA">Vaca vacía</option>
-                      </optgroup>
-                      <optgroup label="Recría / crecimiento">
-                        <option value="TERNERO">Ternero/a</option>
-                        <option value="RECRIA_NOVILLO">Novillito / novillo</option>
-                        <option value="RECRIA_VAQUILLONA">Vaquillona</option>
-                      </optgroup>
-                      <optgroup label="Toros">
-                        <option value="TORO_DESCANSO">Toro en descanso</option>
-                        <option value="TORO_SERVICIO">Toro en servicio</option>
-                      </optgroup>
-                    </select>
+                      placeholder="— Seleccionar estado —"
+                      groups={[
+                        { label: 'Vacas', options: [
+                          { label: 'Vaca con ternero al pie', value: 'VACA_CON_TERNERO' },
+                          { label: 'Vaca preñada', value: 'VACA_PRENADA' },
+                          { label: 'Vaca vacía', value: 'VACA_VACIA' },
+                        ]},
+                        { label: 'Recría / crecimiento', options: [
+                          { label: 'Ternero/a', value: 'TERNERO' },
+                          { label: 'Novillito (hasta 2 años / < 300 kg)', value: 'NOVILLITO' },
+                          { label: 'Novillo (2–4 años / 300–450 kg)', value: 'RECRIA_NOVILLO' },
+                          { label: 'Vaquillona', value: 'RECRIA_VAQUILLONA' },
+                        ]},
+                        { label: 'Toros', options: [
+                          { label: 'Toro en descanso', value: 'TORO_DESCANSO' },
+                          { label: 'Toro en servicio', value: 'TORO_SERVICIO' },
+                        ]},
+                      ]}
+                    />
                   </div>
 
                   {/* Inputs condicionales */}
@@ -1780,12 +1791,12 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       {physioPanel.physioCategory === 'VACA_CON_TERNERO' && (
                         <div className="space-y-1.5">
                           <label className={LABEL}>Período de lactancia</label>
-                          <select className={INPUT}
+                          <CustomSelect
                             value={physioPanel.lactanciaRange}
-                            onChange={e => setPhysioPanel(p => ({ ...p, lactanciaRange: e.target.value as any }))}>
-                            <option value="">— Seleccionar mes —</option>
-                            {LACTANCIA_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                          </select>
+                            onChange={val => setPhysioPanel(p => ({ ...p, lactanciaRange: val as any }))}
+                            placeholder="— Seleccionar mes —"
+                            options={LACTANCIA_RANGES.map(r => ({ label: r.label, value: r.value }))}
+                          />
                         </div>
                       )}
 
@@ -1793,17 +1804,17 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       {physioPanel.physioCategory === 'VACA_PRENADA' && (
                         <div className="space-y-1.5">
                           <label className={LABEL}>Estadio de gestación</label>
-                          <select className={INPUT}
+                          <CustomSelect
                             value={physioPanel.estadioGestacion}
-                            onChange={e => setPhysioPanel(p => ({ ...p, estadioGestacion: e.target.value as any }))}>
-                            <option value="">— Seleccionar mes —</option>
-                            {ESTADIOS_GESTACION.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
-                          </select>
+                            onChange={val => setPhysioPanel(p => ({ ...p, estadioGestacion: val as any }))}
+                            placeholder="— Seleccionar mes —"
+                            options={ESTADIOS_GESTACION.map(e => ({ label: e.label, value: e.value }))}
+                          />
                         </div>
                       )}
 
                       {/* ADPV */}
-                      {['TERNERO','RECRIA_NOVILLO','RECRIA_VAQUILLONA','TORO_DESCANSO','TORO_SERVICIO'].includes(physioPanel.physioCategory) && (
+                      {['TERNERO','NOVILLITO','RECRIA_NOVILLO','RECRIA_VAQUILLONA','TORO_DESCANSO','TORO_SERVICIO'].includes(physioPanel.physioCategory) && (
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-1.5">
                             <label className={LABEL} style={{ marginBottom: 0 }}>
@@ -1878,10 +1889,19 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         )}
                       </div>
                       <div className="relative">
-                        <input type="number" step="0.5" min="1" max="30" inputMode="decimal"
+                        <input type="text" inputMode="decimal" step="0.5" min="1" max="30"
                           className="w-full bg-white border-2 border-emerald-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none transition-all pr-28"
-                          value={physioPanel.customRacionKgDia ?? (RATION_SUGERIDA_POR_CATEGORIA[physioPanel.physioCategory as string] ?? 12)}
-                          onChange={e => setPhysioPanel(p => ({ ...p, customRacionKgDia: Number(e.target.value) || null }))}
+                          value={physioPanel.customRacionKgDia !== null && physioPanel.customRacionKgDia !== undefined
+                            ? physioPanel.customRacionKgDia
+                            : (RATION_SUGERIDA_POR_CATEGORIA[physioPanel.physioCategory as string] ?? 12)}
+                          onChange={e => {
+                            const v = e.target.value.replace(',', '.')
+                            if (v === '' || v === '.') {
+                              setPhysioPanel(p => ({ ...p, customRacionKgDia: null }))
+                            } else if (/^\d*\.?\d*$/.test(v)) {
+                              setPhysioPanel(p => ({ ...p, customRacionKgDia: parseFloat(v) || null }))
+                            }
+                          }}
                           onFocus={e => e.target.select()} />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-medium pointer-events-none">
                           kg MS/cab/d
@@ -2625,7 +2645,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           <Scale className="w-3.5 h-3.5 text-gray-500" />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Registro de condición corporal</p>
+                          <p className={CARD_TIT}>Registro de condición corporal</p>
                           <p className="text-[9px] text-gray-400 font-medium">BCS · Escala 1–5</p>
                         </div>
                       </div>
@@ -2805,7 +2825,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                     {(isFilterExpanded || historyTypeFilter || historyMonthFilter) && (
                       <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
                         <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
-                          {['audio', 'foto', 'texto', 'otros'].map(t => (
+                          {['audio', 'foto', 'texto', 'actividades', 'condición corporal'].map(t => (
                             <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
                               className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
                                 historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
@@ -2934,32 +2954,37 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           </div>
         )}
 
-        {/* Footer — Tab 1 save / general */}
+        {/* Footer — barra de acción sticky, mobile-first */}
         {(tab === 'operativo' || (tab === 'registros' && sessionNoteCount > 0)) && (
-          <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex justify-end gap-3">
-            <button type="button" onClick={onClose}
-              className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
-              Cancelar
-            </button>
-            {tab === 'operativo' && (
-              <button type="button" onClick={handleSave} disabled={saving || !canSave}
-                className="relative px-5 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all disabled:opacity-40 min-w-[110px]">
-                {saving && (
-                  <span className="absolute inset-0 flex items-center justify-center">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  </span>
-                )}
-                <span className={saving ? 'invisible' : ''}>
-                  {isEditing ? 'Actualizar' : 'Crear rodeo'}
-                </span>
-              </button>
-            )}
-            {tab === 'registros' && sessionNoteCount > 0 && (
+          <div className="px-4 pt-4 pb-6 border-t border-gray-100 bg-white shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="flex-1" />
               <button type="button" onClick={onClose}
-                className="px-5 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all">
-                Confirmar (+{sessionNoteCount} registros)
+                className="px-5 py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all min-h-[48px]">
+                Cancelar
               </button>
-            )}
+              {tab === 'operativo' && (
+                <button type="button" onClick={handleSave} disabled={saving || !canSave}
+                  className="relative flex-1 sm:flex-none sm:min-w-[168px] py-3 px-5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all min-h-[48px] shadow-sm shadow-green-200">
+                  {saving && (
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </span>
+                  )}
+                  <span className={`flex items-center justify-center gap-2 ${saving ? 'invisible' : ''}`}>
+                    <Check className="w-4 h-4" />
+                    {isEditing ? 'Actualizar rodeo' : 'Crear rodeo'}
+                  </span>
+                </button>
+              )}
+              {tab === 'registros' && sessionNoteCount > 0 && (
+                <button type="button" onClick={onClose}
+                  className="flex-1 sm:flex-none sm:min-w-[168px] py-3 px-5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 transition-all min-h-[48px] shadow-sm shadow-green-200 flex items-center justify-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Confirmar (+{sessionNoteCount} registros)
+                </button>
+              )}
+            </div>
           </div>
         )}
 

@@ -92,7 +92,7 @@ export function CatCombobox({ value, onChange, placeholder = 'Ej: Ternero, Novil
     inputVal.trim().length > 0 &&
     !BOVINE_OPTIONS.some(o => o.label.toLowerCase() === inputVal.trim().toLowerCase())
 
-  const baseInput = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 pr-8 text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all'
+  const baseInput = 'w-full bg-white border-2 border-gray-200 rounded-xl px-3.5 py-3 pr-9 text-base text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all font-medium'
 
   return (
     <div ref={ref} className={`relative ${className ?? ''}`}>
@@ -187,7 +187,7 @@ export function BreedCombobox({ value, onChange, breeds, placeholder = 'Buscar o
     value.trim().length > 0 &&
     !breeds.some(b => b.toLowerCase() === value.trim().toLowerCase())
 
-  const baseInput = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 pr-8 text-sm text-gray-800 placeholder:text-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all'
+  const baseInput = 'w-full bg-white border-2 border-gray-200 rounded-xl px-3.5 py-3 pr-9 text-base text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all font-medium'
 
   return (
     <div ref={ref} className={`relative ${className ?? ''}`}>

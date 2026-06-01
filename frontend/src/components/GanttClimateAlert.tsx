@@ -83,41 +83,69 @@ const LEVEL_CONFIG = {
   },
 }
 
-// Génera el micro-copy del motivo sin jerga técnica
+// Génera el micro-copy del motivo con explicación completa de factores climáticos
 function buildReason(
   stressType: string | undefined,
   originalDays: number,
   adjustedDays: number
-): { title: string; body: string; action: string } {
+): { title: string; body: string; action: string; factors: { label: string; desc: string; icon: string }[] } {
   const delta = originalDays - adjustedDays
-  const stressLabels: Record<string, { title: string; body: string }> = {
-    heat: {
-      title: `Días reducidos por ola de calor`,
-      body:  `El calor intenso esta semana hace que el pasto crezca más lento. El plan estimaba ${originalDays} días — el clima ajusta a ${adjustedDays} días.`,
-    },
-    cold: {
-      title: `Días reducidos por frío y barro`,
-      body:  `El frío y las lluvias frenan el rebrote del pasto. En lugar de ${originalDays} días, este potrero rinde ${adjustedDays} días útiles.`,
-    },
-    drought: {
-      title: `Días reducidos por falta de lluvia`,
-      body:  `La sequía de esta semana hace que el pasto casi no esté creciendo. El potrero tiene menos días disponibles de lo planeado.`,
-    },
-    storm: {
-      title: `Estadía reducida por tormenta`,
-      body:  `Las condiciones climáticas extremas acortan el tiempo de pastoreo seguro en este potrero.`,
-    },
-    default: {
-      title: `Estadía ajustada por el clima`,
-      body:  `Las condiciones climáticas actuales reducen la productividad del potrero. El plan estimaba ${originalDays} días — ahora son ${adjustedDays}.`,
-    },
+
+  // Factores climáticos detectados según el tipo de estrés dominante
+  const factorsByStress: Record<string, { label: string; desc: string; icon: string }[]> = {
+    heat: [
+      { icon: '🌡️', label: 'Temperatura alta', desc: 'Por encima de 30°C el crecimiento del pasto se reduce significativamente porque la planta usa energía en transpirar en lugar de crecer.' },
+      { icon: '💧', label: 'Estrés hídrico', desc: 'El calor aumenta la evapotranspiración: el suelo pierde agua más rápido, limitando el rebrote.' },
+      { icon: '☀️', label: 'Radiación intensa', desc: 'La alta radiación solar combinada con calor puede quemar los meristemas activos del pasto.' },
+    ],
+    cold: [
+      { icon: '🌡️', label: 'Temperatura baja', desc: 'Debajo de 5–8°C el crecimiento del pasto se detiene: las enzimas del metabolismo vegetal dejan de funcionar.' },
+      { icon: '💧', label: 'Lluvia y barro', desc: 'El exceso de humedad en el suelo dificulta el ingreso del rodeo y aumenta el pisoteo, dañando la base de las plantas.' },
+      { icon: '☁️', label: 'Baja radiación solar', desc: 'Los días nublados y cortos reducen la fotosíntesis, limitando la tasa de crecimiento diario.' },
+    ],
+    drought: [
+      { icon: '🏜️', label: 'Déficit hídrico', desc: 'Sin lluvias recientes el suelo está seco: el pasto entra en latencia y casi no crece.' },
+      { icon: '🌡️', label: 'Temperatura elevada', desc: 'El calor seco acelera la evaporación del poco agua disponible, agravando la sequía.' },
+      { icon: '💨', label: 'Viento seco', desc: 'El viento aumenta la transpiración de la planta y seca el suelo más rápido.' },
+    ],
+    storm: [
+      { icon: '⛈️', label: 'Tormenta / granizo', desc: 'Las condiciones extremas pueden dañar físicamente el pasto y hacer inseguro el ingreso del rodeo.' },
+      { icon: '💧', label: 'Exceso de lluvia', desc: 'El suelo saturado no permite el ingreso del rodeo sin riesgo de compactación severa.' },
+      { icon: '💨', label: 'Viento fuerte', desc: 'Los vientos superiores a 50 km/h generan estrés en las plantas y dificultan el manejo del rodeo.' },
+    ],
+    default: [
+      { icon: '🌡️', label: 'Temperatura', desc: 'Las temperaturas fuera del rango óptimo (8–25°C) reducen la tasa de crecimiento diario del pasto.' },
+      { icon: '💨', label: 'Viento', desc: 'El viento aumenta la evapotranspiración y puede enfriar o resecar el canopeo, frenando el rebrote.' },
+      { icon: '☀️', label: 'Radiación solar', desc: 'La fotosíntesis depende de la luz disponible. Menos sol significa menos energía para crecer.' },
+      { icon: '💧', label: 'Humedad del suelo', desc: 'Tanto la sequía como el exceso de agua limitan el acceso de las raíces a nutrientes y frenan el crecimiento.' },
+    ],
   }
 
-  const { title, body } = stressLabels[stressType ?? 'default'] ?? stressLabels.default
+  const stressTitles: Record<string, string> = {
+    heat:    `Estadía reducida — condiciones de calor`,
+    cold:    `Estadía reducida — frío y barro`,
+    drought: `Estadía reducida — déficit hídrico`,
+    storm:   `Estadía reducida — tormenta`,
+    default: `Estadía ajustada por condiciones climáticas`,
+  }
+
+  const stressBodies: Record<string, string> = {
+    heat:    `El calor intenso y la evapotranspiración reducen el crecimiento del pasto. El plan estimaba ${originalDays} días — el clima ajusta a ${adjustedDays} días útiles.`,
+    cold:    `El frío, el barro y la baja radiación frenan el rebrote. En lugar de ${originalDays} días, este potrero rinde ${adjustedDays} días útiles.`,
+    drought: `La falta de lluvias mantiene el suelo seco y el pasto en latencia. El potrero tiene menos días disponibles de lo planeado (${originalDays} → ${adjustedDays}).`,
+    storm:   `Las condiciones extremas acortan el tiempo de pastoreo seguro: de ${originalDays} días planificados quedan ${adjustedDays} días viables.`,
+    default: `Las condiciones climáticas actuales combinan varios factores que reducen la tasa de crecimiento del pasto. El plan estimaba ${originalDays} días — ahora son ${adjustedDays}.`,
+  }
+
+  const key = stressType ?? 'default'
+  const title   = stressTitles[key]   ?? stressTitles.default
+  const body    = stressBodies[key]   ?? stressBodies.default
+  const factors = factorsByStress[key] ?? factorsByStress.default
 
   return {
     title,
     body,
+    factors,
     action: `Sugerimos mover el rodeo ${delta} día${delta !== 1 ? 's' : ''} antes de lo planeado.`,
   }
 }
@@ -234,6 +262,26 @@ function ClimateAlertDrawer({
               </div>
             )}
           </div>
+
+          {/* Factores climáticos detectados */}
+          {reason.factors.length > 0 && (
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                Factores que reducen el crecimiento
+              </p>
+              <div className="space-y-2">
+                {reason.factors.map((f, i) => (
+                  <div key={i} className="flex items-start gap-3 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
+                    <span className="text-base leading-none shrink-0 mt-0.5">{f.icon}</span>
+                    <div>
+                      <p className="text-xs font-black text-gray-700">{f.label}</p>
+                      <p className="text-[10px] text-gray-500 leading-snug mt-0.5">{f.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Sugerencia */}
           {onApply && (

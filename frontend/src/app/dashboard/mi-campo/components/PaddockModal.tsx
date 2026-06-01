@@ -14,6 +14,7 @@ import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ui/ConfirmModal'
+import { CustomSelect } from '@/components/CustomSelect'
 import { usePlan } from '@/hooks/usePlan'
 import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
 
@@ -176,9 +177,10 @@ const fmtDate = (iso: string | null | undefined) => {
 }
 
 // ─── Shared token strings ──────────────────────────────────────────────────
-const LABEL_CLS  = 'text-[10px] font-black text-gray-700 tracking-widest uppercase'
-const INPUT_CLS  = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-base md:text-sm font-medium text-gray-800 focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-400'
-const SELECT_CLS = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-base md:text-sm font-bold text-gray-800 focus:ring-1 focus:ring-gray-400 outline-none transition-all'
+const LABEL_CLS      = 'text-xs font-black text-gray-600 tracking-wider uppercase'
+const CARD_TITLE_CLS = 'text-xs font-black text-green-700 tracking-wide'
+const INPUT_CLS      = 'w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 focus:ring-2 focus:ring-green-600 outline-none transition-all placeholder:text-gray-400'
+const SELECT_CLS     = 'w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 text-base font-bold text-gray-900 focus:ring-2 focus:ring-green-600 outline-none transition-all'
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
@@ -213,8 +215,9 @@ function SearchableMultiSelect({
   const [query, setQuery] = useState('')
   const [open, setOpen]   = useState(false)
   const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null)
-  const inputRef          = useRef<HTMLInputElement>(null)
-  const containerRef      = useRef<HTMLDivElement>(null)
+  const inputRef     = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef  = useRef<HTMLDivElement | null>(null)
 
   const allOptions = [...new Set([...options, ...selected.filter(s => !options.includes(s))])]
   const filtered   = query.trim()
@@ -225,7 +228,8 @@ function SearchableMultiSelect({
     !selected.some(s => s.toLowerCase() === query.trim().toLowerCase())
 
   const add = (item: string) => {
-    onChange([...selected, item])
+    // Filter out any empty placeholder strings before adding
+    onChange([...selected.filter(s => s !== ''), item])
     setQuery('')
     inputRef.current?.focus()
   }
@@ -244,10 +248,14 @@ function SearchableMultiSelect({
     setOpen(true)
   }
 
-  // Close on outside click
+  // Close on outside click — must also exclude the portal dropdown itself
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const t = e.target as Node
+      if (
+        containerRef.current && !containerRef.current.contains(t) &&
+        !(dropdownRef.current && dropdownRef.current.contains(t))
+      ) {
         setOpen(false)
       }
     }
@@ -268,6 +276,7 @@ function SearchableMultiSelect({
 
   const dropdownEl = showDropdown ? createPortal(
     <div
+      ref={dropdownRef}
       style={{ position: 'fixed', top: dropPos!.top, left: dropPos!.left, width: dropPos!.width, zIndex: 99999 }}
       className="bg-white border border-gray-200 rounded-xl shadow-2xl max-h-52 overflow-y-auto"
       onMouseDown={e => e.preventDefault()}
@@ -276,7 +285,7 @@ function SearchableMultiSelect({
         <button
           key={opt}
           type="button"
-          onClick={() => add(opt)}
+          onClick={() => { add(opt); setOpen(false) }}
           className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 active:bg-green-100 transition-colors border-b border-gray-50 last:border-0"
         >
           <span className="font-medium">{opt.split(' (')[0]}</span>
@@ -298,12 +307,15 @@ function SearchableMultiSelect({
     document.body
   ) : null
 
+  // Only show chips for non-empty selections
+  const validSelected = selected.filter(s => s !== '')
+
   return (
     <div className="space-y-1.5">
-      <p className={LABEL_CLS}>{label}</p>
-      {selected.length > 0 && (
+      {label && <p className={LABEL_CLS}>{label}</p>}
+      {validSelected.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-1">
-          {selected.map(s => <SelectedChip key={s} label={s} onRemove={() => remove(s)} />)}
+          {validSelected.map(s => <SelectedChip key={s} label={s} onRemove={() => remove(s)} />)}
         </div>
       )}
       <div ref={containerRef} className="relative">
@@ -314,7 +326,8 @@ function SearchableMultiSelect({
           onChange={e => { setQuery(e.target.value); handleOpen() }}
           onFocus={handleOpen}
           onBlur={() => {
-            setTimeout(() => setOpen(false), 150)
+            // Small delay to allow portal click to register first
+            setTimeout(() => setOpen(false), 200)
           }}
           placeholder={placeholder}
           className={INPUT_CLS}
@@ -493,6 +506,11 @@ export default function PaddockModal({
   const [hasPredators, setHasPredators]           = useState<boolean>(paddock.technical_data?.has_predators ?? false)
   const [relativeQuality, setRelativeQuality]     = useState<number>(paddock.technical_data?.relative_quality ?? 0)
   const [hasWaterRisk, setHasWaterRisk]           = useState<boolean>(paddock.technical_data?.has_water_risk ?? false)
+  // hasPests: independent boolean toggle for weeds (separate from weedTypes array)
+  const [hasPests, setHasPests]                   = useState<boolean>(
+    (paddock.technical_data?.hasPests ?? false) ||
+    (paddock.technical_data?.weed_types?.length ?? 0) > 0
+  )
 
   // Online/offline detection
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
@@ -617,6 +635,12 @@ export default function PaddockModal({
   const handleSave = async () => {
     if (!name.trim()) return
     setSaving(true)
+
+    // ── Opción A: Si hay un borrador pendiente en Registros, guardarlo primero ──
+    if (noteExpanded && (noteText || audioTranscript || noteImage || audioBlobRef.current)) {
+      await saveQuickNote()
+    }
+
     const td: Record<string, any> = {
       ...(paddock.technical_data || {}),
       quality_score:        qualityScore,
@@ -624,6 +648,7 @@ export default function PaddockModal({
       forage_category:       forageCategory || undefined,
       grass_types:          grassTypes,
       weed_types:           weedTypes,
+      weeds:                weedTypes,
       // Nuevos campos de infraestructura (blueprint)
       has_water_point:      hasWaterPoint,
       water_capacity_liters: hasWaterPoint && waterCapacityLiters !== '' ? Number(waterCapacityLiters) : null,
@@ -635,13 +660,13 @@ export default function PaddockModal({
       electricity_type:     electricityType,
       has_predators:        hasPredators,
       hasWater:             hasWaterPoint,
-      hasPests:             weedTypes.length > 0,
-      weeds:                weedTypes,
+      hasPests:             hasPests,
       hasInfraIssues:       fenceType === 'none' || fenceType === 'poor',
       hasPredators,
       has_water_risk:       hasWaterRisk,
       relative_quality:     relativeQuality > 0 ? relativeQuality : undefined,
     }
+
 
     // ── Offline path: save locally and show confirmation ─────────────────────
     if (!navigator.onLine && !isCreating) {
@@ -1093,38 +1118,38 @@ export default function PaddockModal({
   ] as const
 
   const modalContent = (
-    <div className="fixed inset-0 z-[9999] bg-white md:bg-black/40 md:backdrop-blur-sm flex flex-col md:items-center md:justify-center md:p-4 pb-20 md:pb-0">
+    <div className="fixed inset-0 z-[9999] bg-white md:bg-black/40 md:backdrop-blur-sm flex flex-col md:items-center md:justify-center md:p-4 pb-6 md:pb-0">
       <ConfirmModal />
       <div className="bg-white w-full h-full md:rounded-2xl md:shadow-2xl md:w-full md:max-w-5xl md:max-h-[92vh] flex flex-col">
 
-        {/* Header — mismo estilo que Rebaños */}
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
           <div>
-            <h3 className="text-xl font-black text-gray-950">
+            <h3 className="text-xl font-black text-gray-950 tracking-tight">
               {isCreating ? 'Nuevo potrero' : paddock.name}
             </h3>
-            <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
-              {isCreating ? 'Datos del potrero' : `${Number(paddock.area_ha || 0).toFixed(1)} ha${isGeo ? ' · Georreferenciado' : ''}`}
+            <p className="text-xs text-gray-500 font-medium mt-0.5">
+              {isCreating ? 'Configurá los datos del potrero' : `${Number(paddock.area_ha || 0).toFixed(1)} HA${isGeo ? ' · GEORREFERENCIADO' : ''}`}
             </p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
+          <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all" aria-label="Cerrar modal">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Tabs — verde institucional */}
-        <div className="flex border-b border-gray-100 shrink-0 px-2 pt-2">
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 shrink-0 px-2 pt-1">
           {tabs.map(({ id, label, disabled }) => (
             <button
               key={id}
               onClick={() => !disabled && setActiveTab(id)}
               disabled={disabled}
               title={disabled ? 'Guardá el potrero primero para acceder' : undefined}
-              className={`flex-1 py-2.5 text-[10px] font-black tracking-wide rounded-t-lg transition-all border-b-2 uppercase overflow-hidden whitespace-nowrap text-ellipsis px-1 ${
+              className={`flex-1 py-3.5 text-xs font-black tracking-wide rounded-t-lg transition-all border-b-[3px] uppercase overflow-hidden whitespace-nowrap text-ellipsis px-1 ${
                 disabled
                   ? 'text-gray-300 border-transparent cursor-not-allowed'
                   : activeTab === id
-                  ? 'text-green-700 border-green-600 bg-green-50/50'
+                  ? 'text-green-700 border-green-600 bg-green-50/60'
                   : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -1153,20 +1178,9 @@ export default function PaddockModal({
               {/* Superficie + MS */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className={LABEL_CLS}>
-                      Superficie (ha){isGeo && <span className="ml-1 normal-case font-medium tracking-normal">· calculado</span>}
-                    </label>
-                    {isGeo && onEditPolygon && (
-                      <button
-                        type="button"
-                        onClick={() => { onEditPolygon(paddock.id); onClose() }}
-                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
-                      >
-                        <MapPin className="w-3 h-3" /> Editar polígono
-                      </button>
-                    )}
-                  </div>
+                  <label className={LABEL_CLS}>
+                    Superficie (ha){isGeo && <span className="ml-1 normal-case font-medium tracking-normal">· calculado</span>}
+                  </label>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -1235,57 +1249,67 @@ export default function PaddockModal({
                 )
               })()}
 
-              {/* Evaluación — Ranking + Calidad en grid */}
+              {/* Evaluación — Ranking + Calidad como selects */}
               <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
-                  <p className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Evaluación del potrero</p>
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <p className={CARD_TITLE_CLS}>Evaluación del potrero</p>
                 </div>
-                <div className="px-4 py-3 grid grid-cols-2 gap-4">
-                  {/* Ranking 1-10: dots */}
-                  <div>
-                    <div className="flex items-center gap-1 mb-2">
-                      <span className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Ranking</span>
+                <div className="px-4 py-4 grid grid-cols-2 gap-4">
+
+                  {/* Ranking 1-10: select */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1">
+                      <label className={LABEL_CLS} htmlFor="paddock-ranking">Ranking</label>
                       <Tooltip text="Valor 1-10 de este potrero vs. el resto del campo. 10 = excelente." />
                     </div>
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                        <button key={n} type="button" onClick={() => setQuality(n)}
-                          className={`w-5 h-5 rounded-full text-[8px] font-black transition-all ${
-                            n <= qualityScore ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-green-100'
-                          }`}>{n}</button>
-                      ))}
-                    </div>
-                    <p className="text-[9px] text-gray-400 font-medium mt-1">
-                      {qualityScore >= 8 ? 'Excelente' : qualityScore >= 6 ? 'Bueno' : qualityScore >= 4 ? 'Regular' : 'Bajo'}
-                    </p>
+                    <CustomSelect
+                      value={qualityScore}
+                      onChange={val => setQuality(Number(val))}
+                      options={[
+                        { label: '— Sin ranking —', value: 0 },
+                        { label: '1 — Muy bajo',                value: 1 },
+                        { label: '2 — Bajo',                   value: 2 },
+                        { label: '3 — Por debajo del promedio', value: 3 },
+                        { label: '4 — Regular',                value: 4 },
+                        { label: '5 — Promedio',               value: 5 },
+                        { label: '6 — Bueno',                  value: 6 },
+                        { label: '7 — Muy bueno',              value: 7 },
+                        { label: '8 — Excelente',              value: 8 },
+                        { label: '9 — Sobresaliente',          value: 9 },
+                        { label: '10 — Óptimo',               value: 10 },
+                      ]}
+                    />
                   </div>
-                  {/* Calidad forrajera: estrellas 1-5 */}
-                  <div>
-                    <div className="flex items-center gap-1 mb-2">
-                      <span className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Calidad</span>
+
+                  {/* Calidad forrajera: select */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1">
+                      <label className={LABEL_CLS} htmlFor="paddock-forage-quality">Calidad</label>
                       <Tooltip text="Calidad proteíca del recurso forrajero. 1 = muy baja · 5 = excelente." />
                     </div>
-                    <div className="flex items-center gap-0.5">
-                      {[1,2,3,4,5].map(star => (
-                        <button key={star} type="button" onClick={() => setForageQuality(star)}
-                          className={`text-xl transition-all hover:scale-110 ${
-                            star <= forageQuality ? 'text-amber-400' : 'text-gray-200'
-                          }`}>★</button>
-                      ))}
-                    </div>
-                    <p className="text-[9px] text-gray-400 font-medium mt-1">
-                      {forageQuality >= 5 ? 'Excelente' : forageQuality >= 4 ? 'Buena' : forageQuality >= 3 ? 'Media' : forageQuality >= 2 ? 'Baja' : 'Muy baja'}
-                    </p>
+                    <CustomSelect
+                      value={forageQuality}
+                      onChange={val => setForageQuality(Number(val))}
+                      options={[
+                        { label: '— Sin calidad —', value: 0 },
+                        { label: '1 — Muy baja',   value: 1 },
+                        { label: '2 — Baja',        value: 2 },
+                        { label: '3 — Media',       value: 3 },
+                        { label: '4 — Buena',       value: 4 },
+                        { label: '5 — Excelente',   value: 5 },
+                      ]}
+                    />
                   </div>
+
                 </div>
               </div>
 
               {/* Composición botánica */}
               <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                  <p className="text-[9px] font-black text-gray-500 tracking-widest uppercase">Composición botánica</p>
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <p className={CARD_TITLE_CLS}>Composición botánica</p>
                 </div>
-                <div className="px-4 py-3 space-y-4">
+                <div className="px-4 py-4 space-y-4">
 
                   {/* Paso 1: Recurso forrajero */}
                   <div>
@@ -1323,16 +1347,22 @@ export default function PaddockModal({
                     />
                   )}
 
-                  {/* Malezas — toggle */}
+                  {/* Malezas — toggle bidireccional independiente */}
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[9px] font-black text-gray-500 tracking-widest uppercase">¿Hay malezas?</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[9px] font-black text-gray-500 tracking-widest uppercase">¿Hay malezas?
+                      </span>
                       <Toggle
-                        checked={weedTypes.length > 0}
-                        onChange={() => { if (weedTypes.length > 0) setWeedTypes([]); }}
+                        checked={hasPests}
+                        onChange={() => {
+                          const next = !hasPests
+                          setHasPests(next)
+                          // When disabling, clear the selected weed list
+                          if (!next) setWeedTypes([])
+                        }}
                       />
                     </div>
-                    {weedTypes.length > 0 && (
+                    {hasPests && (
                       <SearchableMultiSelect
                         label=""
                         options={WEED_TYPES}
@@ -1341,15 +1371,6 @@ export default function PaddockModal({
                         placeholder="Buscar o agregar maleza…"
                         allowCustom
                       />
-                    )}
-                    {weedTypes.length === 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setWeedTypes([''])}
-                        className="text-[9px] text-gray-400 hover:text-green-600 transition-colors font-medium"
-                      >
-                        + Agregar maleza
-                      </button>
                     )}
                   </div>
 
@@ -1367,8 +1388,8 @@ export default function PaddockModal({
               <div className="rounded-xl border border-gray-200 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
                   <div>
-                    <p className="text-[10px] font-black text-gray-700 tracking-widest uppercase">¿Tiene aguada?</p>
-                    <p className="text-[9px] text-gray-400 font-medium">Bebedero, laguna, arroyo u otra fuente</p>
+                    <p className="text-sm font-bold text-gray-800">¿Tiene aguada?</p>
+                    <p className="text-xs text-gray-400 font-medium">Bebedero, laguna, arroyo u otra fuente</p>
                   </div>
                   <Toggle checked={hasWaterPoint} onChange={() => { setHasWaterPoint(v => !v); if (hasWaterPoint) setWaterCapacityLiters('') }} />
                 </div>
@@ -1397,7 +1418,7 @@ export default function PaddockModal({
               {/* ─ ALAMBRADO ────────────────────────────────── */}
               <div className="rounded-xl border border-gray-200 overflow-hidden">
                 <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                  <p className="text-[10px] font-black text-gray-700 tracking-widest uppercase">Alambrado</p>
+                  <p className="text-sm font-bold text-gray-800">Alambrado</p>
                 </div>
                 <div className="px-4 py-3">
                   <div className="flex flex-wrap gap-1.5">
@@ -1460,7 +1481,7 @@ export default function PaddockModal({
               {/* ─ ACCESOS ──────────────────────────────────── */}
               <div className="rounded-xl border border-gray-200 overflow-hidden">
                 <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                  <p className="text-[10px] font-black text-gray-700 tracking-widest uppercase">Accesos</p>
+                  <p className="text-sm font-bold text-gray-800">Accesos</p>
                 </div>
                 <div className="px-4 py-3">
                   <SearchableMultiSelect
@@ -1485,13 +1506,13 @@ export default function PaddockModal({
                 {/* ══ CARD 1: NOTAS DE CAMPO ══ */}
                 <div className="rounded-2xl border border-gray-200 overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
-                        <Mic className="w-3.5 h-3.5 text-gray-500" />
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
+                        <Mic className="w-4 h-4 text-green-600" />
                       </div>
                       <div>
-                        <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas del potrero</p>
-                        <p className="text-[9px] text-gray-400 font-medium">Audio · Texto · Foto</p>
+                        <p className="text-sm font-black text-gray-900">Notas del potrero</p>
+                        <p className="text-xs text-gray-400 font-medium">Audio · Texto · Foto</p>
                       </div>
                     </div>
                     {sessionNoteCount > 0 && (
@@ -1649,29 +1670,25 @@ export default function PaddockModal({
                           </div>
                         )}
 
-                        {/* Save / Cancel */}
-                        <div className="flex gap-2">
-                          {(noteText || audioTranscript || noteImage || audioBlob) && (
-                            <button type="button"
-                              onClick={async () => {
-                                const saved = await saveQuickNote()
-                                if (saved) {
-                                  setSessionNoteCount(c => c + 1)
-                                  import('sonner').then(({ toast }) =>
-                                    toast.success('✓ Registro guardado en el historial')
-                                  )
-                                }
-                              }}
-                              disabled={noteSaving}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">
-                              {noteSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                              {noteSaving ? 'Guardando…' : 'Guardar nota'}
-                            </button>
-                          )}
-                          <button type="button"
-                            onClick={resetNoteCapture}
-                            className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700">Cancelar</button>
-                        </div>
+                        {/* Banner informativo: el borrador se guarda al presionar Guardar cambios */}
+                        {(noteText || audioTranscript || noteImage || audioBlob) && (
+                          <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 rounded-xl px-3.5 py-2.5">
+                            <div className="w-5 h-5 rounded-full bg-green-600 flex items-center justify-center shrink-0">
+                              <Check className="w-3 h-3 text-white" />
+                            </div>
+                            <p className="text-xs font-semibold text-green-800 flex-1 leading-snug">
+                              Borrador listo &middot; Se guardará al presionar{' '}
+                              <span className="font-black">Guardar cambios</span>
+                            </p>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={resetNoteCapture}
+                          className="w-full px-3 py-2.5 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700 hover:bg-gray-200 transition-all"
+                        >
+                          Limpiar borrador
+                        </button>
                       </div>
                     )}
                   </div>
@@ -2124,20 +2141,12 @@ export default function PaddockModal({
           </div>
         )}
 
-        {/* Footer — con contador de sesión */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between shrink-0">
-          {!isCreating ? (
-            <div className="flex flex-col gap-1.5">
-              {/* Assign polygon — solo para potreros manuales sin georreferencia */}
-              {!isGeo && onAssignPolygon && (
-                <button
-                  type="button"
-                  onClick={() => { onAssignPolygon(paddock.id); onClose() }}
-                  className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 transition-colors"
-                >
-                  <MapPin className="w-3.5 h-3.5" /> Asignar polígono en mapa
-                </button>
-              )}
+        {/* Footer — barra de acción sticky, mobile-first */}
+        <div className="px-4 pt-4 pb-6 border-t border-gray-100 bg-white shrink-0">
+          <div className="flex items-center gap-2.5">
+
+            {/* Icono eliminar — solo disponible al editar, abre confirm modal */}
+            {!isCreating && (
               <button
                 type="button"
                 onClick={async () => {
@@ -2149,35 +2158,55 @@ export default function PaddockModal({
                   })
                   if (ok) { onDelete?.(paddock.id); onClose() }
                 }}
-                className="text-sm font-bold text-red-500 hover:text-red-700 flex items-center gap-1.5 transition-colors"
+                className="w-12 h-12 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700 border border-red-200 transition-all shrink-0"
+                title="Eliminar potrero"
+                aria-label="Eliminar potrero"
               >
-                <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                <Trash2 className="w-5 h-5" />
               </button>
-            </div>
-          ) : <div />}
+            )}
 
-          <div className="flex gap-3 items-center">
-            <button onClick={onClose}
-              className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+            {/* Asignar polígono — solo para potreros manuales sin georreferencia */}
+            {!isCreating && !isGeo && onAssignPolygon && (
+              <button
+                type="button"
+                onClick={() => { onAssignPolygon(paddock.id); onClose() }}
+                className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors shrink-0"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Polígono</span>
+              </button>
+            )}
+
+            <div className="flex-1" />
+
+            {/* Cancelar */}
+            <button
+              onClick={onClose}
+              className="px-5 py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all min-h-[48px]"
+            >
               Cancelar
             </button>
+
+            {/* Guardar cambios */}
             <button
               onClick={handleSave}
               disabled={saving || !name.trim()}
-              className="relative px-5 py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all min-w-[140px]"
+              className="relative flex-1 sm:flex-none sm:min-w-[168px] py-3 px-5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all min-h-[48px] shadow-sm shadow-green-200"
             >
               {saving && (
                 <span className="absolute inset-0 flex items-center justify-center">
                   <Loader2 className="w-4 h-4 animate-spin" />
                 </span>
               )}
-              <span className={`inline-flex items-center gap-2 ${saving ? 'invisible' : ''}`}>
+              <span className={`flex items-center justify-center gap-2 ${saving ? 'invisible' : ''}`}>
                 <Check className="w-4 h-4" />
                 {isCreating
-                  ? sessionNoteCount > 0 ? `Crear potrero (+${sessionNoteCount} registros)` : 'Crear potrero'
-                  : sessionNoteCount > 0 ? `Guardar (+${sessionNoteCount} nuevos)` : 'Guardar cambios'}
+                  ? sessionNoteCount > 0 ? `Crear potrero (+${sessionNoteCount})` : 'Crear potrero'
+                  : sessionNoteCount > 0 ? `Guardar (+${sessionNoteCount})` : 'Guardar cambios'}
               </span>
             </button>
+
           </div>
         </div>
       </div>

@@ -55,6 +55,7 @@ export const PHYSIOLOGICAL_CATEGORIES = [
   'VACA_VACIA',
   'VACA_SECA',
   'TERNERO',
+  'NOVILLITO',
   'RECRIA_NOVILLO',
   'RECRIA_VAQUILLONA',
   'TORO_DESCANSO',
@@ -75,7 +76,8 @@ export const PHYSIO_EV_BASE: Record<PhysiologicalCategory, number> = {
   VACA_VACIA:        0.73,  // Ref. 400 kg, mantenimiento
   VACA_SECA:         0.73,  // Alias VACA_VACIA
   TERNERO:           0.54,  // Ref. 150 kg, ADPV 0 g/día
-  RECRIA_NOVILLO:    0.69,  // Ref. 200 kg, ADPV 0 g/día
+  NOVILLITO:         0.58,  // Ref. 200 kg (< 300 kg), ADPV activo
+  RECRIA_NOVILLO:    0.69,  // Ref. 300 kg (300-450 kg), ADPV activo
   RECRIA_VAQUILLONA: 0.54,  // Ref. 200 kg, ADPV 0 g/día
   TORO_DESCANSO:     0.98,  // Ref. 600 kg, ADPV 0 g/día
   TORO_SERVICIO:     1.32,  // Ref. 600 kg, ADPV 500 g/día
@@ -88,6 +90,7 @@ export const PHYSIO_LABEL: Record<PhysiologicalCategory, string> = {
   VACA_VACIA:        'Vaca vacía',
   VACA_SECA:         'Vaca seca',
   TERNERO:           'Ternero/a',
+  NOVILLITO:         'Novillito',
   RECRIA_NOVILLO:    'Novillo',
   RECRIA_VAQUILLONA: 'Vaquillona',
   TORO_DESCANSO:     'Toro en descanso',
@@ -100,6 +103,7 @@ export const PHYSIO_LABEL: Record<PhysiologicalCategory, string> = {
  */
 export const GROWTH_PHYSIO_CATEGORIES = new Set<PhysiologicalCategory>([
   'TERNERO',
+  'NOVILLITO',
   'RECRIA_NOVILLO',
   'RECRIA_VAQUILLONA',
   'TORO_DESCANSO',

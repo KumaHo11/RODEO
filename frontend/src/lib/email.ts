@@ -194,29 +194,29 @@ const templates = {
     dashboardUrl: string
   }) => ({
     subject: p.alertLevel === 'critical'
-      ? `ALERTA CRÍTICA: Sobrepastoreo en ${p.paddockName}`
-      : `Ajuste Clima: ${p.paddockName} — estadía reducida ${Math.abs(p.deltaFromPlan)}d`,
+      ? `Ajuste de planificación sugerido: ${p.paddockName}`
+      : `Motor Clima: posible ajuste en ${p.paddockName} (${Math.abs(p.deltaFromPlan)}d)`,
     html: baseLayout(`
       <h2 style="margin:0 0 12px;color:#111827;font-size:22px;font-weight:900">
-        ${p.alertLevel === 'critical' ? 'Alerta Crítica de Pastoreo' : 'Ajuste Climático'}
+        ${p.alertLevel === 'critical' ? 'Revisá la planificación' : 'Sugerencia de ajuste climático'}
       </h2>
       <p style="margin:0 0 20px;color:#6b7280;font-size:15px;line-height:1.6">
-        Hola <strong>${p.ownerName}</strong>, el motor de <strong>Ajuste Clima</strong> detectó
-        un cambio en la estadía del potrero <strong>${p.paddockName}</strong>.
+        Hola <strong>${p.ownerName}</strong>, el motor de <strong>Ajuste Clima</strong> analizó
+        las condiciones actuales del potrero <strong>${p.paddockName}</strong> y tiene una sugerencia para vos.
       </p>
-      <div style="background:${p.alertLevel === 'critical' ? '#fef2f2' : '#fffbeb'};border:1px solid ${p.alertLevel === 'critical' ? '#fecaca' : '#fde68a'};border-radius:12px;padding:20px;margin-bottom:24px">
-        <p style="margin:0 0 12px;color:#111827;font-size:15px;font-weight:800">${p.alertMessage}</p>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+      <div style="background:${p.alertLevel === 'critical' ? '#fefce8' : '#f0fdf4'};border:1px solid ${p.alertLevel === 'critical' ? '#fde68a' : '#bbf7d0'};border-radius:12px;padding:20px;margin-bottom:24px">
+        <p style="margin:0 0 16px;color:#111827;font-size:15px;font-weight:600;line-height:1.6">${p.alertMessage}</p>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;padding-top:16px;border-top:1px solid ${p.alertLevel === 'critical' ? '#fde68a' : '#bbf7d0'}">
           <div style="text-align:center">
-            <p style="margin:0;font-size:28px;font-weight:900;color:${p.alertLevel === 'critical' ? '#dc2626' : '#d97706'}">${p.adjustedDays}d</p>
-            <p style="margin:2px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af">Días ajustados</p>
+            <p style="margin:0;font-size:28px;font-weight:900;color:${p.alertLevel === 'critical' ? '#d97706' : '#059669'}">${p.adjustedDays}d</p>
+            <p style="margin:2px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af">Días estimados</p>
           </div>
           <div style="text-align:center">
             <p style="margin:0;font-size:28px;font-weight:900;color:#6b7280">${p.originalDays}d</p>
             <p style="margin:2px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af">Planificado</p>
           </div>
           <div style="text-align:center">
-            <p style="margin:0;font-size:28px;font-weight:900;color:${p.deltaFromPlan < 0 ? '#dc2626' : '#16a34a'}">${p.deltaFromPlan >= 0 ? '+' : ''}${p.deltaFromPlan}d</p>
+            <p style="margin:0;font-size:28px;font-weight:900;color:${p.deltaFromPlan < 0 ? '#d97706' : '#16a34a'}">${p.deltaFromPlan >= 0 ? '+' : ''}${p.deltaFromPlan}d</p>
             <p style="margin:2px 0 0;font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af">Diferencia</p>
           </div>
         </div>
