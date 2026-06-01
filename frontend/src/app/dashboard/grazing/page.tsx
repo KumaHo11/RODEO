@@ -1564,10 +1564,16 @@ function InteractiveGantt({
                           <div
                             style={{
                               position: 'absolute',
-                              left: `${leftPct}%`,
-                              top: TRACK2_TOP - 18,
-                              zIndex: 25,
+                              // Posicionar al inicio del bloque pero nunca en x=0 
+                              // (que coincide con el sticky label del potrero)
+                              left: `max(4px, ${leftPct}%)`,
+                              // Dentro del bloque, no encima del nombre
+                              top: TRACK2_TOP + 2,
+                              // zIndex inferior al del sticky label (z-20) para no pisarlo
+                              zIndex: 15,
                               maxWidth: '90%',
+                              // Asegurar que no sobresalga más allá del bloque
+                              pointerEvents: 'auto',
                             }}
                             onClick={e => e.stopPropagation()}
                           >
