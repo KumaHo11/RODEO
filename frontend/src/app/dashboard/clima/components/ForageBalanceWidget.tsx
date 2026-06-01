@@ -56,25 +56,45 @@ export function ForageBalanceWidget({ avgGrowthRate }: { avgGrowthRate: number |
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Oferta */}
         <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mb-1">Oferta (Crecimiento)</p>
+          <div className="flex items-center justify-center gap-1 mb-1 relative group cursor-help">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Oferta (Crecimiento)</p>
+            <div className="absolute bottom-full mb-2 w-48 bg-gray-900 text-white text-[10px] p-2 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 font-medium">
+              Tasa de crecimiento actual del pasto. Depende de humedad, temperatura y radiación.
+            </div>
+          </div>
           <p className="text-3xl font-black text-emerald-900 leading-none">{currentOffer.toFixed(1)}</p>
           <p className="text-[10px] font-bold text-emerald-600 mt-1">kg MS/ha/d</p>
         </div>
         
+        {/* Demanda */}
         <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 text-center relative">
-          <p className="text-[10px] font-black uppercase tracking-widest text-orange-700 mb-1">Demanda (Consumo)</p>
+          <div className="flex items-center justify-center gap-1 mb-1 relative group cursor-help">
+            <p className="text-[10px] font-black uppercase tracking-widest text-orange-700">Demanda (Consumo)</p>
+            <div className="absolute bottom-full mb-2 w-56 bg-gray-900 text-white text-[10px] p-2 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 font-medium">
+              Consumo estimado de los rodeos. Sube con el frío por mayor gasto energético y baja con el calor severo por estrés.
+            </div>
+          </div>
           <p className="text-3xl font-black text-orange-900 leading-none">{adjustedDemandPerHa.toFixed(1)}</p>
           <p className="text-[10px] font-bold text-orange-600 mt-1">kg MS/ha/d</p>
           {climateMultiplier !== 1.0 && (
-            <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm">
+            <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm cursor-help" title={`Ajuste climático del consumo debido a ${climateMultiplier > 1 ? 'estrés por frío' : 'estrés calórico'}`}>
               Ajuste Clima: {climateMultiplier > 1 ? '+' : ''}{((climateMultiplier - 1) * 100).toFixed(0)}%
             </div>
           )}
         </div>
         
+        {/* Balance */}
         <div className={`border rounded-xl p-4 text-center flex flex-col justify-center ${balance >= 0 ? 'bg-sky-50 border-sky-100' : 'bg-red-50 border-red-100'}`}>
-          <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${balance >= 0 ? 'text-sky-700' : 'text-red-700'}`}>Balance actual</p>
+          <div className="flex items-center justify-center gap-1 mb-1 relative group cursor-help">
+            <p className={`text-[10px] font-black uppercase tracking-widest ${balance >= 0 ? 'text-sky-700' : 'text-red-700'}`}>Balance actual</p>
+            <div className="absolute bottom-full mb-2 w-56 bg-gray-900 text-white text-[10px] p-2 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 font-medium text-left">
+              Diferencia (Oferta menos Demanda). <br/>
+              <b>Positivo (+)</b>: Sobra pasto (crece más de lo que comen).<br/>
+              <b>Negativo (-)</b>: Faltante de pasto (comen más de lo que crece).
+            </div>
+          </div>
           <p className={`text-3xl font-black leading-none ${balance >= 0 ? 'text-sky-900' : 'text-red-900'}`}>
             {balance > 0 ? '+' : ''}{balance.toFixed(1)}
           </p>

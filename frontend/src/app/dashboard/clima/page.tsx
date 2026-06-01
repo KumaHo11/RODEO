@@ -147,6 +147,7 @@ function CurrentConditionsBar() {
 
 function TabResumen({ orgName }: { orgName: string | null }) {
   const { avgGrowthRate } = useClimateAnalytics()
+  const [isMatrixOpen, setIsMatrixOpen] = useState(false)
   
   return (
     <div className="space-y-6">
@@ -161,70 +162,80 @@ function TabResumen({ orgName }: { orgName: string | null }) {
 
       {/* Matriz de impacto climático */}
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-          <div className="w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center">
-            <BarChart3 className="w-4 h-4 text-emerald-600" />
+        <button
+          onClick={() => setIsMatrixOpen(!isMatrixOpen)}
+          className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
+              <BarChart3 className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="text-left">
+              <h2 className="text-sm font-black text-gray-900">Matriz de impacto climático</h2>
+              <p className="text-[10px] text-gray-400 font-medium">Cómo afectan las variables climáticas al pasto y a los animales</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm font-black text-gray-900">Matriz de impacto climático</h2>
-            <p className="text-[10px] text-gray-400 font-medium">Cómo afectan las variables climáticas al pasto y a los animales</p>
-          </div>
-        </div>
+          {isMatrixOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+        </button>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-5 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Variable climática</th>
-                <th className="px-5 py-3 text-left text-[10px] font-black text-emerald-600 uppercase tracking-widest">
-                  <div className="flex items-center gap-1.5"><Leaf className="w-3 h-3" />Impacto en pasto</div>
-                </th>
-                <th className="px-5 py-3 text-left text-[10px] font-black text-orange-600 uppercase tracking-widest">
-                  <div className="flex items-center gap-1.5"><Users className="w-3 h-3" />Impacto en animal</div>
-                </th>
-                <th className="px-5 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Nota</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MATRIX_ROWS.map((row, i) => (
-                <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2">
-                      {row.icon}
-                      <span className="font-bold text-gray-800 text-xs">{row.variable}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <DirIcon dir={row.pastoDir} />
-                      <span className={`text-xs font-bold ${row.pastoDir === 'up' ? 'text-emerald-700' : row.pastoDir === 'down' ? 'text-red-700' : 'text-amber-700'}`}>
-                        {row.pastoImpact}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <DirIcon dir={row.animalDir} />
-                      <span className={`text-xs font-bold ${row.animalDir === 'up' ? 'text-emerald-700' : row.animalDir === 'down' ? 'text-red-700' : 'text-amber-700'}`}>
-                        {row.animalImpact}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="text-[10px] text-gray-400 font-medium">{row.note}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {isMatrixOpen && (
+          <>
+            <div className="overflow-x-auto border-t border-gray-100">
+              <table className="w-full text-sm min-w-[600px]">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="px-5 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Variable climática</th>
+                    <th className="px-5 py-3 text-left text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                      <div className="flex items-center gap-1.5"><Leaf className="w-3 h-3" />Impacto en pasto</div>
+                    </th>
+                    <th className="px-5 py-3 text-left text-[10px] font-black text-orange-600 uppercase tracking-widest">
+                      <div className="flex items-center gap-1.5"><Users className="w-3 h-3" />Impacto en animal</div>
+                    </th>
+                    <th className="px-5 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Nota</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MATRIX_ROWS.map((row, i) => (
+                    <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          {row.icon}
+                          <span className="font-bold text-gray-800 text-xs">{row.variable}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <DirIcon dir={row.pastoDir} />
+                          <span className={`text-xs font-bold ${row.pastoDir === 'up' ? 'text-emerald-700' : row.pastoDir === 'down' ? 'text-red-700' : 'text-amber-700'}`}>
+                            {row.pastoImpact}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <DirIcon dir={row.animalDir} />
+                          <span className={`text-xs font-bold ${row.animalDir === 'up' ? 'text-emerald-700' : row.animalDir === 'down' ? 'text-red-700' : 'text-amber-700'}`}>
+                            {row.animalImpact}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-[10px] text-gray-400 font-medium">{row.note}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-        <div className="px-5 py-3 border-t border-gray-50 bg-gray-50/50 flex items-center gap-2">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-          <p className="text-[10px] text-gray-500 font-medium">
-            Los efectos se combinan: calor + humedad + viento pueden triplicar el impacto sobre el rodeo.
-          </p>
-        </div>
+            <div className="px-5 py-3 border-t border-gray-50 bg-gray-50/50 flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <p className="text-[10px] text-gray-500 font-medium">
+                Los efectos se combinan: calor + humedad + viento pueden triplicar el impacto sobre el rodeo.
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -438,6 +449,7 @@ function TabRodeos() {
   const [movements, setMovements] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [isRefOpen, setIsRefOpen] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -541,28 +553,36 @@ function TabRodeos() {
 
       {/* Tabla THI de referencia */}
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <p className="text-xs font-black text-gray-700">Referencia índices de bienestar térmico</p>
-          <p className="text-[10px] text-gray-400 font-medium mt-0.5">Cuándo actuar según las condiciones climáticas</p>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {[
-            { range: 'T < 5°C', label: 'Estrés severo por frío', action: 'Proveer refugio, aumentar ración ++', text: 'text-red-600' },
-            { range: 'T < 10°C (con viento)', label: 'Estrés por frío', action: 'Aumentar requerimiento energético', text: 'text-sky-600' },
-            { range: 'Confort térmico', label: 'Zona de confort', action: 'Sin acción requerida', text: 'text-emerald-600' },
-            { range: 'THI 72–79', label: 'Estrés calórico moderado', action: 'Revisar sombra y agua fresca', text: 'text-yellow-600' },
-            { range: 'THI 80–89', label: 'Estrés calórico severo', action: 'Limitar actividad y reducir carga', text: 'text-orange-600' },
-            { range: 'THI ≥ 90', label: 'Estrés calórico crítico', action: 'Riesgo de mortalidad. Acción inmediata.', text: 'text-red-600' },
-          ].map(r => (
-            <div key={r.range} className={`px-5 py-3 flex items-center justify-between`}>
-              <div className="flex items-center gap-3">
-                <span className={`text-xs font-black min-w-[80px] ${r.text}`}>{r.range}</span>
-                <span className={`text-[10px] font-bold ${r.text} opacity-80`}>{r.label}</span>
+        <button
+          onClick={() => setIsRefOpen(!isRefOpen)}
+          className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
+        >
+          <div className="text-left">
+            <p className="text-xs font-black text-gray-700">Referencia índices de bienestar térmico</p>
+            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Cuándo actuar según las condiciones climáticas</p>
+          </div>
+          {isRefOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+        </button>
+        {isRefOpen && (
+          <div className="divide-y divide-gray-100 border-t border-gray-100">
+            {[
+              { range: 'T < 5°C', label: 'Estrés severo por frío', action: 'Proveer refugio, aumentar ración ++', text: 'text-red-600' },
+              { range: 'T < 10°C (con viento)', label: 'Estrés por frío', action: 'Aumentar requerimiento energético', text: 'text-sky-600' },
+              { range: 'Confort térmico', label: 'Zona de confort', action: 'Sin acción requerida', text: 'text-emerald-600' },
+              { range: 'THI 72–79', label: 'Estrés calórico moderado', action: 'Revisar sombra y agua fresca', text: 'text-yellow-600' },
+              { range: 'THI 80–89', label: 'Estrés calórico severo', action: 'Limitar actividad y reducir carga', text: 'text-orange-600' },
+              { range: 'THI ≥ 90', label: 'Estrés calórico crítico', action: 'Riesgo de mortalidad. Acción inmediata.', text: 'text-red-600' },
+            ].map(r => (
+              <div key={r.range} className={`px-5 py-3 flex items-center justify-between`}>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-black min-w-[80px] ${r.text}`}>{r.range}</span>
+                  <span className={`text-[10px] font-bold ${r.text} opacity-80`}>{r.label}</span>
+                </div>
+                <p className={`text-[10px] font-medium text-gray-400`}>{r.action}</p>
               </div>
-              <p className={`text-[10px] font-medium text-gray-400`}>{r.action}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
