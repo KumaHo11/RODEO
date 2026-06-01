@@ -465,12 +465,20 @@ function InteractiveGantt({
     return active.reduce((s: number, p: any) => s + Number(p.dry_matter_kg_ha), 0) / active.length
   }, [paddocks])
 
-  // Virtual events from movements combined with farmEvents
-  // BCS / condición corporal events are excluded from the Gantt visual timeline
-  const BCS_EVENT_TYPES = new Set(['bcs', 'condicion_corporal', 'body_condition'])
+  // ─── Tipos de movimiento que NO deben aparecer como líneas en el Gantt ───────
+  // Solo los eventos de Agenda (farm_events de tipo servicio, parición, etc.)
+  // deben mostrarse como marcadores visuales en el timeline.
+  // Los movements operacionales (mortandad, compra, venta, ajuste, bcs, etc.)
+  // se mantienen en unifiedEvents para los cálculos de EV dinámico, pero NO
+  // se renderizan como líneas verticales en el Gantt.
+  const EXCLUDED_GANTT_TYPES = new Set([
+    'bcs', 'condicion_corporal', 'body_condition',
+    'mortandad', 'compra', 'venta',
+    'stock_inicial', 'ajuste', 'ajuste_entrada', 'ajuste_salida',
+  ])
 
   const unifiedEvents = useMemo(() => {
-    const vEvents = (movements || []).filter(m => !BCS_EVENT_TYPES.has(m.event_type)).map(m => {
+    const vEvents = (movements || []).map(m => {
       const qty = m.quantity || 0
       let title: string
       if (m.event_type === 'ajuste_entrada') {
@@ -479,6 +487,8 @@ function InteractiveGantt({
         title = `Se retiraron ${qty} animales`
       } else if (m.event_type === 'ajuste') {
         title = `Ajuste de stock: ${qty > 0 ? '+' : ''}${qty} animales`
+      } else if (m.event_type === 'bcs') {
+        title = `Condición Corporal (BCS)`
       } else if (m.event_type === 'compra') {
         title = `Compra: ${qty} animales`
       } else if (m.event_type === 'venta') {
@@ -504,10 +514,15 @@ function InteractiveGantt({
         description: m.notes,
       }
     })
-    // Also filter bcs/condicion_corporal from farmEvents themselves
-    const filteredFarmEvents = farmEvents.filter(e => !BCS_EVENT_TYPES.has(e.event_type))
-    return [...filteredFarmEvents, ...vEvents]
+    return [...farmEvents, ...vEvents]
   }, [farmEvents, movements])
+
+  // Eventos que se renderizan como líneas/puntos en el Gantt timeline.
+  // Solo Agenda (farm_events de tipo Agenda) — excluye todos los movements operacionales.
+  const ganttDisplayEvents = useMemo(() =>
+    unifiedEvents.filter(e => !EXCLUDED_GANTT_TYPES.has(e.event_type))
+  , [unifiedEvents])
+
 
   // Use the global calculateDynamicHeadcount
   const getDynamicHeadcount = useCallback((herdId: string, baseCount: number, dateStr: string) => {
@@ -1161,7 +1176,7 @@ function InteractiveGantt({
 
 
                 {/* Agenda Event outlines — line in every row, dot only on first */}
-                {ganttLayers.showEvents && unifiedEvents
+                {ganttLayers.showEvents && ganttDisplayEvents
                   .filter(evt => {
                     const d = daysBetween(windowStart, evt.event_date)
                     const de = evt.end_date ? daysBetween(windowStart, evt.end_date) : d
@@ -5558,16 +5573,24 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 onClick={async () => {
                   setSaving(true)
                   try {
-                    const url = eventToDelete.isMovement ? `/api/movements/${eventToDelete.id}` : `/api/farm-events/${eventToDelete.id}`;
-                    const res = await apiFetch(url, { method: 'DELETE' });
+                    const url = eventToDelete.isMovement
+                      ? `/api/movements/${eventToDelete.id}`
+                      : `/api/farm-events/${eventToDelete.id}`
+                    const res = await apiFetch(url, { method: 'DELETE' })
                     if (res.ok) {
-                      toast.success('Evento eliminado correctamente');
-                      setEventToDelete(null);
-                      window.dispatchEvent(new Event('refresh-farm-events'));
-                      window.dispatchEvent(new Event('refresh-herds'));
-                      window.dispatchEvent(new Event('refresh-events'));
+                      toast.success('Evento eliminado correctamente')
+                      // Update local state immediately (optimistic)
+                      if (eventToDelete.isMovement) {
+                        setMovements(prev => prev.filter(m => m.id !== eventToDelete.id))
+                      } else {
+                        setFarmEvents(prev => prev.filter(e => e.id !== eventToDelete.id))
+                      }
+                      setEventToDelete(null)
+                      // Full reload to ensure consistency
+                      window.dispatchEvent(new Event('rodeo-data-reload'))
                     } else {
-                      toast.error('Error al eliminar el evento. Intentá nuevamente.')
+                      const errData = await res.json().catch(() => ({ error: 'Error desconocido' }))
+                      toast.error(errData.error || 'Error al eliminar el evento. Intentá nuevamente.')
                     }
                   } catch(err) {
                     console.error(err)
