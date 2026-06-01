@@ -5,6 +5,9 @@ import { WifiOff, Wifi, RefreshCw, CheckCircle2 } from 'lucide-react'
 
 type SyncStatus = 'online' | 'offline' | 'syncing' | 'synced'
 
+// Lock global para evitar sincronizaciones concurrentes (iOS dispara 'online' varias veces)
+let isSyncingGlobal = false
+
 export default function OfflineIndicator() {
   const [status, setStatus] = useState<SyncStatus>('online')
   const [pendingCount, setPendingCount] = useState(0)
@@ -31,6 +34,10 @@ export default function OfflineIndicator() {
     }
 
     const handleOnline = async () => {
+      // Prevenir doble-sync: iOS puede disparar 'online' varias veces seguidas
+      if (isSyncingGlobal) return
+      isSyncingGlobal = true
+
       const queue = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
       const { getPendingAudio, deletePendingAudio, getPendingPhoto, deletePendingPhoto, getAllPendingAudios, getAllPendingPhotos } = await import('@/lib/audioOfflineStore')
       const { apiFetch } = await import('@/lib/apiFetch')
@@ -179,11 +186,12 @@ export default function OfflineIndicator() {
         setTimeout(() => {
           setVisible(false)
           if (newQueue.length === 0) setStatus('online')
+          isSyncingGlobal = false  // liberar lock después de mostrar el toast
         }, 3000)
       } else {
         setStatus('online')
         setVisible(true)
-        setTimeout(() => setVisible(false), 2000)
+        setTimeout(() => { setVisible(false); isSyncingGlobal = false }, 2000)
       }
     }
 

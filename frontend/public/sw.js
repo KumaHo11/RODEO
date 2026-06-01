@@ -4,7 +4,7 @@
  * Garantiza que la app funcione completamente offline después de la primera carga.
  */
 
-const CACHE_VERSION = 'v4'
+const CACHE_VERSION = 'v5'
 const SHELL_CACHE   = `rodeo-shell-${CACHE_VERSION}`
 const API_CACHE     = `rodeo-api-${CACHE_VERSION}`
 const ASSET_CACHE   = `rodeo-assets-${CACHE_VERSION}`
@@ -19,6 +19,8 @@ const SHELL_URLS = [
   '/dashboard/herds',
   '/dashboard/bitacora',
   '/dashboard/bitacora/bandeja',
+  '/dashboard/grazing',
+  '/dashboard/insights',
   '/dashboard/planes',
   '/_offline',
   '/manifest.json',
@@ -27,15 +29,25 @@ const SHELL_URLS = [
 // ── Install: pre-cachear el shell ──────────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then(cache => {
-      // Cachear de a uno para no fallar todo si uno falla
-      return Promise.allSettled(
-        SHELL_URLS.map(url =>
-          cache.add(url).catch(err =>
-            console.warn(`[SW] No se pudo cachear ${url}:`, err)
-          )
-        )
+    caches.open(SHELL_CACHE).then(async cache => {
+      // Usamos fetch manual con redirect:'follow' en lugar de cache.add()
+      // porque cache.add() rechaza respuestas 302 (que el middleware de auth
+      // devuelve para URLs protegidas) y no guarda nada en caché.
+      const results = await Promise.allSettled(
+        SHELL_URLS.map(async url => {
+          try {
+            // redirect:'follow' → si el middleware redirige a /login, seguimos
+            // el redirect y cacheamos la respuesta final (la página de login o la app)
+            const response = await fetch(url, { redirect: 'follow' })
+            if (response && (response.ok || response.status === 0)) {
+              await cache.put(url, response)
+            }
+          } catch (err) {
+            console.warn(`[SW] No se pudo pre-cachear ${url}:`, err)
+          }
+        })
       )
+      return results
     }).then(() => self.skipWaiting())
   )
 })
