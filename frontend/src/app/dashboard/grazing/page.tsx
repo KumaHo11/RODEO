@@ -1965,45 +1965,45 @@ function InteractiveGantt({
                 )
                })()}
 
-        {/* ── Legend: Plan Original / Plan Modificado / Plan Real + Agenda + Hoy */}
-        <div className="sticky bottom-0 z-30 flex items-center gap-3 px-4 py-2.5 border-t border-gray-200 bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.06)] flex-wrap">
-          <div className="flex items-center gap-3 mr-2">
-            {/* Track 1 — Plan Original */}
-            <div className="flex items-center gap-1.5">
-              <div className="relative w-8 h-4 border-[1.5px] rounded-sm overflow-hidden" style={{ borderColor: 'rgba(156,163,175,0.70)', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(107,114,128,0.20) 3px, rgba(107,114,128,0.20) 6px)', backgroundColor: 'rgba(209,213,219,0.30)' }}>
-                <Lock className="absolute inset-0 m-auto w-2.5 h-2.5 text-gray-700 opacity-60" />
-              </div>
-              <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan original</span>
-            </div>
-            {/* Track 2 — Plan Modificado */}
-            <div className="flex items-center gap-1.5">
-              <div className="w-8 h-4 border-[1.5px] border-sky-500 rounded-sm" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(14,165,233,0.35) 3px, rgba(14,165,233,0.35) 6px)', backgroundColor: 'rgba(186,230,253,0.18)' }} />
-              <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan planificado/modificable</span>
-            </div>
-            {/* Track 3 — Plan Real */}
-            <div className="flex items-center gap-1.5">
-              <div className="w-8 h-4 rounded-sm bg-green-600" />
-              <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan real</span>
-            </div>
-          </div>
-          {ganttLayers.showAgenda && (
-            <>
-              <div className="w-px h-4 bg-gray-200" />
-              <span className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Agenda:</span>
-              {Object.entries(EVT_CONFIG).filter(([key]) => !['mortandad', 'compra', 'venta', 'stock_inicial', 'ajuste_entrada', 'ajuste_salida', 'ajuste'].includes(key)).map(([key, cfg]) => (
-                <div key={key} className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
-                  <span className="text-[9px] font-bold text-gray-500">{cfg.label}</span>
-                </div>
-              ))}
-            </>
-          )}
-          <div className="flex items-center gap-1.5 ml-auto">
-            <div className="w-px h-3" style={{ borderLeft: '1.5px dashed rgba(34,197,94,0.8)' }} />
-            <span className="text-[9px] font-bold text-green-600 uppercase tracking-wider">Hoy</span>
-          </div>
-        </div>
 
+      </div>
+    </div>
+    {/* ── Legend bar: fuera del scroll container para que sea siempre visible */}
+    <div className="flex items-center gap-3 px-4 py-2.5 border border-t-0 border-gray-200 bg-white rounded-b-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex-wrap">
+      <div className="flex items-center gap-3 mr-2">
+        {/* Track 1 — Plan Original */}
+        <div className="flex items-center gap-1.5">
+          <div className="relative w-8 h-4 border-[1.5px] rounded-sm overflow-hidden" style={{ borderColor: 'rgba(156,163,175,0.70)', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(107,114,128,0.20) 3px, rgba(107,114,128,0.20) 6px)', backgroundColor: 'rgba(209,213,219,0.30)' }}>
+            <Lock className="absolute inset-0 m-auto w-2.5 h-2.5 text-gray-700 opacity-60" />
+          </div>
+          <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan original</span>
+        </div>
+        {/* Track 2 — Plan Modificado */}
+        <div className="flex items-center gap-1.5">
+          <div className="w-8 h-4 border-[1.5px] border-sky-500 rounded-sm" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(14,165,233,0.35) 3px, rgba(14,165,233,0.35) 6px)', backgroundColor: 'rgba(186,230,253,0.18)' }} />
+          <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan planificado/modificable</span>
+        </div>
+        {/* Track 3 — Plan Real */}
+        <div className="flex items-center gap-1.5">
+          <div className="w-8 h-4 rounded-sm bg-green-600" />
+          <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Plan real</span>
+        </div>
+      </div>
+      {ganttLayers.showAgenda && (
+        <>
+          <div className="w-px h-4 bg-gray-200" />
+          <span className="text-[9px] font-black text-gray-400 tracking-widest uppercase">Agenda:</span>
+          {Object.entries(EVT_CONFIG).filter(([key]) => !['mortandad', 'compra', 'venta', 'stock_inicial', 'ajuste_entrada', 'ajuste_salida', 'ajuste'].includes(key)).map(([key, cfg]) => (
+            <div key={key} className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
+              <span className="text-[9px] font-bold text-gray-500">{cfg.label}</span>
+            </div>
+          ))}
+        </>
+      )}
+      <div className="flex items-center gap-1.5 ml-auto">
+        <div className="w-px h-3" style={{ borderLeft: '1.5px dashed rgba(34,197,94,0.8)' }} />
+        <span className="text-[9px] font-bold text-green-600 uppercase tracking-wider">Hoy</span>
       </div>
     </div>
     {eventPopup}

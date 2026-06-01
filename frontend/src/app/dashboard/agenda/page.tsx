@@ -82,7 +82,12 @@ export default function AgendaPage() {
     if (eventsRes.ok) {
       const allEvents = (await eventsRes.json()).events || []
       const validTypes = EVENT_TYPES.map(t => t.id)
-      setEvents(allEvents.filter((e: any) => validTypes.includes(e.event_type)))
+      // Solo mostrar eventos creados desde Agenda (source='agenda' o sin source para compatibilidad historial)
+      // Excluir eventos creados desde Rodeos (source='rodeo')
+      setEvents(allEvents.filter((e: any) =>
+        validTypes.includes(e.event_type) &&
+        e.source !== 'rodeo'
+      ))
     } else {
       setEvents([])
     }
@@ -142,6 +147,7 @@ export default function AgendaPage() {
       body_condition: form.body_condition || null,
       bulls_count: form.event_type === 'servicio' && form.bulls_count ? Number(form.bulls_count) : null,
       bulls_weight: form.event_type === 'servicio' && form.bulls_weight ? Number(form.bulls_weight) : null,
+      source: 'agenda',
     }
 
     if (!skipConflictCheck) {
@@ -806,8 +812,8 @@ export default function AgendaPage() {
       , document.body)}
 
       {/* Conflict Modal */}
-      {conflictModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+      {conflictModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
             <div className="px-6 py-5 border-b border-red-100 bg-red-50/50 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
@@ -848,11 +854,11 @@ export default function AgendaPage() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
 
       {/* ─── MODAL: Confirmación de borrado de Evento ───────────────────────── */}
-      {eventToDelete && (
+      {eventToDelete && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 pt-6 pb-4 text-center">
@@ -893,7 +899,7 @@ export default function AgendaPage() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </FeatureGate>
   )
 }
