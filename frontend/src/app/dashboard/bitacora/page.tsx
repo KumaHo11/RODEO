@@ -391,7 +391,28 @@ export default function BitacoraPage() {
       flashSaved(); resetCapture(); return
     }
 
-    // ── ONLINE path ──
+    // ── OFFLINE path: texto (y cualquier nota sin blob ni foto)
+    if (!navigator.onLine) {
+      setSavingMsg('Guardando sin conexión...')
+      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      addToOfflineQueue({
+        type: 'field_note',
+        data: {
+          paddock_id: null,
+          tags: ['GENERAL'],
+          title,
+          content: liveTranscript || null,
+          lat,
+          lng,
+          sync_status: 'PENDING',
+        },
+        timestamp: Date.now(),
+      } as any)
+      await refreshPending()
+      toast.success('📝 Nota guardada. Se subirá al servidor cuando tengas conexión.')
+      flashSaved(); resetCapture(); return
+    }
+
     try {
       let audio_url: string | null = null
       let photo_url: string | null = null

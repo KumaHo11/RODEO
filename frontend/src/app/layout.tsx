@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
 import OfflineIndicator from '@/components/OfflineIndicator'
+import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
 import { Toaster } from 'sonner'
 
 const inter = Inter({ subsets: ['latin'], preload: false })
@@ -50,6 +51,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <OfflineIndicator />
+          <ServiceWorkerRegistrar />
         </AuthProvider>
         <Toaster
           position="bottom-right"

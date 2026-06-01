@@ -391,9 +391,9 @@ async function compressImage(file: File, maxDim = 1200): Promise<File> {
 // ─── Calculadora de agua inline ───────────────────────────────────────────────
 
 function WaterCalcInline({ area, onSelect }: { area: number; onSelect: (liters: number) => void }) {
-  const [animales, setAnimales] = useState(50)
-  const [litrosPorAnimal, setLitrosPorAnimal] = useState(60)
-  const total = Math.ceil(animales * litrosPorAnimal * 1.2) // +20% margen
+  const [animales, setAnimales] = useState('50')
+  const [litrosPorAnimal, setLitrosPorAnimal] = useState('60')
+  const total = Math.ceil((Number(animales) || 0) * (Number(litrosPorAnimal) || 0) * 1.2) // +20% margen
 
   return (
     <div className="space-y-4">
@@ -401,14 +401,16 @@ function WaterCalcInline({ area, onSelect }: { area: number; onSelect: (liters: 
         <div>
           <label className="text-[9px] font-black text-gray-500 tracking-widest uppercase block mb-1">N.º animales</label>
           <input type="number" min={1} value={animales}
-            onChange={e => setAnimales(Math.max(1, Number(e.target.value)))}
+            onChange={e => setAnimales(e.target.value)}
+            onBlur={e => { if (e.target.value === '' || Number(e.target.value) < 1) setAnimales('1') }}
             className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:ring-1 focus:ring-green-500 outline-none"
           />
         </div>
         <div>
           <label className="text-[9px] font-black text-gray-500 tracking-widest uppercase block mb-1">L/animal/día</label>
           <input type="number" min={10} step={5} value={litrosPorAnimal}
-            onChange={e => setLitrosPorAnimal(Math.max(10, Number(e.target.value)))}
+            onChange={e => setLitrosPorAnimal(e.target.value)}
+            onBlur={e => { if (e.target.value === '' || Number(e.target.value) < 10) setLitrosPorAnimal('10') }}
             className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:ring-1 focus:ring-green-500 outline-none"
           />
         </div>
@@ -423,7 +425,8 @@ function WaterCalcInline({ area, onSelect }: { area: number; onSelect: (liters: 
       <button
         type="button"
         onClick={() => onSelect(total)}
-        className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl transition-all"
+        disabled={total === 0}
+        className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-40"
       >
         Usar este valor
       </button>
