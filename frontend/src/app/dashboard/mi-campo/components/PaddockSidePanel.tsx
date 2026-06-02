@@ -6,6 +6,7 @@ import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
 import { usePlan } from '@/hooks/usePlan'
+import { useConfirm } from '@/components/ui/ConfirmModal'
 import BitacoraModal from '../../bitacora/components/BitacoraModal'
 import PaddockModal from './PaddockModal'
 import WeatherConditionChip from '@/components/WeatherConditionChip'
@@ -122,6 +123,7 @@ export default function PaddockSidePanel({
   const { user } = useAuth()
   const { hasFeature } = usePlan()
   const { latestByPaddock } = useClimateAnalytics()
+  const { confirm, ConfirmModal } = useConfirm()
   const canNdvi = hasFeature('ndvi_access')
   const [editingPaddock, setEditingPaddock] = useState<Paddock | null>(null)
   const [paddockNotes, setPaddockNotes]     = useState<any[]>([])
@@ -298,6 +300,12 @@ export default function PaddockSidePanel({
                     {Number(org.total_area_ha || totalArea || 0).toFixed(0)} ha
                     <span className="text-sm font-bold text-gray-500 ml-1.5">· {paddocks.length} potreros</span>
                   </p>
+                  {/* Ha de potreros — siempre visible si existen */}
+                  {totalArea > 0 && (
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                      Ha potreros: <span className="font-bold text-gray-600">{totalArea.toFixed(1)} ha</span>
+                    </p>
+                  )}
                   {grazingCount > 0 && (
                     <p className="text-xs text-orange-600 font-bold mt-1.5">{grazingCount} en pastoreo</p>
                   )}
@@ -593,8 +601,26 @@ export default function PaddockSidePanel({
                                  <span className="text-[9px] text-gray-300 italic">Sin datos de infraestructura</span>
                                )}
                            </div>
-                           {/* Botón Editar — fila propia, separado visualmente */}
-                           <div className="flex justify-end border-t border-gray-50 pt-2 mt-1 pb-1">
+                           {/* Botón Editar + Botón Borrar — fila propia, separado visualmente */}
+                           <div className="flex items-center justify-between border-t border-gray-50 pt-2 mt-1 pb-1">
+                             <button
+                               type="button"
+                               onClick={async (e) => {
+                                 e.stopPropagation()
+                                 const ok = await confirm({
+                                   title: `¿Eliminar potrero "${paddock.name}"?`,
+                                   description: 'Esta acción es irreversible. Se eliminará el polígono y todos los datos asociados.',
+                                   confirmLabel: 'Sí, eliminar',
+                                   variant: 'danger',
+                                 })
+                                 if (ok) onDeletePaddock?.(paddock.id)
+                               }}
+                               title="Eliminar potrero"
+                               className="group/del flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                             >
+                               <Trash2 className="w-3 h-3 text-gray-300 group-hover/del:text-red-500 transition-colors" />
+                               Borrar
+                             </button>
                              <button
                                type="button"
                                onClick={e => { e.stopPropagation(); openModal(paddock) }}
@@ -627,12 +653,17 @@ export default function PaddockSidePanel({
         {/* ── Footer — sin botón "Configurar campo" ────────────────────────── */}
         {paddocks.length > 0 && (
           <div className="px-5 py-3 pb-8 md:pb-3 border-t border-gray-100 shrink-0">
-            <p className="text-[10px] text-gray-400 font-medium">
-              {paddocks.filter(p => {
-                const d = p.technical_data || {}
-                return (d as any).hasWater !== undefined || (d as any).hasInfraIssues !== undefined
-              }).length}/{paddocks.length} potreros con detalle técnico
-            </p>
+            <div className="flex justify-between items-end mb-1">
+              <p className="text-[10px] text-gray-400 font-medium">
+                {paddocks.filter(p => {
+                  const d = p.technical_data || {}
+                  return (d as any).hasWater !== undefined || (d as any).hasInfraIssues !== undefined
+                }).length}/{paddocks.length} potreros con detalle técnico
+              </p>
+              <p className="text-[10px] text-gray-500 font-bold tabular-nums">
+                {totalArea.toFixed(1)} ha total potreros
+              </p>
+            </div>
             <div className="w-full bg-gray-100 rounded-full h-1 mt-1 overflow-hidden">
               <div
                 className="bg-green-500 h-1 rounded-full transition-all"
@@ -670,6 +701,7 @@ export default function PaddockSidePanel({
         initialPaddockName={editingPaddock?.name}
         paddocks={paddocks}
       />
+      <ConfirmModal />
     </>
   )
 }

@@ -238,7 +238,22 @@ export default function MiCampoPage() {
     setPaddocks(prev => prev.map(p => p.id === paddockId ? { ...p, ...updates } : p))
   }
 
-  const handlePaddockGeomUpdated = async () => { await loadData() }
+  const handlePaddockGeomUpdated = async (paddockId: string, geom: any, areaHa: number) => {
+    // Optimistically update local state so hectares refresh immediately
+    setPaddocks(prev => prev.map(p => p.id === paddockId ? { ...p, area_ha: areaHa } : p))
+    // Recalculate total field area with new values
+    const newTotal = paddocks.reduce((sum, p) => {
+      const ha = p.id === paddockId ? areaHa : Number(p.area_ha) || 0
+      return sum + ha
+    }, 0)
+    try {
+      await apiFetch('/api/organizations', {
+        method: 'PATCH',
+        body: JSON.stringify({ total_area_ha: parseFloat(newTotal.toFixed(2)) }),
+      })
+    } catch {}
+    await loadData()
+  }
 
   // ── Creation via map draw ────────────────────────────────────────────────────
   const handleNewPaddockDrawn = useCallback(async (geojson: any, areaHa: number) => {
@@ -278,7 +293,7 @@ export default function MiCampoPage() {
     setEditPolygonPaddockId(paddockId)
     setSelectedPaddockId(paddockId)
     setMapView('satellite')
-    toast.info('Activá el modo edición (✏️) en el mapa y arrastá los vértices del polígono', { duration: 6000 })
+    toast.info('Usá el botón "Editar" (✏️) del mapa, movés los vértices y presioná "Guardar" (✓) para confirmar los cambios.', { duration: 7000 })
   }, [])
 
   // ── Field boundary drawn from map ────────────────────────────────────────────
@@ -291,8 +306,23 @@ export default function MiCampoPage() {
         method: 'PATCH',
         body: JSON.stringify({ boundaries: geojson, total_area_ha: parseFloat(calc.toFixed(2)) }),
       })
+      toast.success('Límite del campo guardado')
       await loadData()
     } catch {}
+  }, [loadData])
+
+  // ── Field boundary edited in map (existing polygon moved) ────────────────────
+  const handleFieldBoundaryEdited = useCallback(async (geojson: any, areaHa: number) => {
+    try {
+      await apiFetch('/api/organizations', {
+        method: 'PATCH',
+        body: JSON.stringify({ boundaries: geojson, total_area_ha: areaHa }),
+      })
+      toast.success('Límite del campo actualizado')
+      await loadData()
+    } catch {
+      toast.error('Error al guardar el límite del campo')
+    }
   }, [loadData])
 
   // ── Manual creation from side panel ─────────────────────────────────────────
@@ -532,6 +562,15 @@ export default function MiCampoPage() {
                   toast.error(`No se pudo eliminar el potrero: ${errData.error}`)
                 } else {
                   toast.success('Potrero eliminado')
+                  // Recalculate total ha excluding deleted paddock
+                  const remaining = paddocks.filter(p => p.id !== id)
+                  const newTotal = remaining.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0)
+                  try {
+                    await apiFetch('/api/organizations', {
+                      method: 'PATCH',
+                      body: JSON.stringify({ total_area_ha: parseFloat(newTotal.toFixed(2)) }),
+                    })
+                  } catch {}
                   loadData()
                 }
               } catch (err: any) {
@@ -544,6 +583,7 @@ export default function MiCampoPage() {
             fieldBoundaryDrawMode={fieldBoundaryDrawMode}
             onFieldBoundaryDrawn={handleFieldBoundaryDrawn}
             onFieldBoundaryDrawModeChange={setFieldBoundaryDrawMode}
+            onFieldBoundaryEdited={handleFieldBoundaryEdited}
             initialCenter={
               mapCenter
                 ?? (org?.location?.coordinates
@@ -630,6 +670,15 @@ export default function MiCampoPage() {
                 toast.error(`No se pudo eliminar el potrero: ${errData.error}`)
               } else {
                 toast.success('Potrero eliminado')
+                // Recalculate total ha excluding deleted paddock
+                const remaining = paddocks.filter(p => p.id !== id)
+                const newTotal = remaining.reduce((sum: number, p: any) => sum + (Number(p.area_ha) || 0), 0)
+                try {
+                  await apiFetch('/api/organizations', {
+                    method: 'PATCH',
+                    body: JSON.stringify({ total_area_ha: parseFloat(newTotal.toFixed(2)) }),
+                  })
+                } catch {}
                 loadData()
               }
             } catch (err: any) {

@@ -31,13 +31,6 @@ const PASTEL_COLORS = [
 const ACTIVE_STROKE = '#f97316'  // orange
 const RESTING_STROKE = '#15803d' // dark green
 
-const getNdviColor = (ndvi: number): string => {
-  if (ndvi >= 0.6) return '#15803d'
-  if (ndvi >= 0.4) return '#84cc16'
-  if (ndvi >= 0.2) return '#eab308'
-  return '#ef4444'
-}
-
 interface Props {
   paddocks: any[]
   org: any
@@ -54,6 +47,8 @@ interface Props {
   fieldBoundaryDrawMode?: boolean
   onFieldBoundaryDrawn?: (geojson: any) => void
   onFieldBoundaryDrawModeChange?: (active: boolean) => void
+  // Field boundary editing (existing polygon)
+  onFieldBoundaryEdited?: (geojson: any, areaHa: number) => void
   // Initial map center (org location from onboarding step 1)
   initialCenter?: [number, number]
   // KML import overlay
@@ -67,6 +62,7 @@ function MapController({
   onSelectPaddock, onPaddockGeomUpdated, onNewPaddockDrawn, activeGrazingPlans = [],
   drawModeActive = false, onDrawModeChange, onDeletePaddock,
   fieldBoundaryDrawMode = false, onFieldBoundaryDrawn, onFieldBoundaryDrawModeChange,
+  onFieldBoundaryEdited,
   initialCenter,
   kmlFeatures = [], kmlAcceptedIndices = new Set(), onKmlPolygonClick,
 }: Props) {
@@ -91,6 +87,55 @@ function MapController({
     if (!prev) return // first mount — let the normal fit logic handle it
     map.flyTo(initialCenter, 13, { animate: true, duration: 1.5 })
   }, [initialCenter, map])
+
+  // -- Inject tooltip labels into geoman toolbar buttons ---------------------
+  useEffect(() => {
+    const injectLabels = () => {
+      // Map of geoman button class suffixes to Spanish labels
+      const labelMap: Record<string, string> = {
+        'drawPolygon': 'Dibujar',
+        'editMode':    'Editar',
+        'dragMode':    'Mover',
+        'cutPolygon':  'Cortar',
+        'removalMode': 'Borrar',
+        'rotateMode':  'Rotar',
+      }
+      Object.entries(labelMap).forEach(([action, label]) => {
+        const btn = document.querySelector(`.leaflet-pm-toolbar .button-container.${action} .leaflet-pm-actions-container`) as HTMLElement | null
+        // Add title attribute to the icon button for tooltip
+        const iconBtn = document.querySelector(`.leaflet-pm-toolbar .button-container.${action} a.leaflet-pm-icon-${action}`) as HTMLElement | null
+        if (iconBtn && !iconBtn.getAttribute('data-label-injected')) {
+          iconBtn.setAttribute('title', label)
+          iconBtn.setAttribute('data-label-injected', '1')
+          // Add a visible text label below the icon
+          const textEl = document.createElement('span')
+          textEl.textContent = label
+          textEl.style.cssText = `
+            display: block;
+            font-size: 7px;
+            font-weight: 700;
+            text-align: center;
+            line-height: 1;
+            margin-top: 1px;
+            color: #4b5563;
+            pointer-events: none;
+            white-space: nowrap;
+          `
+          iconBtn.appendChild(textEl)
+        }
+      })
+    }
+
+    // Run after geoman renders — use a small delay + MutationObserver
+    const timeout = setTimeout(injectLabels, 500)
+    const observer = new MutationObserver(injectLabels)
+    observer.observe(document.body, { childList: true, subtree: true })
+
+    return () => {
+      clearTimeout(timeout)
+      observer.disconnect()
+    }
+  }, [map])
 
   // -- Geoman init + pm:create handler --------------------------------------
   useEffect(() => {
@@ -179,6 +224,15 @@ function MapController({
       layer.addTo(map)
       fieldLayerRef.current = layer
 
+      // Listen for edits to the field boundary polygon (pm:update fires when user clicks ✓)
+      layer.on('pm:update', async (e: any) => {
+        const editedLayer = e.layer || e.target
+        const updatedGeoJSON = editedLayer.toGeoJSON()
+        const geom = updatedGeoJSON.geometry || updatedGeoJSON
+        const areaHa = parseFloat((area(updatedGeoJSON) / 10000).toFixed(2))
+        onFieldBoundaryEdited?.(geom, areaHa)
+      })
+
       // Fit map to field boundary on first load if no paddocks have been fit yet
       if (!hasInitialFitRef.current) {
         const bounds = layer.getBounds()
@@ -213,7 +267,6 @@ function MapController({
       const fillColor = PASTEL_COLORS[pastelidx % PASTEL_COLORS.length]
       const strokeColor = paddock.current_status === 'GRAZING' ? ACTIVE_STROKE : RESTING_STROKE
       const isSelected = paddock.id === selectedPaddockId
-      const ndvi = paddock.current_ndvi
 
       const layer = L.geoJSON(geojson, {
         style: {
@@ -232,7 +285,8 @@ function MapController({
 
       layer.on('click', () => onSelectPaddock(paddock.id))
 
-      layer.on('pm:edit', async (e: any) => {
+      // pm:update fires when the user finishes editing and clicks the ✓ save button
+      layer.on('pm:update', async (e: any) => {
         const editedLayer = e.layer || e.target
         const updatedGeoJSON = editedLayer.toGeoJSON()
         const geom = updatedGeoJSON.geometry || updatedGeoJSON
@@ -251,8 +305,10 @@ function MapController({
         onPaddockGeomUpdated(paddock.id, geom, areaHa)
       })
 
-      layer.on('pm:remove', () => {
-        if (onDeletePaddock) onDeletePaddock(paddock.id)
+      layer.on('pm:remove', async () => {
+        if (onDeletePaddock) {
+          await onDeletePaddock(paddock.id)
+        }
       })
 
       layerGroupRef.current!.addLayer(layer)

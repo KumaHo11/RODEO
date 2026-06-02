@@ -206,3 +206,54 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ── Leaflet Geoman toolbar: add text labels to icon buttons ────────────────
+   Geoman renders icon-only buttons. We use CSS ::after pseudo-elements to
+   inject readable labels below each icon button for better UX.               */
+
+/* Make each button container taller to fit icon + label */
+.leaflet-pm-toolbar .button-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Style the geoman action buttons */
+.leaflet-pm-toolbar a.leaflet-pm-icon-drawPolygon,
+.leaflet-pm-toolbar a.leaflet-pm-icon-editMode,
+.leaflet-pm-toolbar a.leaflet-pm-icon-dragMode,
+.leaflet-pm-toolbar a.leaflet-pm-icon-removalMode,
+.leaflet-pm-toolbar a.leaflet-pm-icon-rotateMode {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: auto !important;
+  min-height: 30px !important;
+  padding-bottom: 2px !important;
+  width: 30px !important;
+}
+
+/* Text labels via CSS attr() / data attributes */
+.leaflet-pm-toolbar a.leaflet-pm-icon-drawPolygon::after { content: "Dibujar"; }
+.leaflet-pm-toolbar a.leaflet-pm-icon-editMode::after    { content: "Editar"; }
+.leaflet-pm-toolbar a.leaflet-pm-icon-dragMode::after    { content: "Mover"; }
+.leaflet-pm-toolbar a.leaflet-pm-icon-removalMode::after { content: "Borrar"; }
+.leaflet-pm-toolbar a.leaflet-pm-icon-rotateMode::after  { content: "Rotar"; }
+
+.leaflet-pm-toolbar a[class*="leaflet-pm-icon-"]::after {
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  color: #374151;
+  display: block;
+  text-align: center;
+  margin-top: 1px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Active state — label turns green */
+.leaflet-pm-toolbar .active a[class*="leaflet-pm-icon-"]::after {
+  color: #15803d;
+}
