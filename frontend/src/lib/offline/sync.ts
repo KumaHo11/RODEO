@@ -74,9 +74,10 @@ export async function triggerSync(getToken: () => Promise<string | null>): Promi
     window.dispatchEvent(new CustomEvent('rodeo_sync_start'))
   }
 
+  let result = { processed: 0, failed: 0 }
   try {
     // 1. Procesar cola de escrituras pendientes
-    const result = await processQueue()
+    result = await processQueue()
     console.log(`[sync] Outbox: ${result.processed} enviados, ${result.failed} fallidos`)
 
     // 2. Pre-fetch incremental de datos (solo lo que tiene > 5 min)
@@ -84,8 +85,10 @@ export async function triggerSync(getToken: () => Promise<string | null>): Promi
     if (token) {
       await prefetchAll(token)
     }
-
-    // 3. Notificar que el sync terminó
+  } catch (err) {
+    console.error('[sync] Error during sync:', err)
+  } finally {
+    // 3. Notificar que el sync terminó (SIEMPRE, incluso con error)
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('rodeo_sync_completed', {
         detail: { processed: result.processed, failed: result.failed }
@@ -101,13 +104,13 @@ export async function triggerSync(getToken: () => Promise<string | null>): Promi
 
     // Broadcast a otras tabs abiertas
     if (typeof BroadcastChannel !== 'undefined') {
-      const ch = new BroadcastChannel('rodeo-sync')
-      ch.postMessage({ type: 'SYNC_DONE', timestamp: Date.now() })
+      try {
+        const ch = new BroadcastChannel('rodeo-sync')
+        ch.postMessage({ type: 'SYNC_DONE', timestamp: Date.now() })
+        ch.close()
+      } catch { /* ignore */ }
     }
 
-  } catch (err) {
-    console.error('[sync] Error during sync:', err)
-  } finally {
     _isSyncing = false
   }
 }

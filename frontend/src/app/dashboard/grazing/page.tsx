@@ -2459,10 +2459,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [rawDailyAlloc, setRawDailyAlloc] = useState('12')
   const [rawTargetRemnant, setRawTargetRemnant] = useState('1000')
   const [rawGraceDays, setRawGraceDays] = useState('0')
-  const [remnantMode, setRemnantMode] = useState<'kg' | 'pct'>('pct')
+  const [remnantMode, setRemnantMode] = useState<'kg' | 'pct'>('kg')
   const [remnantPct, setRemnantPct] = useState(30)
   const [rawRemnantPct, setRawRemnantPct] = useState('30')
-  const [droughtMode, setDroughtMode] = useState<'kg' | 'pct'>('pct')
+  const [droughtMode, setDroughtMode] = useState<'kg' | 'pct'>('kg')
   const [droughtPct, setDroughtPct] = useState(20)
   const [rawDroughtPct, setRawDroughtPct] = useState('20')
   const [droughtKg, setDroughtKg] = useState(0)
@@ -2967,13 +2967,26 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           return sum + getDynamicHerdEV(h, currentEntryIso, farmEvents, hc)
         }, 0)
         
-        if (precomputedDays[chosenPaddock.id] > 0) {
+        // SIEMPRE recalcular en tiempo real usando el EV dinámico actual y el remanente objetivo.
+        // Los precomputedDays del snapshot pueden estar desactualizados (EV diferente, sin remanente,
+        // o MS del potrero anterior), lo que causa que el planificador muestre días incorrectos.
+        // Solo usamos precomputedDays como último recurso cuando el potrero no tiene datos de MS.
+        const msDynamic = Number(chosenPaddock.dry_matter_kg_ha) > 0 ? Number(chosenPaddock.dry_matter_kg_ha) : 0
+        const areaDynamic = Number(chosenPaddock.area_ha) || 10
+        const evForCalc = currentTotalEV > 0 ? currentTotalEV : 1
+        if (msDynamic > 0) {
+          // Calcular en tiempo real con MS actual, EV dinámico y remanente objetivo correcto
+          const usableMs = calculateUsableForage(msDynamic, remnant, areaDynamic)
+          const dailyDemand = evForCalc * dailyDemandMultiplier
+          const rawDays = calculateGrazingDays(usableMs, dailyDemand) || 3
+          stayDays = Math.max(1, rawDays)
+        } else if (precomputedDays[chosenPaddock.id] > 0) {
+          // Sin datos de MS en el potrero: usar el snapshot como respaldo
           stayDays = precomputedDays[chosenPaddock.id]
         } else {
-          const ms   = Number(chosenPaddock.dry_matter_kg_ha) > 0 ? Number(chosenPaddock.dry_matter_kg_ha) : 1200
-          const area = Number(chosenPaddock.area_ha) || 10
-          const evForCalc = currentTotalEV > 0 ? currentTotalEV : 1
-          const usableMs = calculateUsableForage(ms, remnant, area)
+          // Sin ningún dato: estimación mínima
+          const msEstimado = 1200
+          const usableMs = calculateUsableForage(msEstimado, remnant, areaDynamic)
           const dailyDemand = evForCalc * dailyDemandMultiplier
           const rawDays = calculateGrazingDays(usableMs, dailyDemand) || 3
           stayDays = Math.max(1, rawDays)
@@ -6509,15 +6522,21 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-gray-700 tracking-widest uppercase flex items-center gap-1">
                         {(formData as any).is_locked ? 'Salida ajustada' : 'Salida plan'}
-                        {formData.exit_date && formData.entry_date && (
-                          <span className={`normal-case font-black ml-1 text-xs px-1.5 py-0.5 rounded-full ${
-                            daysBetween(formData.entry_date, formData.exit_date) > 14
-                              ? 'bg-gray-100 text-gray-600'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {daysBetween(formData.entry_date, formData.exit_date)}d
-                          </span>
-                        )}
+                        {formData.exit_date && formData.entry_date && (() => {
+                          const plannedDays = daysBetween(formData.entry_date, formData.exit_date)
+                          const isOver = suggestion.exactDays > 0 && plannedDays > suggestion.exactDays
+                          return (
+                            <span className={`normal-case font-black ml-1 text-xs px-1.5 py-0.5 rounded-full ${
+                              isOver
+                                ? 'bg-red-100 text-red-700'
+                                : plannedDays > 14
+                                ? 'bg-gray-100 text-gray-600'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {plannedDays}d{isOver ? ' ⚠' : ''}
+                            </span>
+                          )
+                        })()}
                       </label>
                       <input
                         type="date"
@@ -6527,6 +6546,42 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       />
                     </div>
                   </div>
+                  {/* ⚠ ALERTA DE SOBREPASTOREO: días planificados > capacidad holística */}
+                  {(() => {
+                    if (!formData.entry_date || !formData.exit_date || suggestion.exactDays <= 0) return null
+                    const plannedDays = daysBetween(formData.entry_date, formData.exit_date)
+                    if (plannedDays <= suggestion.exactDays) return null
+                    const excessDays = plannedDays - Math.floor(suggestion.exactDays)
+                    const dailyDemandKg = totalPlanEV * dailyAllocationKg
+                    const excessKgMs = Math.round(excessDays * dailyDemandKg)
+                    return (
+                      <div className="mt-2 flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-3.5 py-3">
+                        <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-black text-red-700 uppercase tracking-widest">⚠ Riesgo de sobrepastoreo</p>
+                          <p className="text-[11px] text-red-600 font-semibold mt-0.5 leading-relaxed">
+                            Planificaste <span className="font-black">{plannedDays} días</span> pero el motor holístico calcula que este potrero solo puede sostener{' '}
+                            <span className="font-black">{suggestion.exactDays.toFixed(1)} días</span> con el remanente objetivo de{' '}
+                            <span className="font-black">{targetRemnant} kg/ha</span>.{' '}
+                            El exceso implica consumir {excessKgMs.toLocaleString('es')} kg MS por encima del remanente, dañando la pastura.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!formData.entry_date) return
+                              setFormData(prev => ({
+                                ...prev,
+                                exit_date: addDays(prev.entry_date, suggestion.days),
+                              }))
+                            }}
+                            className="mt-1.5 text-[10px] font-black text-red-700 underline decoration-dotted hover:no-underline"
+                          >
+                            Ajustar a {suggestion.days} días (recomendado)
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })()}
                   <div className="flex items-center gap-3 pt-1">
                     <label className="text-[10px] font-black text-gray-700 tracking-widest uppercase whitespace-nowrap">Descanso del potrero</label>
                     <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-xl px-3 py-2 flex-1">

@@ -143,7 +143,11 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
     }
 
     const handleSyncStart = () => {
-      setIsSyncing(true)
+      // Solo mostrar spinner si hay items pendientes en el outbox
+      // El pre-fetch silencioso no debe mostrar el spinner
+      getPendingCount().then(count => {
+        if (count > 0) setIsSyncing(true)
+      })
     }
 
     const handleSyncDone = (ev: Event) => {
@@ -200,8 +204,8 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
         </div>
       )}
 
-      {/* Spinner de sync */}
-      {isSyncing && (
+      {/* Spinner de sync — solo cuando hay pendientes que se están enviando */}
+      {isSyncing && pendingCount > 0 && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9998] pointer-events-none">
           <div className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold">
             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
