@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
-import OfflineIndicator from '@/components/OfflineIndicator'
+import { OfflineManager } from '@/components/OfflineManager'
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
 import { Toaster } from 'sonner'
 
@@ -49,8 +49,9 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <AuthProvider>
-          {children}
-          <OfflineIndicator />
+          <OfflineManager>
+            {children}
+          </OfflineManager>
           <ServiceWorkerRegistrar />
         </AuthProvider>
         <Toaster

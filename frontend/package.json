@@ -28,6 +28,7 @@
     "firebase": "^12.11.0",
     "firebase-admin": "^13.7.0",
     "framer-motion": "^12.38.0",
+    "idb": "^8.0.3",
     "jose": "^6.2.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.6.0",

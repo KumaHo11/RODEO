@@ -96,6 +96,26 @@ export default function MiCampoPage() {
   const loadData = useCallback(async () => {
     if (!user) return
     setLoading(true)
+
+    // ── Paso 1: IndexedDB inmediata ────────────────────────────────────────
+    try {
+      const { dbGetAll, dbGetOrg } = await import('@/lib/offline/db')
+      const [localPaddocks, localOrg] = await Promise.all([
+        dbGetAll('paddocks'),
+        dbGetOrg(),
+      ])
+      if (localPaddocks.length > 0) {
+        setPaddocks(localPaddocks)
+        if (localOrg) {
+          setOrg(localOrg)
+          if (localOrg.boundaries) setFieldBoundary(localOrg.boundaries)
+        }
+        setLoading(false)
+        setIsOfflineData(false)
+      }
+    } catch { /* ignore */ }
+
+    // ── Paso 2: API en background ──────────────────────────────────────────
     try {
       const [paddocksRes, orgRes, plansRes, herdsRes, climateRes] = await Promise.all([
         apiFetch('/api/paddocks'),
@@ -112,11 +132,16 @@ export default function MiCampoPage() {
 
       if (!paddocksRes.ok && !orgRes.ok) throw new Error('offline')
 
-      // Guardar datos críticos en caché local
-      try {
-        if (paddocksRes.ok) localStorage.setItem('rodeo_cached_paddocks', JSON.stringify(paddocksData))
-        if (orgRes.ok) localStorage.setItem('rodeo_cached_org', JSON.stringify(orgData))
-      } catch { /* ignore quota errors */ }
+      // Guardar datos críticos en IndexedDB y caché local
+      const { dbUpsertMany, dbUpsertOrg } = await import('@/lib/offline/db')
+      if (paddocksRes.ok) {
+        await dbUpsertMany('paddocks', paddocksData).catch(() => {})
+        try { localStorage.setItem('rodeo_cached_paddocks', JSON.stringify(paddocksData)) } catch { /* ignore */ }
+      }
+      if (orgRes.ok && orgData) {
+        await dbUpsertOrg(orgData).catch(() => {})
+        try { localStorage.setItem('rodeo_cached_org', JSON.stringify(orgData)) } catch { /* ignore */ }
+      }
 
       // Indexar snapshots climáticos por paddock_id (el más reciente primero)
       const snapMap: Record<string, any> = {}

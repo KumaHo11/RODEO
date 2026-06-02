@@ -191,6 +191,21 @@ function TareasContent({ user }: { user: any }) {
     if (!user) return
     setLoading(true)
 
+    // ── Paso 1: IndexedDB inmediata ───────────────────────────────────────
+    try {
+      const { dbGetAll } = await import('@/lib/offline/db')
+      const [localTasks, localPaddocks] = await Promise.all([
+        dbGetAll('tasks'),
+        dbGetAll('paddocks'),
+      ])
+      if (localTasks.length > 0) {
+        setTasks(localTasks as Task[])
+        setPaddocks(localPaddocks)
+        setLoading(false)
+      }
+    } catch { /* ignore */ }
+
+    // ── Paso 2: API en background ───────────────────────────────────────
     const [tasksRes, teamRes, paddocksRes, orgRes] = await Promise.all([
       apiFetch('/api/tasks'),
       apiFetch('/api/team'),
@@ -198,17 +213,23 @@ function TareasContent({ user }: { user: any }) {
       apiFetch('/api/organizations'),
     ])
 
-    const tasksData   = tasksRes.ok   ? (await tasksRes.json()).tasks : []
-    const teamData    = teamRes.ok    ? (await teamRes.json()).members : []
+    const tasksData    = tasksRes.ok    ? (await tasksRes.json()).tasks    : []
+    const teamData     = teamRes.ok     ? (await teamRes.json()).members   : []
     const paddocksData = paddocksRes.ok ? (await paddocksRes.json()).paddocks : []
-    const orgData     = orgRes.ok     ? (await orgRes.json()).org : null
+    const orgData      = orgRes.ok      ? (await orgRes.json()).org        : null
 
     if (orgData) setIsOwner(orgData.owner_id === user.uid)
 
-    // Tasks already come enriched with paddock + assignee from the API
     setTasks(tasksData || [])
     setMembers(teamData || [])
     setPaddocks(paddocksData || [])
+
+    // Actualizar IndexedDB
+    if (tasksData.length > 0) {
+      const { dbUpsertMany } = await import('@/lib/offline/db')
+      await dbUpsertMany('tasks', tasksData).catch(() => {})
+    }
+
     setLoading(false)
   }, [user])
 
@@ -216,11 +237,16 @@ function TareasContent({ user }: { user: any }) {
 
   // ── Change task status ──────────────────────────────────────────────────
   const changeStatus = async (taskId: string, status: Status) => {
-    await apiFetch(`/api/tasks/${taskId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
-    })
+    // Optimistic update
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
+    // Enqueue via outbox (funciona offline)
+    const { enqueue } = await import('@/lib/offline/outbox')
+    await enqueue({
+      type: 'task_status',
+      url: `/api/tasks/${taskId}`,
+      method: 'PATCH',
+      body: { status },
+    })
   }
 
   // ── Create task ─────────────────────────────────────────────────────────
@@ -229,24 +255,48 @@ function TareasContent({ user }: { user: any }) {
     if (!form.title) return
     setSaving(true)
 
-    await apiFetch('/api/tasks', {
+    const taskBody = {
+      title: form.title,
+      description: form.description || null,
+      task_type: form.task_type,
+      paddock_id: form.paddock_id || null,
+      assigned_to: form.assigned_to || null,
+      due_date: form.due_date || null,
+      priority: form.priority,
+      status: 'PENDIENTE' as Status,
+    }
+
+    // Optimistic local task
+    const tempId = `pending-${Date.now()}`
+    const tempTask: Task = {
+      id: tempId,
+      title: form.title,
+      description: form.description || undefined,
+      task_type: form.task_type,
+      paddock_id: form.paddock_id || undefined,
+      assigned_to: form.assigned_to || undefined,
+      due_date: form.due_date || undefined,
+      priority: form.priority,
+      status: 'PENDIENTE',
+      created_at: new Date().toISOString(),
+    }
+    setTasks(prev => [tempTask, ...prev])
+
+    // Enqueue via outbox
+    const { enqueue } = await import('@/lib/offline/outbox')
+    await enqueue({
+      type: 'task',
+      url: '/api/tasks',
       method: 'POST',
-      body: JSON.stringify({
-        title: form.title,
-        description: form.description || null,
-        task_type: form.task_type,
-        paddock_id: form.paddock_id || null,
-        assigned_to: form.assigned_to || null,
-        due_date: form.due_date || null,
-        priority: form.priority,
-        status: 'PENDIENTE',
-      }),
+      body: taskBody,
+      localData: { store: 'tasks', data: { ...taskBody, id: tempId, created_at: new Date().toISOString() } },
     })
 
     setSaving(false)
     setModalOpen(false)
     setForm({ title: '', description: '', task_type: 'GENERAL', paddock_id: '', assigned_to: '', due_date: '', priority: 'NORMAL' })
-    load()
+    // Si hay red, recargar para obtener ID real
+    if (navigator.onLine) setTimeout(() => load(), 1500)
   }
 
   // ── Filtered/grouped tasks ─────────────────────────────────────────────

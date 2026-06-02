@@ -7,6 +7,7 @@ import {
   signOut as firebaseSignOut,
   User,
 } from 'firebase/auth'
+import { cacheAuthToken, cacheProfile, getCachedProfile, clearAuthCache, decodeJwtExp } from '@/lib/offline/auth-cache'
 
 type Profile = {
   id: string
@@ -83,8 +84,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (res.ok) {
         const data = await res.json()
         setProfile(data.profile)
+        // Cachear perfil en IndexedDB y localStorage (redundante pero seguro)
         try {
           localStorage.setItem('rodeo_cached_profile', JSON.stringify(data.profile))
+          await cacheProfile(data.profile)
         } catch { /* ignore */ }
         return
       }
@@ -112,6 +115,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         console.warn('Error fetching profile (possibly offline):', err)
       }
+      // Intentar desde IndexedDB primero, luego localStorage
+      try {
+        const idbProfile = await getCachedProfile()
+        if (idbProfile) { setProfile(idbProfile); return }
+      } catch { /* ignore */ }
       try {
         const cached = localStorage.getItem('rodeo_cached_profile')
         if (cached) {
@@ -133,6 +141,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (firebaseUser) {
         // Guarda el token en cookie para el middleware
         const token = await firebaseUser.getIdToken()
+        // Cachear token en IndexedDB para login offline
+        const expMs = decodeJwtExp(token)
+        if (expMs) cacheAuthToken(token, expMs).catch(() => {})
         // Set Secure flag only over HTTPS (production) — not in localhost dev
         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
         document.cookie = `__session=${token}; path=/; max-age=3600; SameSite=Lax${isHttps ? '; Secure' : ''}`
@@ -140,6 +151,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         // Limpiar cookie al cerrar sesión
         document.cookie = '__session=; path=/; max-age=0'
+        clearAuthCache().catch(() => {})
         setProfile(null)
       }
       setIsLoading(false)

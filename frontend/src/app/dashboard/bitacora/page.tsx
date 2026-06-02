@@ -174,11 +174,29 @@ export default function BitacoraPage() {
     if (!user) return
     setLoading(true)
     let fetchedNotes: any[] = []
+
+    // ── Paso 1: IndexedDB inmediata ────────────────────────────────────────
+    try {
+      const { dbGetAll } = await import('@/lib/offline/db')
+      const localNotes = await dbGetAll('field_notes')
+      // Solo notas de bitácora (sin paddock_id)
+      const bitacoraLocal = localNotes.filter((n: any) => !n.paddock_id)
+      if (bitacoraLocal.length > 0) {
+        fetchedNotes = bitacoraLocal
+        setNotes(bitacoraLocal)
+        setLoading(false)
+      }
+    } catch { /* ignore */ }
+
+    // ── Paso 2: API en background ──────────────────────────────────────────
     try {
       // bitacora_only=1 → solo notas sin paddock_id (notas de bitácora pura)
       const res = await apiFetch('/api/field-notes?bitacora_only=1')
       if (res.ok) {
         fetchedNotes = (await res.json()).notes || []
+        // Guardar en IndexedDB y localStorage
+        const { dbUpsertMany } = await import('@/lib/offline/db')
+        await dbUpsertMany('field_notes', fetchedNotes).catch(() => {})
         try {
           localStorage.setItem('rodeo_cached_notes_bitacora', JSON.stringify(fetchedNotes))
         } catch { /* ignore */ }
@@ -186,9 +204,12 @@ export default function BitacoraPage() {
         throw new Error('API error')
       }
     } catch {
-      try {
-        fetchedNotes = JSON.parse(localStorage.getItem('rodeo_cached_notes_bitacora') || '[]')
-      } catch { /* ignore */ }
+      // Usar datos ya cargados de IndexedDB o localStorage
+      if (fetchedNotes.length === 0) {
+        try {
+          fetchedNotes = JSON.parse(localStorage.getItem('rodeo_cached_notes_bitacora') || '[]')
+        } catch { /* ignore */ }
+      }
     }
 
     // Merge with offline queue — solo items de bitácora (paddock_id null)

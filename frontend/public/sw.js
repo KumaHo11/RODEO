@@ -4,7 +4,7 @@
  * Garantiza que la app funcione completamente offline después de la primera carga.
  */
 
-const CACHE_VERSION = 'v7'
+const CACHE_VERSION = 'v8'
 const SHELL_CACHE   = `rodeo-shell-${CACHE_VERSION}`
 const API_CACHE     = `rodeo-api-${CACHE_VERSION}`
 const ASSET_CACHE   = `rodeo-assets-${CACHE_VERSION}`
@@ -27,6 +27,10 @@ const SHELL_URLS = [
   '/dashboard/paddocks-list',
   '/dashboard/tareas',
   '/dashboard/profile',
+  '/dashboard/clima',
+  '/dashboard/calculadora',
+  '/dashboard/bitacora',
+  '/dashboard/bitacora/bandeja',
   '/_offline',
   '/manifest.json',
 ]
@@ -299,5 +303,20 @@ self.addEventListener('message', event => {
     self.clients.matchAll({ type: 'window' }).then(clients => {
       clients.forEach(c => c.postMessage({ type: 'SYNC_COMPLETED' }))
     })
+  }
+})
+
+// ── Background Sync API ───────────────────────────────────────────────────────
+// El SO activa este evento cuando recupera la red (Android nativo, iOS simula en primer plano)
+self.addEventListener('sync', event => {
+  if (event.tag === 'rodeo-outbox-sync') {
+    // Notificar a todas las tabs para que procesen el outbox
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+        if (clients.length > 0) {
+          clients.forEach(c => c.postMessage({ type: 'SYNC_STARTED' }))
+        }
+      })
+    )
   }
 })

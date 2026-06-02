@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { isOffline } from '@/lib/connectivity'
-import { addToOfflineQueue } from '@/components/OfflineIndicator'
+import { addToOfflineQueue } from '@/components/OfflineManager'
 import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify, Loader2, WifiOff } from 'lucide-react'
 import { FeatureGate } from '@/components/FeatureGate'
 
@@ -76,6 +76,28 @@ export default function AgendaPage() {
   const loadData = async () => {
     if (!user) return
     setLoading(true)
+
+    // ── Paso 1: IndexedDB inmediata ────────────────────────────────────────
+    try {
+      const { dbGetAll } = await import('@/lib/offline/db')
+      const [localEvents, localHerds, localPlans] = await Promise.all([
+        dbGetAll('farm_events'),
+        dbGetAll('herds'),
+        dbGetAll('grazing_plans'),
+      ])
+      const validTypes = EVENT_TYPES.map(t => t.id)
+      const agendaLocal = localEvents.filter((e: any) =>
+        validTypes.includes(e.event_type) && e.source !== 'rodeo'
+      )
+      if (agendaLocal.length > 0 || localHerds.length > 0) {
+        setEvents(agendaLocal)
+        setHerds(localHerds)
+        setGrazingPlans(localPlans)
+        setLoading(false)
+      }
+    } catch { /* ignore */ }
+
+    // ── Paso 2: API en background ──────────────────────────────────────────
     try {
       const [eventsRes, herdsRes, plansRes] = await Promise.all([
         apiFetch('/api/farm-events'),
@@ -101,12 +123,23 @@ export default function AgendaPage() {
           ]
           return merged
         })
+        // Guardar en IndexedDB
+        const { dbUpsertMany } = await import('@/lib/offline/db')
+        await dbUpsertMany('farm_events', allEvents).catch(() => {})
       } else {
         // Si la API falla (offline o error), conservar el estado actual
         // Los datos cacheados por el SW se devuelven automáticamente
       }
-      setHerds(herdsRes.ok ? (await herdsRes.json()).herds || [] : [])
-      setGrazingPlans(plansRes.ok ? (await plansRes.json()).plans || [] : [])
+      const herdsData = herdsRes.ok ? (await herdsRes.json()).herds || [] : []
+      const plansData = plansRes.ok ? (await plansRes.json()).plans || [] : []
+      setHerds(herdsData)
+      setGrazingPlans(plansData)
+      // Guardar en IndexedDB
+      if (herdsData.length > 0) {
+        const { dbUpsertMany } = await import('@/lib/offline/db')
+        await dbUpsertMany('herds', herdsData).catch(() => {})
+        await dbUpsertMany('grazing_plans', plansData).catch(() => {})
+      }
     } catch (err) {
       console.warn('[Agenda] loadData failed (possibly offline):', err)
     }

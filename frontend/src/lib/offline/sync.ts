@@ -1,0 +1,125 @@
+/**
+ * lib/offline/sync.ts
+ * Motor de sincronización para RODEO offline-first.
+ *
+ * Escucha:
+ *  - Evento 'online' del browser
+ *  - Mensajes del Service Worker ('SYNC_STARTED')
+ *  - BroadcastChannel('rodeo-sync')
+ *
+ * Al detectar conexión:
+ *  1. Procesa el outbox (envía registros pendientes)
+ *  2. Re-fetcha datos en background (prefetch incremental)
+ *  3. Emite 'rodeo_sync_completed' para que las páginas recarguen
+ */
+
+import { processQueue } from './outbox'
+import { prefetchAll } from './prefetch'
+
+let _initialized = false
+let _isSyncing   = false
+
+// ── Inicialización ─────────────────────────────────────────────────────────────
+
+/**
+ * Llama esto una sola vez al montar la app (en OfflineManager).
+ * @param getToken - función que devuelve el Firebase ID token actual
+ */
+export function initSync(getToken: () => Promise<string | null>): void {
+  if (_initialized || typeof window === 'undefined') return
+  _initialized = true
+
+  // Escuchar evento online del browser
+  window.addEventListener('online', () => {
+    console.log('[sync] Network online — starting sync')
+    triggerSync(getToken)
+  })
+
+  // Escuchar mensajes del Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (ev) => {
+      if (ev.data?.type === 'SYNC_STARTED' || ev.data?.type === 'SYNC_COMPLETED') {
+        triggerSync(getToken)
+      }
+    })
+  }
+
+  // BroadcastChannel para coordinar entre tabs
+  if (typeof BroadcastChannel !== 'undefined') {
+    const ch = new BroadcastChannel('rodeo-sync')
+    ch.onmessage = (ev) => {
+      if (ev.data?.type === 'TRIGGER_SYNC') {
+        triggerSync(getToken)
+      }
+    }
+  }
+
+  // Si ya estamos online al inicializar, ejecutar sync inicial
+  if (navigator.onLine) {
+    // Delay corto para no bloquear el primer render
+    setTimeout(() => triggerSync(getToken), 2000)
+  }
+}
+
+// ── Trigger ───────────────────────────────────────────────────────────────────
+
+export async function triggerSync(getToken: () => Promise<string | null>): Promise<void> {
+  if (_isSyncing) return
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return
+
+  _isSyncing = true
+
+  // Notificar inicio a la UI
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('rodeo_sync_start'))
+  }
+
+  try {
+    // 1. Procesar cola de escrituras pendientes
+    const result = await processQueue()
+    console.log(`[sync] Outbox: ${result.processed} enviados, ${result.failed} fallidos`)
+
+    // 2. Pre-fetch incremental de datos (solo lo que tiene > 5 min)
+    const token = await getToken()
+    if (token) {
+      await prefetchAll(token)
+    }
+
+    // 3. Notificar que el sync terminó
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rodeo_sync_completed', {
+        detail: { processed: result.processed, failed: result.failed }
+      }))
+    }
+
+    // Propagar al SW para notificar otras tabs
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.active?.postMessage({ type: 'SYNC_COMPLETED' })
+      }).catch(() => {})
+    }
+
+    // Broadcast a otras tabs abiertas
+    if (typeof BroadcastChannel !== 'undefined') {
+      const ch = new BroadcastChannel('rodeo-sync')
+      ch.postMessage({ type: 'SYNC_DONE', timestamp: Date.now() })
+    }
+
+  } catch (err) {
+    console.error('[sync] Error during sync:', err)
+  } finally {
+    _isSyncing = false
+  }
+}
+
+// ── Manual trigger ────────────────────────────────────────────────────────────
+
+/** Fuerza sincronización manual (ej: al pulsar "Sincronizar ahora") */
+export async function forceSyncNow(getToken: () => Promise<string | null>): Promise<void> {
+  _isSyncing = false // reset lock
+  await triggerSync(getToken)
+}
+
+export function isSyncing(): boolean {
+  return _isSyncing
+}
