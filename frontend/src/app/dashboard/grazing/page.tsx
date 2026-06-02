@@ -5561,7 +5561,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       })()}
 
       {/* ─── MODAL: Confirmación de borrado de Evento ───────────────────────── */}
-      {eventToDelete && (
+      {eventToDelete && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 pt-6 pb-4 text-center">
@@ -5618,7 +5618,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ─── HERD SELECTOR PANEL ─────────────────────────────────────────── */}
