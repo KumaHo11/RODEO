@@ -4,7 +4,9 @@ import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify, Loader2 } from 'lucide-react'
+import { isOffline } from '@/lib/connectivity'
+import { addToOfflineQueue } from '@/components/OfflineIndicator'
+import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify, Loader2, WifiOff } from 'lucide-react'
 import { FeatureGate } from '@/components/FeatureGate'
 
 const EVENT_TYPES = [
@@ -74,29 +76,54 @@ export default function AgendaPage() {
   const loadData = async () => {
     if (!user) return
     setLoading(true)
-    const [eventsRes, herdsRes, plansRes] = await Promise.all([
-      apiFetch('/api/farm-events'),
-      apiFetch('/api/herds'),
-      apiFetch('/api/grazing-plans'),
-    ])
-    if (eventsRes.ok) {
-      const allEvents = (await eventsRes.json()).events || []
-      const validTypes = EVENT_TYPES.map(t => t.id)
-      // Solo mostrar eventos creados desde Agenda (source='agenda' o sin source para compatibilidad historial)
-      // Excluir eventos creados desde Rodeos (source='rodeo')
-      setEvents(allEvents.filter((e: any) =>
-        validTypes.includes(e.event_type) &&
-        e.source !== 'rodeo'
-      ))
-    } else {
-      setEvents([])
+    try {
+      const [eventsRes, herdsRes, plansRes] = await Promise.all([
+        apiFetch('/api/farm-events'),
+        apiFetch('/api/herds'),
+        apiFetch('/api/grazing-plans'),
+      ])
+      if (eventsRes.ok) {
+        const allEvents = (await eventsRes.json()).events || []
+        const validTypes = EVENT_TYPES.map(t => t.id)
+        // Solo mostrar eventos creados desde Agenda (source='agenda' o sin source para compatibilidad historial)
+        // Excluir eventos creados desde Rodeos (source='rodeo')
+        const serverEvents = allEvents.filter((e: any) =>
+          validTypes.includes(e.event_type) &&
+          e.source !== 'rodeo'
+        )
+        // Mantener eventos pendientes offline que aún no llegaron del servidor
+        setEvents(prev => {
+          const pendingOffline = prev.filter((e: any) => e._offline_pending)
+          const merged = [
+            ...serverEvents,
+            // Solo agregar pendientes que no existan en el servidor
+            ...pendingOffline.filter((p: any) => !serverEvents.find((s: any) => s.id === p.id)),
+          ]
+          return merged
+        })
+      } else {
+        // Si la API falla (offline o error), conservar el estado actual
+        // Los datos cacheados por el SW se devuelven automáticamente
+      }
+      setHerds(herdsRes.ok ? (await herdsRes.json()).herds || [] : [])
+      setGrazingPlans(plansRes.ok ? (await plansRes.json()).plans || [] : [])
+    } catch (err) {
+      console.warn('[Agenda] loadData failed (possibly offline):', err)
     }
-    setHerds(herdsRes.ok ? (await herdsRes.json()).herds || [] : [])
-    setGrazingPlans(plansRes.ok ? (await plansRes.json()).plans || [] : [])
     setLoading(false)
   }
 
   useEffect(() => { loadData() }, [user])
+
+  // Escuchar cuando el sync offline completa para recargar datos frescos
+  useEffect(() => {
+    const handleSyncCompleted = () => {
+      loadData()
+    }
+    window.addEventListener('rodeo_sync_completed', handleSyncCompleted)
+    return () => window.removeEventListener('rodeo_sync_completed', handleSyncCompleted)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
 
   const openCreate = () => {
     setEditingEvent(null)
@@ -171,6 +198,36 @@ export default function AgendaPage() {
   const savePayload = async (payload: any, adjustPlans = false) => {
     setSaving(true)
     try {
+      // ── Verificar conectividad real antes de enviar ────────────────────────
+      const offline = await isOffline()
+
+      if (offline) {
+        // Guardar en cola offline para sincronizar cuando haya conexión
+        addToOfflineQueue({
+          type: 'farm_event',
+          data: payload as Record<string, unknown>,
+          timestamp: Date.now(),
+        })
+
+        // Mostrar evento optimistamente en la UI (con badge "Pendiente")
+        const optimisticEvent = {
+          ...payload,
+          id: `pending-${Date.now()}`,
+          status: 'pendiente',
+          created_at: new Date().toISOString(),
+          _offline_pending: true, // marca interna para distinguirlo
+        }
+        setEvents(prev => [optimisticEvent, ...prev])
+
+        setSaving(false)
+        setConflictModalOpen(false)
+        setModalOpen(false)
+        setForm(EMPTY_FORM)
+        setEditingEvent(null)
+        return
+      }
+
+      // ── Online: comportamiento normal ────────────────────────────────────
       if (editingEvent) {
         await apiFetch(`/api/farm-events/${editingEvent.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
 
@@ -191,7 +248,7 @@ export default function AgendaPage() {
             await apiFetch(`/api/herds/${bullsHerd.id}`, {
               method: 'PATCH',
               body: JSON.stringify({
-                name:          payload.title,      // sincronizar nombre con el título del evento
+                name:          payload.title,
                 head_count:    bullCount,
                 avg_weight_kg: bullWeightKg,
                 total_ev:      totalEv,
@@ -212,11 +269,8 @@ export default function AgendaPage() {
           const bullWeightKg = payload.bulls_weight || 600
           const bullCount    = payload.bulls_count
 
-          // Fórmula metabólica canónica INTA: EV = (PV/450)^0.75 × 1.25 (toro)
           const evPerAnimal = parseFloat((Math.pow(bullWeightKg / 450, 0.75) * 1.25).toFixed(3))
           const totalEv     = parseFloat((evPerAnimal * bullCount).toFixed(1))
-
-          // El nombre del rodeo usa el título del evento directamente
           const herdName = payload.title
 
           await apiFetch('/api/herds', {
@@ -236,7 +290,7 @@ export default function AgendaPage() {
           }).catch(e => console.warn('No se pudo crear rodeo temporal:', e))
         }
       }
-      
+
       if (adjustPlans) {
         // En un caso real, aquí iría la lógica para ajustar las planificaciones automáticamente
       }
@@ -564,11 +618,14 @@ export default function AgendaPage() {
                     {(groupEvents as any[]).map((event: any) => {
                       const et = getEventType(event.event_type)
                       const d = safeDate(event.event_date)
+                      const isPending = !!event._offline_pending
 
                       return (
                         <div
                           key={event.id}
-                          className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-all group"
+                          className={`bg-white rounded-xl border p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-all group ${
+                            isPending ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'
+                          }`}
                         >
                           {/* Date badge */}
                           <div className="shrink-0 w-10 text-center">
@@ -589,23 +646,30 @@ export default function AgendaPage() {
                             {event.description && (
                               <p className="text-xs text-gray-400 mt-0.5 leading-snug">{event.description}</p>
                             )}
+                            {isPending && (
+                              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[9px] font-black">
+                                <WifiOff className="w-2.5 h-2.5" /> Pendiente — se sincroniza al reconectar
+                              </span>
+                            )}
                           </div>
 
-                          {/* Actions */}
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                            <button
-                              onClick={() => openEdit(event)}
-                              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setEventToDelete(event)}
-                              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          {/* Actions — disabled for pending events */}
+                          {!isPending && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                              <button
+                                onClick={() => openEdit(event)}
+                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setEventToDelete(event)}
+                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )
                     })}

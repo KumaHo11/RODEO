@@ -6,8 +6,17 @@ import { invalidateConnectivityCache } from '@/lib/connectivity'
 
 type SyncStatus = 'online' | 'offline' | 'syncing' | 'synced'
 
-// Lock global para evitar sincronizaciones concurrentes (iOS dispara 'online' varias veces)
+// Lock global para evitar sincronizaciones concurrentes
+// iOS dispara 'online' varias veces seguidas — este lock previene doble-sync
 let isSyncingGlobal = false
+
+/**
+ * Genera un ID único para cada ítem de la cola offline.
+ * Se usa como X-Idempotency-Key para deduplicar en el servidor.
+ */
+function generateIdempotencyKey(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
 
 export default function OfflineIndicator() {
   const [status, setStatus] = useState<SyncStatus>('online')
@@ -15,13 +24,15 @@ export default function OfflineIndicator() {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    // Read pending count
+    // Leer cantidad de ítems pendientes
     const readPending = async () => {
       try {
         const queue = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
+        // Solo contar ítems que no están siendo sincronizados
+        const waiting = queue.filter((q: any) => !q.syncing)
         const { countPendingItems } = await import('@/lib/audioOfflineStore')
         const mediaCount = await countPendingItems()
-        setPendingCount(Math.max(queue.length, mediaCount))
+        setPendingCount(Math.max(waiting.length, mediaCount))
       } catch {
         setPendingCount(0)
       }
@@ -37,33 +48,51 @@ export default function OfflineIndicator() {
 
     const handleOnline = async () => {
       invalidateConnectivityCache()
-      // Prevenir doble-sync: iOS puede disparar 'online' varias veces seguidas
+
+      // Prevenir doble-sync: iOS dispara 'online' varias veces
       if (isSyncingGlobal) return
       isSyncingGlobal = true
 
-      const queue = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
-      const { getPendingAudio, deletePendingAudio, getPendingPhoto, deletePendingPhoto, getAllPendingAudios, getAllPendingPhotos } = await import('@/lib/audioOfflineStore')
+      const queue: any[] = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
+      const {
+        getPendingAudio, deletePendingAudio,
+        getPendingPhoto, deletePendingPhoto,
+        getAllPendingAudios, getAllPendingPhotos,
+      } = await import('@/lib/audioOfflineStore')
       const { apiFetch } = await import('@/lib/apiFetch')
-      
+
       const orphanedAudios = await getAllPendingAudios()
       const orphanedPhotos = await getAllPendingPhotos()
 
-      if (queue.length > 0 || orphanedAudios.length > 0 || orphanedPhotos.length > 0) {
+      // Ítems pendientes = aquellos que NO están marcados como 'syncing'
+      const pendingItems = queue.filter(q => !q.syncing)
+
+      if (pendingItems.length > 0 || orphanedAudios.length > 0 || orphanedPhotos.length > 0) {
         setStatus('syncing')
         setVisible(true)
+
         if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({ type: 'SYNC_OFFLINE_QUEUE' })
         }
-        
-        let hasErrors = false
-        const newQueue = []
 
-        // Process Queue Items
-        for (const item of queue) {
+        // Marcar todos los ítems pendientes como 'syncing' ANTES de procesarlos
+        // Esto previene que un segundo disparo de 'online' los procese también
+        const updatedQueue = queue.map(q =>
+          pendingItems.find(p => p.idempotency_key === q.idempotency_key)
+            ? { ...q, syncing: true }
+            : q
+        )
+        localStorage.setItem('rodeo_offline_queue', JSON.stringify(updatedQueue))
+
+        let hasErrors = false
+        const failedItems: any[] = []
+
+        // Procesar cada ítem de la cola
+        for (const item of pendingItems) {
           try {
             const data = { ...item.data }
 
-            // Handle Media Attachments
+            // Adjuntos de audio
             if (item.mediaType === 'audio' && item.mediaId) {
               const pa = await getPendingAudio(item.mediaId)
               if (pa) {
@@ -98,13 +127,36 @@ export default function OfflineIndicator() {
               }
             }
 
-            // Execute Endpoint Logic
+            // Headers comunes — incluye idempotency key para deduplicación en servidor
+            const syncHeaders: Record<string, string> = {
+              'Content-Type': 'application/json',
+            }
+            if (item.idempotency_key) {
+              syncHeaders['X-Idempotency-Key'] = item.idempotency_key
+            }
+
+            // Ejecutar la llamada a la API según el tipo
             if (item.type === 'field_note') {
-              const res = await apiFetch('/api/field-notes', { method: 'POST', body: JSON.stringify(data) })
+              const res = await apiFetch('/api/field-notes', {
+                method: 'POST',
+                body: JSON.stringify(data),
+                headers: syncHeaders,
+              })
               if (!res.ok) throw new Error('field_note sync failed')
+            } else if (item.type === 'farm_event') {
+              const res = await apiFetch('/api/farm-events', {
+                method: 'POST',
+                body: JSON.stringify(data),
+                headers: syncHeaders,
+              })
+              if (!res.ok) throw new Error('farm_event sync failed')
             } else if (item.type === 'bcs_update') {
               const { herd_id, bcs_score, bcs_label, ...metadata } = data
-              await apiFetch(`/api/herds/${herd_id}`, { method: 'PATCH', body: JSON.stringify({ bcs_score, bcs_label }) })
+              await apiFetch(`/api/herds/${herd_id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ bcs_score, bcs_label }),
+                headers: syncHeaders,
+              })
               await apiFetch('/api/movements', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -113,7 +165,7 @@ export default function OfflineIndicator() {
                   categoria: metadata.categoria, breed: metadata.breed, admission_date: metadata.admission_date,
                   notes: `Condición Corporal registrada offline: ${bcs_score}/5 — ${bcs_label}`, photo_url: data.photo_url,
                   metadata: { bcs_label, head_count: metadata.quantity, ev: metadata.total_ev, photo_url: data.photo_url }
-                })
+                }),
               })
               await apiFetch('/api/farm-events', {
                 method: 'POST',
@@ -122,74 +174,88 @@ export default function OfflineIndicator() {
                   event_type: 'medicion', event_date: new Date().toISOString(),
                   herd_id: herd_id, herd_ids: [herd_id], description: `BCS: ${bcs_score}/5`,
                   photo_url: data.photo_url, status: 'completado'
-                })
+                }),
+                headers: syncHeaders,
               })
-            } else if (item.type === 'farm_event') {
-               const res = await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify(data) })
-               if (!res.ok) throw new Error('farm_event sync failed')
             } else if (item.type === 'herd_update') {
-               const { herd_id, ...payload } = data
-               const res = await apiFetch(`/api/herds/${herd_id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-               if (!res.ok) throw new Error('herd_update sync failed')
+              const { herd_id, ...payload } = data
+              const res = await apiFetch(`/api/herds/${herd_id}`, {
+                method: 'PATCH',
+                body: JSON.stringify(payload),
+                headers: syncHeaders,
+              })
+              if (!res.ok) throw new Error('herd_update sync failed')
             } else if (item.type === 'paddock_update') {
-               const { paddock_id, ...payload } = data
-               const res = await apiFetch(`/api/paddocks/${paddock_id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-               if (!res.ok) throw new Error('paddock_update sync failed')
+              const { paddock_id, ...payload } = data
+              const res = await apiFetch(`/api/paddocks/${paddock_id}`, {
+                method: 'PATCH',
+                body: JSON.stringify(payload),
+                headers: syncHeaders,
+              })
+              if (!res.ok) throw new Error('paddock_update sync failed')
             }
           } catch (e) {
-            console.error('Failed to sync item:', item, e)
-            newQueue.push(item)
+            console.error('[Offline Sync] Failed to sync item:', item.type, e)
+            failedItems.push({ ...item, syncing: false }) // quitar syncing para reintentar
             hasErrors = true
           }
         }
-        
-        // Clean up orphaned audios/photos — only those NOT already referenced in a queue item
-        // (Legacy: from old implementations that saved media without enqueuing a corresponding item)
+
+        // Limpiar ítems sincronizados — dejar solo los que fallaron y los que ya estaban en syncing (de un sync anterior)
+        const previouslySyncing = queue.filter(q => q.syncing && !pendingItems.find(p => p.idempotency_key === q.idempotency_key))
+        const newQueue = [...previouslySyncing, ...failedItems]
+        localStorage.setItem('rodeo_offline_queue', JSON.stringify(newQueue))
+
+        // Limpiar audios/fotos huérfanos (legacy: de implementaciones sin queue)
         const queuedMediaIds = new Set(queue.map((q: any) => q.mediaId).filter(Boolean))
         const trulyOrphanedAudios = orphanedAudios.filter((a: any) => !queuedMediaIds.has(a.id))
         const trulyOrphanedPhotos = orphanedPhotos.filter((p: any) => !queuedMediaIds.has(p.id))
 
         for (const pa of trulyOrphanedAudios) {
-           const fd = new FormData()
-           fd.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
-           fd.append('folder', 'bitacora-audio')
-           const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-           if (up.ok) {
-              const { url } = await up.json()
-              await apiFetch('/api/field-notes', {
-                 method: 'POST', body: JSON.stringify({ paddock_id: null, tags: ['GENERAL'], title: pa.title, content: pa.transcript || null, audio_url: url, audio_duration_secs: pa.durationSecs })
-              })
-           }
-           await deletePendingAudio(pa.id)
+          const fd = new FormData()
+          fd.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
+          fd.append('folder', 'bitacora-audio')
+          const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+          if (up.ok) {
+            const { url } = await up.json()
+            await apiFetch('/api/field-notes', {
+              method: 'POST', body: JSON.stringify({ paddock_id: null, tags: ['GENERAL'], title: pa.title, content: pa.transcript || null, audio_url: url, audio_duration_secs: pa.durationSecs })
+            })
+          }
+          await deletePendingAudio(pa.id)
         }
         for (const pp of trulyOrphanedPhotos) {
-           const fd = new FormData()
-           fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
-           fd.append('folder', 'bitacora-photos')
-           const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-           if (up.ok) {
-              const { url } = await up.json()
-              await apiFetch('/api/field-notes', {
-                 method: 'POST', body: JSON.stringify({ paddock_id: null, tags: ['GENERAL'], title: pp.title, photo_url: url })
-              })
-           }
-           await deletePendingPhoto(pp.id)
+          const fd = new FormData()
+          fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
+          fd.append('folder', 'bitacora-photos')
+          const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+          if (up.ok) {
+            const { url } = await up.json()
+            await apiFetch('/api/field-notes', {
+              method: 'POST', body: JSON.stringify({ paddock_id: null, tags: ['GENERAL'], title: pp.title, photo_url: url })
+            })
+          }
+          await deletePendingPhoto(pp.id)
         }
 
-        localStorage.setItem('rodeo_offline_queue', JSON.stringify(newQueue))
         readPending()
-        
-        if (newQueue.length === 0) {
+
+        if (newQueue.filter(q => !q.syncing).length === 0) {
           setStatus('synced')
+          // Notificar a todas las páginas que el sync terminó → pueden recargar datos
           window.dispatchEvent(new Event('rodeo_sync_completed'))
+          // También notificar al SW para que difunda a otras tabs
+          if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'SYNC_COMPLETED' })
+          }
         } else {
-          setStatus('offline') // some failed
+          setStatus('offline') // algunos fallaron, siguen pendientes
         }
 
         setTimeout(() => {
           setVisible(false)
-          if (newQueue.length === 0) setStatus('online')
-          isSyncingGlobal = false  // liberar lock después de mostrar el toast
+          if (newQueue.filter(q => !q.syncing).length === 0) setStatus('online')
+          isSyncingGlobal = false
         }, 3000)
       } else {
         setStatus('online')
@@ -198,6 +264,7 @@ export default function OfflineIndicator() {
       }
     }
 
+    // Estado inicial
     if (!navigator.onLine) {
       setStatus('offline')
       setVisible(true)
@@ -220,12 +287,18 @@ export default function OfflineIndicator() {
     offline: {
       bg: 'bg-gray-900', border: 'border-gray-700', icon: WifiOff, iconColor: 'text-red-400',
       text: 'Sin conexión',
-      sub: pendingCount > 0 ? `${pendingCount} nota${pendingCount > 1 ? 's' : ''} pendiente${pendingCount > 1 ? 's' : ''} de sincronizar` : 'Podés seguir usando RODEO sin internet',
+      sub: pendingCount > 0
+        ? `${pendingCount} registro${pendingCount > 1 ? 's' : ''} pendiente${pendingCount > 1 ? 's' : ''} — se sincronizan al reconectar`
+        : 'Podés seguir usando RODEO sin internet',
       subColor: 'text-gray-400',
     },
     syncing: {
-      bg: 'bg-gray-900', border: 'border-gray-700', icon: RefreshCw, iconColor: 'text-amber-400',
-      text: 'Sincronizando...', sub: `Subiendo ${pendingCount} registro${pendingCount > 1 ? 's' : ''} pendiente${pendingCount > 1 ? 's' : ''}`, subColor: 'text-amber-400',
+      bg: 'bg-gray-900', border: 'border-amber-700', icon: RefreshCw, iconColor: 'text-amber-400',
+      text: 'Sincronizando...',
+      sub: pendingCount > 0
+        ? `Subiendo ${pendingCount} registro${pendingCount > 1 ? 's' : ''} pendiente${pendingCount > 1 ? 's' : ''}...`
+        : 'Actualizando datos...',
+      subColor: 'text-amber-400',
     },
     synced: {
       bg: 'bg-gray-900', border: 'border-green-800', icon: CheckCircle2, iconColor: 'text-green-400',
@@ -241,7 +314,11 @@ export default function OfflineIndicator() {
   const Icon = cfg.icon
 
   return (
-    <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[9999] ${cfg.bg} border ${cfg.border} rounded-2xl px-4 py-2.5 shadow-2xl flex items-center gap-3 transition-all duration-500 animate-in slide-in-from-top-4`} role="status" aria-live="polite">
+    <div
+      className={`fixed top-4 left-1/2 -translate-x-1/2 z-[9999] ${cfg.bg} border ${cfg.border} rounded-2xl px-4 py-2.5 shadow-2xl flex items-center gap-3 transition-all duration-500 animate-in slide-in-from-top-4`}
+      role="status"
+      aria-live="polite"
+    >
       <Icon className={`w-4 h-4 shrink-0 ${cfg.iconColor} ${status === 'syncing' ? 'animate-spin' : ''}`} />
       <div>
         <p className="text-xs font-black text-white">{cfg.text}</p>
@@ -251,6 +328,10 @@ export default function OfflineIndicator() {
   )
 }
 
+/**
+ * Agrega un ítem a la cola offline para sincronizar cuando haya conexión.
+ * Cada ítem recibe un idempotency_key único para deduplicación en el servidor.
+ */
 export function addToOfflineQueue(item: {
   type: string
   data: Record<string, unknown>
@@ -260,10 +341,14 @@ export function addToOfflineQueue(item: {
 }) {
   try {
     const queue = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
-    queue.push(item)
+    queue.push({
+      ...item,
+      idempotency_key: generateIdempotencyKey(),
+      syncing: false,
+    })
     localStorage.setItem('rodeo_offline_queue', JSON.stringify(queue))
     window.dispatchEvent(new Event('rodeo_queue_updated'))
   } catch (e) {
-    console.error('Failed to add to offline queue:', e)
+    console.error('[Offline Queue] Failed to add item:', e)
   }
 }

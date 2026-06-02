@@ -4,7 +4,7 @@
  * Garantiza que la app funcione completamente offline después de la primera carga.
  */
 
-const CACHE_VERSION = 'v6'
+const CACHE_VERSION = 'v7'
 const SHELL_CACHE   = `rodeo-shell-${CACHE_VERSION}`
 const API_CACHE     = `rodeo-api-${CACHE_VERSION}`
 const ASSET_CACHE   = `rodeo-assets-${CACHE_VERSION}`
@@ -12,6 +12,7 @@ const IMAGE_CACHE   = `rodeo-images-${CACHE_VERSION}`
 const MAP_CACHE     = `rodeo-maps-${CACHE_VERSION}`
 
 // Rutas del shell de la app que se pre-cachean en install
+// Incluye todas las secciones principales para soporte offline completo
 const SHELL_URLS = [
   '/',
   '/dashboard',
@@ -22,6 +23,10 @@ const SHELL_URLS = [
   '/dashboard/grazing',
   '/dashboard/insights',
   '/dashboard/planes',
+  '/dashboard/agenda',
+  '/dashboard/paddocks-list',
+  '/dashboard/tareas',
+  '/dashboard/profile',
   '/_offline',
   '/manifest.json',
 ]
@@ -279,10 +284,20 @@ function fetchWithTimeout(request, ms) {
 self.addEventListener('message', event => {
   if (event.data?.type === 'SYNC_OFFLINE_QUEUE') {
     // El sync real lo maneja OfflineIndicator.tsx en el cliente
-    // El SW solo confirma recepción
+    // El SW solo confirma recepción y notifica a todos los clientes
     event.source?.postMessage({ type: 'SYNC_ACK' })
+    // Notificar a todas las tabs/windows abiertas
+    self.clients.matchAll({ type: 'window' }).then(clients => {
+      clients.forEach(c => c.postMessage({ type: 'SYNC_STARTED' }))
+    })
   }
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting()
+  }
+  if (event.data?.type === 'SYNC_COMPLETED') {
+    // Notificar a todas las tabs que el sync terminó (para que recarguen datos)
+    self.clients.matchAll({ type: 'window' }).then(clients => {
+      clients.forEach(c => c.postMessage({ type: 'SYNC_COMPLETED' }))
+    })
   }
 })

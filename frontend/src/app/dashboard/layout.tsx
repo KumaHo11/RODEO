@@ -137,20 +137,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // ── Load notifications + pending tasks ──────────────────────────────────────
   const loadNotifications = useCallback(async () => {
     if (!user) return
+    // Guard: si no hay conexión real, no bloquear la UI esperando la API
+    // navigator.onLine puede ser true en iOS aunque no haya red — igual intentamos
+    // pero con timeout muy corto (3s) para no bloquear la navegación
     try {
       const idToken = await user.getIdToken()
-      const res = await fetch('/api/notifications', {
-        headers: { Authorization: `Bearer ${idToken}` },
-      })
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 3000)
+      let res: Response
+      try {
+        res = await fetch('/api/notifications', {
+          headers: { Authorization: `Bearer ${idToken}` },
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timeout)
+      }
       if (res.ok) {
         const data = await res.json()
         setNotifications(data.notifications || [])
         setPendingTasks(data.pendingTasks || 0)
       }
-    } catch (err) {
-      console.error('Error loading notifications:', err)
+    } catch (err: any) {
+      // AbortError (timeout) o TypeError (red caída) → fallar silenciosamente
+      if (err?.name !== 'AbortError') {
+        console.warn('[Layout] loadNotifications failed (possibly offline):', err?.message)
+      }
+      // Mantener notificaciones cacheadas en estado (no limpiar)
     }
   }, [user])
+
 
   useEffect(() => { loadNotifications() }, [loadNotifications])
 

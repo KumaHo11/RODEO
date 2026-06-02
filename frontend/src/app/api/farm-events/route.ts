@@ -1,6 +1,6 @@
 /**
  * GET  /api/farm-events  — Eventos de la organización
- * POST /api/farm-events  — Crea un nuevo evento
+ * POST /api/farm-events  — Crea un nuevo evento (soporta X-Idempotency-Key para deduplicación offline)
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
@@ -107,6 +107,28 @@ export async function POST(req: NextRequest) {
     const auth = await getOrgId(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
+    // ── Idempotency check (deduplicación offline) ────────────────────────────
+    // Si el cliente envía X-Idempotency-Key, verificamos si ya existe un evento
+    // con esa clave creado en las últimas 24h. Si existe, retornamos el id existente
+    // sin crear un duplicado. Clave cuando iOS dispara 'online' múltiples veces.
+    const idempotencyKey = req.headers.get('X-Idempotency-Key')
+    if (idempotencyKey) {
+      try {
+        const existing = await queryOne<{ id: string }>(
+          `SELECT id FROM farm_events
+           WHERE org_id = $1 AND idempotency_key = $2
+             AND created_at > NOW() - INTERVAL '24 hours'
+           LIMIT 1`,
+          [auth.orgId, idempotencyKey]
+        )
+        if (existing?.id) {
+          return NextResponse.json({ id: existing.id, deduplicated: true }, { status: 200 })
+        }
+      } catch {
+        // Si la columna idempotency_key no existe aún, ignorar silenciosamente
+      }
+    }
+
     const body = await req.json()
     const {
       title, event_type, event_date, end_date,
@@ -169,6 +191,18 @@ export async function POST(req: NextRequest) {
         )
       } catch (optErr: any) {
         console.warn('farm-events source skipped (run migration):', optErr.message)
+      }
+    }
+
+    // Step 5: idempotency_key (opcional — salta si la columna no existe)
+    if (id && idempotencyKey) {
+      try {
+        await mutate(
+          `UPDATE farm_events SET idempotency_key = $1 WHERE id = $2`,
+          [idempotencyKey, id]
+        )
+      } catch {
+        // Columna no existe aún — ejecutar: ALTER TABLE farm_events ADD COLUMN idempotency_key TEXT;
       }
     }
 
