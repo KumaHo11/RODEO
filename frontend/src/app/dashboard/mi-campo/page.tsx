@@ -641,7 +641,7 @@ export default function MiCampoPage() {
               title: '¿Eliminar los límites del campo?',
               description: 'Podés volver a configurarlo cuando quieras desde esta sección.',
               confirmLabel: 'Sí, eliminar',
-              variant: 'warning',
+              variant: 'danger',
             })
             if (ok) {
               await apiFetch('/api/organizations', {
@@ -1050,6 +1050,7 @@ function FieldSetupModalInline({
                 type="text" value={setupFieldLocation}
                 onChange={e => setSetupFieldLocation(e.target.value)}
                 onFocus={() => { locationSuggs.length > 0 && setShowSuggs(true); updateLocPos() }}
+                onClick={() => { if (showSuggs) setShowSuggs(false) }}
                 onBlur={() => setTimeout(() => setShowSuggs(false), 200)}
                 placeholder="Ciudad, provincia o país..."
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-4 pr-11 py-2.5 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-400 outline-none transition-all placeholder:font-normal placeholder:text-gray-300"

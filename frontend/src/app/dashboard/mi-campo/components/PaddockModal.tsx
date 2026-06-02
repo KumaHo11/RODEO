@@ -286,7 +286,7 @@ function SearchableMultiSelect({
         <button
           key={opt}
           type="button"
-          onClick={() => { add(opt); setOpen(false) }}
+          onClick={() => { add(opt) }}
           className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 active:bg-green-100 transition-colors border-b border-gray-50 last:border-0"
         >
           <span className="font-medium">{opt.split(' (')[0]}</span>
@@ -298,7 +298,7 @@ function SearchableMultiSelect({
       {canAddCustom && (
         <button
           type="button"
-          onClick={() => { add(query.trim()); setOpen(false) }}
+          onClick={() => { add(query.trim()) }}
           className="w-full text-left px-4 py-2.5 text-sm text-green-700 hover:bg-green-50 transition-colors font-bold border-t border-gray-100"
         >
           + Agregar &ldquo;{query.trim()}&rdquo;
