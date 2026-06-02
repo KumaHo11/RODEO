@@ -4,7 +4,7 @@
  * Garantiza que la app funcione completamente offline después de la primera carga.
  */
 
-const CACHE_VERSION = 'v5'
+const CACHE_VERSION = 'v6'
 const SHELL_CACHE   = `rodeo-shell-${CACHE_VERSION}`
 const API_CACHE     = `rodeo-api-${CACHE_VERSION}`
 const ASSET_CACHE   = `rodeo-assets-${CACHE_VERSION}`
@@ -36,11 +36,24 @@ self.addEventListener('install', event => {
       const results = await Promise.allSettled(
         SHELL_URLS.map(async url => {
           try {
-            // redirect:'follow' → si el middleware redirige a /login, seguimos
-            // el redirect y cacheamos la respuesta final (la página de login o la app)
-            const response = await fetch(url, { redirect: 'follow' })
+            // credentials: 'same-origin' envía la cookie de sesión para evitar redirecciones del middleware.
+            // redirect: 'follow' por si acaso el middleware redirige (ej. token expirado).
+            const response = await fetch(url, { redirect: 'follow', credentials: 'same-origin' })
             if (response && (response.ok || response.status === 0)) {
-              await cache.put(url, response)
+              let finalResponse = response
+              // IMPORTANTÍSIMO: Si la respuesta fue redirigida, limpiar el flag 'redirected'
+              // creando una nueva Response. De lo contrario, Chrome arrojará ERR_FAILED al intentar
+              // servir esta respuesta a un fetch() de Next.js.
+              if (response.redirected) {
+                const cloned = response.clone()
+                const body = await cloned.blob()
+                finalResponse = new Response(body, {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers: response.headers
+                })
+              }
+              await cache.put(url, finalResponse)
             }
           } catch (err) {
             console.warn(`[SW] No se pudo pre-cachear ${url}:`, err)
