@@ -10,6 +10,9 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   output: "standalone", // Required for Cloud Run Docker deployment
+  // turbopack: {} — requerido en Next.js 16 cuando hay config webpack de plugins
+  // (next-pwa inyecta webpack config internamente; esto silencia el error)
+  turbopack: {},
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.supabase.co" },
