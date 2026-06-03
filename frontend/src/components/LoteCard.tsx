@@ -59,15 +59,20 @@ export default function LoteCard({
 }: LoteCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
 
+  // Safe totales — falls back to computing from hijos if API didn't send them
+  const headCount = lote.totales?.head_count ?? lote.hijos.reduce((s, h) => s + (Number(h.head_count) || 0), 0)
+  const totalEv = lote.totales?.total_ev ?? lote.hijos.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
+  const consumoKgMsDia = lote.totales?.consumo_kg_ms_dia ?? Math.round(totalEv * 11)
+
+  const safeTotales = {
+    head_count: headCount,
+    total_ev: totalEv,
+    consumo_kg_ms_dia: consumoKgMsDia,
+  }
+
   // Calcular distribución fisiológica para la progress bar
   const physioDistribution = React.useMemo(() => {
-    // Defensive: compute totales locally if API didn't include them
-    const totales = lote.totales ?? {
-      head_count: lote.hijos.reduce((s, h) => s + (Number(h.head_count) || 0), 0),
-      total_ev:   lote.hijos.reduce((s, h) => s + (Number(h.total_ev)   || 0), 0),
-      consumo_kg_ms_dia: 0,
-    }
-    const totalCabezas = totales.head_count || 1
+    const totalCabezas = safeTotales.head_count || 1
     const groups: { key: string; label: string; cabezas: number; pct: number; color: string }[] = []
 
     // Agrupar por physiological_category
@@ -88,14 +93,7 @@ export default function LoteCard({
     })
 
     return groups.sort((a, b) => b.cabezas - a.cabezas)
-  }, [lote])
-
-  // Safe totales — falls back to computing from hijos if API didn't send them
-  const safeTotales = lote.totales ?? {
-    head_count: lote.hijos.reduce((s, h) => s + (Number(h.head_count) || 0), 0),
-    total_ev:   lote.hijos.reduce((s, h) => s + (Number(h.total_ev)   || 0), 0),
-    consumo_kg_ms_dia: Math.round(lote.hijos.reduce((s, h) => s + (Number(h.total_ev) || 0), 0) * 11),
-  }
+  }, [lote.hijos, safeTotales.head_count])
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">

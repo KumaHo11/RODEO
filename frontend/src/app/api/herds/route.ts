@@ -48,6 +48,7 @@ function buildHierarchy(herds: any[]) {
       totales: {
         head_count:        Math.round(totalCabezas),
         total_ev:          Math.round(totalEV * 10) / 10,
+        consumo_kg_ms_dia: Math.round(totalEV * 11),
       },
     }
   })
