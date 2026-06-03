@@ -725,6 +725,16 @@ export default function SeasonPlanModal({
                                     </div>
                                   </div>
                                 )}
+                                {msHa > 0 && availDays <= 0 && (
+                                  <div className="group relative">
+                                    <span className="flex items-center gap-0.5 text-[9px] font-black text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-md cursor-help">
+                                      <AlertTriangle className="w-2.5 h-2.5" />Riesgo sobrepastoreo
+                                    </span>
+                                    <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block w-48 bg-gray-900 text-white text-[10px] font-medium rounded-lg p-2 shadow-xl z-20">
+                                      El forraje actual está por debajo del remanente objetivo. No es posible planificar pastoreos.
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-[10px] text-gray-400">{areaHa.toFixed(1)} ha · {msHa > 0 ? `${msHa.toLocaleString('es')} kg MS/ha` : 'Sin datos MS'}</span>

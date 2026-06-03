@@ -58,9 +58,27 @@ export function detectForageGaps(
 
   if (activePlans.length === 0) return gaps
 
+  // Solo consideramos huecos (gaps) si están acotados (bounded) entre
+  // el primer día planificado y el último. Si no hay nada planificado 
+  // al final del horizonte, no es un gap, es simplemente que no se planificó aún.
+  let minDateStr = activePlans[0].entry_date!
+  let maxDateStr = activePlans[0].exit_date!
+  for (const p of activePlans) {
+    if (p.entry_date! < minDateStr) minDateStr = p.entry_date!
+    if (p.exit_date! > maxDateStr) maxDateStr = p.exit_date!
+  }
+
   let d = 0
   while (d < horizonDays) {
     const dateStr = addDays(today, d)
+
+    // Si el día está fuera de los límites de la planificación general,
+    // no lo consideramos como "hueco" (gap) porque el usuario no ha 
+    // llegado a planificar esa parte aún.
+    if (dateStr < minDateStr || dateStr >= maxDateStr) {
+      d++
+      continue
+    }
 
     // Is any committed plan covering this exact day?
     const covered = activePlans.some(p =>
@@ -72,6 +90,9 @@ export function detectForageGaps(
       const gapStartDay = d
       while (d < horizonDays) {
         const next = addDays(today, d + 1)
+        if (next >= maxDateStr) {
+          break
+        }
         const nextCovered = activePlans.some(p =>
           p.entry_date! <= next && p.exit_date! > next
         )
