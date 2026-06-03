@@ -2234,7 +2234,7 @@ function InteractiveGantt({
     )}
 
     {/* ANNUAL VIEW HERD MODAL */}
-    {showAnnualHerdModal && (
+    {showAnnualHerdModal && typeof document !== 'undefined' && createPortal(
       <>
         <div className="fixed inset-0 z-[9999] bg-gray-900/40 backdrop-blur-sm" onClick={() => setShowAnnualHerdModal(false)} />
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 pointer-events-none">
@@ -2418,7 +2418,8 @@ function InteractiveGantt({
             </div>
           </div>
         </div>
-      </>
+      </>,
+      document.body
     )}
     </>
   )

@@ -3,9 +3,7 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
   dest: "public",
-  // SW manual en public/sw.js — desactivamos la generación automática de Workbox
-  // para evitar que sobreescriba nuestro sw.js custom (necesario con output:standalone)
-  disable: true,
+  disable: process.env.NODE_ENV === "development",
 });
 
 const nextConfig: NextConfig = {
