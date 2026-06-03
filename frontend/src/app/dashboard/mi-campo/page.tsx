@@ -41,6 +41,7 @@ export default function MiCampoPage() {
   const { confirm, ConfirmModal } = useConfirm()
   const searchParams = useSearchParams()
   const editPaddockId = searchParams.get('editPaddock')
+  const returnTo = searchParams.get('returnTo')
   const [paddocks, setPaddocks]             = useState<any[]>([])
   const [org, setOrg]                       = useState<any>(null)
   const [fieldBoundary, setFieldBoundary]   = useState<any>(null)
@@ -687,6 +688,7 @@ export default function MiCampoPage() {
           onAssignPolygon={handleAssignPolygon}
           onEditPolygon={handleEditPolygon}
           defaultEditPaddockId={editPaddockId || undefined}
+          returnTo={returnTo || undefined}
           onDeletePaddock={async (id) => {
             try {
               const res = await apiFetch(`/api/paddocks/${id}`, { method: 'DELETE' })

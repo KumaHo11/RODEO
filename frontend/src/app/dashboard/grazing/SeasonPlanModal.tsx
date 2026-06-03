@@ -25,7 +25,7 @@ import distance from '@turf/distance'
 import { apiFetch } from '@/lib/apiFetch'
 import { projectEVDemand, calculateBaseEV, type ParitionSeason, type BioMilestone } from '@/lib/grazing/evProjection'
 import {
-  paddockForageOffer, HARVEST_EFFICIENCY, type HarvestEfficiency,
+  paddockForageOffer,
   calculateUsableForage, calculateGrazingDays,
   BASE_GROWTH_RATE_KG_HA_DAY,
 } from '@/lib/grazing/forageCurves'
@@ -662,7 +662,7 @@ export default function SeasonPlanModal({
                 </div>
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
                   {supplyData.map(({ paddock, msHa, areaHa, usableMs, availDays, isSelected }) => {
-                    const isActive = paddock.is_active !== false
+                    const isActive = paddock.is_active !== false && msHa > 0
                     const isDismissed = dismissedPaddockIds.includes(paddock.id)
                     const isStart = startPaddockId === paddock.id
                     const isChecked = isSuggestedMode ? !isDismissed : isSelected
@@ -714,6 +714,16 @@ export default function SeasonPlanModal({
                                   <span className="flex items-center gap-0.5 text-[9px] font-black text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-md">
                                     <Droplets className="w-2.5 h-2.5" />Riesgo hídrico
                                   </span>
+                                )}
+                                {msHa === 0 && (
+                                  <div className="group relative">
+                                    <span className="flex items-center gap-0.5 text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md cursor-help">
+                                      <AlertTriangle className="w-2.5 h-2.5" />Sin MS
+                                    </span>
+                                    <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block w-48 bg-gray-900 text-white text-[10px] font-medium rounded-lg p-2 shadow-xl z-20">
+                                      Sin materia seca declarada no es posible planificar. Actualizá este valor.
+                                    </div>
+                                  </div>
                                 )}
                               </div>
                               <div className="flex items-center gap-2 mt-0.5">
@@ -804,14 +814,6 @@ export default function SeasonPlanModal({
                           </div>
                         </div>
                         <p className="text-[10px] text-gray-400 mt-0.5">Colchón ante sequía u eventos climáticos adversos</p>
-                      </div>
-                      <div className="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5">
-                        {(['days', 'pct', 'kg'] as const).map(m => (
-                          <button key={m} type="button" onClick={() => setDroughtReserveMode(m)}
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-black transition-all ${droughtReserveMode === m ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                            {m === 'days' ? 'Días' : m === 'pct' ? '%' : 'kg MS'}
-                          </button>
-                        ))}
                       </div>
                     </div>
                     {droughtReserveDays === 0 && suggestedReserveDays > 0 && (

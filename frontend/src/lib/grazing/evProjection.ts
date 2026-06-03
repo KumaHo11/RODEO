@@ -207,7 +207,6 @@ export interface GrowthDataPoint {
   monthLabel: string     // ej: "Jun '25"
   projectedWeightKg: number
   evTotal: number
-  dailyConsumptionKgMS: number   // kg de Materia Seca / día (EV × 11)
 }
 
 export interface GrowthProjectionInput {
@@ -244,11 +243,10 @@ export function generateGrowthProjection(
 
     const projectedWeightKg = calculateProjectedWeight(avgWeightKg, gdpKgDay, daysSince)
     const evTotal = calculateProjectedEV(physioCategory, projectedWeightKg, headCount)
-    const dailyConsumptionKgMS = parseFloat((evTotal * 11).toFixed(1))
 
     const monthLabel = targetDate.toLocaleString('es', { month: 'short', year: '2-digit' })
 
-    return { month: i, monthLabel, projectedWeightKg, evTotal, dailyConsumptionKgMS }
+    return { month: i, monthLabel, projectedWeightKg, evTotal }
   })
 }
 

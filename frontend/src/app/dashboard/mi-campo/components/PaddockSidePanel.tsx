@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous, Info } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
@@ -57,6 +58,7 @@ interface Props {
   onAssignPolygon?: (paddockId: string) => void
   onEditPolygon?: (paddockId: string) => void
   defaultEditPaddockId?: string
+  returnTo?: string
   planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
   /** Called when KML is parsed — features are shown on the map interactively */
   onKmlFeaturesLoaded?: (features: ParsedKmlFeature[]) => void
@@ -114,12 +116,13 @@ export default function PaddockSidePanel({
   paddocks, org, loading, selectedPaddockId, onSelectPaddock, onSaveTechnicalData,
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0,
   onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField, onDataRefresh,
-  onFieldImageUploaded, onAssignPolygon, onEditPolygon, defaultEditPaddockId, planningDefaults,
+  onFieldImageUploaded, onAssignPolygon, onEditPolygon, defaultEditPaddockId, returnTo, planningDefaults,
   onKmlFeaturesLoaded,
 }: Props) {
   const [search, setSearch]     = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [bitacoraModalOpen, setBitacoraModalOpen] = useState(false)
+  const router = useRouter()
   const { user } = useAuth()
   const { hasFeature } = usePlan()
   const { latestByPaddock } = useClimateAnalytics()
@@ -429,7 +432,7 @@ export default function PaddockSidePanel({
                 return (
                   <div
                     key={paddock.id}
-                    className={`w-full rounded-2xl border transition-all overflow-hidden cursor-pointer group ${
+                    className={`w-full rounded-2xl border transition-all cursor-pointer group ${
                       !isActive
                         ? 'bg-gray-50 border-gray-200 opacity-60 shadow-sm'
                         : isSelected
@@ -441,11 +444,20 @@ export default function PaddockSidePanel({
                     {/* ══ ZONA 1: IDENTIDAD ══════════════════════════════ */}
                     <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className={`text-lg font-black leading-tight truncate ${
-                          isActive ? 'text-gray-950' : 'text-gray-400'
-                        }`}>
-                          {paddock.name}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className={`text-lg font-black leading-tight truncate ${
+                            isActive ? 'text-gray-950' : 'text-gray-400'
+                          }`}>
+                            {paddock.name}
+                          </h3>
+                          {ms === 0 && (
+                            <div className="group relative shrink-0 z-10">
+                              <span title="Sin materia seca declarada no es posible planificar pastoreos en este potrero." className="flex items-center gap-0.5 text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md cursor-help whitespace-nowrap">
+                                <AlertTriangle className="w-2.5 h-2.5" />Sin MS
+                              </span>
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[10px] font-bold text-gray-500 tabular-nums">
                             {Number(paddock.area_ha || 0).toFixed(1)} ha
@@ -525,7 +537,10 @@ export default function PaddockSidePanel({
                           </div>
                         ) : (
                           <div className="px-4 pb-3">
-                            <p className="text-[10px] text-gray-300 italic">Sin datos de MS cargados</p>
+                            <div className="bg-amber-50 text-amber-800 p-2 rounded-lg border border-amber-200 text-xs font-medium leading-tight flex items-start gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
+                              <span>Para planificar pastoreos en este potrero debés declarar la Materia Seca disponible.</span>
+                            </div>
                           </div>
                         )}
 
@@ -679,7 +694,13 @@ export default function PaddockSidePanel({
         <PaddockModal
           paddock={editingPaddock}
           ndviData={ndviData[editingPaddock.id]}
-          onClose={() => { setModalOpen(false); setEditingPaddock(null) }}
+          onClose={() => { 
+            setModalOpen(false)
+            setEditingPaddock(null)
+            if (returnTo) {
+              router.push(returnTo)
+            }
+          }}
           onSave={handleModalSave}
           onDelete={onDeletePaddock}
           onAssignPolygon={onAssignPolygon}

@@ -47,10 +47,10 @@ export async function POST(req: NextRequest) {
         ST_X(ST_Centroid(p.geom)) as lng,
         ST_Y(ST_Centroid(p.geom)) as lat,
         -- Variable forrajera
-        COALESCE(p.dry_matter_kg_ha, p.estimated_adh * 66, 0) as ms_actual,
+        p.dry_matter_kg_ha as ms_actual,
         (SELECT MAX(exit_date) FROM grazing_plans cp WHERE cp.paddock_id = p.id AND status = 'COMPLETED') as last_grazed_date
       FROM paddocks p
-      WHERE p.org_id = $1 AND p.is_grazable = true AND p.current_status = 'RESTING'
+      WHERE p.org_id = $1 AND p.is_grazable = true AND p.current_status = 'RESTING' AND p.dry_matter_kg_ha IS NOT NULL AND p.dry_matter_kg_ha > 0
     `
     const candidatesResult = await query<any>(candidateQuery, [auth.orgId])
     let candidates = candidatesResult

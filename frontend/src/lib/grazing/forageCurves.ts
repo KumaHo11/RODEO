@@ -63,15 +63,6 @@ export const BASE_GROWTH_RATE_KG_HA_DAY: number[] = [
   25,  // Dic     — Verano temprano
 ]
 
-/** Eficiencia de cosecha según sistema de pastoreo */
-export type HarvestEfficiency = 'extensivo' | 'intensivo' | 'holístico'
-
-export const HARVEST_EFFICIENCY: Record<HarvestEfficiency, number> = {
-  extensivo: 0.35,   // 35% — pastoreo continuo
-  holístico: 0.50,   // 50% — rotativo con regla del remanente
-  intensivo: 0.65,   // 65% — pastoreo de 1 día alta densidad
-}
-
 /**
  * Ajusta la tasa de crecimiento mensual por precipitación.
  *
@@ -101,7 +92,6 @@ export function paddockForageOffer(params: {
   startMonthIndex: number     // Mes de inicio (0=Enero)
   durationDays: number        // Días del período a proyectar
   rainByMonth?: Record<string, number>  // YYYY-MM → mm
-  efficiency?: HarvestEfficiency // Retained for backwards compatibility if needed
   targetRemnantKgHa?: number  // Holisitc absolute remnant approach
   startYear?: number
 }): {
@@ -112,7 +102,7 @@ export function paddockForageOffer(params: {
 } {
   const {
     initialMsKgHa, areaHa, startMonthIndex,
-    durationDays, rainByMonth = {}, efficiency, targetRemnantKgHa, startYear,
+    durationDays, rainByMonth = {}, targetRemnantKgHa, startYear,
   } = params
 
   const year = startYear ?? new Date().getFullYear()
@@ -133,10 +123,9 @@ export function paddockForageOffer(params: {
   let usableKgMs = 0
   if (targetRemnantKgHa !== undefined) {
     usableKgMs = Math.max(0, totalKgMs - (targetRemnantKgHa * areaHa))
-  } else if (efficiency) {
-    usableKgMs = totalKgMs * HARVEST_EFFICIENCY[efficiency]
   } else {
-    usableKgMs = totalKgMs * 0.5 // Default to 50% if neither is provided
+    // Si por algún error falta el remanente, asumimos 600kg/ha por defecto biológico
+    usableKgMs = Math.max(0, totalKgMs - (600 * areaHa))
   }
 
   return {

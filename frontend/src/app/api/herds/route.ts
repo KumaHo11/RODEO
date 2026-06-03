@@ -41,7 +41,6 @@ function buildHierarchy(herds: any[]) {
     const nombre       = hijos[0]?.grupo_manejo_nombre ?? hijos[0]?.name ?? 'Lote'
     const totalCabezas = hijos.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
     const totalEV      = hijos.reduce((s: number, h: any) => s + (Number(h.total_ev)   || 0), 0)
-    const consumoKgMs  = Math.round(totalEV * 11)
     return {
       grupo_manejo_id: id,
       nombre,
@@ -49,7 +48,6 @@ function buildHierarchy(herds: any[]) {
       totales: {
         head_count:        Math.round(totalCabezas),
         total_ev:          Math.round(totalEV * 10) / 10,
-        consumo_kg_ms_dia: consumoKgMs,
       },
     }
   })

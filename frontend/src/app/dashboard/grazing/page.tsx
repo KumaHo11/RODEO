@@ -104,9 +104,7 @@ const addDays = (iso: any, n: number): string => {
   return d.toISOString().split('T')[0]
 }
 
-// ─── Re-exports desde lib/grazing/evProjection (fuente de verdad canónica) ───
-// Mantenidos para compatibilidad con consumidores externos.
-export { calculateDynamicHeadcount, getDynamicHerdEV } from '@/lib/grazing/evProjection'
+// Re-exports removidos porque rompen el build de Next.js.
 
 // ── Alias local para uso interno del Gantt (evita import circular) ──
 import {
@@ -1002,8 +1000,9 @@ function InteractiveGantt({
         {/* Paddock rows — sorted by suggestedPaddockOrder when in suggested mode */}
         {orderedPaddocks.map((paddock, rowIdx) => {
           const paddockPlans = plans.filter(p => p.paddock_id === paddock.id)
-          // Dot: green if enabled (is_active), gray if disabled
-          const isEnabled = paddock.is_active !== false
+          // Dot: green if enabled (is_active) AND has MS declared, gray if disabled or no MS
+          const hasMS = Number(paddock.dry_matter_kg_ha) > 0
+          const isEnabled = paddock.is_active !== false && hasMS
           // Data from Datos de Campo slider (quality_score = 1-10)
           const qualityScore = paddock.technical_data?.quality_score as number | undefined
           const msHa = Number(paddock.dry_matter_kg_ha) || 0
@@ -1043,7 +1042,7 @@ function InteractiveGantt({
                     isEnabled ? 'text-green-500 hover:text-red-400' : 'text-gray-300 hover:text-green-500'
                   }`}
                 >
-                  {isEnabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                  {paddock.is_active !== false ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
                 </button>
                 <div className="min-w-0 flex-1 flex flex-col justify-center gap-1">
                   {/* Row 1: Nombre + badge calidad */}
@@ -1063,6 +1062,13 @@ function InteractiveGantt({
                             {qualityScore}/10
                           </span>
                         </HoverTooltip>
+                      </div>
+                    )}
+                    {!hasMS && (
+                      <div className="flex items-center gap-0.5 shrink-0" title="Sin materia seca declarada no es posible planificar pastoreos en este potrero.">
+                        <span className="flex items-center gap-0.5 text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md cursor-help">
+                          <AlertTriangle className="w-2 h-2" />Sin MS
+                        </span>
                       </div>
                     )}
                   </div>
@@ -2752,7 +2758,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
   const droughtReserve = useMemo(() => {
     const totalSupply = paddocks.reduce((sum, p) => {
-      const ms = Number(p.dry_matter_kg_ha) || Number(p.estimated_adh) * 66 || 0
+      const ms = Number(p.dry_matter_kg_ha) || 0
       return sum + (ms * Number(p.area_ha || 0))
     }, 0)
     const uEvents = [
@@ -2803,15 +2809,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     }
   }
 
-  const getRecoveryDays = (exitDate: Date, overrideDays?: number): number => {
-    if (overrideDays && overrideDays > 0) return overrideDays
-    const month = exitDate.getMonth()
-    if (month >= 8 || month <= 1) return 40
-    if (month >= 2 && month <= 4) return 65
-    return 92
-  }
+
 
   const handleGeneratePlanCycle = async (seasonPlan: any) => {
+    const getRecoveryDays = (exitDate: Date, overrideDays?: number): number => {
+      if (overrideDays && overrideDays > 0) return overrideDays
+      const month = exitDate.getMonth()
+      const customRecovery = seasonPlan?.recovery_days || {}
+      if (month >= 8 || month <= 1) return customRecovery.spring_summer || 40
+      if (month >= 2 && month <= 4) return customRecovery.autumn || 65
+      return customRecovery.winter || 92
+    }
+
     const allActivePaddocks = paddocks.filter(p => p.is_active !== false)
     const activePaddocks = allActivePaddocks.length > 0 ? allActivePaddocks : paddocks
 
@@ -4504,7 +4513,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             onRainfallChange={handleRainfallChange}
             weatherEvents={weatherEvents}
             onPaddockClick={(paddockId) => {
-              router.push(`/dashboard/mi-campo?editPaddock=${paddockId}`)
+              router.push(`/dashboard/mi-campo?editPaddock=${paddockId}&returnTo=/dashboard/grazing`)
             }}
             droughtThresholdMm={droughtThresholdMm}
             onDroughtThresholdChange={handleDroughtThresholdChange}

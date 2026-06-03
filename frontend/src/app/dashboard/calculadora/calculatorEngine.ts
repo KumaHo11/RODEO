@@ -41,25 +41,8 @@ function calcWaterBalance(precipMm: number, etMm: number, ndvi: number) {
 }
 
 
-// ─── Constantes agronómicas ──────────────────────────────────────────────────
-
-const MIN_REMNANT_MS_HA   = 900   // kg MS/ha — remanente mínimo biológico
-const HARVEST_EFFICIENCY  = 0.60  // 60% de eficiencia de cosecha en pastoreo rotativo
-
-/**
- * Tasa base de crecimiento por estación para el motor de la Calculadora.
- * Nota: Los valores son deliberadamente más conservadores que SEASONAL_BASE_GROWTH
- * de forageCurves.ts (que es la tasa de crecimiento observada de Pampa Húmeda).
- * Aquí se usa la tasa de producción neta aprovechable (descontando pérdidas biológicas).
- */
-const CALCULATOR_SEASONAL_BASE: Record<string, number> = {
-  VERANO:    28,  // 32 bruto * 0.87 eficiencia
-  OTONO:     14,  // 18 bruto * 0.78 eficiencia
-  INVIERNO:   5,  //  8 bruto * 0.62 eficiencia
-  PRIMAVERA: 35,  // 38 bruto * 0.92 eficiencia
-}
-
-// getAustralSeason importado desde lib/grazing/forageCurves.ts
+// SEASONAL_BASE_GROWTH importado desde lib/grazing/forageCurves.ts
+import { SEASONAL_BASE_GROWTH } from '@/lib/grazing/forageCurves'
 
 // ─── Tipos públicos ──────────────────────────────────────────────────────────
 
@@ -154,7 +137,7 @@ export function runCalculator(input: CalculatorInput): CalculatorResult {
   // ── 3. Stock forrajero ───────────────────────────────────────────────────
   const stockTotalKg       = msKgHa * totalAreaHa
   const disponiblePorHa    = Math.max(0, msKgHa - remnantMsKgHa)
-  const stockAprovechableKg = disponiblePorHa * totalAreaHa * HARVEST_EFFICIENCY
+  const stockAprovechableKg = disponiblePorHa * totalAreaHa
 
   // ── 4. Clima: ET y Balance Hídrico ───────────────────────────────────────
   const et = calcET(temperaturaC, radiacionSolar, humidityPct, windKmh)
@@ -164,7 +147,7 @@ export function runCalculator(input: CalculatorInput): CalculatorResult {
 
   // ── 5. Tasa de crecimiento ajustada ─────────────────────────────────────
   const season     = getAustralSeason(currentMonth)
-  const baseGrowth = CALCULATOR_SEASONAL_BASE[season]
+  const baseGrowth = SEASONAL_BASE_GROWTH[season]
 
   // Factor NDVI (cobertura vegetal)
   let ndviMult = 0.70
