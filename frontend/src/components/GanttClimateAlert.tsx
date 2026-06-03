@@ -21,6 +21,7 @@ import {
   Thermometer, Snowflake, CloudRain, AlertTriangle,
   X, ChevronRight, CheckCircle2, Info,
   TrendingDown, Clock, CloudLightning,
+  Droplets, Sun, Wind, Cloud
 } from 'lucide-react'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -88,53 +89,34 @@ function buildReason(
   stressType: string | undefined,
   originalDays: number,
   adjustedDays: number
-): { title: string; body: string; action: string; factors: { label: string; desc: string; icon: string }[] } {
+): { title: string; body: string; action: string; factors: { label: string; desc: string; icon: React.ReactNode }[] } {
   const delta = originalDays - adjustedDays
 
   // Factores climáticos detectados según el tipo de estrés dominante
-  const factorsByStress: Record<string, { label: string; desc: string; icon: string }[]> = {
+  const factorsByStress: Record<string, { label: string; desc: string; icon: React.ReactNode }[]> = {
     heat: [
-      { icon: '🌡️', label: 'Temperatura alta', desc: 'Por encima de 30°C el crecimiento del pasto se reduce significativamente porque la planta usa energía en transpirar en lugar de crecer.' },
-      { icon: '💧', label: 'Estrés hídrico', desc: 'El calor aumenta la evapotranspiración: el suelo pierde agua más rápido, limitando el rebrote.' },
-      { icon: '☀️', label: 'Radiación intensa', desc: 'La alta radiación solar combinada con calor puede quemar los meristemas activos del pasto.' },
+      { icon: <Thermometer className="w-5 h-5 text-red-500" />, label: 'Estrés por calor', desc: 'El ganado gasta energía extra intentando refrescarse, y el estrés térmico altera su metabolismo, reduciendo la eficiencia.' },
+      { icon: <Sun className="w-5 h-5 text-amber-500" />, label: 'Búsqueda de sombra', desc: 'El rodeo se agrupa en zonas de sombra, pisoteando y desperdiciando una gran cantidad de forraje en esas áreas.' },
     ],
     cold: [
-      { icon: '🌡️', label: 'Temperatura baja', desc: 'Debajo de 5–8°C el crecimiento del pasto se detiene: las enzimas del metabolismo vegetal dejan de funcionar.' },
-      { icon: '💧', label: 'Lluvia y barro', desc: 'El exceso de humedad en el suelo dificulta el ingreso del rodeo y aumenta el pisoteo, dañando la base de las plantas.' },
-      { icon: '☁️', label: 'Baja radiación solar', desc: 'Los días nublados y cortos reducen la fotosíntesis, limitando la tasa de crecimiento diario.' },
-    ],
-    drought: [
-      { icon: '🏜️', label: 'Déficit hídrico', desc: 'Sin lluvias recientes el suelo está seco: el pasto entra en latencia y casi no crece.' },
-      { icon: '🌡️', label: 'Temperatura elevada', desc: 'El calor seco acelera la evaporación del poco agua disponible, agravando la sequía.' },
-      { icon: '💨', label: 'Viento seco', desc: 'El viento aumenta la transpiración de la planta y seca el suelo más rápido.' },
-    ],
-    storm: [
-      { icon: '⛈️', label: 'Tormenta / granizo', desc: 'Las condiciones extremas pueden dañar físicamente el pasto y hacer inseguro el ingreso del rodeo.' },
-      { icon: '💧', label: 'Exceso de lluvia', desc: 'El suelo saturado no permite el ingreso del rodeo sin riesgo de compactación severa.' },
-      { icon: '💨', label: 'Viento fuerte', desc: 'Los vientos superiores a 50 km/h generan estrés en las plantas y dificultan el manejo del rodeo.' },
+      { icon: <Thermometer className="w-5 h-5 text-blue-400" />, label: 'Requerimiento térmico', desc: 'Las bajas temperaturas obligan al animal a consumir más alimento simplemente para mantener su temperatura corporal.' },
+      { icon: <Droplets className="w-5 h-5 text-blue-600" />, label: 'Barro y pisoteo', desc: 'El exceso de humedad genera barro. El animal camina más pesado y entierra gran cantidad de pasto al pisar, aumentando el desperdicio.' },
     ],
     default: [
-      { icon: '🌡️', label: 'Temperatura', desc: 'Las temperaturas fuera del rango óptimo (8–25°C) reducen la tasa de crecimiento diario del pasto.' },
-      { icon: '💨', label: 'Viento', desc: 'El viento aumenta la evapotranspiración y puede enfriar o resecar el canopeo, frenando el rebrote.' },
-      { icon: '☀️', label: 'Radiación solar', desc: 'La fotosíntesis depende de la luz disponible. Menos sol significa menos energía para crecer.' },
-      { icon: '💧', label: 'Humedad del suelo', desc: 'Tanto la sequía como el exceso de agua limitan el acceso de las raíces a nutrientes y frenan el crecimiento.' },
+      { icon: <AlertTriangle className="w-5 h-5 text-orange-500" />, label: 'Condiciones adversas', desc: 'El clima extremo obliga a los animales a gastar más energía y aumenta el desperdicio de forraje por pisoteo o búsqueda de reparo.' },
     ],
   }
 
   const stressTitles: Record<string, string> = {
-    heat:    `Estadía reducida — condiciones de calor`,
+    heat:    `Estadía reducida — consumo por calor`,
     cold:    `Estadía reducida — frío y barro`,
-    drought: `Estadía reducida — déficit hídrico`,
-    storm:   `Estadía reducida — tormenta`,
-    default: `Estadía ajustada por condiciones climáticas`,
+    default: `Estadía ajustada por aumento de demanda`,
   }
 
   const stressBodies: Record<string, string> = {
-    heat:    `El calor intenso y la evapotranspiración reducen el crecimiento del pasto. El plan estimaba ${originalDays} días — el clima ajusta a ${adjustedDays} días útiles.`,
-    cold:    `El frío, el barro y la baja radiación frenan el rebrote. En lugar de ${originalDays} días, este potrero rinde ${adjustedDays} días útiles.`,
-    drought: `La falta de lluvias mantiene el suelo seco y el pasto en latencia. El potrero tiene menos días disponibles de lo planeado (${originalDays} → ${adjustedDays}).`,
-    storm:   `Las condiciones extremas acortan el tiempo de pastoreo seguro: de ${originalDays} días planificados quedan ${adjustedDays} días viables.`,
-    default: `Las condiciones climáticas actuales combinan varios factores que reducen la tasa de crecimiento del pasto. El plan estimaba ${originalDays} días — ahora son ${adjustedDays}.`,
+    heat:    `El estrés térmico eleva los requerimientos y el desperdicio por sombra. El plan estimaba ${originalDays} días — el aumento de demanda ajusta a ${adjustedDays} días útiles.`,
+    cold:    `El frío extremo y el barro incrementan el consumo por termorregulación y el desperdicio. En lugar de ${originalDays} días, rinde ${adjustedDays} días útiles.`,
+    default: `Las condiciones ambientales elevan el requerimiento efectivo del rodeo. El plan estimaba ${originalDays} días — ahora son ${adjustedDays}.`,
   }
 
   const key = stressType ?? 'default'
@@ -198,7 +180,7 @@ function ClimateAlertDrawer({
               </div>
               <div>
                 <p className={`text-[10px] font-black uppercase tracking-widest ${cfg.iconColor} mb-0.5`}>
-                  Impacto Climático · {paddockName}
+                  IMPACTO CLIMÁTICO - {paddockName}
                 </p>
                 <h3 className={`text-sm font-black ${cfg.textColor} leading-tight`}>
                   {reason.title}
@@ -256,9 +238,9 @@ function ClimateAlertDrawer({
             </p>
             <p className="text-sm text-gray-600 leading-relaxed">{reason.body}</p>
             {alertMessage && (
-              <div className={`mt-3 flex items-start gap-2 px-3 py-2.5 rounded-xl border ${cfg.border} ${cfg.bg}`}>
-                <Info className={`w-3.5 h-3.5 ${cfg.iconColor} shrink-0 mt-0.5`} />
-                <p className={`text-xs leading-relaxed ${cfg.textColor}`}>{alertMessage}</p>
+              <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-200 bg-amber-50`}>
+                <Info className={`w-3.5 h-3.5 text-amber-600 shrink-0`} />
+                <p className={`text-xs font-semibold text-amber-800`}>{alertMessage}</p>
               </div>
             )}
           </div>
@@ -267,15 +249,17 @@ function ClimateAlertDrawer({
           {reason.factors.length > 0 && (
             <div>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                Factores que reducen el crecimiento
+                Factores que elevan el consumo
               </p>
               <div className="space-y-2">
                 {reason.factors.map((f, i) => (
-                  <div key={i} className="flex items-start gap-3 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-                    <span className="text-base leading-none shrink-0 mt-0.5">{f.icon}</span>
+                  <div key={i} className="flex items-start gap-3 bg-gray-50 rounded-xl px-3 py-3 border border-gray-100">
+                    <div className="shrink-0 flex items-center justify-center bg-white rounded-full p-1.5 shadow-sm border border-gray-100">
+                      {f.icon}
+                    </div>
                     <div>
-                      <p className="text-xs font-black text-gray-700">{f.label}</p>
-                      <p className="text-[10px] text-gray-500 leading-snug mt-0.5">{f.desc}</p>
+                      <p className="text-sm font-black text-gray-800">{f.label}</p>
+                      <p className="text-xs text-gray-500 leading-relaxed mt-0.5">{f.desc}</p>
                     </div>
                   </div>
                 ))}

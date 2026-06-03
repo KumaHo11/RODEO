@@ -20,6 +20,31 @@ import { processQueue, getPendingCount } from '@/lib/offline/outbox'
 import { toast } from 'sonner'
 import { WifiOff, Wifi, RefreshCw } from 'lucide-react'
 
+/**
+ * Limpia el rodeo_offline_queue del localStorage legacy.
+ * Elimina ítems con syncing:true que quedan atascados después de un reinicio.
+ * Esto evita que el OfflineIndicator viejo interfiera con el nuevo OfflineManager.
+ */
+function cleanLegacyLocalStorageQueue() {
+  try {
+    const raw = localStorage.getItem('rodeo_offline_queue')
+    if (!raw) return
+    const queue = JSON.parse(raw)
+    if (!Array.isArray(queue)) {
+      localStorage.removeItem('rodeo_offline_queue')
+      return
+    }
+    // Quitar solo los marcados como syncing:true (quedaron atascados)
+    const cleaned = queue.filter((item: any) => !item.syncing)
+    if (cleaned.length !== queue.length) {
+      localStorage.setItem('rodeo_offline_queue', JSON.stringify(cleaned))
+    }
+  } catch {
+    // Si está corrupto, limpiar
+    try { localStorage.removeItem('rodeo_offline_queue') } catch { /* ignore */ }
+  }
+}
+
 // ── Context ───────────────────────────────────────────────────────────────────
 
 interface OfflineContextValue {
@@ -81,6 +106,7 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
   const [pendingCount, setPending]  = useState(0)
   const initDoneRef                 = useRef(false)
   const toastIdRef                  = useRef<string | number | null>(null)
+  const syncTimeoutRef              = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Función para obtener el token del usuario actual
   const getToken = useCallback(async (): Promise<string | null> => {
@@ -102,6 +128,9 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
   useEffect(() => {
     if (!user || initDoneRef.current) return
     initDoneRef.current = true
+
+    // Limpiar ítems syncing:true atascados del sistema legacy (localStorage)
+    cleanLegacyLocalStorageQueue()
 
     // Inicializar motor de sync
     initSync(getToken)
@@ -146,11 +175,20 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
       // Solo mostrar spinner si hay items pendientes en el outbox
       // El pre-fetch silencioso no debe mostrar el spinner
       getPendingCount().then(count => {
-        if (count > 0) setIsSyncing(true)
+        if (count > 0) {
+          setIsSyncing(true)
+          // Safety timeout: si en 15s no termina, limpiar el spinner igual
+          if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
+          syncTimeoutRef.current = setTimeout(() => {
+            setIsSyncing(false)
+            refreshPendingCount()
+          }, 15_000)
+        }
       })
     }
 
     const handleSyncDone = (ev: Event) => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
       setIsSyncing(false)
       refreshPendingCount()
       const detail = (ev as CustomEvent).detail ?? {}
@@ -181,14 +219,37 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
     }
   }, [refreshPendingCount])
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
+    }
+  }, [])
+
+  // Auto-clear isSyncing when pendingCount drops to 0
+  useEffect(() => {
+    if (pendingCount === 0 && isSyncing) {
+      setIsSyncing(false)
+    }
+  }, [pendingCount, isSyncing])
+
   const syncNow = useCallback(() => {
     if (!navigator.onLine) {
       toast.error('Sin conexión', { description: 'Conectate a internet para sincronizar.' })
       return
     }
     setIsSyncing(true)
-    triggerSync(getToken).finally(() => setIsSyncing(false))
-  }, [getToken])
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
+    syncTimeoutRef.current = setTimeout(() => {
+      setIsSyncing(false)
+      refreshPendingCount()
+    }, 15_000)
+    triggerSync(getToken).finally(() => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
+      setIsSyncing(false)
+      refreshPendingCount()
+    })
+  }, [getToken, refreshPendingCount])
 
   return (
     <OfflineContext.Provider value={{ isOffline, pendingCount, isSyncing, syncNow }}>

@@ -27,7 +27,7 @@ import {
   type CategoriaComercial,
 } from '@/lib/categorias'
 import { usePlan } from '@/hooks/usePlan'
-import { calculateBaseEV, calculateProjectedEV, PHYSIOLOGICAL_CATEGORIES, PHYSIO_LABEL, PHYSIO_EV_BASE, GROWTH_PHYSIO_CATEGORIES, type PhysiologicalCategory } from '@/lib/grazing/evProjection'
+import { calculateBaseEV, calculateProjectedEV, PHYSIOLOGICAL_CATEGORIES, PHYSIO_LABEL, PHYSIO_EV_BASE, PHYSIO_PESO_DEFAULT, physioToComercial, GROWTH_PHYSIO_CATEGORIES, type PhysiologicalCategory } from '@/lib/grazing/evProjection'
 import { calcularEVRodeo, LACTANCIA_RANGES, ESTADIOS_GESTACION, RATION_SUGERIDA_POR_CATEGORIA, type LactanciaRange, type EstadioGestacion } from '@/lib/grazing/evMatrix'
 import { todayISO } from '@/lib/utils/dates'
 import GrowthProjectionChart from '@/components/GrowthProjectionChart'
@@ -223,7 +223,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [exitDate,      setExitDate]      = useState<string>(
     herd?.exit_date ? String(herd.exit_date).slice(0, 10) : ''
   )
-
+  // Controls the collapsible optional fields section (breed, age, dates, rodeo temporario)
+  const [showOptionalFields, setShowOptionalFields] = useState(!!isEditing)
   // ── v9: Panel fisiológico unificado (PhysioEVPanel state) ──────────────────
   const [physioPanel, setPhysioPanel] = useState<PhysioEVPanelValue>({
     physioCategory: (herd?.physiological_category as PhysiologicalCategory | undefined) ?? '',
@@ -257,6 +258,29 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   useEffect(() => {
     if (!isEditing && catKey && !weight) setWeight(CATEGORIA_PESO_DEFAULT[catKey] ?? '')
   }, [catKey, isEditing]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-sincronizar catKey/catLabel desde la categoría fisiológica (SSOT)
+  // Cuando el usuario selecciona un estado fisiológico, la categoría comercial
+  // se deriva automáticamente via physioToComercial()
+  useEffect(() => {
+    if (physioPanel.physioCategory) {
+      const comercial = physioToComercial(physioPanel.physioCategory) as CategoriaComercial
+      setCatKey(comercial)
+      setCatLabel(CATEGORIA_LABEL_RAE[comercial] ?? comercial)
+    }
+  }, [physioPanel.physioCategory]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Precargar peso desde PHYSIO_PESO_DEFAULT cuando se selecciona categoría fisiológica
+  // y el campo de peso está vacío (no sobreescribir pesos ya ingresados)
+  useEffect(() => {
+    if (physioPanel.physioCategory && (!physioPanel.pesoKg || Number(physioPanel.pesoKg) <= 0)) {
+      const defaultWeight = PHYSIO_PESO_DEFAULT[physioPanel.physioCategory]
+      if (defaultWeight) {
+        setPhysioPanel(prev => ({ ...prev, pesoKg: defaultWeight }))
+        if (!weight) setWeight(defaultWeight)
+      }
+    }
+  }, [physioPanel.physioCategory]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // GDP defaults inteligentes por categoría fisiológica
   useEffect(() => {
@@ -1652,321 +1676,359 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
           {/* ════ PESTAÑA: DATOS OPERATIVOS ════ */}
           {tab === 'operativo' && (
-            <div className="px-5 pt-5 pb-28 space-y-3">
+            <div className="px-5 pt-5 pb-28 space-y-4">
 
-              {/* ――― SECCIÓN 1: Identificación y mercado ――― */}
-              <div className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                    Identificación y mercado
-                  </p>
+              {/* ── Nombre ── */}
+              <div className="space-y-1.5">
+                <label className={LABEL}>Nombre del rodeo *</label>
+                <input type="text" value={name} onChange={e => setName(e.target.value)}
+                  placeholder="Ej: Vacas preñadas 2026" className={INPUT} autoFocus={!isEditing} />
+              </div>
+
+              {/* ── Categoría fisiológica (cards visuales — campo principal) ── */}
+              <div className="space-y-2">
+                <label className={LABEL}>Categoría</label>
+                <div className="space-y-2.5">
+                  {[
+                    { label: 'Vacas', cats: ['VACA_CON_TERNERO','VACA_PRENADA','VACA_VACIA'] as const },
+                    { label: 'Recría / Crecimiento', cats: ['TERNERO','NOVILLITO','RECRIA_NOVILLO','RECRIA_VAQUILLONA'] as const },
+                    { label: 'Toros', cats: ['TORO_DESCANSO','TORO_SERVICIO'] as const },
+                  ].map(group => (
+                    <div key={group.label}>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{group.label}</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {group.cats.map(cat => {
+                          const selected = physioPanel.physioCategory === cat
+                          const evBase = PHYSIO_EV_BASE[cat]
+                          const shortLabel: Record<string,string> = {
+                            VACA_CON_TERNERO:  'Con ternero al pie',
+                            VACA_PRENADA:      'Vaca preñada',
+                            VACA_VACIA:        'Vaca vacía',
+                            TERNERO:           'Ternero/a',
+                            NOVILLITO:         'Novillito',
+                            RECRIA_NOVILLO:    'Novillo',
+                            RECRIA_VAQUILLONA: 'Vaquillona',
+                            TORO_DESCANSO:     'Toro en descanso',
+                            TORO_SERVICIO:     'Toro en servicio',
+                          }
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => setPhysioPanel(prev => ({
+                                ...prev,
+                                physioCategory: cat as any,
+                                lactanciaRange: '',
+                                estadioGestacion: '',
+                                customRacionKgDia: null,
+                              }))}
+                              className={`w-full text-left rounded-xl border-2 transition-all px-3 py-2.5 ${
+                                selected
+                                  ? 'border-green-500 bg-green-50 shadow-sm shadow-green-500/10'
+                                  : 'border-gray-100 bg-white hover:border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className={`text-xs font-bold leading-tight ${selected ? 'text-green-800' : 'text-gray-700'}`}>
+                                  {shortLabel[cat]}
+                                </span>
+                                {selected && (
+                                  <span className="text-[9px] font-black text-green-600 shrink-0">{evBase.toFixed(2)} EV</span>
+                                )}
+                              </div>
+                              {selected && (
+                                <p className="text-[9px] font-normal mt-0.5 text-green-600">{PHYSIO_LABEL[cat]}</p>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="px-4 py-4 space-y-3">
+              </div>
 
-                  {/* Nombre */}
-                  <div className="space-y-1.5">
-                    <label className={LABEL}>Nombre del rodeo *</label>
-                    <input type="text" value={name} onChange={e => setName(e.target.value)}
-                      placeholder="Ej: Vientres 2024, Recría Norte..." className={INPUT} autoFocus={!isEditing} />
-                  </div>
-
-                  {/* Stock + Raza */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className={`${LABEL} flex items-center gap-1.5`}>
-                        <Hash className="w-3 h-3 text-gray-400" /> Stock
-                      </label>
-                      <input type="number" min="1" value={count} inputMode="numeric"
-                        onChange={e => setCount(e.target.value === '' ? '' : Number(e.target.value))}
-                        onFocus={e => e.target.select()} placeholder="Cabezas" className={INPUT} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className={LABEL}>Raza</label>
-                      <BreedCombobox value={breed} onChange={setBreed} breeds={availableBreeds} />
-                    </div>
-                  </div>
-
-                  {/* Categoría Comercial */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <label className={LABEL} style={{ marginBottom: 0 }}>Categoría comercial</label>
-                      <Tooltip text="Clasificación para valorización de mercado y reportes patrimoniales. No afecta el cálculo de consumo de pastoreo." />
-                    </div>
-                    <CatCombobox value={catLabel} onChange={(lbl, key) => { setCatLabel(lbl); setCatKey(key) }} />
-                    {catKey === null && catLabel.trim() && (
-                      <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
-                        <Info className="w-3 h-3 shrink-0" /> Categoría personalizada — sin cotización del Mercado de Cañuelas
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Fecha de alta + toggle rodeo temporario */}
-                  <div className="space-y-2">
+              {/* ── Peso + Cabezas (aparecen tras elegir categoría) ── */}
+              <AnimatePresence>
+                {physioPanel.physioCategory && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="space-y-4"
+                  >
+                    {/* Peso + Cabezas */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <label className={`${LABEL} flex items-center gap-1.5`}>
-                          <Calendar className="w-3 h-3 text-gray-400" /> Fecha de alta
+                        <label className={`${LABEL} flex items-center gap-1`}>
+                          <Scale className="w-3 h-3 text-gray-400" />
+                          {physioPanel.physioCategory === 'VACA_CON_TERNERO' ? 'Peso madre (kg)' : 'Peso prom. (kg)'}
                         </label>
-                        <input type="date" value={admissionDate}
-                          onChange={e => setAdmissionDate(e.target.value)} className={INPUT} />
+                        <input type="number" min="50" max="900" step="5" inputMode="numeric"
+                          className={INPUT}
+                          value={physioPanel.pesoKg}
+                          onChange={e => setPhysioPanel(p => ({ ...p, pesoKg: e.target.value === '' ? '' : Number(e.target.value) }))}
+                          onFocus={e => e.target.select()}
+                          placeholder={String(PHYSIO_PESO_DEFAULT[physioPanel.physioCategory as keyof typeof PHYSIO_PESO_DEFAULT] ?? 400)} />
+                        <p className="text-[9px] text-gray-400">Ref: {PHYSIO_PESO_DEFAULT[physioPanel.physioCategory as keyof typeof PHYSIO_PESO_DEFAULT]} kg</p>
                       </div>
-                      {isTemporary && (
-                        <div className="space-y-1.5">
-                          <label className={`${LABEL} flex items-center gap-1.5`}>
-                            <Calendar className="w-3 h-3 text-gray-400" /> Fecha de salida
-                            <span className="text-red-500 font-black">*</span>
-                          </label>
-                          <input type="date" value={exitDate}
-                            onChange={e => setExitDate(e.target.value)} className={INPUT} />
-                        </div>
-                      )}
+                      <div className="space-y-1.5">
+                        <label className={`${LABEL} flex items-center gap-1`}>
+                          <Hash className="w-3 h-3 text-gray-400" /> Cabezas *
+                        </label>
+                        <input type="number" min="1" inputMode="numeric"
+                          className={INPUT}
+                          value={count}
+                          onChange={e => setCount(e.target.value === '' ? '' : Number(e.target.value))}
+                          onFocus={e => e.target.select()}
+                          placeholder="Cant." />
+                      </div>
                     </div>
 
-                    {/* Toggle rodeo temporario */}
-                    <button
-                      type="button"
-                      onClick={() => setExitDate(isTemporary ? '' : (exitDate || ''))}
-                      className="flex items-center gap-2 group w-fit"
-                    >
-                      <div className={`w-8 h-4 rounded-full transition-colors shrink-0 ${isTemporary ? 'bg-amber-400' : 'bg-gray-200'}`}>
-                        <div className={`w-3 h-3 bg-white rounded-full m-0.5 shadow-sm transition-transform ${isTemporary ? 'translate-x-4' : 'translate-x-0'}`} />
-                      </div>
-                      <p className="text-[10px] font-bold text-gray-500 group-hover:text-gray-700 transition-colors">
-                        Rodeo temporario
-                      </p>
-                      {isTemporary && (
-                        <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200">
-                          Requerí la fecha de salida
-                        </span>
-                      )}
-                    </button>
-                  </div>
-
-                </div>
-              </div>
-
-              {/* ――― SECCIÓN 2: Perfil biológico ――― */}
-              <div className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                    Perfil biológico
-                  </p>
-                  <Tooltip text="Las variables biológicas determinan cuánto pasto consume este rodeo. Afectan directamente el balance forrajero de tu plan de pastoreo." />
-                </div>
-                <div className="px-4 py-4 space-y-4">
-
-                  {/* Estado fisiológico */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <label className={LABEL} style={{ marginBottom: 0 }}>Estado fisiológico</label>
-                      <Tooltip text="En qué etapa productiva está el rodeo. Determina sus requerimientos reales de materia seca, independientemente de la categoría comercial." />
-                    </div>
-                    <CustomSelect
-                      value={physioPanel.physioCategory}
-                      onChange={val => setPhysioPanel(prev => ({
-                        ...prev,
-                        physioCategory: val as any,
-                        lactanciaRange: '',
-                        estadioGestacion: '',
-                        customRacionKgDia: null,
-                      }))}
-                      placeholder="— Seleccionar estado —"
-                      groups={[
-                        { label: 'Vacas', options: [
-                          { label: 'Vaca con ternero al pie', value: 'VACA_CON_TERNERO' },
-                          { label: 'Vaca preñada', value: 'VACA_PRENADA' },
-                          { label: 'Vaca vacía', value: 'VACA_VACIA' },
-                        ]},
-                        { label: 'Recría / crecimiento', options: [
-                          { label: 'Ternero/a', value: 'TERNERO' },
-                          { label: 'Novillito (hasta 2 años / < 300 kg)', value: 'NOVILLITO' },
-                          { label: 'Novillo (2–4 años / 300–450 kg)', value: 'RECRIA_NOVILLO' },
-                          { label: 'Vaquillona', value: 'RECRIA_VAQUILLONA' },
-                        ]},
-                        { label: 'Toros', options: [
-                          { label: 'Toro en descanso', value: 'TORO_DESCANSO' },
-                          { label: 'Toro en servicio', value: 'TORO_SERVICIO' },
-                        ]},
-                      ]}
-                    />
-                  </div>
-
-                  {/* Inputs condicionales */}
-                  {physioPanel.physioCategory && (
-                    <div className="space-y-3">
-
-                      {/* Peso + último pesaje */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <label className={`${LABEL} flex items-center gap-1.5`}>
-                            <Scale className="w-3 h-3 text-gray-400" />
-                            {physioPanel.physioCategory === 'VACA_CON_TERNERO' ? 'Peso de la madre (kg)' : 'Peso promedio (kg)'}
-                          </label>
-                          <input type="number" min="50" max="900" step="5" inputMode="numeric"
-                            className={INPUT}
-                            value={physioPanel.pesoKg}
-                            onChange={e => setPhysioPanel(p => ({ ...p, pesoKg: e.target.value === '' ? '' : Number(e.target.value) }))}
-                            onFocus={e => e.target.select()}
-                            placeholder="Ej: 400" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className={`${LABEL} flex items-center gap-1.5`}>
-                            <Calendar className="w-3 h-3 text-gray-400" /> Último pesaje
-                          </label>
-                          <input type="date" className={INPUT}
-                            value={physioPanel.lastWeighDate}
-                            onChange={e => setPhysioPanel(p => ({ ...p, lastWeighDate: e.target.value }))} />
-                        </div>
-                      </div>
-
-                      {/* Lactancia */}
-                      {physioPanel.physioCategory === 'VACA_CON_TERNERO' && (
-                        <div className="space-y-1.5">
-                          <label className={LABEL}>Período de lactancia</label>
-                          <CustomSelect
-                            value={physioPanel.lactanciaRange}
-                            onChange={val => setPhysioPanel(p => ({ ...p, lactanciaRange: val as any }))}
-                            placeholder="— Seleccionar mes —"
-                            options={LACTANCIA_RANGES.map(r => ({ label: r.label, value: r.value }))}
-                          />
-                        </div>
-                      )}
-
-                      {/* Gestación */}
-                      {physioPanel.physioCategory === 'VACA_PRENADA' && (
-                        <div className="space-y-1.5">
-                          <label className={LABEL}>Estadio de gestación</label>
-                          <CustomSelect
-                            value={physioPanel.estadioGestacion}
-                            onChange={val => setPhysioPanel(p => ({ ...p, estadioGestacion: val as any }))}
-                            placeholder="— Seleccionar mes —"
-                            options={ESTADIOS_GESTACION.map(e => ({ label: e.label, value: e.value }))}
-                          />
-                        </div>
-                      )}
-
-                      {/* ADPV */}
-                      {['TERNERO','NOVILLITO','RECRIA_NOVILLO','RECRIA_VAQUILLONA','TORO_DESCANSO','TORO_SERVICIO'].includes(physioPanel.physioCategory) && (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <label className={LABEL} style={{ marginBottom: 0 }}>
-                              <TrendingUp className="w-3 h-3 text-teal-500 inline mr-1" />ADPV (kg/día)
-                            </label>
-                            <Tooltip text="ADPV = Aumento Diario de Peso Vivo. Cuántos kg gana cada animal por día. Ej: 0.500 kg/día = 500 gramos. Rango típico en pastoreo: 0.300–0.800 kg/día." />
+                    {/* EV en tiempo real */}
+                    {effectiveEV > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="grid grid-cols-2 gap-2"
+                      >
+                        <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50 rounded-xl border border-green-100">
+                          <Scale className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                          <div>
+                            <p className="text-[9px] font-black text-green-600 uppercase tracking-widest">EV Total</p>
+                            <p className="text-base font-black text-green-700 leading-none">
+                              {effectiveEV.toFixed(1)}
+                              <span className="text-[9px] font-normal ml-1">EV</span>
+                            </p>
                           </div>
-                          <input type="number" step="0.05" min="-0.2" max="1.5" inputMode="decimal"
-                            className={INPUT}
-                            value={physioPanel.adpvKgDay}
-                            onChange={e => setPhysioPanel(p => ({ ...p, adpvKgDay: e.target.value === '' ? '' : Number(e.target.value) }))}
-                            onFocus={e => e.target.select()} placeholder="Ej: 0.500" />
-                          <p className="text-[10px] text-gray-400">Aumento Diario de Peso Vivo</p>
                         </div>
-                      )}
+                        <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
+                          <Leaf className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <div>
+                            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">MS/día</p>
+                            <p className="text-base font-black text-emerald-700 leading-none">
+                              {((physioPanel.customRacionKgDia ?? (RATION_SUGERIDA_POR_CATEGORIA[physioPanel.physioCategory as string] ?? 12)) * (Number(count) || 0)).toLocaleString('es-AR')}
+                              <span className="text-[9px] font-normal ml-1">kg</span>
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
 
-                    </div>
-                  )}
-
-                  {physioPanel.physioCategory && (!physioPanel.pesoKg || Number(physioPanel.pesoKg) <= 0) && (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-lg border border-amber-100">
-                      <Info className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                      <p className="text-[10px] text-amber-700 font-medium">Ingresá el peso para ver el impacto forrajero</p>
-                    </div>
-                  )}
-
-                </div>
-              </div>
-
-              {/* ――― SECCIÓN 3: Impacto forrajero ――― */}
-              {effectiveEV > 0 && physioPanel.physioCategory && (
-                <div className="rounded-xl border border-green-200 bg-white overflow-hidden shadow-sm">
-                  <div className="flex items-center justify-between px-4 py-2.5 bg-green-50/60 border-b border-green-100">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-4 rounded-full bg-green-400 shrink-0" />
-                      <p className="text-[9px] font-black uppercase tracking-widest text-green-700">Impacto forrajero</p>
-                    </div>
-                    <span className="text-[9px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
-                      {Number(count) || 0} cabezas
-                    </span>
-                  </div>
-                  <div className="px-4 py-4 space-y-4">
-
-                    {/* EV unitario + total */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-gray-50 rounded-xl px-3 py-3 border border-gray-100 text-center">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">EV por cabeza</p>
-                        <p className="text-xl font-black text-gray-900 tabular-nums">
-                          {(effectiveEV / Math.max(Number(count) || 1, 1)).toFixed(3)}
-                        </p>
-                        <p className="text-[10px] text-gray-400">eq. vaca / cab.</p>
+                    {/* Lactancia */}
+                    {physioPanel.physioCategory === 'VACA_CON_TERNERO' && (
+                      <div className="space-y-1.5">
+                        <label className={LABEL}>Período de lactancia</label>
+                        <CustomSelect
+                          value={physioPanel.lactanciaRange}
+                          onChange={val => setPhysioPanel(p => ({ ...p, lactanciaRange: val as any }))}
+                          placeholder="— Seleccionar mes —"
+                          options={LACTANCIA_RANGES.map(r => ({ label: r.label, value: r.value }))}
+                        />
                       </div>
-                      <div className="bg-gray-50 rounded-xl px-3 py-3 border border-gray-100 text-center">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">EV total del lote</p>
-                        <p className="text-xl font-black text-gray-900 tabular-nums">{effectiveEV.toFixed(1)}</p>
-                        <p className="text-[10px] text-gray-400">eq. vaca</p>
+                    )}
+
+                    {/* Gestación */}
+                    {physioPanel.physioCategory === 'VACA_PRENADA' && (
+                      <div className="space-y-1.5">
+                        <label className={LABEL}>Estadio de gestación</label>
+                        <CustomSelect
+                          value={physioPanel.estadioGestacion}
+                          onChange={val => setPhysioPanel(p => ({ ...p, estadioGestacion: val as any }))}
+                          placeholder="— Seleccionar mes —"
+                          options={ESTADIOS_GESTACION.map(e => ({ label: e.label, value: e.value }))}
+                        />
                       </div>
-                    </div>
+                    )}
+
+                    {/* ADPV */}
+                    {['TERNERO','NOVILLITO','RECRIA_NOVILLO','RECRIA_VAQUILLONA','TORO_DESCANSO','TORO_SERVICIO'].includes(physioPanel.physioCategory) && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <label className={LABEL} style={{ marginBottom: 0 }}>
+                            <TrendingUp className="w-3 h-3 text-teal-500 inline mr-1" />ADPV (kg/día)
+                          </label>
+                          <Tooltip text="Aumento Diario de Peso Vivo. Cuántos kg gana cada animal por día. Rango típico en pastoreo: 0.300–0.800 kg/día." />
+                        </div>
+                        <input type="number" step="0.05" min="-0.2" max="1.5" inputMode="decimal"
+                          className={INPUT}
+                          value={physioPanel.adpvKgDay}
+                          onChange={e => setPhysioPanel(p => ({ ...p, adpvKgDay: e.target.value === '' ? '' : Number(e.target.value) }))}
+                          onFocus={e => e.target.select()} placeholder="Ej: 0.500" />
+                        <p className="text-[10px] text-gray-400">Aumento Diario de Peso Vivo</p>
+                      </div>
+                    )}
 
                     {/* Ración editable */}
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <Leaf className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Ración / día</p>
-                        <Tooltip text="kg de Materia Seca por cabeza por día. Ajustálo según tu disponibilidad forrajera. Se usa en la planificación del Gantt." />
-                        {physioPanel.customRacionKgDia !== null && (
-                          <button type="button"
-                            onClick={() => setPhysioPanel(p => ({ ...p, customRacionKgDia: null }))}
-                            className="ml-auto text-[9px] text-amber-600 font-bold hover:underline">
-                            Restablecer sugerida
-                          </button>
-                        )}
-                      </div>
-                      <div className="relative">
-                        <input type="text" inputMode="decimal" step="0.5" min="1" max="30"
-                          className="w-full bg-white border-2 border-emerald-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none transition-all pr-28"
-                          value={physioPanel.customRacionKgDia !== null && physioPanel.customRacionKgDia !== undefined
-                            ? physioPanel.customRacionKgDia
-                            : (RATION_SUGERIDA_POR_CATEGORIA[physioPanel.physioCategory as string] ?? 12)}
-                          onChange={e => {
-                            const v = e.target.value.replace(',', '.')
-                            if (v === '' || v === '.') {
-                              setPhysioPanel(p => ({ ...p, customRacionKgDia: null }))
-                            } else if (/^\d*\.?\d*$/.test(v)) {
-                              setPhysioPanel(p => ({ ...p, customRacionKgDia: parseFloat(v) || null }))
-                            }
-                          }}
-                          onFocus={e => e.target.select()} />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-medium pointer-events-none">
-                          kg MS/cab/d
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between px-3.5 py-3 bg-emerald-50 rounded-xl border border-emerald-100">
-                        <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Consumo del rodeo</p>
-                        <div className="text-right">
-                          <p className="text-sm font-black text-emerald-800 tabular-nums">
-                            {((physioPanel.customRacionKgDia ?? (RATION_SUGERIDA_POR_CATEGORIA[physioPanel.physioCategory as string] ?? 12)) * (Number(count) || 0)).toLocaleString('es-AR')}
-                            <span className="text-[10px] font-normal text-emerald-600 ml-1">kg MS/día</span>
-                          </p>
-                          <p className="text-[9px] text-emerald-600/70">
-                            {physioPanel.customRacionKgDia ?? (RATION_SUGERIDA_POR_CATEGORIA[physioPanel.physioCategory as string] ?? 12)} kg × {Number(count) || 0} cab.
-                          </p>
+                    {effectiveEV > 0 && (
+                      <div className="space-y-2 pt-1">
+                        <div className="flex items-center gap-1.5">
+                          <Leaf className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Ración / día</p>
+                          <Tooltip text="kg de Materia Seca por cabeza por día. Se usa en la planificación del Gantt." />
+                          {physioPanel.customRacionKgDia !== null && (
+                            <button type="button"
+                              onClick={() => setPhysioPanel(p => ({ ...p, customRacionKgDia: null }))}
+                              className="ml-auto text-[9px] text-amber-600 font-bold hover:underline">
+                              Restablecer sugerida
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <input type="text" inputMode="decimal" step="0.5" min="1" max="30"
+                            className="w-full bg-white border-2 border-emerald-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none transition-all pr-28"
+                            value={physioPanel.customRacionKgDia !== null && physioPanel.customRacionKgDia !== undefined
+                              ? physioPanel.customRacionKgDia
+                              : (RATION_SUGERIDA_POR_CATEGORIA[physioPanel.physioCategory as string] ?? 12)}
+                            onChange={e => {
+                              const v = e.target.value.replace(',', '.')
+                              if (v === '' || v === '.') {
+                                setPhysioPanel(p => ({ ...p, customRacionKgDia: null }))
+                              } else if (/^\d*\.?\d*$/.test(v)) {
+                                setPhysioPanel(p => ({ ...p, customRacionKgDia: parseFloat(v) || null }))
+                              }
+                            }}
+                            onFocus={e => e.target.select()} />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-medium pointer-events-none">
+                            kg MS/cab/d
+                          </span>
                         </div>
                       </div>
+                    )}
+
+                    {/* ── Campos opcionales colapsables ── */}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowOptionalFields(v => !v)}
+                        className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        {showOptionalFields
+                          ? <ChevronDown className="w-3 h-3" />
+                          : <ChevronRight className="w-3 h-3" />}
+                        {showOptionalFields ? 'Ocultar campos adicionales' : 'Raza, edad, fechas y pesaje (opcional)'}
+                      </button>
+
+                      <AnimatePresence>
+                        {showOptionalFields && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="space-y-3 mt-3">
+                              {/* Raza */}
+                              <div className="space-y-1.5">
+                                <label className={LABEL}>Raza</label>
+                                <BreedCombobox value={breed} onChange={setBreed} breeds={availableBreeds} />
+                              </div>
+
+                              {/* Edad */}
+                              <div className="space-y-1.5">
+                                <label className={`${LABEL} flex items-center gap-1`}>
+                                  Edad (meses)
+                                  <span className="font-normal normal-case text-gray-300">opt.</span>
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input type="number" min="0"
+                                    className={INPUT}
+                                    value={ageValue}
+                                    onChange={e => setAgeValue(e.target.value === '' ? '' : Number(e.target.value))}
+                                    placeholder="Ej: 12" />
+                                  <select className={INPUT} value={ageUnit} onChange={e => setAgeUnit(e.target.value as 'months' | 'years')}>
+                                    <option value="months">Meses</option>
+                                    <option value="years">Años</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              {/* Fecha de alta + último pesaje */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                  <label className={`${LABEL} flex items-center gap-1.5`}>
+                                    <Calendar className="w-3 h-3 text-gray-400" /> Fecha de alta
+                                  </label>
+                                  <input type="date" value={admissionDate}
+                                    onChange={e => setAdmissionDate(e.target.value)} className={INPUT} />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className={`${LABEL} flex items-center gap-1.5`}>
+                                    <Calendar className="w-3 h-3 text-gray-400" /> Último pesaje
+                                  </label>
+                                  <input type="date" className={INPUT}
+                                    value={physioPanel.lastWeighDate}
+                                    onChange={e => setPhysioPanel(p => ({ ...p, lastWeighDate: e.target.value }))} />
+                                </div>
+                              </div>
+
+                              {/* Toggle rodeo temporario */}
+                              <div className="space-y-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setExitDate(isTemporary ? '' : (exitDate || ''))}
+                                  className="flex items-center gap-2 group w-fit"
+                                >
+                                  <div className={`w-8 h-4 rounded-full transition-colors shrink-0 ${isTemporary ? 'bg-amber-400' : 'bg-gray-200'}`}>
+                                    <div className={`w-3 h-3 bg-white rounded-full m-0.5 shadow-sm transition-transform ${isTemporary ? 'translate-x-4' : 'translate-x-0'}`} />
+                                  </div>
+                                  <p className="text-[10px] font-bold text-gray-500 group-hover:text-gray-700 transition-colors">
+                                    Rodeo temporario
+                                  </p>
+                                  {isTemporary && (
+                                    <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200">
+                                      Requerí la fecha de salida
+                                    </span>
+                                  )}
+                                </button>
+                                {isTemporary && (
+                                  <div className="space-y-1.5">
+                                    <label className={`${LABEL} flex items-center gap-1.5`}>
+                                      <Calendar className="w-3 h-3 text-gray-400" /> Fecha de salida *
+                                    </label>
+                                    <input type="date" value={exitDate}
+                                      onChange={e => setExitDate(e.target.value)} className={INPUT} />
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Categoría comercial derivada */}
+                              {catKey && (
+                                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">Categoría comercial</p>
+                                  <span className="text-[11px] font-bold text-gray-700">{catLabel}</span>
+                                  <Tooltip text="Derivada automáticamente del estado fisiológico. Se usa en cotización Mercado Cañuelas y reportes patrimoniales." />
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
-                  </div>
-                </div>
-              )}
+                    {/* Proyección de crecimiento */}
+                    {effectiveEV > 0 && physioPanel.adpvKgDay !== '' && Number(physioPanel.adpvKgDay) > 0 && physioPanel.pesoKg !== '' && (
+                      <GrowthProjectionChart
+                        physioCategory={physioCategory || null}
+                        avgWeightKg={Number(physioPanel.pesoKg)}
+                        gdpKgDay={Number(physioPanel.adpvKgDay)}
+                        headCount={Number(count) || 1}
+                        lastWeighDate={physioPanel.lastWeighDate || null}
+                        months={6}
+                      />
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-              {/* Proyección de crecimiento */}
-              {effectiveEV > 0 && physioPanel.adpvKgDay !== '' && Number(physioPanel.adpvKgDay) > 0 && physioPanel.pesoKg !== '' && (
-                <GrowthProjectionChart
-                  physioCategory={physioCategory || null}
-                  avgWeightKg={Number(physioPanel.pesoKg)}
-                  gdpKgDay={Number(physioPanel.adpvKgDay)}
-                  headCount={Number(count) || 1}
-                  lastWeighDate={physioPanel.lastWeighDate || null}
-                  months={6}
-                />
+              {/* Hint cuando no se seleccionó categoría */}
+              {!physioPanel.physioCategory && (
+                <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <Info className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-gray-400 font-normal leading-relaxed">
+                    Seleccioná la categoría para ver el peso de referencia y el EV calculado automáticamente.
+                  </p>
+                </div>
               )}
 
               {saveError && (
@@ -1976,7 +2038,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             </div>
           )}
 
-          {/* Tab marker */}
+
+
 
 
           {/* ════ TAB 2 — ACTIVIDADES ════ */}

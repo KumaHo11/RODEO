@@ -115,6 +115,7 @@ import {
   EV_BASE,
   calculateBaseEV,
   obtenerEvRodeoParaFecha,
+  calcularEvParaMes,
   type BioMilestone,
 } from '@/lib/grazing/evProjection'
 import { BASE_GROWTH_RATE_KG_HA_DAY } from '@/lib/grazing/forageCurves'
@@ -322,7 +323,7 @@ function InteractiveGantt({
   rainfallData, onRainfallChange, weatherEvents = [], onPaddockClick,
   droughtThresholdMm, onDroughtThresholdChange,
   targetRemnant, dailyAllocationKg,
-  climateViewEnabled = false, paddockCAdj = {},
+  climateViewEnabled = false, paddockCAdj = {}, paddockAAdj = {},
   isDrawingMode = false, onDrawEnd, onHerdUpdate, onEditEvent, onDeleteEvent, onAddHerd, onHerdClick,
   paddockOrder = [],
   seasonPlanColorMap = {},
@@ -354,6 +355,8 @@ function InteractiveGantt({
   /** C_adj activado: bloques se recalculan con el coeficiente por potrero */
   climateViewEnabled?: boolean
   paddockCAdj?: Record<string, number>
+  /** A_adj per paddock — animal demand multiplier due to climate conditions */
+  paddockAAdj?: Record<string, number>
   isDrawingMode?: boolean
   onDrawEnd?: (paddockId: string, startDate: string, endDate: string) => void
   onHerdUpdate?: (herdId: string, updates: Record<string, any>) => void
@@ -1115,7 +1118,6 @@ function InteractiveGantt({
               >
                 {/* Drawing Highlight Overlay — red when no forage or exceeding optimal days */}
                 {drawingState && drawingState.paddockId === paddock.id && (() => {
-                  // Detectar si el potrero tiene pasto pero sin capacidad para este rodeo
                   const noForage = msHa > 0 && drawingState.optimalDays === 0
                   const isRed = noForage || drawingState.isOverOptimal
                   const days = Math.abs(drawingState.currentDay - drawingState.startDay) + 1
@@ -1274,13 +1276,13 @@ function InteractiveGantt({
                     const ghostWidthPct    = ghostDays > 0 ? Math.max(0.3, (ghostDays / windowDays) * 100) : 0
                     const exceedingRemanente = ghostDays > 0 && duration > ghostDays && !isCompleted
 
-                    // ── Ajuste Climático: delta de días por C_adj ──
-                    const cAdj = (climateViewEnabled && paddockCAdj?.[paddock.id])
-                      ? paddockCAdj[paddock.id]
+                    // ── Ajuste Climático: delta de días por A_adj (Impacto Animal) ──
+                    const aAdj = (climateViewEnabled && paddockAAdj?.[paddock.id])
+                      ? paddockAAdj[paddock.id]
                       : 1.0
                     const baseDuration = duration
-                    const adjustedDuration = climateViewEnabled && cAdj !== 1.0
-                      ? Math.max(1, Math.round(baseDuration * cAdj))
+                    const adjustedDuration = climateViewEnabled && aAdj !== 1.0
+                      ? Math.max(1, Math.round(baseDuration / aAdj))
                       : baseDuration
                     const deltaClimate = adjustedDuration - baseDuration
                     const adjustedWidthPct = climateViewEnabled && deltaClimate !== 0
@@ -1583,8 +1585,8 @@ function InteractiveGantt({
                               originalDays={baseDuration}
                               adjustedDays={adjustedDuration}
                               alertLevel={Math.abs(deltaClimate) >= 3 ? 'critical' : 'warning'}
-                              stressType={cAdj < 1 ? 'heat' : 'cold'}
-                              alertMessage={`Multiplicador climático: ×${cAdj.toFixed(2)}`}
+                              stressType={aAdj > 1.15 ? 'cold' : 'heat'} // Heurística simple para mostrar íconos
+                              alertMessage={`Multiplicador de demanda: ×${aAdj.toFixed(2)}`}
                             />
                           </div>
                         )}
@@ -1642,7 +1644,8 @@ function InteractiveGantt({
               paddockName: paddock?.name || plan.paddock_id,
               paddockId: plan.paddock_id,
               baseDays: durationDays,
-              climateMultiplier: mult,
+              cAdj: paddockCAdj?.[plan.paddock_id] ?? 1.0,
+              aAdj: paddockAAdj?.[plan.paddock_id] ?? 1.0,
               areaHa: Number(paddock?.area_ha) || 0,
               isPlanModified: !plan.is_locked,
             }
@@ -1717,33 +1720,36 @@ function InteractiveGantt({
                       <div className="flex flex-1">
                         {MONTHS_FOOTER.map(m => {
                           // ── Alerta preventiva de demanda vs crecimiento forrajero ──
-                          const monthIdx = m.month // 0=Ene … 11=Dic
-                          const growthRateKgHaDay = BASE_GROWTH_RATE_KG_HA_DAY[monthIdx] ?? 0
-                          const totalHa = paddocks.reduce((s: number, p: any) => s + (Number(p.area_ha) || 0), 0)
-                          const estimatedGrowthKgDay = growthRateKgHaDay * totalHa * 0.50
-                          const totalEvMesHdr = activeHerdsInWindow.reduce((sum, h) => {
-                            const herdEntry = h.admission_date || '2000-01-01'
-                            const herdExit = h.exit_date || '2100-01-01'
-                            if (herdEntry > m.endDate || herdExit < m.startDate) return sum
-                            return sum + obtenerEvRodeoParaFecha(h, m.startDate, bioMilestones)
-                          }, 0)
-                          const demandKgDay = totalEvMesHdr * dailyAllocationKg
-                          const isHighDemand = estimatedGrowthKgDay > 0 && demandKgDay > estimatedGrowthKgDay * 1.1
-                          const isAlertDemand = estimatedGrowthKgDay > 0 && demandKgDay > estimatedGrowthKgDay
+                          // ── Alerta de consumo acelerado por clima (A_adj > 1.0) ──
+                          // El stock de pasto es estático. La alerta se activa cuando el clima
+                          // (frío extremo o pisoteo por barro) eleva la demanda diaria del rodeo.
+                          const isCurrentOrFuture = m.key >= new Date().toISOString().substring(0, 7)
+                          const avgAAdj = climateViewEnabled && Object.keys(paddockAAdj).length > 0
+                            ? Object.values(paddockAAdj).reduce((s, v) => s + v, 0) / Object.values(paddockAAdj).length
+                            : 1.0
+                          // Solo mostrar en el mes actual o próximo, y solo si el ajuste animal supera el umbral (>5%)
+                          const hasClimateAlert = climateViewEnabled && isCurrentOrFuture && avgAAdj > 1.05
+                          const racionUsuario = dailyAllocationKg
+                          const racionAjustada = Math.round(racionUsuario * avgAAdj)
                           return (
                           <div
                             key={m.key}
-                            className={`border-r border-gray-300 flex flex-col items-center justify-center px-0.5 overflow-hidden shrink-0 gap-0.5 ${isHighDemand ? 'bg-red-50' : isAlertDemand ? 'bg-amber-50' : ''}`}
+                            className={`border-r border-gray-300 flex flex-col items-center justify-center px-0.5 overflow-hidden shrink-0 gap-0.5 ${hasClimateAlert ? 'bg-orange-50' : ''}`}
                             style={{ width: `${m.widthPct}%`, minWidth: 60 }}
                           >
-                            {(isHighDemand || isAlertDemand) && (
-                              <span
-                                title={isHighDemand
-                                  ? `⚠ ALTA DEMANDA — La carga animal supera el crecimiento forrajero en más de un 10%.\n\nDemanda estimada: ${demandKgDay.toFixed(0)} kg MS/día\nCrecimiento proyectado: ${estimatedGrowthKgDay.toFixed(0)} kg MS/día\n\nEsto puede indicar que el forraje disponible no alcanzará para sostener todos los rodeos durante este mes. Considerá reducir la carga animal, acortar las estadías o rotar más rápido.`
-                                  : `⚠ DEMANDA AJUSTADA — La carga animal supera el crecimiento forrajero proyectado para este mes.\n\nDemanda estimada: ${demandKgDay.toFixed(0)} kg MS/día\nCrecimiento proyectado: ${estimatedGrowthKgDay.toFixed(0)} kg MS/día\n\nMonitoreá el remanente al salir de cada potrero para detectar sobrepastoreo temprano.`
-                                }
-                                className={`text-[7px] font-black px-1 rounded cursor-help ${isHighDemand ? 'text-red-700 bg-red-100' : 'text-amber-700 bg-amber-100'}`}
-                              >⚠ Alta demanda</span>
+                            {hasClimateAlert && (
+                              <div className="relative group/altadem w-full flex justify-center">
+                                <span className="text-[7px] font-black px-1 rounded cursor-help text-orange-700 bg-orange-100">
+                                  ⚠ Alta demanda
+                                </span>
+                                {/* Tooltip compacto CSS — aparece arriba del badge */}
+                                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-52 bg-gray-900 text-white text-[10px] leading-relaxed font-normal rounded-lg px-3 py-2.5 shadow-xl opacity-0 group-hover/altadem:opacity-100 transition-opacity duration-150">
+                                  <p className="font-semibold text-[10px] mb-1 text-orange-300">Consumo acelerado por clima</p>
+                                  <p>El frío o estrés ambiental eleva el requerimiento de los animales (o el desperdicio por pisoteo). El rodeo consume hoy una ración efectiva de {racionAjustada} kg en lugar de los {racionUsuario} kg planificados, agotando el stock antes de tiempo.</p>
+                                  {/* Flecha apuntando hacia abajo */}
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                                </div>
+                              </div>
                             )}
                             <div className="flex w-full">
                               {(['Núm.', 'Peso', '%EQ', 'Total EQ'] as const).map(col => (
@@ -1812,13 +1818,15 @@ function InteractiveGantt({
                             const headCount = herdActiveThisMonth ? getDynamicHeadcount(herd.id, currentHeadCount, m.startDate) : 0
                             const peso = Number(herd.avg_weight_kg) || 0
                             const catKey = herd.categoria as string
-                            // ── EV Dinámico por mes: usa obtenerEvRodeoParaFecha (GDP + physio + hitos) ──
-                            const pesoDefault = CATEGORIA_PESO_DEFAULT[catKey as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450
-                            const effectivePeso = peso > 0 ? peso : pesoDefault
+                            // ── EV correcto para la tabla: total_ev de DB + crecimiento relativo ──
+                            // calcularEvParaMes usa total_ev como ancla (no PHYSIO_EV_BASE)
+                            // y aplica multiplicadores relativos de peso y fenología para meses futuros.
                             const ev = herdActiveThisMonth && headCount > 0
-                              ? obtenerEvRodeoParaFecha(herd, m.startDate, bioMilestones)
+                              ? calcularEvParaMes(herd, m.startDate, headCount)
                               : 0
-                            const evPerHead = headCount > 0 && ev > 0 ? ev / headCount : (EV_BASE[catKey] ?? 1.0) * Math.pow(effectivePeso / 450, 0.75)
+                            const evPerHead = headCount > 0 && ev > 0
+                              ? ev / headCount
+                              : (EV_BASE[catKey] ?? 1.0)
                             const active = monthPlansForHerd.length > 0 && herdActiveThisMonth
                             return (
                               <div
@@ -1884,7 +1892,7 @@ function InteractiveGantt({
                                   <span className="text-[8px] font-black text-gray-300 flex-[2] text-center w-full truncate">—</span>
                                 )}
                                 <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate">
-                                  {herdActiveThisMonth ? (peso > 0 ? peso : `~${effectivePeso}`) : '—'}
+                                  {herdActiveThisMonth ? (peso > 0 ? peso : `~${CATEGORIA_PESO_DEFAULT[catKey as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450}`) : '—'}
                                 </span>
                                 <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate">
                                   {herdActiveThisMonth && headCount > 0 && ev > 0 ? (ev / headCount).toFixed(2) : '—'}
@@ -1914,9 +1922,9 @@ function InteractiveGantt({
                             const herdExit = h.exit_date || '2100-01-01'
                             if (herdEntry <= m.endDate && herdExit >= m.startDate) {
                               const hc = getDynamicHeadcount(h.id, Number(h.head_count) || 0, m.startDate)
-                              // ── Total row: mismo motor que filas individuales ──
+                              // ── Total row: mismo motor correcto que las filas individuales ──
                               const evHerd = hc > 0
-                                ? obtenerEvRodeoParaFecha(h, m.startDate, bioMilestones)
+                                ? calcularEvParaMes(h, m.startDate, hc)
                                 : 0
 
                               totalCabMes += hc
@@ -2558,6 +2566,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     return saved === null ? true : saved === 'true' // default ON
   })
   const [paddockCAdj, setPaddockCAdj] = useState<Record<string, number>>({})
+  const [paddockAAdj, setPaddockAAdj] = useState<Record<string, number>>({})
 
   // ── Layer visibility: controla qué capas se muestran en el Gantt ──
   const [ganttLayers, setGanttLayers] = useState<{
@@ -2590,7 +2599,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     apiFetch('/api/climate-adjustment')
       .then(r => r.json())
       .then(data => {
-        let snaps = (data.snapshots ?? []) as Array<{ paddock_id: string; climate_multiplier: number; calculated_at: string }>
+        let snaps = (data.snapshots ?? []) as Array<{ paddock_id: string; climate_multiplier: number; multiplier_breakdown?: any; calculated_at: string }>
         
         if (snaps.length === 0 && user?.email === 'javi.osorio.1@gmail.com') {
           snaps = [
@@ -2600,11 +2609,20 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           ]
         }
 
-        const map: Record<string, number> = {}
+        const mapC: Record<string, number> = {}
+        const mapA: Record<string, number> = {}
         snaps
           .sort((a, b) => b.calculated_at.localeCompare(a.calculated_at))
-          .forEach(s => { if (!map[s.paddock_id]) map[s.paddock_id] = Number(s.climate_multiplier) })
-        setPaddockCAdj(map)
+          .forEach(s => {
+            if (!mapC[s.paddock_id]) {
+              const parsed = typeof s.multiplier_breakdown === 'string' ? JSON.parse(s.multiplier_breakdown) : (s.multiplier_breakdown ?? {})
+              const aAdj = parsed?.animalImpact?.aAdj
+              mapA[s.paddock_id] = typeof aAdj === 'number' ? aAdj : 1.0
+              mapC[s.paddock_id] = Number(s.climate_multiplier)
+            }
+          })
+        setPaddockCAdj(mapC)
+        setPaddockAAdj(mapA)
       })
       .catch(() => {})
   }, [climateViewEnabled, user, paddocks])
@@ -3691,11 +3709,14 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     const paddock = paddocks.find((p: any) => p.id === paddockId)
     const msHa = Number(paddock?.dry_matter_kg_ha) || 0
     const areaHa = Number(paddock?.area_ha) || 0
-    // ── EV proyectado para la fecha de entrada del bloque dibujado ──
+    // ── EV CORRECTO: usar total_ev de BD, no la proyección fisiológica ──────────
+    // obtenerEvRodeoParaFecha() recalcula el EV con PHYSIO_EV_BASE que diverge del
+    // total_ev real (ej: Novillito=0.58 → 182 EV en lugar de 337 EV reales).
+    // total_ev ya contiene el EV calibrado y validado por el usuario.
     const drawingEV = drawingHerdIds.reduce((sum: number, hId: string) => {
       const h = herds.find((hh: any) => hh.id === hId)
       if (!h) return sum
-      return sum + obtenerEvRodeoParaFecha(h, entryDate, bioMilestones)
+      return sum + (Number(h.total_ev) || 0)
     }, 0)
     const usableMs = msHa > 0 ? calculateUsableForage(msHa, targetRemnant, areaHa) : -1
     const dailyDemand = drawingEV * dailyAllocationKg
@@ -4491,6 +4512,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             dailyAllocationKg={dailyAllocationKg}
             climateViewEnabled={climateViewEnabled}
             paddockCAdj={paddockCAdj}
+            paddockAAdj={paddockAAdj}
             isDrawingMode={drawingMode}
             onDrawEnd={(paddockId, startDate, endDate) => {
               handleDrawEnd(
@@ -4524,11 +4546,13 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             ganttLayers={ganttLayers}
             onPaddockToggle={handlePaddockToggle}
             drawingHerdEV={(() => {
-              // EV proyectado para HOY (punto de referencia del modo dibujo antes de fijar fecha)
-              const today = new Date().toISOString().split('T')[0]
+              // ── EV CORRECTO: usa total_ev de BD, no la proyección fisiológica ──
+              // obtenerEvRodeoParaFecha() recalcula el EV con PHYSIO_EV_BASE que diverge
+              // del total_ev real del usuario (ej: Novillito factor=0.58 → 182 EV en
+              // lugar de 337 EV reales). total_ev ya incluye peso y categoría correctos.
               return herds
                 .filter((h: any) => drawingHerdIds.includes(h.id))
-                .reduce((s: number, h: any) => s + obtenerEvRodeoParaFecha(h, today, bioMilestones), 0)
+                .reduce((s: number, h: any) => s + (Number(h.total_ev) || 0), 0)
             })()}
             drawingHerdsLabel={herds
               .filter((h: any) => drawingHerdIds.includes(h.id))

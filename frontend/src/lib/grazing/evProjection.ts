@@ -33,6 +33,46 @@ export const EV_BASE: Record<string, number> = {
   BUBALINOS:   1.10,
 }
 
+/**
+ * Peso de referencia por categoría fisiológica (kg).
+ * Usado para precargar el campo Peso en los formularios de alta de rodeos.
+ * Fuente: tablas Cocimano / INTA — peso típico de cada categoría en Argentina.
+ *
+ * SINGLE SOURCE OF TRUTH para precarga de peso en:
+ *  - HerdFormFields (componente unificado)
+ *  - Step3Herds (onboarding)
+ *  - HerdModal Tab 1 (sección Rodeos)
+ *  - Planificador (temporarios)
+ */
+export const PHYSIO_PESO_DEFAULT: Record<string, number> = {
+  VACA_CON_TERNERO:  420,  // Ref. calculadora: 350-500 kg
+  VACA_PRENADA:      420,  // Ref. calculadora: 350-500 kg
+  VACA_VACIA:        400,  // Ref. calculadora: 350-500 kg
+  VACA_SECA:         400,  // Alias VACA_VACIA
+  TERNERO:           190,  // Ref. calculadora: 160-220 kg
+  NOVILLITO:         290,  // Ref. calculadora: 240-340 kg
+  RECRIA_NOVILLO:    440,  // Ref. calculadora: 400-480 kg
+  RECRIA_VAQUILLONA: 295,  // Ref. calculadora: 260-330 kg
+  TORO_DESCANSO:     700,  // Ref. calculadora: 600-800 kg
+  TORO_SERVICIO:     700,  // Ref. calculadora: 600-800 kg
+}
+
+/**
+ * Deriva la categoría comercial (para guardar en BD) desde la categoría fisiológica.
+ * La categoría comercial se mantiene por compatibilidad con el resto del sistema
+ * (filtros, colores, razas por categoría, etc.) pero ya no es el campo primario del formulario.
+ */
+export function physioToComercial(physio: string): string {
+  if (['VACA_CON_TERNERO', 'VACA_PRENADA', 'VACA_VACIA', 'VACA_SECA'].includes(physio)) return 'VACAS'
+  if (physio === 'TERNERO') return 'TERNEROS'
+  if (physio === 'NOVILLITO') return 'NOVILLITOS'
+  if (physio === 'RECRIA_NOVILLO') return 'NOVILLOS'
+  if (physio === 'RECRIA_VAQUILLONA') return 'VAQUILLONAS'
+  if (['TORO_DESCANSO', 'TORO_SERVICIO'].includes(physio)) return 'TOROS'
+  return 'VACAS'
+}
+
+
 // ══════════════════════════════════════════════════════════════════════════════
 // CATEGORÍAS FISIOLÓGICAS / BIOLÓGICAS
 // ══════════════════════════════════════════════════════════════════════════════
@@ -603,4 +643,89 @@ export function projectEVDemand(
 
     return { month: i, monthLabel, totalEV, dailyDemandKg, breakdown }
   })
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// calcularEvParaMes — EV correcto para la tabla del Planificador
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Calcula el EV total de un rodeo para un mes específico del Planificador.
+ *
+ * Diferencia clave con `obtenerEvRodeoParaFecha`:
+ *  - Usa `total_ev` de DB como base (EV real calibrado por el usuario).
+ *  - NO recalcula desde PHYSIO_EV_BASE — eso causaba el gap de 7-8 días.
+ *  - Para meses futuros aplica SOLO multiplicadores RELATIVOS de crecimiento
+ *    de peso y fenología vacuna, manteniendo el total_ev como ancla.
+ *
+ * Consistent con `projectEVDemand` y el motor del Planificador Sugerido.
+ *
+ * @param herd             Datos del rodeo (requiere total_ev, head_count, avg_weight_kg, categoria)
+ * @param monthStartDate   Fecha de inicio del mes en formato 'YYYY-MM-DD'
+ * @param headCountOverride Cabezas dinámicas para el mes (post-movimientos de hacienda)
+ * @param paritionSeason   Temporada de parición de la org (para vacas cría)
+ */
+export function calcularEvParaMes(
+  herd: {
+    id: string
+    total_ev?: number | string | null
+    head_count?: number | string | null
+    avg_weight_kg?: number | string | null
+    categoria?: string | null
+  },
+  monthStartDate: string,
+  headCountOverride: number,
+  paritionSeason: ParitionSeason = 'primavera',
+): number {
+  if (headCountOverride === 0) return 0
+
+  const categoria = ((herd.categoria as string) ?? 'VACAS').toUpperCase()
+  const baseWeight = Number(herd.avg_weight_kg) || 450
+  const baseHeadCount = Number(herd.head_count) || headCountOverride
+
+  // ── Base EV: usar total_ev de DB (EV real del rodeo calibrado) ─────────────
+  let baseHerdEv = Number(herd.total_ev)
+  if (!baseHerdEv || isNaN(baseHerdEv)) {
+    // Fallback para rodeos sin total_ev: fórmula INTA por categoría comercial
+    baseHerdEv = calculateBaseEV(categoria, baseWeight, baseHeadCount)
+  }
+
+  // EV por cabeza calibrado (ancla para escalar con cabezas dinámicas futuras)
+  const evPerHead = baseHeadCount > 0 ? baseHerdEv / baseHeadCount : 0
+  if (evPerHead === 0) return 0
+
+  // ── Offset de meses desde HOY hasta monthStartDate ────────────────────────
+  const today = new Date()
+  const todayYear = today.getFullYear()
+  const todayMonth = today.getMonth()       // 0-based
+  const parts = monthStartDate.split('-')
+  const tYear = parseInt(parts[0], 10)
+  const tMonth = parseInt(parts[1], 10) - 1  // 0-based
+  const monthOffset = (tYear - todayYear) * 12 + (tMonth - todayMonth)
+
+  // ── Mes actual o pasado: EV del DB escalado con cabezas dinámicas ─────────
+  if (monthOffset <= 0) {
+    return parseFloat((evPerHead * headCountOverride).toFixed(2))
+  }
+
+  // ── Meses futuros: multiplicador relativo de crecimiento de peso ──────────
+  const growthKgMonth = GROWTH_RATE_KG_MONTH[categoria] ?? 0
+  const projectedWeight = Math.min(baseWeight + growthKgMonth * monthOffset, 600)
+
+  // Multiplicador de peso relativo al mes 0 (preserva la escala de total_ev)
+  const baseRef = Math.pow((baseWeight || 450) / 450, 0.75)
+  const projRef = Math.pow(projectedWeight / 450, 0.75)
+  const growthMultiplier = baseRef > 0 ? projRef / baseRef : 1
+
+  let ev = evPerHead * headCountOverride * growthMultiplier
+
+  // ── Multiplicador fenológico relativo para vacas cría ─────────────────────
+  // Se aplica RELATIVO al mes 0 para no romper el total_ev como ancla.
+  if (['VACAS', 'VAQUILLONAS'].includes(categoria)) {
+    const factor0 = vacaFenologiaFactor(0, paritionSeason)
+    const factorI = vacaFenologiaFactor(monthOffset, paritionSeason)
+    if (factor0 > 0) ev *= (factorI / factor0)
+  }
+
+  return parseFloat(ev.toFixed(2))
 }

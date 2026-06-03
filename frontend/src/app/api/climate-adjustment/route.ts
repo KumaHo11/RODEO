@@ -277,7 +277,7 @@ async function persistSnapshot(
       result.grassGrowthRateKgHaDay, result.climateMultiplier,
       result.baseRemainingDays, result.adjustedRemainingDays,
       result.alertLevel, result.alertMessage, result.deltaFromPlan,
-      JSON.stringify(result.multiplierBreakdown),
+      JSON.stringify({ ...result.multiplierBreakdown, animalImpact: result.animalImpact }),
     ])
   } catch (err) {
     console.warn('[climate-adjustment] snapshot skipped:', err instanceof Error ? err.message : err)

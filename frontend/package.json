@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "postbuild": "mkdir -p .next/standalone/public && cp public/sw.js .next/standalone/public/ && cp public/manifest.json .next/standalone/public/ && cp -r public/icons .next/standalone/public/ 2>/dev/null || true",
     "start": "next start",

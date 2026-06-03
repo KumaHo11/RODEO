@@ -27,7 +27,8 @@ export interface PlanInMonth {
   paddockName: string
   paddockId: string
   baseDays: number
-  climateMultiplier: number
+  cAdj: number
+  aAdj: number
   areaHa: number
   isPlanModified: boolean
 }
@@ -111,14 +112,14 @@ function MonthDrawer({
   const growthLabel = getGrowthLabel(growthMult)
 
   const adjustments = plans
-    .filter(p => p.isPlanModified && p.climateMultiplier !== 1.0)
+    .filter(p => p.isPlanModified && p.aAdj !== 1.0)
     .map(p => ({
       planId: p.id,
-      newDays: Math.max(1, Math.round(p.baseDays * p.climateMultiplier)),
+      newDays: Math.max(1, Math.round(p.baseDays / p.aAdj)),
     }))
 
   const totalDelta = plans.reduce((s, p) => {
-    const adj = Math.max(1, Math.round(p.baseDays * p.climateMultiplier))
+    const adj = Math.max(1, Math.round(p.baseDays / p.aAdj))
     return s + (adj - p.baseDays)
   }, 0)
 
@@ -174,7 +175,7 @@ function MonthDrawer({
                 <span className="font-black" style={{ color: growthColor }}>{growthLabel}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500 font-medium">Multiplicador</span>
+                <span className="text-gray-500 font-medium">Multiplicador global estacional</span>
                 <span className="font-black text-gray-700">×{growthMult.toFixed(2)}</span>
               </div>
               {rainMm > 0 && (
@@ -229,7 +230,7 @@ function MonthDrawer({
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Potreros planificados</p>
               <div className="space-y-1.5">
                 {plans.map(p => {
-                  const adjDays = Math.max(1, Math.round(p.baseDays * p.climateMultiplier))
+                  const adjDays = Math.max(1, Math.round(p.baseDays / p.aAdj))
                   const delta = adjDays - p.baseDays
                   return (
                     <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-xs ${p.isPlanModified ? 'bg-white border-gray-100' : 'bg-gray-50 border-gray-100 opacity-70'}`}>
@@ -246,6 +247,10 @@ function MonthDrawer({
                             </>
                           )}
                           {!p.isPlanModified && <span className="text-[8px] text-gray-400 bg-gray-100 px-1 rounded">bloqueado</span>}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-[9px] text-gray-500 font-medium">
+                          <span title="Multiplicador Crecimiento Pasto">Pasto: <span className="text-gray-700 font-black">×{p.cAdj.toFixed(2)}</span></span>
+                          <span title="Multiplicador Demanda Animal">Animal: <span className="text-gray-700 font-black">×{p.aAdj.toFixed(2)}</span></span>
                         </div>
                       </div>
                     </div>

@@ -28,6 +28,12 @@ export interface ClimateAdjustmentInput {
   totalEv: number
   dailyRationKgPerEv?: number
 
+  /**
+   * Remanente holístico objetivo (kg MS/ha) — configurado por el usuario en la org.
+   * Si no se provee, default 600 kg/ha (estándar Manejo Holístico).
+   */
+  targetRemnantKgHa?: number
+
   /** Lluvia acumulada 7 días (API) */
   rainfall7dMm: number
   /** Lluvia manual del productor — sobrescribe la API si está definida */
@@ -51,13 +57,24 @@ export interface ClimateAdjustmentInput {
 
 export type DroughtIndex = 'NONE' | 'MILD' | 'MODERATE' | 'SEVERE'
 
+export interface AnimalImpactBreakdown {
+  aAdj: number
+  iht: number
+  st: number
+  fMetabolica: number
+  fEficiencia: number
+  effectiveRationKg: number
+}
+
 export interface ClimateAdjustmentResult {
   adjustedRemainingDays: number
   baseRemainingDays: number
   grassGrowthRateKgHaDay: number
   projectedForageMsHaAtExit: number
-  /** C_adj — coeficiente de ajuste final (0.20–1.80) */
+  /** C_adj — coeficiente de ajuste climático para crecimiento de pasto (0.20–1.80) */
   climateMultiplier: number
+  /** A_adj - coeficiente de ajuste de demanda animal */
+  animalImpact: AnimalImpactBreakdown
   /** NUEVO v2: desglose del cálculo BH */
   waterBalance: WaterBalanceBreakdown
   /** Desglose de multiplicadores (compatibilidad con UI existente) */
@@ -108,10 +125,10 @@ export interface ClimateAdjustmentAccessResult {
 // getAustralSeason, SEASONAL_BASE_GROWTH, SEASONAL_TEMP_ESTIMATE importados
 // desde lib/grazing/forageCurves.ts (fuente de verdad canónica).
 
-// ─── Constantes agronómicas (privadas de este módulo) ───────────────────────
-const MIN_REMNANT_MS_HA   = 900
-const DEFAULT_DAILY_RATION = 12
-const HARVEST_EFFICIENCY   = 0.60
+// ─── Constantes agronómicas (privadas de este módulo) ────────────────────────────────────
+/** Remanente mínimo por defecto si la org no tiene configurado targetRemnantKgHa */
+const DEFAULT_REMNANT_MS_HA = 600
+const DEFAULT_DAILY_RATION   = 12
 
 // ─── Evapotranspiración (Hargreaves simplificado) ────────────────────────────
 
@@ -250,6 +267,54 @@ function ndviTrendMultiplier(
   return { multiplier: Math.max(0.30, Math.min(1.60, m)), trend }
 }
 
+// ─── Impacto Animal (A_adj) ──────────────────────────────────────────────────
+
+function calculateIHT(tempC: number, humidityPct: number): number {
+  return (1.8 * tempC + 32) - (0.55 - 0.0055 * humidityPct) * (1.8 * tempC - 26)
+}
+
+function calculateST(tempC: number, windKmh: number, rainMm: number): number {
+  let st = tempC
+  if (tempC <= 10 && windKmh > 4.8) {
+    st = 13.12 + 0.6215 * tempC - 11.37 * Math.pow(windKmh, 0.16) + 0.3965 * tempC * Math.pow(windKmh, 0.16)
+  }
+  // Penalización por estar mojado
+  if (rainMm > 0 && tempC < 15) {
+    st -= 5
+  }
+  return st
+}
+
+function calculateAnimalImpact(
+  tempC: number,
+  humidityPct: number,
+  windKmh: number,
+  rainMm: number,
+  bh: number,
+  ndvi: number
+): Omit<AnimalImpactBreakdown, 'effectiveRationKg'> {
+  const iht = calculateIHT(tempC, humidityPct)
+  const st = calculateST(tempC, windKmh, rainMm)
+
+  // Factor Metabólico
+  let fMetabolica = 0
+  if (iht >= 79) fMetabolica = -0.20
+  else if (st < 5 && rainMm > 0) fMetabolica = 0.15
+
+  // Factor de Eficiencia (Barro)
+  let fEficiencia = 0
+  if (bh >= 20) {
+    if (ndvi < 0.20) fEficiencia = 0.15
+    else if (ndvi >= 0.40) fEficiencia = 0.05
+    else fEficiencia = 0.10 // Intermedio
+  }
+
+  const rawAAdj = 1 + fMetabolica + fEficiencia
+  const aAdj = Math.max(0.75, Math.min(1.30, rawAAdj))
+
+  return { aAdj, iht, st, fMetabolica, fEficiencia }
+}
+
 // ─── FUNCIÓN PRINCIPAL ───────────────────────────────────────────────────────
 
 export function calculateClimateAdjustment(
@@ -312,33 +377,39 @@ export function calculateClimateAdjustment(
   // ── 6. Tasa de crecimiento del pasto (kg MS/ha/día) ─────────────────────
   const grassGrowthRate = baseGrowth * climateMultiplier
 
-  // ── 7. Días restantes ───────────────────────────────────────────────────
-  const availableMs       = Math.max(0, input.currentForageMsHa - MIN_REMNANT_MS_HA)
-  const totalAvailableMs  = availableMs * input.areaHa * HARVEST_EFFICIENCY
-  const dailyDemandKg     = input.totalEv * dailyRation
+  // ── 7. Días restantes — fórmula holística consistente con el Planificador ─────────
+  // Usa el remanente configurado por el usuario (default 600 kg/ha = estándar Savory).
+  // NO aplica HARVEST_EFFICIENCY (factor de cosecha del pasto):
+  //   - HARVEST_EFFICIENCY es relevante para modelos de producción forrajera
+  //   - Los días de pastoreo holístico se basan en DEMANDA ANIMAL, no en cosecha
+  //   - Consistencia garantizada con el cálculo del Gantt y el motor de sugerencias
+  const remnantKgHa      = input.targetRemnantKgHa ?? DEFAULT_REMNANT_MS_HA
+  const availableMs      = Math.max(0, input.currentForageMsHa - remnantKgHa)
+  const totalAvailableMs = availableMs * input.areaHa
 
-  const baseRemainingDays = dailyDemandKg > 0
+  // Demanda Base (kg/día): EV total × ración diaria
+  const baseDailyDemandKg = input.totalEv * dailyRation
+  const baseRemainingDays = baseDailyDemandKg > 0
+    ? Math.max(0, Math.round(totalAvailableMs / baseDailyDemandKg))
+    : 0
+
+  // Demanda Ajustada por Impacto Animal (clima afecta el consumo animal)
+  const rawAnimalImpact   = calculateAnimalImpact(tempC, humidity, wind, precipMm, wb.balanceHidricoMm, input.currentNdvi)
+  const effectiveRationKg = dailyRation * rawAnimalImpact.aAdj
+  const animalImpact: AnimalImpactBreakdown = { ...rawAnimalImpact, effectiveRationKg }
+
+  // Días ajustados: misma fórmula con ración efectiva (ajustada por IHT y ST)
+  const dailyDemandKg = input.totalEv * effectiveRationKg
+
+  const adjustedRemainingDays = dailyDemandKg > 0
     ? Math.max(0, Math.round(totalAvailableMs / dailyDemandKg))
     : 0
 
-  const netDailyChangeMsHa = grassGrowthRate - (dailyRation * input.totalEv / input.areaHa)
-
-  let adjustedRemainingDays: number
-  let projectedForageMsHaAtExit: number
-
-  if (netDailyChangeMsHa >= 0) {
-    adjustedRemainingDays = Math.min(60, baseRemainingDays + Math.round(grassGrowthRate * 5))
-    projectedForageMsHaAtExit = input.currentForageMsHa + netDailyChangeMsHa * adjustedRemainingDays
-  } else {
-    const daysUntilMin = availableMs > 0
-      ? availableMs / Math.abs(netDailyChangeMsHa)
-      : 0
-    adjustedRemainingDays = Math.max(0, Math.round(daysUntilMin))
-    projectedForageMsHaAtExit = Math.max(
-      MIN_REMNANT_MS_HA,
-      input.currentForageMsHa + netDailyChangeMsHa * adjustedRemainingDays
-    )
-  }
+  // Forraje proyectado al final de la estadía (nunca baja del remanente)
+  const projectedForageMsHaAtExit = Math.max(
+    remnantKgHa,
+    input.currentForageMsHa - (dailyDemandKg * adjustedRemainingDays / input.areaHa)
+  )
 
   // ── 8. Alerta ───────────────────────────────────────────────────────────
   const deltaFromPlan = adjustedRemainingDays - originalPlannedDays
@@ -347,19 +418,14 @@ export function calculateClimateAdjustment(
 
   if (adjustedRemainingDays <= 3) {
     alertLevel = 'critical'
-    alertMessage = `El ajuste climático sugiere que quedan aproximadamente ${adjustedRemainingDays} día${adjustedRemainingDays !== 1 ? 's' : ''} de estadía disponible. Te recomendamos revisar si conviene anticipar el movimiento del rodeo en los próximos días.`
-  } else if (soilConditionCritical) {
-    alertLevel = 'critical'
-    alertMessage = `El satélite detecta cobertura vegetal muy baja en este potrero (NDVI ${input.currentNdvi.toFixed(2)}). El rebrote puede ser más lento de lo habitual. Revisá la planificación si tenías previsto un descanso corto.`
-  } else if (adjustedRemainingDays <= 7 || deltaFromPlan <= -5) {
+    alertMessage = `El pasto disponible alcanza para ${adjustedRemainingDays} día${adjustedRemainingDays !== 1 ? 's' : ''}. Te recomendamos revisar si conviene anticipar el movimiento del rodeo en los próximos días.`
+  } else if (animalImpact.aAdj > 1.05) {
     alertLevel = 'warning'
-    const bhInfo = wb.balanceHidricoMm < 0
-      ? `El balance hídrico muestra un déficit de ${Math.abs(wb.balanceHidricoMm).toFixed(0)} mm en los últimos días.`
-      : ''
-    alertMessage = `En base a las condiciones climáticas actuales, la estadía en este potrero podría ajustarse a ${adjustedRemainingDays} días (${Math.abs(deltaFromPlan)}d menos de lo planificado). ${bhInfo} Es un buen momento para revisar el plan.`.trim()
-  } else if (deltaFromPlan >= 5 && wb.balanceHidricoMm > 10) {
+    const reason = animalImpact.fMetabolica > 0 ? "al estrés por frío" : "al desperdicio por barro"
+    alertMessage = `La estadía se ajusta a ${adjustedRemainingDays} días (${Math.abs(deltaFromPlan)}d menos de lo planificado) debido a que la demanda efectiva aumentó por ${reason}.`
+  } else if (animalImpact.aAdj < 0.95) {
     alertLevel = 'ok'
-    alertMessage = `Las condiciones climáticas son favorables (balance hídrico ${wb.balanceHidricoMm.toFixed(0)} mm). La estadía planificada podría extenderse hasta ${deltaFromPlan} días adicionales si el pasto lo permite.`
+    alertMessage = `La estadía planificada se extiende hasta ${deltaFromPlan} días adicionales debido a que la demanda disminuyó por estrés calórico.`
   } else {
     alertLevel = 'ok'
   }
@@ -378,12 +444,12 @@ export function calculateClimateAdjustment(
   // ── 10. Detalle de trazabilidad ─────────────────────────────────────────
   const calculationDetails = [
     `Estación: ${season} | Base: ${baseGrowth} kg MS/ha/día`,
-    `Temp: ${tempC}°C (${dataSourceFlags.tempSource}) | Rs: ${rsMjM2} MJ/m² (${dataSourceFlags.rsSource})`,
-    `Lluvia: ${precipMm} mm (${dataSourceFlags.rainfallSource}) | Humedad: ${humidity}% | Viento: ${wind} km/h`,
-    `ET: ${wb.etCalculadaMm} mm | P_efectiva: ${wb.precipitacionEfectivaMm} mm (runoff ${(wb.runoffFactor*100).toFixed(0)}%) | BH: ${wb.balanceHidricoMm} mm`,
-    `NDVI: ${input.currentNdvi} (tendencia: ${ndviTrend}) | NDVI mult: ×${ndviMult.toFixed(3)}`,
-    `f_crecimiento: ${fGrowth.toFixed(3)} | C_adj: ×${climateMultiplier.toFixed(3)}${soilConditionCritical ? ' ⚠ SUELO CRÍTICO' : ''}`,
-    `Base: ${baseRemainingDays}d → Ajustado: ${adjustedRemainingDays}d (Δ ${deltaFromPlan >= 0 ? '+' : ''}${deltaFromPlan}d)`,
+    `Temp: ${tempC}°C | Rs: ${rsMjM2} MJ/m² | Lluvia: ${precipMm} mm | Humedad: ${humidity}% | Viento: ${wind} km/h`,
+    `ET: ${wb.etCalculadaMm} mm | P_efectiva: ${wb.precipitacionEfectivaMm} mm | BH: ${wb.balanceHidricoMm} mm`,
+    `C_adj (Crecimiento Pasto): ×${climateMultiplier.toFixed(3)} | Tasa ajustada: ${Math.round(grassGrowthRate*10)/10} kg MS/ha/día`,
+    `IHT: ${animalImpact.iht.toFixed(1)} | ST: ${animalImpact.st.toFixed(1)}°C`,
+    `A_adj (Impacto Animal): ×${animalImpact.aAdj.toFixed(3)} | Ración Efectiva: ${animalImpact.effectiveRationKg.toFixed(1)} kg`,
+    `Días: Base ${baseRemainingDays}d → Ajustado ${adjustedRemainingDays}d (Δ ${deltaFromPlan >= 0 ? '+' : ''}${deltaFromPlan}d)`,
   ].join('\n')
 
   return {
@@ -392,6 +458,7 @@ export function calculateClimateAdjustment(
     grassGrowthRateKgHaDay: Math.round(grassGrowthRate * 10) / 10,
     projectedForageMsHaAtExit: Math.round(projectedForageMsHaAtExit),
     climateMultiplier: Math.round(climateMultiplier * 1000) / 1000,
+    animalImpact,
     waterBalance: wb,
     multiplierBreakdown,
     alertLevel,

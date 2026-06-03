@@ -72,6 +72,8 @@ export async function GET(req: NextRequest) {
       owner_first_name: string | null
       latitude: number | null
       longitude: number | null
+      default_target_remnant_kg_ha: number | null
+      default_daily_allocation_kg: number | null
     }>(`
       SELECT DISTINCT
         o.id         AS org_id,
@@ -80,7 +82,9 @@ export async function GET(req: NextRequest) {
         pr.email     AS owner_email,
         pr.first_name AS owner_first_name,
         o.latitude,
-        o.longitude
+        o.longitude,
+        o.default_target_remnant_kg_ha,
+        o.default_daily_allocation_kg
       FROM organizations o
       JOIN subscriptions_plans sp ON o.subscription_plan_id = sp.id
       JOIN profiles pr ON pr.organization_id = o.id
@@ -103,7 +107,9 @@ export async function GET(req: NextRequest) {
     // ── 3. Procesar cada org ──────────────────────────────────────────────────
     for (const org of eligibleOrgs) {
       try {
-        // 3a. Potreros activos (con rodeo pastoreando)
+        // 3a. Potreros ACTIVOS únicamente — solo donde el rodeo está pastoreando hoy.
+        // Bug fix: excluir status='PLANNED' para evitar alertas en potreros sin ganado.
+        // Un plan PLANNED significa que el rodeo aún no entró; solo ACTIVE confirma pastoreo real.
         const activePaddocks = await query<{
           paddock_id: string
           paddock_name: string
@@ -132,7 +138,7 @@ export async function GET(req: NextRequest) {
           FROM grazing_plans gp
           JOIN paddocks p ON p.id = gp.paddock_id
           WHERE gp.org_id = $1
-            AND gp.status IN ('ACTIVE', 'PLANNED')
+            AND gp.status = 'ACTIVE'
             AND gp.entry_date <= CURRENT_DATE
             AND (gp.exit_date IS NULL OR gp.exit_date >= CURRENT_DATE)
         `, [org.org_id])
@@ -218,6 +224,10 @@ export async function GET(req: NextRequest) {
               ? Number(userRainRow!.total_mm)
               : undefined
 
+            // Remanente holístico: usa el configurado por el usuario, no el hardcodeado
+            const targetRemnantKgHa = Number(org.default_target_remnant_kg_ha) || 600
+            const dailyRationKgEv   = Number(org.default_daily_allocation_kg)  || 12
+
             const input: ClimateAdjustmentInput = {
               paddockId:             paddock.paddock_id,
               areaHa:                Number(paddock.area_ha) || 1,
@@ -227,7 +237,8 @@ export async function GET(req: NextRequest) {
                                        : (paddock.previous_ndvi ? Number(paddock.previous_ndvi) : undefined),
               daysSincePreviousNdvi: daysSincePrevNdvi,
               totalEv,
-              dailyRationKgPerEv:    12,
+              dailyRationKgPerEv:    dailyRationKgEv,
+              targetRemnantKgHa,
               rainfall7dMm:          Number(rainfall7dRow?.total_mm) || Number(weatherCache?.precipitation_sum) || 0,
               rainfallManualMm:      rainfallManual,
               humidityPct:           Number(weatherCache?.humidity) || 65,
@@ -240,7 +251,8 @@ export async function GET(req: NextRequest) {
               currentMonth:          new Date().getMonth() + 1,
             }
 
-            const originalDays = paddock.planned_days ?? 21
+            // originalDays: días planificados del plan ACTIVO actual (no un default arbitrario)
+            const originalDays = paddock.planned_days ?? 0
             const result = calculateClimateAdjustment(input, originalDays)
 
             // Persistir snapshot

@@ -194,8 +194,8 @@ const templates = {
     dashboardUrl: string
   }) => ({
     subject: p.alertLevel === 'critical'
-      ? `Ajuste de planificación sugerido: ${p.paddockName}`
-      : `Motor Clima: posible ajuste en ${p.paddockName} (${Math.abs(p.deltaFromPlan)}d)`,
+      ? `⚠️ Alerta de pastoreo: ${p.paddockName} — quedan ${p.adjustedDays} días`
+      : `Ajuste climático en ${p.paddockName} (${Math.abs(p.deltaFromPlan)}d vs planificado)`,
     html: baseLayout(`
       <h2 style="margin:0 0 12px;color:#111827;font-size:22px;font-weight:900">
         ${p.alertLevel === 'critical' ? 'Revisá la planificación' : 'Sugerencia de ajuste climático'}

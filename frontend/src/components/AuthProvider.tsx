@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { auth } from '@/lib/firebase/client'
 import {
-  onAuthStateChanged,
+  onIdTokenChanged,
   signOut as firebaseSignOut,
   User,
 } from 'firebase/auth'
@@ -136,7 +136,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user, fetchProfile])
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser)
       if (firebaseUser) {
         // Guarda el token en cookie para el middleware

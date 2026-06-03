@@ -35,7 +35,16 @@ function LoginContent() {
     }
   }, [user, isLoading, loading, profile])
 
-  function redirectAfterAuth() {
+  async function redirectAfterAuth() {
+    try {
+      if (user) {
+        // Force token refresh to ensure middleware sees a valid token, preventing redirect loops
+        const token = await user.getIdToken(true)
+        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
+        document.cookie = `__session=${token}; path=/; max-age=3600; SameSite=Lax${isHttps ? '; Secure' : ''}`
+      }
+    } catch { /* ignore */ }
+
     if (nextPath && nextPath !== '/login') {
       router.replace(nextPath)
       return

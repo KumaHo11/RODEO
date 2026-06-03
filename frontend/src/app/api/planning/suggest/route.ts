@@ -8,7 +8,9 @@ export async function POST(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const payload = await req.json()
-    const { herd_id, start_date, start_paddock_id, limit = 5, utilization_percent = 50 } = payload
+    // utilization_percent se mantiene por compatibilidad con consumidores legacy pero no se usa
+    // en el cálculo holístico — el remanente absoluto reemplaza al factor de utilización porcentual.
+    const { herd_id, start_date, start_paddock_id, limit = 5, target_remnant_kg_ha = 600, daily_allocation_kg = 12 } = payload
 
     if (!herd_id || !start_date) {
       return NextResponse.json({ error: 'herd_id y start_date requeridos' }, { status: 400 })
@@ -27,7 +29,12 @@ export async function POST(req: NextRequest) {
     if (m >= 6 && m <= 8) recoveryPenaltyDays = 95  // Invierno
     if (m >= 9 && m <= 11) recoveryPenaltyDays = 45 // Primavera
 
-    const utlizationDecimal = (utilization_percent || 50) / 100 // Default 50%
+    // ── Parámetros holísticos ─────────────────────────────────────────────────
+    // targetRemnantKgHa: Piso fijo de MS que NO se consume (enfoque Savory).
+    // Defecto: 600 kg MS/ha (estándar Pampa Húmeda, temporada cerrada).
+    const targetRemnantKgHa = Number(target_remnant_kg_ha) >= 0 ? Number(target_remnant_kg_ha) : 600
+    // dailyAllocationKg: Ración diaria por EV (kg MS/EV/día). Defecto: 12 kg.
+    const dailyAllocationKgPerEV = Number(daily_allocation_kg) > 0 ? Number(daily_allocation_kg) : 12
 
     // 3. PostGIS: Consultar todos los potreros disponibles y variables de Forraje + Geometría
     const candidateQuery = `
@@ -75,11 +82,15 @@ export async function POST(req: NextRequest) {
       let bestDays = 0
 
       for (const c of candidates) {
-        // T_i = ((MS_actual * util) * Ha) / (EV_total * 12)
+        // ── FÓRMULA HOLÍSTICA (Savory) ──────────────────────────────────────
+        // MS Disponible = (MS_actual_kg_ha - Remanente_kg_ha) × Área_ha
+        // Demanda Diaria = EV_total × Ración_kg_EV_día
+        // Días de Estadía (DAH) = MS Disponible / Demanda Diaria
         const msActual = Number(c.ms_actual)
         const area = Number(c.area_ha) || 1
-        const dryMatterAvailable = msActual * utlizationDecimal * area
-        const daysStay = Math.floor(dryMatterAvailable / (totalEV * 12)) // 12 kg requirement as requested
+        const dryMatterAvailable = Math.max(0, msActual - targetRemnantKgHa) * area
+        const demandaDiaria = totalEV * dailyAllocationKgPerEV
+        const daysStay = demandaDiaria > 0 ? Math.floor(dryMatterAvailable / demandaDiaria) : 0
         
         let score = daysStay
 

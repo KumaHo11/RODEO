@@ -10,7 +10,6 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   output: "standalone", // Required for Cloud Run Docker deployment
-  turbopack: {},
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.supabase.co" },

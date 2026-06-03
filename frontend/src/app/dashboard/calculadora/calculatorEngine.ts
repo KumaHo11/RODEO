@@ -14,7 +14,8 @@ import {
   adjustedGrowthRate,
   getAustralSeason,
 } from '@/lib/grazing/forageCurves'
-import { EV_BASE } from '@/lib/grazing/evProjection'
+import { EV_BASE, PHYSIO_EV_BASE } from '@/lib/grazing/evProjection'
+
 
 // ─── Tipos inline (duplicados de climate-adjustment para evitar bundling de db.ts) ─
 
@@ -137,9 +138,10 @@ export function runCalculator(input: CalculatorInput): CalculatorResult {
     ndvi, droughtIndex, currentMonth,
   } = input
 
-  // ── 1. Equivalentes vaca ──────────────────────────────────────────────────
-  const evBase = EV_BASE[categoria] ?? 1.0
-  const weightFactor = Math.pow((avgWeightKg || 450) / 450, 0.75)
+  // ── 1. Equivalentes vaca (tablas Cocimano — referencia 400 kg) ───────────────
+  // Prioridad: PHYSIO_EV_BASE (fisiológico, Cocimano) > EV_BASE (comercial, legacy)
+  const evBase = (PHYSIO_EV_BASE as Record<string, number>)[categoria] ?? EV_BASE[categoria] ?? 1.0
+  const weightFactor = Math.pow((avgWeightKg || 400) / 400, 0.75)
   const totalEv = evBase * weightFactor * headCount
 
   // ── 2. Carga y consumo ───────────────────────────────────────────────────
