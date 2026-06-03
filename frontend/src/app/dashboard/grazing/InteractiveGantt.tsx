@@ -114,6 +114,7 @@ import {
   calculateBaseEV,
   obtenerEvRodeoParaFecha,
   calcularEvParaMes,
+  calcularPesoParaMes,
   type BioMilestone,
 } from '@/lib/grazing/evProjection'
 import { BASE_GROWTH_RATE_KG_HA_DAY } from '@/lib/grazing/forageCurves'
@@ -1838,7 +1839,9 @@ function InteractiveGantt({
                             const herdActiveThisMonth = herdEntry <= m.endDate && herdExit >= m.startDate
                             const currentHeadCount = Number(herd.head_count) || 0
                             const headCount = herdActiveThisMonth ? getDynamicHeadcount(herd.id, currentHeadCount, m.startDate) : 0
-                            const peso = Number(herd.avg_weight_kg) || 0
+                            const pesoBase = Number(herd.avg_weight_kg) || 0
+                            const peso = herdActiveThisMonth ? Math.round(calcularPesoParaMes(herd, m.startDate)) : pesoBase
+                            const gainedWeight = peso - pesoBase
                             const catKey = herd.categoria as string
                             // ── EV correcto para la tabla: total_ev de DB + crecimiento relativo ──
                             // calcularEvParaMes usa total_ev como ancla (no PHYSIO_EV_BASE)
@@ -1913,8 +1916,13 @@ function InteractiveGantt({
                                 ) : (
                                   <span className="text-[8px] font-black text-gray-300 flex-[2] text-center w-full truncate">—</span>
                                 )}
-                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate">
-                                  {herdActiveThisMonth ? (peso > 0 ? peso : `~${CATEGORIA_PESO_DEFAULT[catKey as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450}`) : '—'}
+                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate relative group cursor-default">
+                                  {herdActiveThisMonth ? (
+                                    <>
+                                      {peso > 0 ? peso : `~${CATEGORIA_PESO_DEFAULT[catKey as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450}`}
+                                      {gainedWeight > 0 && <span className="text-green-600 ml-0.5 inline-block" title={`Aumento proyectado: +${gainedWeight} kg`}>↑</span>}
+                                    </>
+                                  ) : '—'}
                                 </span>
                                 <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate">
                                   {herdActiveThisMonth && headCount > 0 && ev > 0 ? (ev / headCount).toFixed(2) : '—'}
@@ -2291,13 +2299,15 @@ function InteractiveGantt({
                           if (!herdActiveThisMonth) {
                             return <td colSpan={4} key={m.key} className="py-3 px-1 text-xs text-gray-200 text-center border-r border-gray-200">—</td>
                           }
-                          // ── Fórmula canónica: recalcular siempre desde peso y categoría ──
+                          // ── Proyección de EV y Peso ──
                           const headCount = getDynamicHeadcount(herd.id, currentHeadCount, m.startDate)
                           const catU = herd.categoria?.toUpperCase() || 'VACAS'
-                          const pesoForCalc = peso > 0 ? peso
+                          const pesoDinamico = Math.round(calcularPesoParaMes(herd, m.startDate))
+                          const gainedWeight = pesoDinamico - peso
+                          const pesoForCalc = pesoDinamico > 0 ? pesoDinamico
                             : (CATEGORIA_PESO_DEFAULT[catU as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450)
-                          const evPerH = (EV_BASE[catU] ?? 1.0) * Math.pow(pesoForCalc / 450, 0.75)
-                          const ev = evPerH * headCount
+                          const ev = headCount > 0 ? calcularEvParaMes(herd, m.startDate, headCount) : 0
+                          const evPerH = headCount > 0 && ev > 0 ? ev / headCount : (EV_BASE[catU] ?? 1.0)
                           const eqPct = ev > 0 && headCount > 0 ? evPerH.toFixed(2) : '—'
                           return (
                             <React.Fragment key={m.key}>
@@ -2358,7 +2368,10 @@ function InteractiveGantt({
                                   onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                                 />
                               </td>
-                              <td className="py-3 px-1 text-xs text-gray-500 font-bold text-center">{peso > 0 ? peso : '—'}</td>
+                              <td className="py-3 px-1 text-xs text-gray-500 font-bold text-center relative group cursor-default">
+                                {pesoForCalc > 0 ? pesoForCalc : '—'}
+                                {gainedWeight > 0 && <span className="text-green-600 ml-0.5 inline-block" title={`Aumento proyectado: +${gainedWeight} kg`}>↑</span>}
+                              </td>
                               <td className="py-3 px-1 text-xs text-gray-500 font-bold text-center">{eqPct}</td>
                               <td className="py-3 px-1 text-xs font-black text-green-700 text-center border-r border-gray-200">{ev > 0 ? ev.toFixed(0) : '—'}</td>
                             </React.Fragment>

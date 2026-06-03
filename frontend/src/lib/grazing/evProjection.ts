@@ -727,3 +727,36 @@ export function calcularEvParaMes(
 
   return parseFloat(ev.toFixed(2))
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// calcularPesoParaMes — Proyección de peso para tablas
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Calcula el peso promedio proyectado de una cabeza para un mes específico.
+ * Usa la misma lógica de monthOffset y GROWTH_RATE_KG_MONTH que calcularEvParaMes.
+ */
+export function calcularPesoParaMes(
+  herd: {
+    avg_weight_kg?: number | string | null
+    categoria?: string | null
+  },
+  monthStartDate: string
+): number {
+  const categoria = ((herd.categoria as string) ?? 'VACAS').toUpperCase()
+  const baseWeight = Number(herd.avg_weight_kg) || 450
+
+  const today = new Date()
+  const todayYear = today.getFullYear()
+  const todayMonth = today.getMonth()
+  const parts = monthStartDate.split('-')
+  const tYear = parseInt(parts[0], 10)
+  const tMonth = parseInt(parts[1], 10) - 1
+  const monthOffset = (tYear - todayYear) * 12 + (tMonth - todayMonth)
+
+  if (monthOffset <= 0) return baseWeight
+
+  const growthKgMonth = GROWTH_RATE_KG_MONTH[categoria] ?? 0
+  return Math.min(baseWeight + growthKgMonth * monthOffset, 600)
+}
+
