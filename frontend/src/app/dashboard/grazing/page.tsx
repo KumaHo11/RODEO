@@ -996,7 +996,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     if (!user) return
     setLoading(true)
     try {
-      const [paddocksRes, herdsRes, plansRes, eventsRes, movementsRes, mercadoRes, orgRes] = await Promise.all([
+      const [paddocksRes, herdsRes, plansRes, eventsRes, movementsRes, mercadoRes, orgRes, spRes, wEvRes, wDataRes] = await Promise.all([
         apiFetch('/api/paddocks').catch(() => null),
         apiFetch('/api/herds').catch(() => null),
         apiFetch('/api/grazing-plans').catch(() => null),
@@ -1004,15 +1004,20 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         apiFetch('/api/movements?entity_type=herd').catch(() => null),
         fetch('/api/mercado').catch(() => null),
         apiFetch('/api/organizations').catch(() => null),
+        apiFetch('/api/season-plans').catch(() => null),
+        apiFetch('/api/weather?limit=200').catch(() => null),
+        getPaddockWeather(-37.32, -59.13).catch(() => null),
       ])
 
-      const [paddocksResJson, herdsResJson, plansResJson, eventsResJson, movementsResJson, orgResJson] = await Promise.all([
+      const [paddocksResJson, herdsResJson, plansResJson, eventsResJson, movementsResJson, orgResJson, spResJson, wEvResJson] = await Promise.all([
         paddocksRes?.ok ? paddocksRes.json() : Promise.resolve({ paddocks: [] }),
         herdsRes?.ok    ? herdsRes.json()    : Promise.resolve({ herds: [] }),
         plansRes?.ok    ? plansRes.json()    : Promise.resolve({ plans: [] }),
         eventsRes?.ok   ? eventsRes.json()   : Promise.resolve({ events: [] }),
         movementsRes?.ok? movementsRes.json(): Promise.resolve({ movements: [] }),
         orgRes?.ok      ? orgRes.json()      : Promise.resolve({ organization: null }),
+        spRes?.ok       ? spRes.json()       : Promise.resolve({ plans: [] }),
+        wEvRes?.ok      ? wEvRes.json()      : Promise.resolve({ events: [] }),
       ])
       setPaddocks(paddocksResJson.paddocks ?? [])
       setHerds(herdsResJson.herds ?? [])
@@ -1031,35 +1036,26 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         setRawTargetRemnant(String(newRemnant))
       }
 
-      try {
-        const spRes = await apiFetch('/api/season-plans')
-        if (spRes.ok) {
-          const spJson = await spRes.json()
-          setSeasonPlans(spJson.plans ?? spJson ?? [])
-        }
-      } catch { }
+      if (spResJson) {
+        setSeasonPlans(spResJson.plans ?? spResJson ?? [])
+      }
 
-      try {
-        const wEvRes = await apiFetch('/api/weather?limit=200')
-        if (wEvRes.ok) {
-          const wEvJson = await wEvRes.json()
-          setWeatherEvents(wEvJson.events || [])
-          const fromDb: Record<string, number> = {}
-          ;(wEvJson.events || []).forEach((ev: any) => {
-            if (ev.type === 'RAIN') {
-              const key = (ev.date as string).slice(0, 7)
-              fromDb[key] = (fromDb[key] || 0) + Number(ev.value)
-            }
-          })
-          // Merge: DB values override localStorage for same month key
-          setRainfallData(prev => ({ ...prev, ...fromDb }))
-        }
-      } catch { /* weather events optional */ }
+      if (wEvResJson) {
+        setWeatherEvents(wEvResJson.events || [])
+        const fromDb: Record<string, number> = {}
+        ;(wEvResJson.events || []).forEach((ev: any) => {
+          if (ev.type === 'RAIN') {
+            const key = (ev.date as string).slice(0, 7)
+            fromDb[key] = (fromDb[key] || 0) + Number(ev.value)
+          }
+        })
+        // Merge: DB values override localStorage for same month key
+        setRainfallData(prev => ({ ...prev, ...fromDb }))
+      }
 
-      try {
-        const wData = await getPaddockWeather(-37.32, -59.13)
-        setWeather(wData)
-      } catch { /* ignore — weather is optional */ }
+      if (wDataRes) {
+        setWeather(wDataRes)
+      }
     } catch (err) {
       console.error('Grazing loadData error:', err)
     } finally {

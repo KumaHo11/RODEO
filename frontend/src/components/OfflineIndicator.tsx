@@ -99,7 +99,7 @@ export default function OfflineIndicator() {
                 const fd = new FormData()
                 fd.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
                 fd.append('folder', 'bitacora-audio')
-                const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd })
+                const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd, timeout: 60000 })
                 if (uploadRes.ok) data.audio_url = (await uploadRes.json()).url
 
                 let transcript = pa.transcript || ''
@@ -107,23 +107,25 @@ export default function OfflineIndicator() {
                   try {
                     const tf = new FormData()
                     tf.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
-                    const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
+                    const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf, timeout: 60000 })
                     if (tr.ok) { const d = await tr.json(); transcript = d.transcript || '' }
                   } catch { /* ignore */ }
                 }
                 if (!data.content && transcript && transcript !== '[Sin voz detectable]') data.content = transcript
                 data.audio_duration_secs = pa.durationSecs
-                await deletePendingAudio(pa.id)
               }
-            } else if (item.mediaType === 'photo' && item.mediaId) {
-              const pp = await getPendingPhoto(item.mediaId)
-              if (pp) {
-                const fd = new FormData()
-                fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
-                fd.append('folder', 'bitacora-photos')
-                const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd })
-                if (uploadRes.ok) data.photo_url = (await uploadRes.json()).url
-                await deletePendingPhoto(pp.id)
+            }
+            if (item.mediaType === 'photo' || item.hasPhoto) {
+              const ppId = item.mediaId || item.mediaIds?.photo
+              if (ppId) {
+                const pp = await getPendingPhoto(ppId)
+                if (pp) {
+                  const fd = new FormData()
+                  fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
+                  fd.append('folder', 'bitacora-photos')
+                  const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd, timeout: 60000 })
+                  if (uploadRes.ok) data.photo_url = (await uploadRes.json()).url
+                }
               }
             }
 
@@ -193,6 +195,13 @@ export default function OfflineIndicator() {
                 headers: syncHeaders,
               })
               if (!res.ok) throw new Error('paddock_update sync failed')
+            }
+
+            if ((item.mediaType === 'audio' || item.hasAudio) && (item.mediaId || item.mediaIds?.audio)) {
+              await deletePendingAudio(item.mediaId || item.mediaIds?.audio)
+            }
+            if ((item.mediaType === 'photo' || item.hasPhoto) && (item.mediaId || item.mediaIds?.photo)) {
+              await deletePendingPhoto(item.mediaId || item.mediaIds?.photo)
             }
           } catch (e) {
             console.error('[Offline Sync] Failed to sync item:', item.type, e)
@@ -332,13 +341,19 @@ export default function OfflineIndicator() {
  * Agrega un ítem a la cola offline para sincronizar cuando haya conexión.
  * Cada ítem recibe un idempotency_key único para deduplicación en el servidor.
  */
-export function addToOfflineQueue(item: {
+export interface OfflineQueueItem {
+  idempotency_key?: string
   type: string
   data: Record<string, unknown>
   timestamp: number
   mediaType?: 'audio' | 'photo'
   mediaId?: string
-}) {
+  mediaIds?: { audio?: string; photo?: string }
+  hasAudio?: boolean
+  hasPhoto?: boolean
+  syncing?: boolean
+}
+export function addToOfflineQueue(item: Omit<OfflineQueueItem, 'idempotency_key' | 'syncing'>) {
   try {
     const queue = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
     queue.push({

@@ -26,9 +26,10 @@ export async function GET(req: NextRequest) {
     // Buscar perfil en Cloud SQL
     const profile = await queryOne(
       `SELECT p.id, p.firebase_uid, p.email, p.first_name, p.last_name, p.avatar_url,
-              p.organization_id, p.onboarding_step, p.team_role, p.permissions,
+              p.organization_id, p.onboarding_step, p.team_role, p.permissions, p.notification_preferences,
               p.country_code, p.role, p.phone, p.is_first_login, p.is_active, p.system_role,
-              sp.slug AS plan_slug, sp.name AS plan_name
+              o.created_at as org_created_at, o.plan_status, o.trial_ends_at, o.stripe_customer_id,
+              sp.slug AS plan_slug, sp.name AS plan_name, sp.price as plan_price, sp.price_yearly as plan_price_yearly, sp.trial_days as plan_trial_days
        FROM profiles p
        LEFT JOIN organizations o ON p.organization_id = o.id
        LEFT JOIN subscriptions_plans sp ON o.subscription_plan_id = sp.id
@@ -85,21 +86,25 @@ export async function PATCH(req: NextRequest) {
     if (!decoded) return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
     const firebaseUid = decoded.uid
 
-    const { first_name, last_name, phone, role, onboarding_step, is_first_login } = await req.json()
+    const { first_name, last_name, phone, role, onboarding_step, is_first_login, avatar_url, notification_preferences } = await req.json()
 
     await query(
       `UPDATE profiles
-       SET first_name       = COALESCE($1, first_name),
-           last_name        = COALESCE($2, last_name),
-           phone            = COALESCE($3, phone),
-           role             = COALESCE($4, role),
-           onboarding_step  = COALESCE($5, onboarding_step),
-           is_first_login   = COALESCE($6, is_first_login),
-           updated_at       = NOW()
-       WHERE firebase_uid = $7`,
+       SET first_name               = COALESCE($1, first_name),
+           last_name                = COALESCE($2, last_name),
+           phone                    = COALESCE($3, phone),
+           role                     = COALESCE($4, role),
+           onboarding_step          = COALESCE($5, onboarding_step),
+           is_first_login           = COALESCE($6, is_first_login),
+           avatar_url               = COALESCE($7, avatar_url),
+           notification_preferences = COALESCE($8, notification_preferences),
+           updated_at               = NOW()
+       WHERE firebase_uid = $9`,
       [first_name || null, last_name || null, phone || null, role || null,
        onboarding_step !== undefined ? onboarding_step : null,
        is_first_login !== undefined ? is_first_login : null,
+       avatar_url || null,
+       notification_preferences ? JSON.stringify(notification_preferences) : null,
        firebaseUid]
     )
 

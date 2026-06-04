@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import RodeoLogo from '@/components/RodeoLogo'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Globe, ArrowRight, Mail, Loader2, Eye, EyeOff, Phone, AlertCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { auth } from '@/lib/firebase/client'
@@ -216,8 +217,15 @@ export default function RegisterPage() {
       {/* Visual Side */}
       <div className="hidden lg:flex lg:w-1/2 bg-green-700 items-center justify-center overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)] relative">
         <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
-        <div className="relative z-10">
-          <RodeoLogo variant="dark" size="xl" showTagline={true} />
+        <div className="relative z-10 w-[55%] flex items-center justify-center">
+          <Image 
+            src="/LogoLoginBlanco.svg" 
+            alt="RODEO Ganadería Regenerativa" 
+            width={800} 
+            height={800} 
+            className="w-full h-auto object-contain" 
+            priority 
+          />
         </div>
       </div>
 

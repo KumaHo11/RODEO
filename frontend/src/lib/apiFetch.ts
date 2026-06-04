@@ -11,13 +11,13 @@ import { auth } from '@/lib/firebase/client'
 
 const DEFAULT_TIMEOUT_MS = 8000
 
-export async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
+export async function apiFetch(url: string, options?: RequestInit & { timeout?: number }): Promise<Response> {
   const token = await auth.currentUser?.getIdToken()
   const isFormData = options?.body instanceof FormData
 
   // Merge caller's signal with our timeout signal
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), options?.timeout || DEFAULT_TIMEOUT_MS)
 
   // If caller already provided a signal, abort ours when theirs fires too
   if (options?.signal) {

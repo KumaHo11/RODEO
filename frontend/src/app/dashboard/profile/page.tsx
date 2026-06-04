@@ -123,7 +123,10 @@ export default function ProfilePage() {
     phone: '',
     role: '',
     avatar_url: '',
+    notification_preferences: { reminders: true, weekly_summary: true } as Record<string, boolean>,
   })
+
+  const [billingData, setBillingData] = useState<any>(null)
 
   useEffect(() => {
     async function load() {
@@ -139,6 +142,16 @@ export default function ProfilePage() {
             phone: data.phone || '',
             role: data.role || '',
             avatar_url: data.avatar_url || '',
+            notification_preferences: data.notification_preferences || { reminders: true, weekly_summary: true },
+          })
+          setBillingData({
+            plan_status: data.plan_status,
+            plan_name: data.plan_name,
+            plan_price: data.plan_price,
+            plan_price_yearly: data.plan_price_yearly,
+            plan_trial_days: data.plan_trial_days,
+            trial_ends_at: data.trial_ends_at,
+            org_created_at: data.org_created_at,
           })
         }
       }
@@ -150,8 +163,42 @@ export default function ProfilePage() {
   const handleAvatarClick = () => fileInputRef.current?.click()
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    setError('La actualización de foto estará disponible próximamente.')
-    setTimeout(() => setError(''), 3000)
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingAvatar(true)
+    setError('')
+
+    try {
+      const data = new FormData()
+      data.append('file', file)
+      data.append('folder', 'avatars')
+
+      const res = await apiFetch('/api/upload', {
+        method: 'POST',
+        // Omit Content-Type header so the browser sets it with the correct boundary
+        body: data,
+      })
+
+      if (res.ok) {
+        const { url } = await res.json()
+        setFormData(p => ({ ...p, avatar_url: url }))
+        // Auto-save the profile
+        await apiFetch('/api/auth/profile', {
+          method: 'PATCH',
+          body: JSON.stringify({ avatar_url: url }),
+        })
+        setSuccess('Foto de perfil actualizada.')
+        setTimeout(() => setSuccess(''), 3000)
+      } else {
+        const d = await res.json()
+        setError(d.error || 'Error al subir la imagen.')
+      }
+    } catch (err: any) {
+      setError('Error al subir la imagen.')
+    } finally {
+      setUploadingAvatar(false)
+    }
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -166,11 +213,25 @@ export default function ProfilePage() {
         last_name: formData.last_name,
         phone: formData.phone,
         role: formData.role,
+        notification_preferences: formData.notification_preferences,
       }),
     })
     if (!res.ok) { setError('Error al guardar el perfil.') }
     else { setSuccess('Perfil guardado correctamente.'); setTimeout(() => setSuccess(''), 3000) }
     setSaving(false)
+  }
+
+  const toggleNotification = async (key: string, value: boolean) => {
+    const newPrefs = { ...formData.notification_preferences, [key]: value }
+    setFormData(p => ({ ...p, notification_preferences: newPrefs }))
+    try {
+      await apiFetch('/api/auth/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ notification_preferences: newPrefs }),
+      })
+    } catch (err) {
+      console.error('Error guardando notificación', err)
+    }
   }
 
   const handleSignOut = async () => {
@@ -325,7 +386,7 @@ export default function ProfilePage() {
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-black text-gray-900">Recordatorio de salida de potrero</p>
                     <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
+                      <input type="checkbox" checked={formData.notification_preferences?.reminders ?? true} onChange={e => toggleNotification('reminders', e.target.checked)} className="sr-only peer" />
                       <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
                     </label>
                   </div>
@@ -343,7 +404,7 @@ export default function ProfilePage() {
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-black text-gray-900">Resumen semanal</p>
                     <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
+                      <input type="checkbox" checked={formData.notification_preferences?.weekly_summary ?? true} onChange={e => toggleNotification('weekly_summary', e.target.checked)} className="sr-only peer" />
                       <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
@@ -358,56 +419,60 @@ export default function ProfilePage() {
       )}
 
       {/* === FACTURACIÓN TAB === */}
-      {activeTab === 'facturacion' && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader title="Facturación" />
-            <div className="flex items-center justify-between p-5 bg-green-50 rounded-2xl border border-green-100 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-green-100 flex items-center justify-center">
-                  <Building className="w-6 h-6 text-green-700" />
+      {activeTab === 'facturacion' && billingData && (() => {
+        const isActive = billingData.plan_status === 'active' || billingData.plan_status === 'trialing'
+        const statusText = billingData.plan_status === 'trialing' ? 'Prueba Gratuita' : (billingData.plan_status === 'active' ? 'Activo' : 'Inactivo')
+        
+        let trialInfo = null
+        if (billingData.plan_status === 'trialing') {
+            const createdDate = new Date(billingData.org_created_at)
+            const daysSinceCreation = Math.floor((Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24))
+            const totalTrialDays = billingData.plan_trial_days || 45
+            const daysLeft = Math.max(0, totalTrialDays - daysSinceCreation)
+            trialInfo = `${daysLeft} días de prueba restantes`
+        }
+
+        return (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader title="Facturación" />
+              <div className="flex items-center justify-between p-5 bg-green-50 rounded-2xl border border-green-100 mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-green-100 flex items-center justify-center">
+                    <Building className="w-6 h-6 text-green-700" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-green-950">Plan {billingData.plan_name}</p>
+                    <p className="text-xs font-bold text-green-600 mt-0.5">{trialInfo || (billingData.plan_price > 0 ? `USD ${billingData.plan_price}/mes` : 'Gratuito')}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-black text-green-950">Plan Pro</p>
-                  <p className="text-xs font-bold text-green-600 mt-0.5">Vence el 01/05/2026</p>
+                <span className={`text-[10px] font-black ${isActive ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'} px-3 py-1.5 rounded-full uppercase tracking-widest`}>{statusText}</span>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 mb-3">Historial de pagos</p>
+                <div className="flex flex-col items-center justify-center p-6 text-center border border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
+                  <CreditCard className="w-8 h-8 text-gray-300 mb-2" />
+                  <p className="text-sm font-bold text-gray-500">No hay pagos registrados aún</p>
+                  <p className="text-[10px] text-gray-400 mt-1">Tus facturas aparecerán aquí una vez finalizado el período de prueba o al contratar un plan.</p>
                 </div>
               </div>
-              <span className="text-[10px] font-black bg-green-600 text-white px-3 py-1.5 rounded-full uppercase tracking-widest">Activo</span>
-            </div>
+            </Card>
 
-            <div className="space-y-2">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 mb-3">Historial de pagos</p>
-              {[
-                { date: '01/04/2026', amount: '$29.99', status: 'Completado', method: 'Tarjeta •••• 4242' },
-                { date: '01/03/2026', amount: '$29.99', status: 'Completado', method: 'Tarjeta •••• 4242' },
-              ].map((payment, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center">
-                      <CreditCard className="w-4 h-4 text-gray-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900">{payment.amount}</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{payment.method} · {payment.date}</p>
-                    </div>
-                  </div>
-                  <span className="text-[9px] font-black text-green-700 bg-green-50 px-2.5 py-1 rounded-lg uppercase tracking-wider">{payment.status}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card padding="md" className="bg-amber-50 border-amber-100">
-            <div className="flex items-center gap-4">
-               <Clock className="w-5 h-5 text-amber-600 shrink-0" />
-               <div>
-                 <p className="text-sm font-black text-amber-900 tracking-tight">Próxima renovación</p>
-                 <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-1">01 de Mayo, 2026</p>
-               </div>
-            </div>
-          </Card>
-        </div>
-      )}
+            {isActive && !trialInfo && billingData.plan_price > 0 && (
+            <Card padding="md" className="bg-amber-50 border-amber-100">
+              <div className="flex items-center gap-4">
+                 <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+                 <div>
+                   <p className="text-sm font-black text-amber-900 tracking-tight">Suscripción Activa</p>
+                   <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-1">Facturación mensual automática</p>
+                 </div>
+              </div>
+            </Card>
+            )}
+          </div>
+        )
+      })()}
 
       {/* === PLANES TAB === */}
       {activeTab === 'planes' && (

@@ -23,9 +23,10 @@ function baseLayout(body: string): string {
   <tr><td align="center">
   <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06)">
     <!-- Header -->
-    <tr><td style="background:#16a34a;padding:28px 40px;text-align:center">
-      <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;font-style:italic;letter-spacing:-1px">Rodeo</h1>
-      <p style="margin:4px 0 0;color:#bbf7d0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px">Gestión Ganadera Regenerativa</p>
+    <tr><td style="background:#16a34a;padding:28px 40px;text-align:left">
+      <div style="width:259px;height:56px;overflow:hidden;margin:0 auto;display:inline-block;text-align:left;">
+        <img src="https://rodeoagtech.com/LogoHeaderBlanco.svg" alt="RODEO" width="259" height="56" style="display:block;width:259px;height:56px;object-fit:contain;" />
+      </div>
     </td></tr>
     <!-- Body -->
     <tr><td style="padding:36px 40px">${body}</td></tr>
