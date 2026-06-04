@@ -13,7 +13,7 @@
   "dir": "ltr",
   "icons": [
     {
-      "src": "/Faviconblanco.svg",
+      "src": "/FaviconFondoVerde.svg",
       "sizes": "72x72 96x96 128x128 192x192 512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
@@ -25,14 +25,14 @@
       "short_name": "Bitácora",
       "description": "Registrar observación de campo",
       "url": "/dashboard/bitacora",
-      "icons": [{ "src": "/Faviconblanco.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/FaviconFondoVerde.svg", "sizes": "96x96", "type": "image/svg+xml" }]
     },
     {
       "name": "Mi Campo",
       "short_name": "Campo",
       "description": "Ver mapa de potreros",
       "url": "/dashboard/mi-campo",
-      "icons": [{ "src": "/Faviconblanco.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/FaviconFondoVerde.svg", "sizes": "96x96", "type": "image/svg+xml" }]
     }
   ],
   "screenshots": [
