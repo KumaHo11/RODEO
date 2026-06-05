@@ -20,9 +20,10 @@ import { createPortal } from 'react-dom'
 import {
   Thermometer, Snowflake, CloudRain, AlertTriangle,
   X, ChevronRight, CheckCircle2, Info,
-  TrendingDown, Clock, CloudLightning,
-  Droplets, Sun, Wind, Cloud
+  TrendingDown, TrendingUp, Clock, CloudLightning,
+  Droplets, Sun, Wind, Cloud, Minus
 } from 'lucide-react'
+import { useWeather } from '@/lib/context/WeatherContext'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,10 @@ export interface GanttClimateAlertProps {
   onDismiss?: () => void
   /** Mostrar en modo ultra-compacto (solo el pill) — para filas Gantt */
   compact?: boolean
+  /** Consumo diario total original (para calcular variación) */
+  dailyDemand?: number
+  /** Multiplicador de consumo climático */
+  aAdj?: number
 }
 
 // ── Helpers visuales ──────────────────────────────────────────────────────────
@@ -143,14 +148,20 @@ function ClimateAlertDrawer({
   stressType,
   onApply,
   onClose,
+  dailyDemand,
+  aAdj,
 }: GanttClimateAlertProps & { onClose: () => void }) {
   const [applying, setApplying] = useState(false)
   const [applied, setApplied]   = useState(false)
+  const { current } = useWeather()
 
   const cfg    = LEVEL_CONFIG[alertLevel]
   const delta  = originalDays - adjustedDays
   const reason = buildReason(stressType, originalDays, adjustedDays)
   const StressIcon = STRESS_ICONS[stressType ?? 'default'] ?? STRESS_ICONS.default
+
+  const extraDailyDemand = dailyDemand && aAdj ? dailyDemand * (aAdj - 1.0) : 0
+  const thi = current ? parseFloat((current.tempC + 0.36 * (current.tempC - (100 - current.humidityPct) / 5) + 41.5).toFixed(1)) : null
 
   const handleApply = async () => {
     if (!onApply) return
@@ -230,6 +241,59 @@ function ClimateAlertDrawer({
               </div>
             </div>
           </div>
+
+          {/* Condiciones actuales */}
+          {current && (
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                Condiciones climáticas actuales
+              </p>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {[
+                  { label: 'Temperatura',  value: `${Math.round(current.tempC)}°C`,          Icon: Thermometer, color: 'text-orange-500' },
+                  { label: 'Humedad',      value: `${Math.round(current.humidityPct)}%`,      Icon: Droplets,    color: 'text-blue-500' },
+                  { label: 'Viento',       value: `${Math.round(current.windSpeedKmh)} km/h`, Icon: Wind,        color: 'text-gray-500' },
+                  { label: 'Sensación',    value: `${Math.round(current.feelsLikeC)}°C`,      Icon: Thermometer, color: 'text-rose-400' },
+                ].map(({ label, value, Icon, color }) => (
+                  <div key={label} className="bg-gray-50 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Icon className={`w-3 h-3 ${color}`} />
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+                    </div>
+                    <p className="text-base font-black text-gray-900">{value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {thi != null && (
+                  <div className={`flex items-center justify-between px-4 py-3 rounded-xl border ${thi > 72 ? 'bg-orange-50 border-orange-200' : 'bg-emerald-50 border-emerald-100'}`}>
+                    <span className="text-xs font-bold text-gray-500">Índice THI</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${thi > 80 ? 'bg-red-100 text-red-700' : thi > 72 ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {thi > 80 ? 'Severo' : thi > 72 ? 'Moderado' : 'Normal'}
+                      </span>
+                      <span className="text-base font-black text-gray-700">{thi}</span>
+                    </div>
+                  </div>
+                )}
+                {extraDailyDemand !== 0 && (
+                  <div className={`flex items-center justify-between px-4 py-3 rounded-xl border ${extraDailyDemand > 0 ? 'border-red-100 bg-red-50' : 'border-emerald-100 bg-emerald-50'}`}>
+                    <div className="flex items-center gap-2">
+                      {extraDailyDemand > 0 ? (
+                        <TrendingUp className="w-4 h-4 text-red-500" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4 text-emerald-500" />
+                      )}
+                      <span className={`text-xs font-bold ${extraDailyDemand > 0 ? 'text-red-700' : 'text-emerald-700'}`}>Variación diaria de ración</span>
+                    </div>
+                    <span className={`text-base font-black ${extraDailyDemand > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                      {extraDailyDemand > 0 ? '+' : ''}{extraDailyDemand.toFixed(0)} kg
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Por qué ocurre */}
           <div>
@@ -327,6 +391,7 @@ export default function GanttClimateAlert({
   onApply,
   onDismiss,
   compact = false,
+  ...props
 }: GanttClimateAlertProps) {
   const [drawerOpen, setDrawerOpen]   = useState(false)
   const [dismissed, setDismissed]     = useState(false)
@@ -362,7 +427,7 @@ export default function GanttClimateAlert({
           `}
         >
           <StressIcon className="w-3 h-3" />
-          −{delta}d clima
+          Ajuste Clima
           <ChevronRight className="w-2.5 h-2.5" />
         </button>
 
@@ -377,6 +442,8 @@ export default function GanttClimateAlert({
             onApply={onApply}
             onDismiss={onDismiss}
             compact={compact}
+            dailyDemand={props.dailyDemand}
+            aAdj={props.aAdj}
             onClose={() => setDrawerOpen(false)}
           />
         )}
@@ -440,6 +507,8 @@ export default function GanttClimateAlert({
           onApply={onApply}
           onDismiss={onDismiss}
           compact={compact}
+          dailyDemand={props.dailyDemand}
+          aAdj={props.aAdj}
           onClose={() => setDrawerOpen(false)}
         />
       )}

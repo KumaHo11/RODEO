@@ -1585,7 +1585,7 @@ function InteractiveGantt({
                       <React.Fragment key={plan.id}>
                         {renderBlocks}
                         {/* ── Ajuste Climático: alert inline cuando el clima acorta días ── */}
-                        {climateViewEnabled && deltaClimate < 0 && (
+                        {climateViewEnabled && isActiveNow && aAdj !== 1.0 && (
                           <div
                             style={{
                               position: 'absolute',
@@ -1610,6 +1610,8 @@ function InteractiveGantt({
                               alertLevel={Math.abs(deltaClimate) >= 3 ? 'critical' : 'warning'}
                               stressType={aAdj > 1.15 ? 'cold' : 'heat'} // Heurística simple para mostrar íconos
                               alertMessage={`Multiplicador de demanda: ×${aAdj.toFixed(2)}`}
+                              dailyDemand={ghostDailyDemand}
+                              aAdj={aAdj}
                             />
                           </div>
                         )}

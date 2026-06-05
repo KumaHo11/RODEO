@@ -93,8 +93,8 @@ export async function POST(req: NextRequest) {
           [
             invitation.org_id,
             owner.id,
-            `${memberName} se unió al equipo`,
-            `${memberName} aceptó la invitación como ${invitation.team_role} en ${invitation.org_name || 'tu campo'}.`,
+            `Se sumó a tu equipo ${memberName}`,
+            `Se sumó a tu equipo ${memberName}, como ${invitation.team_role} al campo ${invitation.org_name || 'tu campo'}.`,
           ]
         )
       }

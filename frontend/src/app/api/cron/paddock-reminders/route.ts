@@ -28,12 +28,19 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // ── Compute tomorrow's date ──────────────────────────────────────────────
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const tomorrowStr = tomorrow.toISOString().split('T')[0]
+    // ── Compute target dates ─────────────────────────────────────────────────
+    const today = new Date()
+    const fmtIso = (d: Date) => d.toISOString().split('T')[0]
 
-    // ── Fetch plans expiring tomorrow + related data ─────────────────────────
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+    const threeDaysAgo = new Date(today); threeDaysAgo.setDate(today.getDate() - 3)
+
+    const tomorrowStr = fmtIso(tomorrow)
+    const yesterdayStr = fmtIso(yesterday)
+    const threeDaysAgoStr = fmtIso(threeDaysAgo)
+
+    // ── Fetch plans for tomorrow, yesterday and 3 days ago ───────────────────
     const plans = await query<{
       plan_id: string
       paddock_name: string
@@ -43,6 +50,7 @@ export async function GET(req: NextRequest) {
       planned_recovery_days: number
       org_id: string
       org_name: string
+      owner_profile_id: string
       owner_email: string
       owner_first_name: string
     }>(`
@@ -55,6 +63,7 @@ export async function GET(req: NextRequest) {
         COALESCE(gp.planned_recovery_days, 0)      AS planned_recovery_days,
         o.id             AS org_id,
         o.name           AS org_name,
+        pr.id            AS owner_profile_id,
         pr.email         AS owner_email,
         pr.first_name    AS owner_first_name
       FROM grazing_plans gp
@@ -63,26 +72,61 @@ export async function GET(req: NextRequest) {
       JOIN organizations o ON o.id = gp.org_id
       JOIN profiles  pr ON pr.organization_id = o.id
                         AND pr.team_role IS NULL   -- owner only
-      WHERE gp.exit_date = $1
+      WHERE gp.exit_date IN ($1, $2, $3)
         AND gp.status IN ('PLANNED', 'ACTIVE')
       ORDER BY o.id, gp.exit_date
-    `, [tomorrowStr])
-
-    if (!plans || plans.length === 0) {
-      return NextResponse.json({ sent: 0, message: 'No moves tomorrow' })
-    }
-
-    // ── Group by org ─────────────────────────────────────────────────────────
-    const byOrg = new Map<string, typeof plans>()
-    for (const row of plans) {
-      if (!byOrg.has(row.org_id)) byOrg.set(row.org_id, [])
-      byOrg.get(row.org_id)!.push(row)
-    }
+    `, [tomorrowStr, yesterdayStr, threeDaysAgoStr])
 
     const fmtDate = (iso: string) =>
       new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {
         day: 'numeric', month: 'long', year: 'numeric',
       })
+    
+    const fmtDateShort = (iso: string) =>
+      new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {
+        day: 'numeric', month: 'long',
+      })
+
+    // ── Insert In-App Notifications ──────────────────────────────────────────
+    if (plans && plans.length > 0) {
+      for (const plan of plans) {
+        let title = ''
+        let body = ''
+        
+        if (plan.exit_date === tomorrowStr) {
+          title = `Próxima salida ${fmtDateShort(plan.exit_date)} del potrero ${plan.paddock_name}`
+          body = `No olvides ajustar el stock de animales y el remanente que queda después de pastoreo.`
+        } else if (plan.exit_date === yesterdayStr) {
+          title = `Retraso: Los animales debieron salir ayer del potrero ${plan.paddock_name}`
+          body = `No olvides ajustar el stock de animales y el remanente que queda después de pastoreo.`
+        } else if (plan.exit_date === threeDaysAgoStr) {
+          title = `Alerta de sobrepastoreo: hace tres días debieron salir los animales del potrero ${plan.paddock_name}`
+          body = `Revisá el planificador para ajustar la fecha de salida.`
+        }
+
+        // We use mutate directly to insert into notifications table
+        import('@/lib/db').then(({ mutate }) => {
+          mutate(`
+            INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, data)
+            VALUES ($1, $2, $2, 'ALERTA', $3, $4, $4, $5::jsonb)
+          `, [
+            plan.org_id,
+            plan.owner_profile_id,
+            title,
+            body,
+            JSON.stringify({ link: `/dashboard/grazing?planId=${plan.plan_id}` })
+          ]).catch(e => console.error('Failed to insert notification', e))
+        })
+      }
+    }
+
+    // ── Group tomorrow's plans by org for Emails ─────────────────────────────
+    const plansForEmail = plans ? plans.filter(p => p.exit_date === tomorrowStr) : []
+    const byOrg = new Map<string, typeof plansForEmail>()
+    for (const row of plansForEmail) {
+      if (!byOrg.has(row.org_id)) byOrg.set(row.org_id, [])
+      byOrg.get(row.org_id)!.push(row)
+    }
 
     let sent = 0
     const errors: string[] = []
@@ -113,10 +157,41 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Agenda events starting tomorrow ──────────────────────────────────────
+    const events = await query<{
+      id: string
+      title: string
+      org_id: string
+      owner_profile_id: string
+    }>(`
+      SELECT e.id, e.title, e.org_id, pr.id AS owner_profile_id
+      FROM agenda_events e
+      JOIN profiles pr ON pr.organization_id = e.org_id AND pr.team_role IS NULL
+      WHERE e.event_date = $1
+    `, [tomorrowStr]).catch(() => [])
+
+    if (events && events.length > 0) {
+      for (const ev of events) {
+        import('@/lib/db').then(({ mutate }) => {
+          mutate(`
+            INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, data)
+            VALUES ($1, $2, $2, 'EVENTO', $3, $4, $4, $5::jsonb)
+          `, [
+            ev.org_id,
+            ev.owner_profile_id,
+            `Tenés un evento que inicia mañana: ${ev.title}`,
+            `Acordate de revisar tu agenda.`,
+            JSON.stringify({ link: `/dashboard/agenda` })
+          ]).catch(e => console.error('Failed to insert event notification', e))
+        })
+      }
+    }
+
     return NextResponse.json({
       sent,
       orgs: byOrg.size,
-      plansFound: plans.length,
+      plansFound: plans?.length || 0,
+      eventsFound: events?.length || 0,
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (err: any) {

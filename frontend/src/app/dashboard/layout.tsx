@@ -626,13 +626,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         const colorClass = NOTIF_COLORS[notif.type] || NOTIF_COLORS.SISTEMA
                         const date = new Date(notif.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
                         const cleanText = (text: string) => text.replace(/[🚨⚠️🐄⛔]/g, '').trim()
+                        
+                        // Default link behavior based on type if data.link is missing
+                        let notifLink = notif.data?.link
+                        if (!notifLink) {
+                          if (notif.type === 'TAREA') notifLink = '/dashboard/tareas'
+                          else if (notif.type === 'EVENTO') notifLink = '/dashboard/agenda'
+                          else if (notif.type === 'INVITACION') notifLink = '/dashboard/equipo'
+                        }
+                        
+                        const Container = notifLink ? Link : 'div'
+                        
                         return (
-                          <div
+                          <Container
                             key={notif.id}
+                            href={notifLink || '#'}
                             className={clsx(
                               'group flex items-start gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors',
                               !notif.is_read && 'bg-green-50/40'
                             )}
+                            onClick={(e) => {
+                              // If it has a link, close the panel
+                              if (notifLink) setNotifOpen(false);
+                            }}
                           >
                             <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center shrink-0 mt-0.5">
                               <Bell className="w-4 h-4 text-gray-400" />
@@ -645,14 +661,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <div className="flex items-center gap-1 shrink-0 mt-0.5">
                               {!notif.is_read && <div className="w-2 h-2 bg-green-500 rounded-full" />}
                               <button
-                                onClick={() => deleteOneNotification(notif.id)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  deleteOneNotification(notif.id);
+                                }}
                                 className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
                                 title="Eliminar notificación"
                               >
                                 <X className="w-3 h-3" />
                               </button>
                             </div>
-                          </div>
+                          </Container>
                         )
                       })
                     )}

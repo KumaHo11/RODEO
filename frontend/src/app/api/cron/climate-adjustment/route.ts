@@ -320,20 +320,8 @@ export async function GET(req: NextRequest) {
 
             paddocksProcessed++
 
-            // Acumular alertas para despacho en batch
-            if (result.alertLevel !== 'ok' && result.alertMessage) {
-              allAlerts.push({
-                orgId:        org.org_id,
-                profileId:    org.owner_profile_id,
-                paddockId:    paddock.paddock_id,
-                paddockName:  paddock.paddock_name,
-                alertLevel:   result.alertLevel,
-                alertMessage: result.alertMessage,
-                adjustedDays: result.adjustedRemainingDays,
-                originalDays,
-                deltaFromPlan: result.deltaFromPlan,
-              })
-            }
+            // Acumular alertas para despacho en batch ha sido desactivado
+            // según requerimiento del cliente.
           } catch (err: any) {
             errors.push(`org=${org.org_id} paddock=${paddock.paddock_id}: ${err.message}`)
           }
@@ -346,11 +334,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── 4. Despachar alertas en batch ─────────────────────────────────────────
-    if (allAlerts.length > 0) {
-      const alertResults = await dispatchBatchClimateAlerts(allAlerts)
-      alertsDispatched = alertResults.filter(r => r.sent).length
-    }
+    // ── 4. Despachar alertas en batch (Desactivado) ───────────────────────────
+    alertsDispatched = 0
 
     const durationMs = Date.now() - startedAt
     console.log(`[climate-cron] ✓ orgs=${orgsProcessed} paddocks=${paddocksProcessed} alerts=${alertsDispatched} ms=${durationMs}`)
