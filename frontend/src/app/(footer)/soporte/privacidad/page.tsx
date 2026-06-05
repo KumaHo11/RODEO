@@ -124,8 +124,8 @@ Los registros de auditoría y facturación se conservan durante el período exig
           <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 mt-10">
             <p className="text-gray-600 text-sm">
               Para ejercer tus derechos o consultas sobre privacidad, escribinos a{' '}
-              <a href="mailto:soporte@rodeoagtech.com" className="text-green-600 font-bold underline">
-                soporte@rodeoagtech.com
+              <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="text-green-600 font-bold underline">
+                {process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}
               </a>.
               También podés consultar los{' '}
               <Link href="/soporte/terminos-de-uso" className="text-green-600 font-bold underline">

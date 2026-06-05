@@ -101,10 +101,10 @@ export default function Prensa() {
                   Para entrevistas, información adicional o datos de impacto específicos,
                   contactate directamente con nuestro equipo.
                 </p>
-                <a href="mailto:prensa@rodeoagtech.com"
+                <a href={`mailto:${process.env.NEXT_PUBLIC_PRESS_EMAIL || 'prensa@rodeoagtech.com'}`}
                   className="inline-flex items-center gap-2 text-green-400 text-sm font-bold hover:text-green-300">
                   <Mail className="w-4 h-4" />
-                  prensa@rodeoagtech.com
+                  {process.env.NEXT_PUBLIC_PRESS_EMAIL || 'prensa@rodeoagtech.com'}
                 </a>
               </div>
             </div>

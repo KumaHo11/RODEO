@@ -11,12 +11,24 @@ export async function POST(request: Request) {
 
     // Forward to Resend / email service
     const RESEND_API_KEY = process.env.RESEND_API_KEY
-    const TO_EMAIL = 'soporte@rodeoagtech.com'
+    const TO_EMAILS = process.env.CONTACT_FORM_DESTINATION_EMAILS 
+      ? process.env.CONTACT_FORM_DESTINATION_EMAILS.split(',') 
+      : ['Josorio@rodeoagtech.com', 'jllamazares@rodeoagtech.com']
 
     if (!RESEND_API_KEY) {
       console.error('[contact] RESEND_API_KEY not configured')
       return NextResponse.json({ error: 'Servicio de correo no configurado.' }, { status: 500 })
     }
+
+    const ASUNTO_LABELS: Record<string, string> = {
+      'soporte-tecnico': 'Soporte Técnico',
+      'consulta-planes': 'Planes y Precios',
+      'demo': 'Demo/Ventas',
+      'ventas-corporativas': 'Ventas Corporativas',
+      'prensa': 'Prensa y Medios',
+      'otro': 'Contacto',
+    }
+    const tag = ASUNTO_LABELS[asunto] || 'Contacto'
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -26,9 +38,9 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         from: 'Rodeo Contacto <no-reply@rodeoagtech.com>',
-        to: [TO_EMAIL],
+        to: TO_EMAILS,
         reply_to: email,
-        subject: `[Contacto Rodeo] ${asunto} — ${nombre}`,
+        subject: `[${tag}] Nuevo mensaje desde formulario — ${nombre}`,
         html: `
           <div style="font-family: Inter, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; background: #fff;">
             <div style="background: #16a34a; padding: 16px 24px; border-radius: 12px; margin-bottom: 24px;">

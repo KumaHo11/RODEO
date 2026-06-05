@@ -19,7 +19,7 @@ export default function Contacto() {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, to: 'soporte@rodeoagtech.com' }),
+        body: JSON.stringify({ ...form }),
       })
       if (res.ok) {
         setStatus('success')
@@ -150,7 +150,7 @@ export default function Contacto() {
                     <p className="text-red-600 text-sm bg-red-50 border border-red-100 rounded-xl px-4 py-3">
                       Hubo un error al enviar el mensaje. Por favor intentá nuevamente o
                       escribinos directamente a{' '}
-                      <a href="mailto:soporte@rodeoagtech.com" className="font-bold underline">soporte@rodeoagtech.com</a>.
+                      <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="font-bold underline">{process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}</a>.
                     </p>
                   )}
 
@@ -186,8 +186,8 @@ export default function Contacto() {
                     <div>
                       <div className="font-bold text-gray-900 mb-1">Soporte por correo</div>
                       <p className="text-sm text-gray-500 mb-2">Para consultas técnicas y de producto. Respondemos en menos de 24 horas hábiles.</p>
-                      <a href="mailto:soporte@rodeoagtech.com" className="text-sm font-bold text-green-600 hover:text-green-700">
-                        soporte@rodeoagtech.com
+                      <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="text-sm font-bold text-green-600 hover:text-green-700">
+                        {process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}
                       </a>
                     </div>
                   </div>

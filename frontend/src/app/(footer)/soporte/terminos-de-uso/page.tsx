@@ -97,8 +97,8 @@ La responsabilidad total de Rodeo ante el usuario, por cualquier concepto, no ex
           <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 mt-10">
             <p className="text-gray-600 text-sm">
               Para consultas sobre estos Términos de Uso, escribinos a{' '}
-              <a href="mailto:soporte@rodeoagtech.com" className="text-green-600 font-bold underline">
-                soporte@rodeoagtech.com
+              <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="text-green-600 font-bold underline">
+                {process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}
               </a>{' '}
               o visitá nuestro{' '}
               <Link href="/soporte/centro-de-ayuda" className="text-green-600 font-bold underline">

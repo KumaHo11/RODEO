@@ -161,8 +161,8 @@ function ActionContent() {
 
               <p className="text-center text-xs text-gray-400">
                 ¿Necesitás ayuda?{' '}
-                <a href="mailto:soporte@rodeoagtech.com" className="text-green-600 font-bold hover:underline">
-                  soporte@rodeoagtech.com
+                <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="text-green-600 font-bold hover:underline">
+                  {process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}
                 </a>
               </p>
             </motion.div>

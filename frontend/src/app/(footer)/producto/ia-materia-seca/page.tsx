@@ -250,7 +250,7 @@ export default function IaMateriaSeca() {
           </Link>
           <p className="mt-4 text-xs text-gray-400">
             ¿Tenés preguntas? Escribinos a{' '}
-            <a href="mailto:soporte@rodeoagtech.com" className="text-green-600 underline">soporte@rodeoagtech.com</a>
+            <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="text-green-600 underline">{process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}</a>
           </p>
         </div>
       </section>

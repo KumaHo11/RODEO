@@ -810,7 +810,7 @@ export default function LandingPage() {
                     </div>
 
                     {plan.slug === 'latifundio' ? (
-                      <a href="mailto:ventas@rodeoagtech.com"
+                      <a href={`mailto:${process.env.NEXT_PUBLIC_SALES_EMAIL || 'ventas@rodeoagtech.com'}`}
                         className={`w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all mb-5 block ${(plan as any).ctaStyle}`}>
                         {(plan as any).cta}
                       </a>
