@@ -14,7 +14,8 @@
  */
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Layers, Users } from 'lucide-react'
+import { ChevronDown, Users } from 'lucide-react'
+import { IconoRodeos } from '@/components/icons/IconoRodeos'
 import { type HerdData } from '@/components/HerdModal'
 import SubHerdCard from '@/components/SubHerdCard'
 import { PHYSIO_LABEL } from '@/lib/grazing/evProjection'
@@ -107,7 +108,7 @@ export default function LoteCard({
         {/* Ícono + Nombre del Lote */}
         <div className="flex items-start gap-3 min-w-0">
           <div className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 border border-green-200 flex items-center justify-center">
-            <Layers className="w-4 h-4 text-green-600" />
+            <IconoRodeos className="w-4 h-4 text-green-600" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">

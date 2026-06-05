@@ -23,8 +23,9 @@ import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, ChevronRight, ChevronLeft, Check, Loader2,
-  Baby, AlertTriangle, ArrowRight, Plus, Layers,
+  Baby, AlertTriangle, ArrowRight, Plus,
 } from 'lucide-react'
+import { IconoRodeos } from '@/components/icons/IconoRodeos'
 import { apiFetch } from '@/lib/apiFetch'
 import { todayISO } from '@/lib/utils/dates'
 import {
@@ -477,7 +478,7 @@ export default function WeaningWizard({
                           ? 'border-teal-400 bg-teal-50 text-teal-700'
                           : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'}`}
                     >
-                      <Layers className="w-4 h-4 shrink-0" />
+                      <IconoRodeos className="w-4 h-4 shrink-0" />
                       <div>
                         <p>Rodeo existente</p>
                         <p className="font-medium text-[10px] opacity-70">Transferir a recría</p>

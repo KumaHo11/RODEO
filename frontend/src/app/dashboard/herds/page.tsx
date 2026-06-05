@@ -5,7 +5,8 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import {
   Plus, Search, Trash2, List, Download,
-  ChevronUp, ChevronDown, Filter, X, Calendar, Layers,
+  ChevronUp, ChevronDown, Filter, X, Calendar,
+
   Info, FileSpreadsheet, WifiOff,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -22,7 +23,7 @@ import WeatherConditionChip from '@/components/WeatherConditionChip'
 import { calculateBaseEV, PHYSIO_LABEL } from '@/lib/grazing/evProjection'
 import { fmtDate } from '@/lib/utils/dates'
 import LoteCard, { type LoteData } from '@/components/LoteCard'
-
+import { IconoRodeos } from '@/components/icons/IconoRodeos'
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SortKey = 'name' | 'head_count' | 'avg_weight_kg' | 'admission_date' | 'total_ev'
 
@@ -686,7 +687,7 @@ export default function HerdsPage() {
                   if (v === 'historial') loadHistorial() 
                 }}
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${view === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                {v === 'cards' && <Layers className="w-3.5 h-3.5 shrink-0" />}
+                {v === 'cards' && <IconoRodeos className="w-3.5 h-3.5 shrink-0" />}
                 {v === 'list'  && <List   className="w-3.5 h-3.5 shrink-0" />}
                 {v === 'historial' && <Calendar className="w-3.5 h-3.5 shrink-0" />}
                 <span className="hidden sm:inline capitalize">{v === 'cards' ? 'Lotes' : v === 'list' ? 'Lista' : 'Historial'}</span>
@@ -864,7 +865,7 @@ export default function HerdsPage() {
           </div>
         ) : filteredLotes.length === 0 && filteredUngrouped.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 py-20 text-center shadow-sm">
-            <Layers className="w-6 h-6 mx-auto text-gray-200 mb-2" />
+            <IconoRodeos className="w-6 h-6 mx-auto text-gray-200 mb-2" />
             <p className="text-sm font-bold text-gray-400">No hay rodeos que mostrar</p>
             <p className="text-[10px] text-gray-300 mt-1">Creá tu primer rodeo o cambiá los filtros</p>
           </div>
@@ -1009,7 +1010,7 @@ export default function HerdsPage() {
                         <td className="px-4 py-3" colSpan={7}>
                           <div className="flex items-center gap-2.5">
                             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-green-100 to-emerald-200 border border-green-200 flex items-center justify-center shrink-0">
-                              <Layers className="w-3.5 h-3.5 text-green-700" />
+                              <IconoRodeos className="w-3.5 h-3.5 text-green-700" />
                             </div>
                             <div>
                               <span className="text-sm font-black text-gray-900">{lote.nombre}</span>
@@ -1115,7 +1116,7 @@ export default function HerdsPage() {
                           <td colSpan={5} className="px-4 py-3">
                             <div className="flex items-center gap-2.5">
                               <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-green-100 to-emerald-200 border border-green-200 flex items-center justify-center shrink-0">
-                                <Layers className="w-3 h-3 text-green-700" />
+                                <IconoRodeos className="w-3 h-3 text-green-700" />
                               </div>
                               <span className="text-sm font-black text-gray-900">{nombre}</span>
                               <span className="text-[9px] font-black bg-green-600 text-white px-2 py-0.5 rounded-full tracking-widest uppercase">LOTE</span>
