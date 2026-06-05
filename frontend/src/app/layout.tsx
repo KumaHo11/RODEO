@@ -47,7 +47,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="RODEO" />
         {/* Anti-ServiceWorker para desarrollo: Muerte súbita a cachés corruptas */}
-        <script
+        <Script
+          id="sw-unregister"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               if (location.hostname === 'localhost' && 'serviceWorker' in navigator) {
