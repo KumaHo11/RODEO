@@ -394,13 +394,14 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
 
   const PERIODS: Record<string, number> = { trimestral: 84, semestral: 180, anual: 365, cerrada: 213, abierta: 212 }
-  const WINDOW_DAYS = PERIODS[ganttPeriod] ?? 365
-
+  
   const [ganttWindow, setGanttWindow] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() - 28)
     return d.toISOString().split('T')[0]
   })
+
+  // dynamicWindowDays calculation moved below filteredPlans definition
 
   const [climateViewEnabled, setClimateViewEnabled] = useState(() => {
     if (typeof window === 'undefined') return true
@@ -489,7 +490,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       setGanttWindow(`${year}-04-01`)
       setGanttPeriod('anual')
     }
-  }, [seasonalFilters, plans])
+  }, [seasonalFilters])
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [showPlanDropdown, setShowPlanDropdown] = useState(false)
@@ -1460,6 +1461,30 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     }),
     [plans, search, filterStatus, viewMode, activeGanttTab, historyTab, activeSeasonPlanId]
   )
+
+  let dynamicWindowDays = PERIODS[ganttPeriod] ?? 365
+
+  if (viewMode === 'gantt' && typeof filteredPlans !== 'undefined' && filteredPlans.length > 0) {
+    const startObj = new Date(ganttWindow + 'T00:00:00')
+    let maxDate = startObj.getTime() + dynamicWindowDays * 24 * 60 * 60 * 1000
+
+    filteredPlans.forEach((p: any) => {
+      const exitStr = p.exit_date || p.actual_exit_date || p.entry_date
+      if (exitStr) {
+        const exitObj = new Date(exitStr + 'T00:00:00')
+        if (exitObj.getTime() > maxDate) {
+          maxDate = exitObj.getTime()
+        }
+      }
+    })
+
+    const diffDays = Math.ceil((maxDate - startObj.getTime()) / (24 * 60 * 60 * 1000))
+    if (diffDays > dynamicWindowDays) {
+      dynamicWindowDays = Math.min(diffDays + 14, 1095) // Max 3 years
+    }
+  }
+
+  const WINDOW_DAYS = dynamicWindowDays
 
 
   const handleExportExcel = async () => {
