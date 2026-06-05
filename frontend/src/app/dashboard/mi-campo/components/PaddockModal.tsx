@@ -528,8 +528,11 @@ export default function PaddockModal({
   const [noteMode, setNoteMode]             = useState<'text' | 'image' | 'audio' | null>(null)
   const [noteTitle, setNoteTitle]           = useState('')
   const [noteText, setNoteText]             = useState('')
-  const [noteImage, setNoteImage]           = useState<File | null>(null)
-  const [noteImagePreview, setNoteImagePreview] = useState<string | null>(null)
+  const [noteImages, setNoteImages]         = useState<File[]>([])
+  const [noteImagePreviews, setNoteImagePreviews] = useState<string[]>([])
+  const [aiUpdateProposal, setAiUpdateProposal] = useState<any>(null)
+  const [lightboxImages, setLightboxImages] = useState<string[]>([])
+  const [lightboxIndex, setLightboxIndex] = useState(0)
   const [noteAnalyzing, setNoteAnalyzing]   = useState(false)
   const [noteResult, setNoteResult]         = useState<any>(null)
   const [noteSaving, setNoteSaving]         = useState(false)
@@ -638,7 +641,7 @@ export default function PaddockModal({
     setSaving(true)
 
     // ── Opción A: Si hay un borrador pendiente en Registros, guardarlo primero ──
-    if (noteExpanded && (noteText || audioTranscript || noteImage || audioBlobRef.current)) {
+    if (noteExpanded && (noteText || audioTranscript || noteImages.length > 0 || audioBlobRef.current)) {
       await saveQuickNote()
     }
 
@@ -698,7 +701,9 @@ export default function PaddockModal({
       areaHa !== '' ? Number(areaHa) : undefined,
     )
     setSaving(false)
-    onClose()
+    if (activeTab !== 'registros') {
+      onClose()
+    }
   }
 
   // ── Audio con SpeechRecognition + MediaRecorder ────────────────────────────
@@ -755,8 +760,8 @@ export default function PaddockModal({
     setAudioBlob(null)
     setAudioUrl(null)
     audioBlobRef.current = null
-    setNoteImage(null)
-    setNoteImagePreview(null)
+    setNoteImages([])
+    setNoteImagePreviews([])
     setNoteResult(null)
     setNoteMode(null)
     setNoteExpanded(false)
@@ -789,7 +794,7 @@ export default function PaddockModal({
     }
 
     const content = noteText || audioTranscript
-    if (!content && !noteImage && !effectiveBlob) {
+    if (!content && noteImages.length === 0 && !effectiveBlob) {
       setNoteSaving(false)
       return false
     }
@@ -802,7 +807,7 @@ export default function PaddockModal({
       const offlineId = crypto.randomUUID()
       const offlineTitle = noteTitle.trim() || (noteText || audioTranscript).slice(0, 60) || 'Nota de campo'
       
-      if (!effectiveBlob && !noteImage) {
+      if (!effectiveBlob && noteImages.length === 0) {
         // Nota de texto — encolar directamente
         import('@/components/OfflineIndicator').then(({ addToOfflineQueue }) => {
           addToOfflineQueue({
@@ -848,15 +853,15 @@ export default function PaddockModal({
           mediaId: offlineId,
         } as any)
         toast.success('🎙️ Audio guardado. Se subirá al servidor cuando tengas conexión.')
-      } else if (noteImage) {
+      } else if (noteImages.length > 0) {
         // Foto — guardar blob en IndexedDB y encolar, mostrar preview
         const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
         await savePendingPhoto({
           id: offlineId,
-          blob: noteImage,
+          blob: noteImages[0],
           lat: null, lng: null,
           createdAt: new Date().toISOString(),
-          title: noteTitle.trim() || noteImage.name,
+          title: noteTitle.trim() || noteImages[0]?.name,
         })
         const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
         addToOfflineQueue({
@@ -865,7 +870,7 @@ export default function PaddockModal({
             paddock_id: paddock.id,
             category: noteResult ? 'BIOMASA' : 'GENERAL',
             tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-            title: noteTitle.trim() || noteImage.name,
+            title: noteTitle.trim() || noteImages[0]?.name,
             content: noteText || null,
             sync_status: 'PENDING',
             analysis_result: noteResult || null,
@@ -890,29 +895,33 @@ export default function PaddockModal({
     // Si cualquier fetch falla con TypeError (error de red), encolamos offline.
     try {
       let photo_url: string | null = null
-      if (noteImage) {
+      let photo_urls: string[] = []
+      if (noteImages.length > 0) {
         try {
-          const compressedImage = await compressImage(noteImage)
-          const fd = new FormData()
-          fd.append('file', compressedImage)
-          fd.append('folder', 'field-notes')
-          const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-          if (up.ok) {
-            const upData = await up.json().catch(() => ({}))
-            photo_url = upData.url || null
-          } else {
-            console.warn('[saveQuickNote] photo upload failed:', up.status)
+          for (const img of noteImages) {
+            const compressedImage = await compressImage(img)
+            const fd = new FormData()
+            fd.append('file', compressedImage)
+            fd.append('folder', 'field-notes')
+            const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+            if (up.ok) {
+              const upData = await up.json().catch(() => ({}))
+              if (upData.url) photo_urls.push(upData.url)
+            } else {
+              console.warn('[saveQuickNote] photo upload failed:', up.status)
+            }
           }
         } catch (err) {
           console.error('[saveQuickNote] compress/upload error:', err)
           throw err // re-throw para que caiga en el catch externo (fallback offline)
         }
 
-        if (!photo_url) {
-          toast.error('No se pudo subir la foto al servidor. Verificá tu conexión e intentá de nuevo.')
+        if (photo_urls.length === 0) {
+          toast.error('No se pudieron subir las fotos al servidor. Verificá tu conexión e intentá de nuevo.')
           setNoteSaving(false)
           return false
         }
+        photo_url = photo_urls[0]
       }
 
       // 1. Upload audio file
@@ -940,7 +949,7 @@ export default function PaddockModal({
       const resolvedContent = noteText || audioTranscript || null
       const resolvedTitle = noteTitle.trim() ||
         resolvedContent?.slice(0, 60) ||
-        noteImage?.name ||
+        noteImages[0]?.name ||
         (effectiveBlob ? `Audio · ${timestamp}` : 'Nota de campo')
 
       // 3. Save note immediately
@@ -953,6 +962,7 @@ export default function PaddockModal({
           title: resolvedTitle,
           content: resolvedContent,
           photo_url,
+          photo_urls,
           audio_url,
           analysis_result: noteResult || null,
         }),
@@ -1029,16 +1039,21 @@ export default function PaddockModal({
           data: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
           timestamp: Date.now(), mediaType: 'audio', mediaId: offlineId,
         } as any)
-      } else if (noteImage) {
+      } else if (noteImages.length > 0) {
         const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
-        await savePendingPhoto({
-          id: offlineId, blob: noteImage, lat: null, lng: null,
-          createdAt: new Date().toISOString(), title: offlineTitle,
-        }).catch(() => {})
+        const ppIds = []
+        for (const img of noteImages) {
+          const id = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
+          await savePendingPhoto({
+            id: id, blob: img, lat: null, lng: null,
+            createdAt: new Date().toISOString(), title: offlineTitle,
+          }).catch(() => {})
+          ppIds.push(id)
+        }
         addToOfflineQueue({
           type: 'field_note',
           data: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
-          timestamp: Date.now(), mediaType: 'photo', mediaId: offlineId,
+          timestamp: Date.now(), mediaType: 'photo', mediaIds: { photos: ppIds },
         } as any)
       } else {
         addToOfflineQueue({
@@ -1056,7 +1071,7 @@ export default function PaddockModal({
       resetNoteCapture()
       return true
     }
-  }, [noteText, audioTranscript, noteImage, noteResult, paddock.id, loadNotes, noteTitle, recording, resetNoteCapture])
+  }, [noteText, audioTranscript, noteImages, noteResult, paddock.id, loadNotes, noteTitle, recording, resetNoteCapture])
 
 
 
@@ -1074,21 +1089,28 @@ export default function PaddockModal({
   }, [confirm])
 
   const analyzeNoteImage = useCallback(async () => {
-    if (!noteImage) return
+    if (noteImages.length === 0) return
     setNoteAnalyzing(true)
     setNoteResult(null)
+    setAiUpdateProposal(null)
     try {
-      const compressedImage = await compressImage(noteImage)
-      const reader = new FileReader()
-      const b64: string = await new Promise((res, rej) => {
-        reader.onload = () => res((reader.result as string).split(',')[1])
-        reader.onerror = rej
-        reader.readAsDataURL(compressedImage)
-      })
+      const imagesBase64 = []
+      for (const img of noteImages) {
+        const compressedImage = await compressImage(img)
+        const reader = new FileReader()
+        const b64: string = await new Promise((res, rej) => {
+          reader.onload = () => res((reader.result as string).split(',')[1])
+          reader.onerror = rej
+          reader.readAsDataURL(compressedImage)
+        })
+        imagesBase64.push({ base64: b64, mimeType: compressedImage.type })
+      }
+      
       const resp = await apiFetch('/api/analyze-biomass', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: b64, mimeType: compressedImage.type, area_ha: areaHa })
+        body: JSON.stringify({ imagesBase64, area_ha: areaHa }),
+        timeout: 60000 // 60 seconds timeout for Gemini multimodal
       })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
@@ -1101,17 +1123,16 @@ export default function PaddockModal({
       const result = data?.data ?? data
       if (result?.dry_matter_kg_ha) {
         setNoteResult(result)
-        setMsHa(String(Math.round(result.dry_matter_kg_ha)))
-        toast.success(`La IA estimó ${Math.round(result.dry_matter_kg_ha)} kg MS/ha. Se actualizó el potrero.`)
+        setAiUpdateProposal(result)
       } else {
         toast.error('La IA no pudo determinar la biomasa de esta imagen')
       }
     } catch (e: any) {
       console.error('analyzeNoteImage error:', e)
-      toast.error('Error de conexión al analizar')
+      toast.error(e.name === 'AbortError' ? 'El análisis tardó demasiado. Intenta con menos fotos.' : 'Error de conexión al analizar')
     }
     setNoteAnalyzing(false)
-  }, [noteImage, areaHa])
+  }, [noteImages, areaHa])
 
   const analyzeBio = useCallback(async () => {
     if (!bioPhoto) return
@@ -1592,7 +1613,7 @@ export default function PaddockModal({
                             if (noteMode === 'audio') {
                               setNoteExpanded(false); setNoteMode(null)
                             } else {
-                              setNoteText(''); setNoteImage(null); setNoteImagePreview(null); setNoteResult(null)
+                              setNoteText(''); setNoteImages([]); setNoteImagePreviews([]); setNoteResult(null)
                               setNoteExpanded(true); setNoteMode('audio')
                             }
                           }}
@@ -1630,7 +1651,7 @@ export default function PaddockModal({
                           } else {
                             // Clear previous mode data
                             setAudioTranscript(''); setAudioBlob(null); setAudioUrl(null)
-                            setNoteImage(null); setNoteImagePreview(null); setNoteResult(null)
+                            setNoteImages([]); setNoteImagePreviews([]); setNoteResult(null)
                             speechRef.current?.stop(); mediaRecorderRef.current?.stop(); setRecording(false)
                             setNoteExpanded(true); setNoteMode('text')
                           }
@@ -1695,15 +1716,47 @@ export default function PaddockModal({
                                 <Camera className="w-3.5 h-3.5" /> Cámara
                               </button>
                             </div>
-                            <input ref={noteImageRef} type="file" accept="image/*" className="sr-only"
-                              onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
+                            <input ref={noteImageRef} type="file" multiple accept="image/*" className="sr-only"
+                              onChange={e => {
+                                const files = Array.from(e.target.files || [])
+                                if (files.length === 0) return
+                                if (noteImages.length + files.length > 5) {
+                                  toast.error('Máximo 5 fotos')
+                                  return
+                                }
+                                setNoteImages(prev => [...prev, ...files])
+                                setNoteImagePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
+                                setNoteResult(null)
+                              }} />
                             <input ref={noteCameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
-                              onChange={e => { const f = e.target.files?.[0]; if (f) { setNoteImage(f); setNoteImagePreview(URL.createObjectURL(f)); setNoteResult(null) } }} />
-                            {noteImagePreview && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={noteImagePreview} alt="preview" className="w-full max-h-36 object-cover rounded-xl" />
+                              onChange={e => {
+                                const files = Array.from(e.target.files || [])
+                                if (files.length === 0) return
+                                if (noteImages.length + files.length > 5) {
+                                  toast.error('Máximo 5 fotos')
+                                  return
+                                }
+                                setNoteImages(prev => [...prev, ...files])
+                                setNoteImagePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
+                                setNoteResult(null)
+                              }} />
+                            {noteImagePreviews.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {noteImagePreviews.map((preview, idx) => (
+                                  <div key={idx} className="relative w-20 h-20 group">
+                                    <img src={preview} alt="preview" className="w-full h-full object-cover rounded-xl" />
+                                    <button type="button" onClick={() => {
+                                      setNoteImages(prev => prev.filter((_, i) => i !== idx))
+                                      setNoteImagePreviews(prev => prev.filter((_, i) => i !== idx))
+                                      setNoteResult(null)
+                                    }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
                             )}
-                            {noteImage && canAiInsight && (
+                            {noteImages.length > 0 && canAiInsight && (
                               <button type="button" onClick={analyzeNoteImage} disabled={noteAnalyzing || !isOnline}
                                 title={!isOnline ? 'Requiere conexión a internet' : undefined}
                                 className="w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap overflow-hidden px-2">
@@ -1711,17 +1764,38 @@ export default function PaddockModal({
                                 <span className="truncate">{noteAnalyzing ? 'Analizando con IA…' : !isOnline ? 'IA no disponible sin conexión' : 'Analizar biomasa con IA'}</span>
                               </button>
                             )}
-                            {noteImage && !canAiInsight && (
+                            {noteImages.length > 0 && !canAiInsight && (
                               <div className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-center">
                                 <p className="text-[10px] font-bold text-gray-400">✨ Análisis de biomasa IA disponible en planes Pro</p>
                               </div>
                             )}
-                            {noteResult && (
-                              <div className="bg-violet-50 px-3 py-2 rounded-xl border border-violet-200 flex items-center gap-2">
-                                <span className="text-lg">🌿</span>
-                                <div>
-                                  <p className="text-[9px] font-black text-violet-500 tracking-widest uppercase">Resultado IA · Gemini</p>
-                                  <p className="text-sm font-black text-violet-900">{Number(noteResult.dry_matter_kg_ha).toLocaleString('es')} kg MS/ha</p>
+                            {aiUpdateProposal && (
+                              <div className="bg-violet-50 px-3 py-2 rounded-xl border border-violet-200 flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-lg">✨</span>
+                                    <div>
+                                      <p className="text-[9px] font-black text-violet-500 tracking-widest uppercase">Análisis completado</p>
+                                      <p className="text-sm font-black text-violet-900">Resultados listos</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="pl-8 flex flex-col gap-0.5 text-xs text-violet-700 font-medium">
+                                  <p><span className="font-bold">Materia Seca:</span> {Math.round(aiUpdateProposal.dry_matter_kg_ha)} kg MS/ha</p>
+                                  {aiUpdateProposal.pasture_type && <p><span className="font-bold">Tipo:</span> {aiUpdateProposal.pasture_type}</p>}
+                                  {aiUpdateProposal.protein_content_pct && <p><span className="font-bold">Proteína:</span> {aiUpdateProposal.protein_content_pct}%</p>}
+                                  {aiUpdateProposal.coverage_pct && <p><span className="font-bold">Cobertura:</span> {aiUpdateProposal.coverage_pct}%</p>}
+                                  {aiUpdateProposal.grass_height_cm && <p><span className="font-bold">Altura:</span> {aiUpdateProposal.grass_height_cm} cm</p>}
+                                  {aiUpdateProposal.weeds_detected && aiUpdateProposal.weeds_detected.length > 0 && <p><span className="font-bold">Malezas:</span> {aiUpdateProposal.weeds_detected.join(', ')}</p>}
+                                </div>
+                                <div className="mt-1 flex items-center justify-end gap-2">
+                                  <button type="button" onClick={() => setAiUpdateProposal(null)} className="px-3 py-1.5 text-xs font-bold text-violet-600 bg-white border border-violet-200 rounded-lg hover:bg-violet-50">Descartar</button>
+                                  <button type="button" onClick={() => {
+                                    setMsHa(String(Math.round(aiUpdateProposal.dry_matter_kg_ha)))
+                                    if (aiUpdateProposal.weeds_detected?.length > 0) setHasPests(true)
+                                    setAiUpdateProposal(null)
+                                    toast.success('Valores aplicados al potrero.')
+                                  }} className="px-3 py-1.5 text-xs font-bold text-white bg-violet-600 rounded-lg hover:bg-violet-700">Aplicar Datos</button>
                                 </div>
                               </div>
                             )}
@@ -1731,7 +1805,7 @@ export default function PaddockModal({
                         )}
 
                         {/* Banner informativo: el borrador se guarda al presionar Guardar cambios */}
-                        {(noteText || audioTranscript || noteImage || audioBlob) && (
+                        {(noteText || audioTranscript || noteImages.length > 0 || audioBlob) && (
                           <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 rounded-xl px-3.5 py-2.5">
                             <div className="w-5 h-5 rounded-full bg-green-600 flex items-center justify-center shrink-0">
                               <Check className="w-3 h-3 text-white" />
@@ -1867,7 +1941,7 @@ export default function PaddockModal({
                         const { tags, primary } = getCat(note)
                         const { Icon: CatIcon } = primary
                         const hasAudio = !!note.audio_url
-                        const hasPhoto = !!note.photo_url
+                        const hasPhoto = !!note.photo_url || (note.photo_urls && note.photo_urls.length > 0)
                         const hasAI    = !!note.analysis_result?.dry_matter_kg_ha
                         return (
                           <div key={note.id} className="flex gap-2.5">
@@ -1899,19 +1973,26 @@ export default function PaddockModal({
                                   </div>
                                 </div>
                               )}
-                              {hasPhoto && (
-                                note.photo_url?.startsWith('/uploads/') ? (
-                                  <div className="flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2">
-                                    <Camera className="w-3 h-3" />
-                                    <span>Imagen no disponible en este entorno</span>
+                              {hasPhoto && (() => {
+                                const urls = note.photo_urls?.length ? note.photo_urls : (note.photo_url ? [note.photo_url] : [])
+                                return (
+                                  <div className={`grid gap-1 px-3 pb-2 ${urls.length === 1 ? 'grid-cols-1' : urls.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                    {urls.map((u: string, idx: number) => u.startsWith('/uploads/') ? (
+                                      <div key={idx} className="flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2 rounded-lg">
+                                        <Camera className="w-3 h-3" />
+                                        <span>Imagen no disponible</span>
+                                      </div>
+                                    ) : (
+                                      <button key={idx} type="button" onClick={() => { setLightboxImages(urls); setLightboxIndex(idx) }} className={`relative w-full overflow-hidden rounded-lg group ${urls.length === 1 ? "aspect-video" : "aspect-square"}`}>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={u} alt="Evidencia" className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                          onError={(e) => { const el = e.currentTarget; el.style.display='none'; const fb = document.createElement('div'); fb.className='flex items-center justify-center h-full w-full bg-gray-50'; fb.innerHTML='<span class="text-[9px] text-gray-400">Error</span>'; el.parentNode?.insertBefore(fb, el.nextSibling) }}
+                                        />
+                                      </button>
+                                    ))}
                                   </div>
-                                ) : (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={note.photo_url} alt="Evidencia" className="w-full max-h-24 object-cover"
-                                    onError={(e) => { const el = e.currentTarget; el.style.display='none'; const fb = document.createElement('div'); fb.className='flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2'; fb.innerHTML='<span>Imagen no disponible</span>'; el.parentNode?.insertBefore(fb, el.nextSibling) }}
-                                  />
                                 )
-                              )}
+                              })()}
                               {hasAI && (
                                 <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
                                   {[
@@ -2085,7 +2166,7 @@ export default function PaddockModal({
                         const { Icon: CatIcon } = primary
                         const isOwner = !user || note.created_by === user?.id || note.created_by === user?.uid
                         const hasAudio = !!note.audio_url
-                        const hasPhoto = !!note.photo_url
+                        const hasPhoto = !!note.photo_url || (note.photo_urls && note.photo_urls.length > 0)
                         const hasAI    = !!note.analysis_result?.dry_matter_kg_ha
 
                         return (
@@ -2129,22 +2210,29 @@ export default function PaddockModal({
                                   </div>
                                 </div>
                               )}
-                              {hasPhoto && (
-                                note.photo_url?.startsWith('/uploads/') ? (
-                                  <div className="flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2">
-                                    <Camera className="w-3 h-3" />
-                                    <span>Imagen no disponible en este entorno</span>
+                              {hasPhoto && (() => {
+                                const urls = note.photo_urls?.length ? note.photo_urls : (note.photo_url ? [note.photo_url] : [])
+                                return (
+                                  <div className={`grid gap-1 px-3 pb-2 ${urls.length === 1 ? 'grid-cols-1' : urls.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                    {urls.map((u: string, idx: number) => u.startsWith('/uploads/') ? (
+                                      <div key={idx} className="flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2 rounded-lg">
+                                        <Camera className="w-3 h-3" />
+                                        <span>Imagen no disponible</span>
+                                      </div>
+                                    ) : (
+                                      <button key={idx} type="button" onClick={() => { setLightboxImages(urls); setLightboxIndex(idx) }} className={`relative w-full overflow-hidden rounded-lg group ${urls.length === 1 ? "aspect-video" : "aspect-square"}`}>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={u} alt="Evidencia" className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                          onError={(e) => { const el = e.currentTarget; el.style.display='none'; const fb = document.createElement('div'); fb.className='flex items-center justify-center h-full w-full bg-gray-50'; fb.innerHTML='<span class="text-[9px] text-gray-400">Error</span>'; el.parentNode?.insertBefore(fb, el.nextSibling) }}
+                                        />
+                                      </button>
+                                    ))}
                                   </div>
-                                ) : (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={note.photo_url} alt="Evidencia" className="w-full max-h-32 object-cover"
-                                    onError={(e) => { const el = e.currentTarget; el.style.display='none'; const fb = document.createElement('div'); fb.className='flex items-center gap-1.5 text-[9px] text-gray-400 bg-gray-50 px-3 py-2'; fb.innerHTML='<span>Imagen no disponible</span>'; el.parentNode?.insertBefore(fb, el.nextSibling) }}
-                                  />
                                 )
-                              )}
+                              })()}
                               {note.content && (
                                 <div className="px-3 pb-2">
-                                  <p className="text-[10px] text-gray-500 leading-relaxed line-clamp-3">{note.content}</p>
+                                  <p className="text-[10px] text-gray-500 leading-relaxed line-clamp-3 hover:line-clamp-none transition-all cursor-pointer">{note.content}</p>
                                 </div>
                               )}
                               {hasAI && (
@@ -2289,11 +2377,33 @@ export default function PaddockModal({
     </div>
   ) : null
 
+  const lightboxModal = lightboxImages.length > 0 ? (
+    <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/90 backdrop-blur-sm">
+      <div className="absolute top-4 right-4 flex gap-4">
+        <button onClick={() => setLightboxImages([])} className="text-white hover:text-gray-300 p-2">
+          <X className="w-8 h-8" />
+        </button>
+      </div>
+      {lightboxImages.length > 1 && (
+        <>
+          <button onClick={() => setLightboxIndex(i => (i > 0 ? i - 1 : lightboxImages.length - 1))} className="absolute left-4 text-white hover:text-gray-300 p-2 bg-black/50 rounded-full">
+            <ChevronDown className="w-8 h-8 rotate-90" />
+          </button>
+          <button onClick={() => setLightboxIndex(i => (i < lightboxImages.length - 1 ? i + 1 : 0))} className="absolute right-4 text-white hover:text-gray-300 p-2 bg-black/50 rounded-full">
+            <ChevronDown className="w-8 h-8 -rotate-90" />
+          </button>
+        </>
+      )}
+      <img src={lightboxImages[lightboxIndex]} alt="fullscreen" className="max-w-full max-h-full object-contain" />
+    </div>
+  ) : null
+
   if (typeof document === 'undefined') return null
   return (
     <>
       {createPortal(modalContent, document.body)}
       {createPortal(waterCalcModal ?? <></>, document.body)}
+      {createPortal(lightboxModal ?? <></>, document.body)}
     </>
   )
 }

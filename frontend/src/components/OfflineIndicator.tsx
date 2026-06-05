@@ -116,15 +116,26 @@ export default function OfflineIndicator() {
               }
             }
             if (item.mediaType === 'photo' || item.hasPhoto) {
-              const ppId = item.mediaId || item.mediaIds?.photo
-              if (ppId) {
-                const pp = await getPendingPhoto(ppId)
-                if (pp) {
-                  const fd = new FormData()
-                  fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
-                  fd.append('folder', 'bitacora-photos')
-                  const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd, timeout: 60000 })
-                  if (uploadRes.ok) data.photo_url = (await uploadRes.json()).url
+              const ppIds = item.mediaIds?.photos || (item.mediaId || item.mediaIds?.photo ? [item.mediaId || item.mediaIds?.photo] : [])
+              if (ppIds.length > 0) {
+                const urls: string[] = []
+                for (const ppId of ppIds) {
+                  if (ppId) {
+                    const pp = await getPendingPhoto(ppId)
+                    if (pp) {
+                      const fd = new FormData()
+                      fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
+                      fd.append('folder', 'bitacora-photos')
+                      const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: fd, timeout: 60000 })
+                      if (uploadRes.ok) urls.push((await uploadRes.json()).url)
+                    }
+                  }
+                }
+                if (urls.length > 0) {
+                  if (!item.mediaIds?.photos) {
+                    data.photo_url = urls[0] // backward compatibility
+                  }
+                  data.photo_urls = urls
                 }
               }
             }
@@ -200,8 +211,11 @@ export default function OfflineIndicator() {
             if ((item.mediaType === 'audio' || item.hasAudio) && (item.mediaId || item.mediaIds?.audio)) {
               await deletePendingAudio(item.mediaId || item.mediaIds?.audio)
             }
-            if ((item.mediaType === 'photo' || item.hasPhoto) && (item.mediaId || item.mediaIds?.photo)) {
-              await deletePendingPhoto(item.mediaId || item.mediaIds?.photo)
+            if ((item.mediaType === 'photo' || item.hasPhoto)) {
+              const ppIds = item.mediaIds?.photos || (item.mediaId || item.mediaIds?.photo ? [item.mediaId || item.mediaIds?.photo] : [])
+              for (const ppId of ppIds) {
+                if (ppId) await deletePendingPhoto(ppId)
+              }
             }
           } catch (e) {
             console.error('[Offline Sync] Failed to sync item:', item.type, e)

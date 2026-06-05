@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import RodeoLogo from '@/components/RodeoLogo'
 import { FormulasTab } from '@/app/dashboard/calculadora/components/FormulasTab'
+import { event } from '@/lib/analytics'
 
 interface ApiPlan {
   id: string; name: string; slug: string; description: string
@@ -76,6 +77,20 @@ function StatsSection() {
   )
 }
 
+function TrackedSection({ id, className, sectionName, children }: { id?: string, className?: string, sectionName: string, children: React.ReactNode }) {
+  const { ref, inView } = useInView(0.3)
+  useEffect(() => {
+    if (inView) {
+      import('@/lib/analytics').then(({ event }) => event({ action: 'landing_section_view', category: 'engagement', section_name: sectionName }))
+    }
+  }, [inView, sectionName])
+  return (
+    <section id={id} className={className} ref={ref}>
+      {children}
+    </section>
+  )
+}
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="inline-flex items-center gap-1.5 border border-gray-200 text-gray-500 text-xs font-bold tracking-widest px-3 py-1.5 rounded-full mb-6">
@@ -91,10 +106,27 @@ export default function LandingPage() {
   const [scrolled, setScrolled]           = useState(false)
   const [activePlan, setActivePlan]       = useState<'monthly' | 'annual'>('annual')
   const [apiPlans, setApiPlans]           = useState<ApiPlan[]>([])
+  const [exchangeRate, setExchangeRate]   = useState<number>(1000)
   const [plansLoading, setPlansLoading]   = useState(true)
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40)
+    const thresholds = new Set([25, 50, 75, 100])
+    const onScroll = () => {
+      setScrolled(window.scrollY > 40)
+      
+      const scrollPercent = Math.round((window.scrollY + window.innerHeight) / document.body.scrollHeight * 100)
+      thresholds.forEach((threshold) => {
+        if (scrollPercent >= threshold) {
+          event({
+            action: 'landing_scroll_depth',
+            category: 'engagement',
+            scroll_percentage: threshold,
+            page_path: window.location.pathname
+          })
+          thresholds.delete(threshold)
+        }
+      })
+    }
     window.addEventListener('scroll', onScroll)
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
@@ -102,7 +134,10 @@ export default function LandingPage() {
   useEffect(() => {
     fetch('/api/plans')
       .then(r => r.json())
-      .then(d => setApiPlans(d.plans || []))
+      .then(d => {
+        setApiPlans(d.plans || [])
+        if (d.exchange_rate) setExchangeRate(d.exchange_rate)
+      })
       .catch(() => {})
       .finally(() => setPlansLoading(false))
   }, [])
@@ -293,7 +328,7 @@ export default function LandingPage() {
               }`}>
               Iniciar sesión
             </Link>
-            <Link href="/register" className="text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-green-900/20">
+            <Link href="/register" onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'header' })} className="text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-green-900/20">
               Empezar gratis
             </Link>
           </div>
@@ -315,7 +350,7 @@ export default function LandingPage() {
             ))}
             <div className="pt-3 flex flex-col gap-2">
               <Link href="/login" className="block text-center text-sm font-medium text-gray-600 py-2.5">Iniciar sesión</Link>
-              <Link href="/register" className="block text-center text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-xl">Empezar gratis</Link>
+              <Link href="/register" onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'mobile_menu' })} className="block text-center text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-xl">Empezar gratis</Link>
             </div>
           </div>
         )}
@@ -323,7 +358,7 @@ export default function LandingPage() {
 
 
       {/* ── HERO ── */}
-      <section className="relative min-h-screen flex items-center overflow-hidden">
+      <TrackedSection sectionName="hero" className="relative min-h-screen flex items-center overflow-hidden">
         <div className="absolute inset-0 z-0">
           <Image
             src="/hero-paddocks-v2.png"
@@ -366,6 +401,7 @@ export default function LandingPage() {
 
             <div className="flex flex-col sm:flex-row gap-3 mb-12">
               <Link href="/register"
+                onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'hero' })}
                 className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-green-600/30">
                 Regístrate gratis
                 <ArrowRight className="w-4 h-4" />
@@ -400,19 +436,19 @@ export default function LandingPage() {
             <div className="w-1 h-2 bg-white/40 rounded-full animate-bounce" />
           </div>
         </div>
-      </section>
+      </TrackedSection>
 
 
       {/* ── STATS BAR ── */}
-      <section className="bg-green-600 py-14">
+      <TrackedSection sectionName="stats" className="bg-green-600 py-14">
         <div className="max-w-5xl mx-auto px-6">
           <StatsSection />
         </div>
-      </section>
+      </TrackedSection>
 
 
       {/* ── PROBLEMA / SOLUCIÓN ── */}
-      <section className="py-24 bg-gray-50">
+      <TrackedSection sectionName="problema" className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
@@ -484,11 +520,11 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-      </section>
+      </TrackedSection>
 
 
       {/* ── FEATURE SHOWCASE ── */}
-      <section id="producto" className="py-24 bg-white">
+      <TrackedSection sectionName="producto" id="producto" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-14">
             <SectionLabel>MÓDULOS</SectionLabel>
@@ -505,7 +541,10 @@ export default function LandingPage() {
               {features.map((f, i) => {
                 const active = activeFeature === i
                 return (
-                  <button key={i} onClick={() => setActiveFeature(i)}
+                  <button key={i} onClick={() => {
+                    setActiveFeature(i)
+                    event({ action: 'landing_section_view', category: 'engagement', section_name: f.title })
+                  }}
                     className={`w-full text-left px-4 py-3.5 rounded-xl transition-all duration-200 ${active ? 'bg-gray-950 shadow-sm' : 'hover:bg-gray-50'}`}>
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? 'bg-green-600' : 'bg-gray-100'}`}>
@@ -557,11 +596,11 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-      </section>
+      </TrackedSection>
 
 
       {/* ── OFFLINE FIRST FEATURE STRIP ── */}
-      <section className="py-20 bg-gray-950 text-white">
+      <TrackedSection sectionName="offline" className="py-20 bg-gray-950 text-white">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-14">
             <div className="inline-flex items-center gap-1.5 border border-white/10 text-gray-500 text-xs font-bold tracking-widest px-3 py-1.5 rounded-full mb-6">
@@ -604,11 +643,11 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-      </section>
+      </TrackedSection>
 
 
       {/* ── HOW IT WORKS ── */}
-      <section id="como-funciona" className="py-24 bg-white">
+      <TrackedSection sectionName="como_funciona" id="como-funciona" className="py-24 bg-white">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-14">
             <SectionLabel>CÓMO EMPEZAR</SectionLabel>
@@ -642,17 +681,17 @@ export default function LandingPage() {
           </div>
 
           <div className="text-center mt-12">
-            <Link href="/register" className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-3.5 rounded-xl text-sm transition-all">
+            <Link href="/register" onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'como_funciona' })} className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-3.5 rounded-xl text-sm transition-all">
               Empezar gratis ahora
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
-      </section>
+      </TrackedSection>
 
 
       {/* ── PRICING ── */}
-      <section id="precios" className="py-24 bg-gray-50">
+      <TrackedSection sectionName="problema" id="precios" className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-12">
             <SectionLabel>PRECIOS</SectionLabel>
@@ -675,7 +714,10 @@ export default function LandingPage() {
 
             <div className="inline-flex items-center gap-1 bg-gray-200 rounded-full p-1">
               {(['monthly', 'annual'] as const).map((period) => (
-                <button key={period} onClick={() => setActivePlan(period)}
+                <button key={period} onClick={() => {
+                  setActivePlan(period)
+                  event({ action: 'pricing_click', category: 'pricing', plan_name: 'toggle', billing_cycle: period })
+                }}
                   className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${activePlan === period ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                   {period === 'monthly' ? 'Mensual' : 'Anual'}
                   {period === 'annual' && <span className="ml-1.5 text-green-600 text-xs font-bold">−18%</span>}
@@ -752,10 +794,14 @@ export default function LandingPage() {
                             <span className="text-3xl">USD {price}</span>
                             <span className={`text-xs font-medium ml-1 ${isPopular ? 'text-gray-400' : 'text-gray-500'}`}>/mes</span>
                           </div>
+                          <div className={`text-sm font-bold mt-1 ${isPopular ? 'text-green-300' : 'text-green-700'}`}>
+                            ARS {(price * exchangeRate).toLocaleString('es-AR')}
+                            <span className={`text-[10px] font-normal ml-1 ${isPopular ? 'text-white/60' : 'text-gray-400'}`}>(T.C. BNA: ${exchangeRate})</span>
+                          </div>
                           {activePlan === 'annual' ? (
-                            <div className="text-xs text-green-400 font-semibold mt-0.5">Facturación anual · Ahorrás 18%</div>
+                            <div className="text-xs text-green-400 font-semibold mt-1.5">Facturación anual · Ahorrás 18%</div>
                           ) : (
-                            hasTrial && <div className={`text-xs mt-0.5 ${isPopular ? 'text-amber-300' : 'text-amber-600'}`}>Incluye {trialDays} días de prueba gratis</div>
+                            hasTrial && <div className={`text-xs mt-1.5 ${isPopular ? 'text-amber-300' : 'text-amber-600'}`}>Incluye {trialDays} días de prueba gratis</div>
                           )}
                         </>
                       ) : (
@@ -770,6 +816,7 @@ export default function LandingPage() {
                       </a>
                     ) : (
                       <Link href="/register"
+                        onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: `pricing_${plan.slug}` })}
                         className={`w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all mb-5 block ${(plan as any).ctaStyle}`}>
                         {(plan as any).cta}
                       </Link>
@@ -794,11 +841,11 @@ export default function LandingPage() {
             Todos los planes incluyen actualizaciones automáticas · Sin contratos de permanencia · Cancelá cuando quieras
           </p>
         </div>
-      </section>
+      </TrackedSection>
 
 
       {/* ── TESTIMONIALS ── */}
-      <section id="testimonios" className="py-24 bg-white">
+      <TrackedSection sectionName="testimonios" id="testimonios" className="py-24 bg-white">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
             <SectionLabel>TESTIMONIOS</SectionLabel>
@@ -826,13 +873,13 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-      </section>
+      </TrackedSection>
 
 
 
 
       {/* ── FINAL CTA ── */}
-      <section className="py-24 bg-green-600 relative overflow-hidden">
+      <TrackedSection sectionName="cta" className="py-24 bg-green-600 relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.07]">
           <div className="absolute top-8 left-8 w-72 h-72 rounded-full border border-white" />
           <div className="absolute top-24 left-24 w-44 h-44 rounded-full border border-white" />
@@ -849,6 +896,7 @@ export default function LandingPage() {
           </p>
 
           <Link href="/register"
+            onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'bottom_banner' })}
             className="inline-flex items-center gap-2 bg-white text-green-700 font-black px-9 py-4 rounded-xl text-base transition-all hover:bg-green-50 shadow-xl">
             Empezar gratis
             <ArrowRight className="w-4 h-4" />
@@ -858,7 +906,7 @@ export default function LandingPage() {
             Sin tarjeta de crédito · Configuración en 10 min · Cancelá cuando quieras
           </p>
         </div>
-      </section>
+      </TrackedSection>
 
 
       {/* ── FOOTER ── */}

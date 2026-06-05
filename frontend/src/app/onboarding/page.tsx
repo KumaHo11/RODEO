@@ -359,6 +359,13 @@ function OnboardingWizard() {
                       animate={{ y: 0, opacity: 1 }}
                       exit={{ y: 40, opacity: 0 }}
                       transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+                      onAnimationComplete={(def) => {
+                        if (def !== "opacity") {
+                          import('@/lib/analytics').then(({ event }) => {
+                            event({ action: 'onboarding_modal_view', category: 'onboarding', modal_name: 'new_paddock_modal', step_number: 2 })
+                          })
+                        }
+                      }}
                       className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden"
                       onClick={e => e.stopPropagation()}
                     >

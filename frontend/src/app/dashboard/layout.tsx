@@ -67,7 +67,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [pendingTasks, setPendingTasks]     = useState(0)
   const [isOnline, setIsOnline]             = useState(true)
   const [showWelcome, setShowWelcome]       = useState(false)
+  const [menuConfig, setMenuConfig]         = useState<Record<string, boolean>>({})
   const notifRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    fetch('/api/config/menu')
+      .then(res => res.json())
+      .then(data => {
+        if (data && !data.error) setMenuConfig(data)
+      })
+      .catch(err => console.error('Error fetching menu config:', err))
+  }, [])
 
   // ── Guard: redirect to onboarding (in useEffect — never during render) ───────
   useEffect(() => {
@@ -86,25 +96,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [isLoading, user, authProfile, router])
 
   // ── Build filtered navigation based on user permissions ────────────────────
+  const getMenuConfigKey = (item: NavItem) => {
+    if (item.name === 'Panel') return 'menu_panel'
+    if (item.name === 'Calculadora') return 'menu_calculadora'
+    return `menu_${item.permissionKey}`
+  }
+
+  const isMenuEnabled = (item: NavItem) => {
+    const key = getMenuConfigKey(item)
+    // If we haven't loaded config yet or it's not set, default to true
+    if (Object.keys(menuConfig).length > 0 && menuConfig[key] === false) {
+      return false
+    }
+    return true
+  }
+
   const filteredNav = useMemo<NavItem[]>(() => {
     return ALL_NAV_ITEMS.filter(item => {
+      if (!isMenuEnabled(item)) return false
       if (isOwner) return true // owners see everything
       if (item.permissionKey === null) return true // always visible (Panel, Equipo)
       return can(item.permissionKey as any)
     })
-  }, [isOwner, can])
+  }, [isOwner, can, menuConfig])
 
   // Groups with items filtered by permissions
   const filteredGroups = useMemo<NavGroup[]>(() => {
     return NAV_GROUPS.map(group => ({
       ...group,
       items: group.items.filter(item => {
+        if (!isMenuEnabled(item)) return false
         if (isOwner) return true
         if (item.permissionKey === null) return true
         return can(item.permissionKey as any)
       }),
     })).filter(g => g.items.length > 0)
-  }, [isOwner, can])
+  }, [isOwner, can, menuConfig])
 
   // ── Online/Offline detection ─────────────────────────────────────────────
   useEffect(() => {

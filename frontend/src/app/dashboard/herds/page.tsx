@@ -352,6 +352,7 @@ export default function HerdsPage() {
         setLotes([])
         setLoading(false)
         setIsOfflineData(false)
+        import('@/lib/analytics').then(({ event }) => event({ action: 'herds_view', category: 'herds', mode: 'offline' }))
       }
 
       // ── Paso 2: API en background ────────────────────────────────────────
@@ -363,6 +364,7 @@ export default function HerdsPage() {
         setLotes(data.lotes || [])
         setUngrouped(data.ungrouped || herdsData)
         setIsOfflineData(false)
+        import('@/lib/analytics').then(({ event }) => event({ action: 'herds_view', category: 'herds', mode: 'online' }))
         // Guardar en IndexedDB
         const { dbUpsertMany } = await import('@/lib/offline/db')
         await dbUpsertMany('herds', herdsData)
@@ -559,8 +561,16 @@ export default function HerdsPage() {
     return next
   })
 
-  const openCreate = () => { setEditingHerd(null); setModalOpen(true) }
-  const openEdit   = (h: HerdData) => { setEditingHerd(h); setModalOpen(true) }
+  const openCreate = () => { 
+    import('@/lib/analytics').then(({ event }) => event({ action: 'herds_create_click', category: 'herds' }))
+    setEditingHerd(null); 
+    setModalOpen(true) 
+  }
+  const openEdit   = (h: HerdData) => { 
+    import('@/lib/analytics').then(({ event }) => event({ action: 'herds_edit_click', category: 'herds' }))
+    setEditingHerd(h); 
+    setModalOpen(true) 
+  }
 
   const handleDelete = async (id: string) => {
     const ok = await confirm({
@@ -576,6 +586,7 @@ export default function HerdsPage() {
       const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
       toast.error(`No se pudo eliminar: ${err.error}`)
     } else {
+      import('@/lib/analytics').then(({ event }) => event({ action: 'herds_delete', category: 'herds' }))
       setHerds(p => p.filter(h => h.id !== id))
       setUngrouped(p => p.filter(h => h.id !== id))
       setLotes(p => p.map(l => ({ ...l, hijos: l.hijos.filter(h => h.id !== id) })).filter(l => l.hijos.length > 0))
@@ -669,7 +680,11 @@ export default function HerdsPage() {
           <div className="bg-gray-100 rounded-xl p-0.5 flex gap-0.5 shrink-0">
             {(['cards', 'list', 'historial'] as const).map(v => (
               <button key={v}
-                onClick={() => { setView(v); if (v === 'historial') loadHistorial() }}
+                onClick={() => { 
+                  import('@/lib/analytics').then(({ event }) => event({ action: 'herds_change_view', category: 'herds', view_mode: v }))
+                  setView(v); 
+                  if (v === 'historial') loadHistorial() 
+                }}
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${view === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                 {v === 'cards' && <Layers className="w-3.5 h-3.5 shrink-0" />}
                 {v === 'list'  && <List   className="w-3.5 h-3.5 shrink-0" />}
@@ -681,14 +696,20 @@ export default function HerdsPage() {
           {/* Export */}
           {view === 'historial' ? (
             <button
-              onClick={() => exportHistorialExcel(herds, lotes)}
+              onClick={() => {
+                import('@/lib/analytics').then(({ event }) => event({ action: 'herds_export_historial', category: 'herds' }))
+                exportHistorialExcel(herds, lotes)
+              }}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all shrink-0">
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Exportar historial</span>
             </button>
           ) : (
             <button
-              onClick={() => exportHerdsExcel(herds, lotes, ungrouped)}
+              onClick={() => {
+                import('@/lib/analytics').then(({ event }) => event({ action: 'herds_export_excel', category: 'herds' }))
+                exportHerdsExcel(herds, lotes, ungrouped)
+              }}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all shrink-0">
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Exportar</span>

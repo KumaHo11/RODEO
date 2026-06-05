@@ -114,7 +114,13 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
   }
 
   const handleNext = async () => {
-    updateData({ skippedMap: !hasField && !hasPaddocks })
+    const isSkip = !hasField && !hasPaddocks
+    updateData({ skippedMap: isSkip })
+    if (isSkip) {
+      import('@/lib/analytics').then(({ event }) => {
+        event({ action: 'onboarding_skip', category: 'onboarding', step_number: 2, skipped_fields: ['map', 'paddocks'] })
+      })
+    }
     await persistStep(2)
     nextStep()
   }

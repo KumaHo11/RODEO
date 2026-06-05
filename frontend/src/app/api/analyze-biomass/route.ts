@@ -25,10 +25,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tu plan no incluye análisis de biomasa IA' }, { status: 403 })
     }
 
-    const { imageBase64, mimeType = 'image/jpeg' } = await req.json()
+    const { imageBase64, mimeType = 'image/jpeg', imagesBase64 } = await req.json()
 
-    if (!imageBase64) {
-      return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 })
+    const images = imagesBase64 || (imageBase64 ? [{ base64: imageBase64, mimeType }] : [])
+
+    if (images.length === 0) {
+      return NextResponse.json({ success: false, error: 'No images provided' }, { status: 400 })
     }
 
     // gemini-2.5-flash — multimodal, supports vision and audio
@@ -40,6 +42,9 @@ Analizá esta foto de pastura/potrero y respondé SOLO con un objeto JSON válid
   "grass_height_cm": número (altura promedio del pasto en centímetros, estima visualmente),
   "coverage_pct": número (cobertura vegetal en %, de 0 a 100),
   "dry_matter_kg_ha": número (materia seca disponible en kg/ha, rango típico 500-4000),
+  "pasture_type": texto en español (estimación del tipo de pasto visible, ej: campo natural, alfalfa, agropiro, festuca, etc.),
+  "protein_content_pct": número (estimación del porcentaje de proteína bruta en la materia seca, según el estado fenológico y tipo de pasto visible),
+  "weeds_detected": arreglo de strings (lista de nombres comunes de las malezas detectadas, o un arreglo vacío si no hay),
   "condition": "OPTIMO" o "BUENO" o "REGULAR" o "BAJO",
   "condition_label": texto en español describiendo el estado (ej: "Pasto en estado óptimo con buena cobertura"),
   "confidence": número de 0 a 100 indicando tu confianza en el análisis,
@@ -50,13 +55,15 @@ Analizá esta foto de pastura/potrero y respondé SOLO con un objeto JSON válid
 Si la imagen NO es de una pastura o pasto, devolvé: {"error": "La imagen no parece ser de una pastura"}
 Respondé SOLO con el JSON, sin markdown, sin bloques de código, sin explicaciones.`
 
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          data: imageBase64,
-          mimeType: mimeType as any,
-        },
+    const imageParts = images.map((img: any) => ({
+      inlineData: {
+        data: img.base64,
+        mimeType: img.mimeType as any,
       },
+    }))
+
+    const result = await model.generateContent([
+      ...imageParts,
       prompt,
     ])
 

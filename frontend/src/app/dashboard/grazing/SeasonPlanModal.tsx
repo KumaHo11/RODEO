@@ -174,6 +174,11 @@ export default function SeasonPlanModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    import('@/lib/analytics').then(({ event }) => event({ action: 'plan_wizard_start', category: 'planner', mode: isSuggestedMode ? 'sugerido' : 'manual' }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ── Paso 1: El Plan ─────────────────────────────────────────────────────────
   const [name, setName] = useState(existingPlan?.name ?? `Plan ${currentYear}`)
   const [seasonType, setSeasonType] = useState<'cerrado' | 'abierto' | 'ambos'>(
@@ -456,6 +461,7 @@ export default function SeasonPlanModal({
         body: JSON.stringify({ default_daily_allocation_kg: dailyAllocationKg, default_target_remnant_kg_ha: targetRemnant }),
       }).catch(() => {})
       const fullPlan = { ...payload, ...data } as SeasonPlan
+      import('@/lib/analytics').then(({ event }) => event({ action: 'plan_wizard_complete', category: 'planner', mode: isSuggestedMode ? 'sugerido' : 'manual', season_days: seasonDays, herds_count: selectedHerdIds.length }))
       onSaved(fullPlan)
       onClose()
     } catch (e: any) {
@@ -921,7 +927,10 @@ export default function SeasonPlanModal({
               </p>
             )}
             {!error && step > 1 && (
-              <button type="button" onClick={() => setStep(s => (s - 1) as any)}
+              <button type="button" onClick={() => {
+                import('@/lib/analytics').then(({ event }) => event({ action: 'plan_wizard_step_change', category: 'planner', mode: isSuggestedMode ? 'sugerido' : 'manual', from_step: step, to_step: step - 1 }))
+                setStep(s => (s - 1) as any)
+              }}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">
                 <ChevronLeft className="w-4 h-4" />Anterior
               </button>
@@ -937,7 +946,10 @@ export default function SeasonPlanModal({
             )}
             {step < 3 ? (
               <button type="button"
-                onClick={() => { setError(null); setStep(s => (s + 1) as any) }}
+                onClick={() => {
+                  import('@/lib/analytics').then(({ event }) => event({ action: 'plan_wizard_step_change', category: 'planner', mode: isSuggestedMode ? 'sugerido' : 'manual', from_step: step, to_step: step + 1 }))
+                  setError(null); setStep(s => (s + 1) as any)
+                }}
                 disabled={step === 1 && !name.trim()}
                 className={`flex items-center gap-2 px-5 py-2 text-sm font-black text-white rounded-xl transition-all disabled:opacity-40 ${accent.btn}`}
               >

@@ -82,11 +82,18 @@ function LoginContent() {
 
       // Block login if email is not verified
       if (!refreshedUser.emailVerified) {
+        import('@/lib/analytics').then(({ event }) => {
+          event({ action: 'login_error', category: 'auth', error_type: 'unverified_email' })
+        })
         await auth.signOut() // sign them back out
         setUnverifiedEmail(email)
         setLoading(false)
         return
       }
+
+      import('@/lib/analytics').then(({ event }) => {
+        event({ action: 'login', category: 'auth', method: 'email' })
+      })
 
       // Email verificado: redirigir activamente sin esperar al useEffect
       // Esto evita el deadlock si fetchProfile del AuthProvider tarda o falla
@@ -101,6 +108,9 @@ function LoginContent() {
     } catch (err: any) {
       setLoading(false)
       const code = err.code || ''
+      import('@/lib/analytics').then(({ event }) => {
+        event({ action: 'login_error', category: 'auth', error_type: code })
+      })
       if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
         setError('Correo electrónico o contraseña incorrectos.')
       } else if (code === 'auth/too-many-requests') {

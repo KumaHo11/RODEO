@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
+import Script from 'next/script'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
 import { OfflineManager } from '@/components/OfflineManager'
@@ -40,8 +41,8 @@ export default function RootLayout({
     <html lang="es" data-scroll-behavior="smooth">
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <link rel="icon" type="image/svg+xml" href="/Faviconblanco.svg" />
+        <link rel="apple-touch-icon" href="/LogoInstallapp.svg" />
+        <link rel="icon" type="image/svg+xml" href="/FaviconFondoVerde.svg" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -55,6 +56,24 @@ export default function RootLayout({
                   rs.forEach(function(r) { r.unregister() })
                 });
               }
+            `,
+          }}
+        />
+        <Script
+          strategy="afterInteractive"
+          src={`https://www.googletagmanager.com/gtag/js?id=G-WNEFPKRP9B`}
+        />
+        <Script
+          id="gtag-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-WNEFPKRP9B', {
+                page_path: window.location.pathname,
+              });
             `,
           }}
         />

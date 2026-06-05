@@ -7,6 +7,22 @@ import { query } from '@/lib/db'
 
 export async function GET() {
   try {
+    let exchangeRate = 1000 // Fallback
+
+    try {
+      const bnaResponse = await fetch('https://dolarapi.com/v1/dolares/oficial', {
+        next: { revalidate: 3600 } // Revalidate every hour
+      })
+      if (bnaResponse.ok) {
+        const bnaData = await bnaResponse.json()
+        if (bnaData && bnaData.venta) {
+          exchangeRate = bnaData.venta
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching dolarapi:', e)
+    }
+
     const plans = await query(`
       SELECT
         sp.id, sp.name, sp.slug, sp.description,
@@ -30,11 +46,11 @@ export async function GET() {
       GROUP BY sp.id
       ORDER BY sp.sort_order, sp.created_at
     `)
-    return NextResponse.json({ plans }, {
+    return NextResponse.json({ plans, exchange_rate: exchangeRate }, {
       headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' }
     })
   } catch (err) {
     console.error('GET /api/plans error:', err)
-    return NextResponse.json({ plans: [] }, { status: 200 })
+    return NextResponse.json({ plans: [], exchange_rate: 1000 }, { status: 200 })
   }
 }

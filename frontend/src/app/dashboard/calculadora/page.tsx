@@ -168,6 +168,10 @@ export default function CalculadoraPage() {
 
   useEffect(() => { loadFieldData() }, [loadFieldData])
 
+  useEffect(() => {
+    import('@/lib/analytics').then(({ event }) => event({ action: 'calculadora_tab_view', category: 'calculadora', tab: activeTab }))
+  }, [activeTab])
+
   // ── Calcular resultados ────────────────────────────────────────────────────
   const activeInput = useMemo<CalculatorInput>(() => {
     if (scenario === 'base') return input
@@ -182,6 +186,7 @@ export default function CalculadoraPage() {
     setInput(prev => ({ ...prev, [key]: val }))
     // Al editar manualmente, quita el tag «dato real»
     setRealSources(prev => ({ ...prev, [key]: false }))
+    import('@/lib/analytics').then(({ event }) => event({ action: 'calculadora_input_change', category: 'calculadora', field: key as string }))
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -231,7 +236,10 @@ export default function CalculadoraPage() {
               {(['base', 'sequia', 'optimo'] as ScenarioMode[]).map(s => (
                 <button
                   key={s}
-                  onClick={() => setScenario(s)}
+                  onClick={() => {
+                    import('@/lib/analytics').then(({ event }) => event({ action: 'calculadora_scenario_change', category: 'calculadora', scenario: s }))
+                    setScenario(s)
+                  }}
                   className={clsx(
                     'px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
                     scenario === s
@@ -246,6 +254,7 @@ export default function CalculadoraPage() {
             <button
               onClick={() => {
                 const willShow = !showComparison
+                import('@/lib/analytics').then(({ event }) => event({ action: 'calculadora_compare_toggle', category: 'calculadora', show: willShow }))
                 setShowComparison(willShow)
                 if (willShow) {
                   setTimeout(() => {

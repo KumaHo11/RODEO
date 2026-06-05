@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       paddock_id, tags, title, content,
-      lat, lng, photo_url, audio_url, analysis_result,
+      lat, lng, photo_url, photo_urls, audio_url, analysis_result,
       // audio_duration_secs — stored as comment until DB column is added
     } = body
 
@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
 
     const { rows } = await mutate(
       `INSERT INTO field_notes
-         (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, audio_url, analysis_result)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, photo_urls, audio_url, analysis_result)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING *`,
       [
         auth.orgId, auth.profileId,
@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
         lat || null,
         lng || null,
         photo_url || null,
+        photo_urls ? JSON.stringify(photo_urls) : '[]',
         audio_url || null,
         analysis_result ? JSON.stringify(analysis_result) : null,
       ]

@@ -193,11 +193,18 @@ export default function RegisterPage() {
         return
       }
 
+      import('@/lib/analytics').then(({ event }) => {
+        event({ action: 'sign_up', category: 'auth', method: 'email' })
+      })
+
       await signOut(auth)
       setSuccessMsg(
         `¡Cuenta creada! Te enviamos un correo de verificación a ${email}. Revisá tu bandeja (y spam) y hacé clic en el botón para activar tu cuenta.`
       )
     } catch (err: any) {
+      import('@/lib/analytics').then(({ event }) => {
+        event({ action: 'sign_up_error', category: 'auth', error_type: err.code || 'unknown' })
+      })
       if (err.code === 'auth/email-already-in-use') {
         setServerError('Este correo ya está registrado. Por favor, inicia sesión.')
       } else if (err.code === 'auth/weak-password') {

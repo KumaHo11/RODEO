@@ -13,6 +13,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   integrations: 'Integraciones AgTech',
   auth:         'Autenticación',
   general:      'General',
+  menu:         'Visibilidad del Menú',
 }
 
 export default function AdminConfigPage() {
@@ -142,7 +143,34 @@ export default function AdminConfigPage() {
                       )}
                     </div>
 
-                    {editingKey !== item.key && (
+                    {category === 'menu' ? (
+                      <div className="flex-shrink-0 flex items-center">
+                        <button
+                          onClick={() => {
+                            const nextValue = item.value === 'true' ? 'false' : 'true'
+                            setEditValue(nextValue)
+                            // Trigger save directly
+                            if (!user) return
+                            setSaving(item.key)
+                            user.getIdToken().then(token => {
+                              fetch('/api/admin/config', {
+                                method: 'PATCH',
+                                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ key: item.key, value: nextValue }),
+                              }).then(() => {
+                                setSuccess(item.key)
+                                setTimeout(() => setSuccess(null), 3000)
+                                fetchConfig()
+                              }).finally(() => setSaving(null))
+                            })
+                          }}
+                          disabled={saving === item.key}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 ${item.value === 'true' ? 'bg-green-600' : 'bg-gray-200'}`}
+                        >
+                          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${item.value === 'true' ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                      </div>
+                    ) : editingKey !== item.key && (
                       <button onClick={() => { setEditingKey(item.key); setEditValue('') }}
                         className="flex-shrink-0 px-3 py-1.5 rounded-xl border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 text-xs font-medium transition-colors">
                         {item.hasValue ? 'Actualizar' : 'Configurar'}

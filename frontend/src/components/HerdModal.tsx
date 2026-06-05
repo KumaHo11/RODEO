@@ -397,7 +397,9 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         try { const j = await res.json(); msg = j.error ?? msg } catch {}
         setSaveError(msg); return
       }
-      onSaved(); onClose()
+      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save', category: 'herds', is_editing: isEditing }))
+      import('sonner').then(({ toast }) => toast.success('Cambios guardados'))
+      onSaved();
     } catch (e: any) {
       // Si fue error de red (iOS puede estar offline aunque onLine=true)
       const isNetErr = e instanceof TypeError || e?.message?.includes('fetch')
@@ -641,6 +643,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         }),
       })
 
+      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_activity', category: 'herds', activity_type: 'paricion_wizard' }))
+
       // 5. Actualización optimista inmediata
       setLiveHerd(prev => prev ? { ...prev, head_count: newCount, total_ev: newEV } : prev)
       setCount(newCount)
@@ -771,6 +775,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
         // Update historial local immediately
         if (evRes.ok) {
+          import('@/lib/analytics').then(({ event }) => event({ action: 'herd_activity', category: 'herds', activity_type: actId }))
           const saved = await evRes.json().catch(() => null)
           setAgendaEvents(prev => [{
             id: saved?.event?.id ?? `temp-${Date.now()}`,
@@ -972,8 +977,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       setActSuccess(`✓ ${toastMsg}`)
       setTimeout(() => setActSuccess(null), 6000)
       onSaved()
-      // Cerrar el HerdModal para que el usuario vea los cambios reflejados en la card
-      setTimeout(() => onClose(), 800)
+      // No cerramos el modal automáticamente a pedido del usuario
+      // setTimeout(() => onClose(), 800)
     } catch (e: any) {
       console.error('[commitWeaning]', e)
       setActError('Error en el destete: ' + (e?.message || String(e)))
@@ -1186,9 +1191,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         if (up.ok) ({ url: photo_url } = await up.json())
       } catch (err) {
         console.error('[saveBcs] compress error:', err)
-        throw err // re-lanzar para caer en catch externo (fallback offline)
       }
     }
+
+    import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save_bcs', category: 'herds', score: bcsScore, has_photo: !!bcsPhotoFile }))
 
     const eventTitle = `Condición Corporal registrada: ${bcsScore}/5 — ${label}`
     const eventDesc  = [`BCS: ${bcsScore}/5`, bcsAiResult ? `IA: ${bcsAiResult}` : ''].filter(Boolean).join(' · ')
@@ -1359,6 +1365,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null); audioBlobRef.current = null;
       setTimeout(() => setNoteSaved(false), 3000)
       import('sonner').then(({ toast }) => toast.success('Nota guardada offline. Se sincronizará al conectar.'))
+      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save_note', category: 'herds', note_type: isAudioNote ? 'audio' : notePhoto ? 'photo' : 'text', mode: 'offline' }))
       return
     }
 
@@ -1437,6 +1444,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
       setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null); audioBlobRef.current = null;
       setTimeout(() => setNoteSaved(false), 3000)
+      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save_note', category: 'herds', note_type: isAudioNote ? 'audio' : notePhoto ? 'photo' : 'text', mode: 'online' }))
 
     } catch (networkErr: any) {
       // Auto-fallback offline (común en iOS con navigator.onLine=true sin internet real)
@@ -1660,7 +1668,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         {/* Tabs */}
         <div className="flex border-b border-gray-100 shrink-0 px-2 pt-1">
           {TABS.map(({ id, label }) => (
-            <button key={id} onClick={() => setTab(id)}
+            <button key={id} onClick={() => {
+              import('@/lib/analytics').then(({ event }) => event({ action: 'herd_tab_change', category: 'herds', tab: id }))
+              setTab(id)
+            }}
               className={`flex-1 py-3.5 text-xs font-black tracking-wide rounded-t-lg transition-all border-b-[3px] uppercase overflow-hidden whitespace-nowrap text-ellipsis px-1 ${
                 tab === id
                   ? 'text-green-700 border-green-600 bg-green-50/60'
@@ -2352,7 +2363,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                           </p>
                                         </div>
                                       </div>
-                                      <button type="button" onClick={() => setTab('operativo')}
+                                      <button type="button" onClick={() => {
+                                        import('@/lib/analytics').then(({ event }) => event({ action: 'herd_tab_change', category: 'herds', tab: 'operativo', from: 'paricion_wizard_error' }))
+                                        setTab('operativo')
+                                      }}
                                         className="w-full py-2 text-xs font-bold text-amber-700 border border-amber-400 rounded-xl bg-white hover:bg-amber-50 transition-all">
                                         Ir a Datos Operativos para configurar la categoría
                                       </button>
@@ -2882,7 +2896,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           )
                         })}
                         {agendaEvents.length > 3 && (
-                          <button type="button" onClick={() => setTab('historial')}
+                          <button type="button" onClick={() => {
+                            import('@/lib/analytics').then(({ event }) => event({ action: 'herd_tab_change', category: 'herds', tab: 'historial', from: 'registros_ver_todos' }))
+                            setTab('historial')
+                          }}
                             className="w-full text-[10px] font-bold text-green-600 hover:text-green-800 py-1.5 text-center transition-colors">
                             Ver todos los registros ({agendaEvents.length}) →
                           </button>
@@ -3040,7 +3057,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               </div>
               <button
                 type="button"
-                onClick={() => { setOfflineSaved(false); onClose() }}
+                onClick={() => { setOfflineSaved(false); }}
                 className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all text-sm"
               >
                 OK, continuar

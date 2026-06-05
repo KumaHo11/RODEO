@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react'
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react'
 
 interface OnboardingPaddock {
   name: string
@@ -59,6 +59,10 @@ const OnboardingContext = createContext<OnboardingContextType | undefined>(undef
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [step, setStep] = useState(1)
   const [isCompleting, setIsCompleting] = useState(false)
+  const isCompletingRef = React.useRef(isCompleting)
+  const stepRef = React.useRef(step)
+  const dataRef = React.useRef<OnboardingData | null>(null)
+
   const [data, setData] = useState<OnboardingData>({
     fieldName: '',
     location: null,
@@ -73,12 +77,60 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     skippedHerds: false,
   })
 
+  useEffect(() => {
+    isCompletingRef.current = isCompleting
+    stepRef.current = step
+    dataRef.current = data
+  }, [isCompleting, step, data])
+
+  useEffect(() => {
+    // Dynamically import event to avoid circular dependencies or SSR issues
+    import('@/lib/analytics').then(({ event }) => {
+      event({ action: 'onboarding_start', category: 'onboarding' })
+    })
+
+    return () => {
+      if (!isCompletingRef.current) {
+        import('@/lib/analytics').then(({ event }) => {
+          let fieldsCompleted = 0
+          if (dataRef.current?.fieldName) fieldsCompleted++
+          if (dataRef.current?.location) fieldsCompleted++
+          if (dataRef.current?.paddocks.length) fieldsCompleted++
+          if (dataRef.current?.herds.length) fieldsCompleted++
+          
+          event({ 
+            action: 'onboarding_abandon', 
+            category: 'onboarding',
+            step_number: stepRef.current,
+            fields_completed: fieldsCompleted
+          })
+        })
+      }
+    }
+  }, [])
+
   const updateData = useCallback((updates: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...updates }))
   }, [])
 
   // 3 steps (Step 4 / Confirm is now the SuccessModal, not a page step)
-  const nextStep = useCallback(() => setStep(s => Math.min(s + 1, 3)), [])
+  const nextStep = useCallback(() => {
+    setStep(s => {
+      const next = Math.min(s + 1, 3)
+      if (s !== next) {
+        import('@/lib/analytics').then(({ event }) => {
+          const stepNames = ['Location', 'Paddocks', 'Herds']
+          event({ 
+            action: 'onboarding_step_complete', 
+            category: 'onboarding',
+            step_number: s,
+            step_name: stepNames[s - 1]
+          })
+        })
+      }
+      return next
+    })
+  }, [])
   const prevStep = useCallback(() => setStep(s => Math.max(s - 1, 1)), [])
   const goToStep = useCallback((n: number) => setStep(Math.max(1, Math.min(n, 3))), [])
 

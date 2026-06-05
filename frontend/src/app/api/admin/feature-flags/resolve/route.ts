@@ -98,13 +98,6 @@ export async function GET(req: NextRequest) {
       if (brotePlan) {
         return resolveFlags(brotePlan.id, brotePlan.name, brotePlan.slug, resolvedOrgId)
       }
-      // Fallback al slug legacy
-      const freePlan = await queryOne<{ id: string; name: string; slug: string }>(
-        `SELECT id, name, slug FROM subscriptions_plans WHERE slug = 'campo_libre' AND is_active = true LIMIT 1`
-      )
-      if (freePlan) {
-        return resolveFlags(freePlan.id, freePlan.name, freePlan.slug, resolvedOrgId)
-      }
       return NextResponse.json({ flags: {}, planName: 'Sin plan', planSlug: null, planStatus: null })
     }
 

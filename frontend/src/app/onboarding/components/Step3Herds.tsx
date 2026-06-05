@@ -104,7 +104,12 @@ export default function Step3Herds() {
     if (!user) return
     setSubmitting(true)
     setError(null)
-    if (skipHerds) updateData({ skippedHerds: true })
+    if (skipHerds) {
+      updateData({ skippedHerds: true })
+      import('@/lib/analytics').then(({ event }) => {
+        event({ action: 'onboarding_skip', category: 'onboarding', step_number: 3, skipped_fields: ['herds'] })
+      })
+    }
     try {
       const paddockAreaHa = data.paddocks.reduce((s: number, p: any) => s + p.area_ha, 0)
       const res = await finishOnboarding({
@@ -118,6 +123,9 @@ export default function Step3Herds() {
         paddocks:        data.paddocks,
       })
       if (res.success) {
+        import('@/lib/analytics').then(({ event }) => {
+          event({ action: 'onboarding_complete', category: 'onboarding' })
+        })
         setShowSuccess(true)
         setIsCompleting(true)
         try {

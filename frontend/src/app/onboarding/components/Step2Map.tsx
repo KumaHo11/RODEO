@@ -151,7 +151,16 @@ export default function Step2Map() {
       <AnimatePresence>
         {showSkipWarning && (
           <motion.div
-            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            onAnimationComplete={(def) => {
+              if (def !== "opacity") {
+                import('@/lib/analytics').then(({ event }) => {
+                  event({ action: 'onboarding_modal_view', category: 'onboarding', modal_name: 'skip_map_warning', step_number: 2 })
+                })
+              }
+            }}
             className="mb-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 shrink-0"
           >
             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />

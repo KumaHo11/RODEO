@@ -12,6 +12,7 @@ import { usePlan } from '@/hooks/usePlan'
 import { apiFetch } from '@/lib/apiFetch'
 import { Check, Sparkles, Zap, Crown, Building2, Loader2, ArrowRight, Star } from 'lucide-react'
 import { toast } from 'sonner'
+import { MercadoPagoBrick } from '@/components/MercadoPagoBrick'
 
 interface ApiPlan {
   id: string
@@ -63,12 +64,14 @@ function PlanCard({
   isCurrentPlan,
   onSelect,
   loading,
+  exchangeRate,
 }: {
   plan: ApiPlan
   billing: 'monthly' | 'annual'
   isCurrentPlan: boolean
   onSelect: (plan: ApiPlan) => void
   loading: boolean
+  exchangeRate: number
 }) {
   const Icon = PLAN_ICONS[plan.slug] || Sparkles
   const price = Number(billing === 'annual' ? plan.price_yearly : plan.price)
@@ -141,6 +144,10 @@ function PlanCard({
                 <span className="text-4xl font-black text-gray-900">USD {price.toFixed(0)}</span>
                 <span className="text-sm font-bold text-gray-400 mb-1.5">/EV/mes</span>
               </div>
+              <div className="text-sm font-bold text-green-700 mt-1">
+                ARS {Math.round(price * exchangeRate).toLocaleString('es-AR')}
+                <span className="text-[10px] font-normal text-gray-400 ml-1">(T.C. BNA: ${exchangeRate})</span>
+              </div>
               {billing === 'annual' && annual_saving > 0 && (
                 <p className="text-xs font-bold text-green-600 mt-1">
                   Ahorrás {annual_saving}% con el plan anual
@@ -204,14 +211,19 @@ export default function PlanesPage() {
   const { user } = useAuth()
   const { planSlug } = usePlan()
   const [plans, setPlans] = useState<ApiPlan[]>([])
+  const [exchangeRate, setExchangeRate] = useState<number>(1000)
   const [loading, setLoading] = useState(true)
   const [billing, setBilling] = useState<'monthly' | 'annual'>('annual')
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
+  const [mpPlanSelected, setMpPlanSelected] = useState<{ planId: string, amount: number } | null>(null)
 
   useEffect(() => {
     fetch('/api/plans')
       .then(r => r.json())
-      .then(d => setPlans(d.plans || []))
+      .then(d => {
+        setPlans(d.plans || [])
+        if (d.exchange_rate) setExchangeRate(d.exchange_rate)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -240,16 +252,13 @@ export default function PlanesPage() {
         }
       }
 
-      // Fallback MercadoPago
-      if (plan.mp_preapproval_plan_id) {
-        const res = await apiFetch('/api/payments/mercadopago/create-subscription', {
-          method: 'POST',
-          body: JSON.stringify({ plan_id: plan.id }),
+      // Fallback MercadoPago (o por defecto si no hay stripe)
+      if (plan.mp_preapproval_plan_id || !stripeId) {
+        setMpPlanSelected({
+           planId: plan.id,
+           amount: Math.round(Number(billing === 'annual' ? plan.price_yearly : plan.price) * exchangeRate)
         })
-        if (res.ok) {
-          const { url } = await res.json()
-          if (url) { window.location.href = url; return }
-        }
+        return
       }
 
       // Sin pasarela configurada — contactar
@@ -328,6 +337,7 @@ export default function PlanesPage() {
               isCurrentPlan={planSlug === plan.slug}
               onSelect={handleSelect}
               loading={checkoutLoading === plan.id}
+              exchangeRate={exchangeRate}
             />
           ))}
         </div>
@@ -339,6 +349,22 @@ export default function PlanesPage() {
         Podés cancelar o cambiar de plan en cualquier momento.
         Para consultas: <a href="mailto:soporte@rodeoagtech.com" className="text-green-600 font-bold">soporte@rodeoagtech.com</a>
       </p>
+
+      {mpPlanSelected && (
+        <div className="fixed inset-0 z-[9999] overflow-y-auto bg-black/50 backdrop-blur-sm flex flex-col items-center">
+          <div className="w-full max-w-md my-auto shrink-0 py-8 px-4">
+            <MercadoPagoBrick 
+              planId={mpPlanSelected.planId} 
+              amount={mpPlanSelected.amount} 
+              onCancel={() => setMpPlanSelected(null)}
+              onSuccess={() => {
+                setMpPlanSelected(null)
+                window.location.href = '/dashboard/planes?success=1'
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

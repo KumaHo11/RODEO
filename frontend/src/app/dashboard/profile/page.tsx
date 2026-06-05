@@ -156,6 +156,9 @@ export default function ProfilePage() {
         }
       }
       setLoading(false)
+      import('@/lib/analytics').then(({ event }) => {
+        event({ action: 'profile_view', category: 'profile' })
+      })
     }
     load()
   }, [user])
@@ -188,6 +191,9 @@ export default function ProfilePage() {
           method: 'PATCH',
           body: JSON.stringify({ avatar_url: url }),
         })
+        import('@/lib/analytics').then(({ event }) => {
+          event({ action: 'profile_update_avatar', category: 'profile' })
+        })
         setSuccess('Foto de perfil actualizada.')
         setTimeout(() => setSuccess(''), 3000)
       } else {
@@ -217,11 +223,20 @@ export default function ProfilePage() {
       }),
     })
     if (!res.ok) { setError('Error al guardar el perfil.') }
-    else { setSuccess('Perfil guardado correctamente.'); setTimeout(() => setSuccess(''), 3000) }
+    else { 
+      setSuccess('Perfil guardado correctamente.'); 
+      setTimeout(() => setSuccess(''), 3000) 
+      import('@/lib/analytics').then(({ event }) => {
+        event({ action: 'profile_update', category: 'profile' })
+      })
+    }
     setSaving(false)
   }
 
   const toggleNotification = async (key: string, value: boolean) => {
+    import('@/lib/analytics').then(({ event }) => {
+      event({ action: 'profile_notification_toggle', category: 'profile', notification_type: key, enabled: value })
+    })
     const newPrefs = { ...formData.notification_preferences, [key]: value }
     setFormData(p => ({ ...p, notification_preferences: newPrefs }))
     try {
@@ -235,6 +250,9 @@ export default function ProfilePage() {
   }
 
   const handleSignOut = async () => {
+    import('@/lib/analytics').then(({ event }) => {
+      event({ action: 'logout', category: 'auth' })
+    })
     await signOut()
     router.push('/login')
   }
@@ -298,7 +316,12 @@ export default function ProfilePage() {
       <div className="overflow-x-auto pb-2">
         <Tabs 
           activeTab={activeTab}
-          onChange={(tab) => setActiveTab(tab as any)}
+          onChange={(tab) => {
+            setActiveTab(tab as any)
+            import('@/lib/analytics').then(({ event }) => {
+              event({ action: 'profile_change_tab', category: 'profile', tab_name: tab })
+            })
+          }}
           items={[
             { id: 'perfil', label: 'Mi perfil' },
             { id: 'notificaciones', label: 'Notificaciones' },

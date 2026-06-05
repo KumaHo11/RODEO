@@ -26,7 +26,7 @@ function baseLayout(body: string): string {
     <!-- Header -->
     <tr><td style="background:#16a34a;padding:28px 40px;text-align:left">
       <div style="width:259px;height:56px;overflow:hidden;margin:0 auto;display:inline-block;text-align:left;">
-        <img src="${baseUrl}/LogoHeaderBlanco.svg" alt="RODEO" width="259" height="56" style="display:block;width:259px;height:56px;object-fit:contain;" />
+        <img src="${baseUrl}/LogoHeaderBlancoMail.svg" alt="RODEO" width="259" height="56" style="display:block;width:259px;height:56px;object-fit:contain;" />
       </div>
     </td></tr>
     <!-- Body -->

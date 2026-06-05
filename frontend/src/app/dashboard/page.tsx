@@ -154,6 +154,10 @@ export default function DashboardOverview() {
 
       setLoading(false)
       setDataLoaded(true)
+
+      import('@/lib/analytics').then(({ event }) => {
+        event({ action: 'dashboard_view', category: 'dashboard' })
+      })
     }
     load()
   }, [authLoading, user, profile, dataLoaded, router])
@@ -179,6 +183,10 @@ export default function DashboardOverview() {
 
   // ── Refresh NDVI from satellite for each paddock ────────────────────────────
   const refreshAllNdvi = useCallback(async () => {
+    import('@/lib/analytics').then(({ event }) => {
+      event({ action: 'dashboard_refresh_ndvi', category: 'dashboard' })
+    })
+
     if (ndviLoading || paddocks.length === 0) return
     
     const todayStr = new Date().toISOString().split('T')[0]
@@ -345,6 +353,9 @@ export default function DashboardOverview() {
             <button 
               onClick={() => {
                 try {
+                  import('@/lib/analytics').then(({ event }) => {
+                    event({ action: 'dashboard_download_history', category: 'dashboard' })
+                  })
                   let csv = '--- RESUMEN DEL ESTADO DEL CAMPO ---\n\n'
                   csv += 'POTREROS\nNombre,Area (ha),Materia Seca (kg/ha)\n'
                   paddocks.forEach(p => { csv += `${p.name},${p.area_ha || 0},${p.dry_matter_kg_ha || 0}\n` })
