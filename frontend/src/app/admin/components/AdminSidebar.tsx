@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 
+import Image from 'next/image'
+
 const NAV_ITEMS = [
   {
     group: 'PANEL',
@@ -37,15 +39,16 @@ export default function AdminSidebar() {
     <aside className={`relative flex flex-col bg-white border-r border-gray-100 transition-all duration-300 flex-shrink-0 ${collapsed ? 'w-14' : 'w-52'}`}>
 
       {/* Logo */}
-      <div className={`flex items-center gap-2.5 px-4 h-16 border-b border-gray-100 ${collapsed ? 'justify-center' : ''}`}>
-        <div className="w-7 h-7 bg-green-600 rounded-lg flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-[11px] font-black tracking-tight">R</span>
-        </div>
-        {!collapsed && (
-          <div>
-            <div className="text-gray-900 font-black text-sm tracking-tight leading-none">RODEO</div>
-            <div className="text-[9px] text-green-600 font-semibold tracking-widest mt-0.5">SUPER ADMIN</div>
-          </div>
+      <div className={`flex items-center px-4 h-16 border-b border-gray-100 ${collapsed ? 'justify-center' : ''}`}>
+        {!collapsed ? (
+          <Link href="/admin/dashboard" className="flex flex-col justify-center mt-1">
+            <Image src="/LogoHeaderVerde.svg" alt="RODEO" width={120} height={26} className="h-6 w-auto object-contain object-left mb-1" priority />
+            <div className="text-[9px] text-green-700 font-bold tracking-widest leading-none ml-1">SUPER ADMIN</div>
+          </Link>
+        ) : (
+          <Link href="/admin/dashboard" className="w-7 h-7 flex items-center justify-center flex-shrink-0">
+            <Image src="/FaviconFondoVerde.svg" alt="R" width={28} height={28} className="w-full h-full rounded-md" />
+          </Link>
         )}
       </div>
 
