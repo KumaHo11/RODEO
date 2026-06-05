@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Mail, Send, CheckCircle, Loader2 } from 'lucide-react'
 
 export default function Contacto() {
   const [form, setForm] = useState({ nombre: '', email: '', asunto: '', mensaje: '' })
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -17,6 +18,17 @@ export default function Contacto() {
       }
     }
   }, [])
+
+  const handleDemoClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setForm(prev => ({ ...prev, asunto: 'demo' }))
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // Opción para enfocar el primer input después de un breve retraso por el scroll
+    setTimeout(() => {
+      const nameInput = document.getElementById('nombre')
+      nameInput?.focus()
+    }, 500)
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -84,7 +96,7 @@ export default function Contacto() {
                   </button>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-5">
+                <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="nombre" className="block text-xs font-bold text-gray-700 mb-1.5 tracking-wide">
@@ -224,11 +236,11 @@ export default function Contacto() {
                     Agendá una demo personalizada de 30 minutos con nuestro equipo.
                     Te mostramos cómo Rodeo puede transformar la gestión de tu establecimiento.
                   </p>
-                  <Link href="/register"
+                  <button onClick={handleDemoClick}
                     className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all">
-                    Agendar demo gratuita
+                    Solicitar demo por formulario
                     <ArrowRight className="w-4 h-4" />
-                  </Link>
+                  </button>
                 </div>
               </div>
             </div>
