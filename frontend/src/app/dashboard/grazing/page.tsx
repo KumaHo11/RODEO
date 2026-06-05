@@ -1449,11 +1449,16 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           matchTab = (p.plan_type !== 'suggested' && p.ai_analysis?.plan_source !== 'suggested')
         }
       }
-      // Todas las planificaciones sugeridas son visibles simultáneamente en el mismo Gantt.
-      // El color de intensidad púrpura diferencia cada season plan.
-      return matchSearch && matchStatus && matchTab
+
+      // Isolate the view for a specific season plan when viewed from History
+      let matchSeasonPlan = true
+      if (viewMode === 'gantt' && activeSeasonPlanId) {
+        matchSeasonPlan = p.ai_analysis?.season_plan_id === activeSeasonPlanId || p.season_plan_id === activeSeasonPlanId
+      }
+
+      return matchSearch && matchStatus && matchTab && matchSeasonPlan
     }),
-    [plans, search, filterStatus, viewMode, activeGanttTab, historyTab]
+    [plans, search, filterStatus, viewMode, activeGanttTab, historyTab, activeSeasonPlanId]
   )
 
 
@@ -1474,6 +1479,70 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       console.error('Export error:', err)
       toast.error('Error al exportar el historial.')
     }
+  }
+
+  const handleExportSeasonPlan = (sp: any) => {
+    const spPlans = plans.filter(p => p.ai_analysis?.season_plan_id === sp.id || p.season_plan_id === sp.id)
+    if (spPlans.length === 0) {
+      toast.error('No hay registros para este plan.')
+      return
+    }
+
+    const headers = [
+      'Potrero', 'Rodeos', 'Estado',
+      'Entrada plan', 'Entrada real', 'Salida plan', 'Salida real',
+      'Días plan', 'Días reales', 'Stock inicio', 'Stock fin',
+      'Remanente (kg MS/ha)', 'Desvío (días)',
+    ]
+    const fmtCsv = (d: string | null | undefined) =>
+      d ? new Date(d + 'T12:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
+
+    const rows = spPlans.map(plan => {
+      const pHerds = herds.filter(h => (plan.herd_ids?.length ? plan.herd_ids : plan.herd_id ? [plan.herd_id] : []).includes(h.id))
+      const herdNames = pHerds.map(h => h.name).join(' / ')
+      const st = STATUS_MAP[plan.status]?.label || plan.status
+      const plannedDays = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : (plan.planned_recovery_days || '')
+      const effectiveEntry = plan.actual_entry_date || (plan.status === 'COMPLETED' ? plan.entry_date : null)
+      const actualDays = (effectiveEntry && plan.actual_exit_date) ? daysBetween(effectiveEntry, plan.actual_exit_date) : ''
+      let stockInicio = pHerds.reduce((s, h) => s + (Number(h.animal_count || h.head_count) || 0), 0)
+      let stockFin: string | number = ''
+      if (plan.ai_analysis?.closing_stock && Array.isArray(plan.ai_analysis.closing_stock)) {
+        stockInicio = plan.ai_analysis.closing_stock.reduce((s: number, r: any) => s + (Number(r.initial) || 0), 0)
+        if (plan.status === 'COMPLETED') {
+          stockFin = plan.ai_analysis.closing_stock.reduce((s: number, r: any) => s + (Number(r.final) || 0), 0)
+        }
+      } else if (plan.status === 'COMPLETED' && stockInicio > 0) {
+        stockFin = stockInicio
+      }
+      const desvio = actualDays !== '' && Number(plannedDays) > 0 ? Number(actualDays) - Number(plannedDays) : ''
+      return [
+        plan.paddocks?.name || '',
+        herdNames,
+        st,
+        fmtCsv(plan.entry_date),
+        fmtCsv(plan.actual_entry_date),
+        fmtCsv(plan.exit_date),
+        fmtCsv(plan.actual_exit_date),
+        plannedDays,
+        actualDays,
+        stockInicio || '',
+        stockFin,
+        plan.exit_dry_matter_kg_ha || '',
+        desvio !== '' ? (Number(desvio) > 0 ? `+${desvio}` : desvio) : '',
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    })
+
+    const csv = [headers.map(h => `"${h}"`).join(','), ...rows].join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `plan-${sp.name.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success(`Plan ${sp.name} exportado`)
   }
 
   // Export histórico de pastoreo como CSV (client-side)
@@ -2595,6 +2664,13 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                             Ver Planilla
                           </button>
                         )}
+                        <button
+                          onClick={() => handleExportSeasonPlan(sp)}
+                          className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 text-[10px] font-bold rounded shadow-sm hover:border-green-300 hover:text-green-700 transition-colors flex items-center gap-1.5"
+                          title="Descargar CSV del plan"
+                        >
+                          <Download className="w-3 h-3" /> CSV
+                        </button>
                         <button
                           onClick={() => handleDeleteSeasonPlan(sp.id, sp.name)}
                           className="px-2 py-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 outline-none text-[10px] font-bold rounded transition-colors"
