@@ -810,10 +810,10 @@ export default function LandingPage() {
                     </div>
 
                     {plan.slug === 'latifundio' ? (
-                      <a href={`mailto:${process.env.NEXT_PUBLIC_SALES_EMAIL || 'ventas@rodeoagtech.com'}`}
+                      <Link href="/soporte/contacto?asunto=ventas-corporativas"
                         className={`w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all mb-5 block ${(plan as any).ctaStyle}`}>
                         {(plan as any).cta}
-                      </a>
+                      </Link>
                     ) : (
                       <Link href="/register"
                         onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: `pricing_${plan.slug}` })}
