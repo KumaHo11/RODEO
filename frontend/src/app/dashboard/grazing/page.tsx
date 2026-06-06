@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
 import { DashboardMetricsBar, DashboardMetricsData } from '@/design-system/molecules/DashboardMetricsBar'
+import OnboardingTour from '@/components/OnboardingTour'
 import SeasonPlanModal from './SeasonPlanModal'
 import dynamic from 'next/dynamic'
 const ExcelImporter = dynamic(() => import('./ExcelImporter'), { ssr: false })
@@ -1910,6 +1911,26 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     <>
       <ConfirmModal />
       <div className="space-y-5 pb-10">
+        <OnboardingTour
+          tourId="tour-planificador-v1"
+          steps={[
+            {
+              target: '.tour-planificador-modo',
+              title: 'Modos de Planificación',
+              content: 'Intercala entre el modo Manual libre o el modo Sugerido, donde la IA propone un recorrido óptimo.'
+            },
+            {
+              target: '.tour-planificador-vista',
+              title: 'Vistas del Planificador',
+              content: 'Alterná entre el gráfico de Gantt interactivo, la vista de Lista detallada, o el Historial completo.'
+            },
+            {
+              target: '.tour-planificador-nuevo',
+              title: 'Nueva Planificación',
+              content: 'Iniciá una nueva planificación para asignar rodeos a los potreros o usar el trazado inteligente.'
+            }
+          ]}
+        />
 
       {/* ─── Header simplificado ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1919,7 +1940,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           <div className="relative">
             <button
               onClick={() => setShowGanttModeDropdown(v => !v)}
-              className="group flex items-center justify-between gap-4 px-4 py-2.5 bg-white border border-gray-200 shadow-sm hover:shadow hover:border-gray-300 rounded-2xl transition-all duration-200"
+              className="tour-planificador-modo group flex items-center justify-between gap-4 px-4 py-2.5 bg-white border border-gray-200 shadow-sm hover:shadow hover:border-gray-300 rounded-2xl transition-all duration-200"
             >
               <div className="flex flex-col items-start text-left">
                 <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
@@ -1996,7 +2017,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         <div className="flex items-center gap-2 shrink-0">
 
           {/* Vista toggle */}
-          <div className="bg-white border border-gray-200 rounded-xl p-1 flex items-center shadow-sm gap-0.5">
+          <div className="tour-planificador-vista bg-white border border-gray-200 rounded-xl p-1 flex items-center shadow-sm gap-0.5">
             {[
               { id: 'gantt',   Icon: CalendarDays, label: 'Gantt'     },
               { id: 'list',    Icon: AlignJustify,  label: 'Lista'     },
@@ -2065,7 +2086,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 }
               }}
               disabled={loading}
-              className={`flex items-center gap-2 px-4 py-2 text-white font-bold text-sm rounded-xl shadow-sm transition-all disabled:opacity-50 ${
+              className={`tour-planificador-nuevo flex items-center gap-2 px-4 py-2 text-white font-bold text-sm rounded-xl shadow-sm transition-all disabled:opacity-50 ${
                 activeGanttTab === 'suggested'
                   ? 'bg-purple-600 hover:bg-purple-700'
                   : (drawingMode ? 'bg-green-700' : 'bg-green-600 hover:bg-green-700')
