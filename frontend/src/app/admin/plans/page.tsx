@@ -218,9 +218,16 @@ function PlanModal({ plan, onClose, onSave }: {
                   {flag.flag_type === 'boolean' ? (
                     <Toggle value={!!flag.flag_value} onChange={v => updateFlag(i, v)} size="sm" />
                   ) : (
-                    <input type="number" value={flag.flag_value}
-                      onChange={e => updateFlag(i, parseFloat(e.target.value) || 0)}
-                      className="w-20 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-center text-gray-900 focus:outline-none focus:border-green-500" />
+                    <div className="flex items-center gap-2">
+                      {flag.flag_value === -1 && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">Ilimitado</span>}
+                      <input type="number" value={flag.flag_value}
+                        onChange={e => {
+                          const valStr = e.target.value;
+                          const parsed = parseFloat(valStr);
+                          updateFlag(i, isNaN(parsed) ? (valStr === '-' ? '-' : 0) : parsed);
+                        }}
+                        className="w-20 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-center text-gray-900 focus:outline-none focus:border-green-500" />
+                    </div>
                   )}
                 </div>
               ))}
@@ -288,12 +295,13 @@ function FlagRow({ flag, planId, onUpdate }: {
         </div>
       ) : (
         <div className="flex items-center gap-2">
+          {flag.flag_value === -1 && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">Ilimitado</span>}
           <input
             type="number"
             defaultValue={flag.flag_value}
             onBlur={e => {
-              const v = parseFloat(e.target.value) || 0
-              if (v !== flag.flag_value) handleToggle(v)
+              const v = parseFloat(e.target.value)
+              if (!isNaN(v) && v !== flag.flag_value) handleToggle(v)
             }}
             className="w-20 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-center text-gray-900 focus:outline-none focus:border-green-500"
           />
