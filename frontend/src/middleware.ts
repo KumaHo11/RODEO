@@ -18,7 +18,7 @@ const JWKS = createRemoteJWKSet(
 const rateLimitMap = new Map<string, { count: number, resetAt: number }>()
 
 function checkRateLimit(request: NextRequest): boolean {
-  const ip = request.headers.get('x-forwarded-for') || request.ip || 'unknown'
+  const ip = request.headers.get('x-forwarded-for') || 'unknown'
   const now = Date.now()
   const windowMs = 60 * 1000 // 1 min
   const maxRequests = 300 // allow normal usage but block spam
