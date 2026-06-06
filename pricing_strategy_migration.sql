@@ -63,7 +63,7 @@ INSERT INTO plan_feature_flags (plan_id, flag_key, flag_value, label, flag_type)
 SELECT p.id, unnested.flag_key, unnested.flag_value::jsonb, unnested.label, unnested.flag_type
 FROM subscriptions_plans p,
 (VALUES
-  ('max_paddocks',     '5',      'Máx. potreros',              'number'),
+  ('max_paddocks',     '20',     'Máx. potreros',              'number'),
   ('max_herds',        '1',      'Máx. rodeos',                'number'),
   ('max_team_members', '1',      'Miembros de equipo',         'number'),
   ('map',              'true',   'Mapa de campo + potreros',   'boolean'),
@@ -91,8 +91,8 @@ SELECT p.id, unnested.flag_key, unnested.flag_value::jsonb, unnested.label, unne
 FROM subscriptions_plans p,
 (VALUES
   ('max_paddocks',     '-1',     'Máx. potreros (ilimitado)',  'number'),
-  ('max_herds',        '-1',     'Máx. rodeos (ilimitado)',    'number'),
-  ('max_team_members', '-1',     'Miembros de equipo',         'number'),
+  ('max_herds',        '5',      'Máx. rodeos',                'number'),
+  ('max_team_members', '3',      'Miembros de equipo',         'number'),
   ('map',              'true',   'Mapa de campo + potreros',   'boolean'),
   ('clima',            'true',   'Módulo clima y alertas',     'boolean'),
   ('agenda',           'true',   'Agenda / eventos',           'boolean'),

@@ -91,9 +91,10 @@ function PlanCard({
     .filter(f => f.flag_type === 'number')
     .map(f => {
       const val = Number(f.flag_value)
-      if (f.flag_key === 'max_paddocks') return val >= 9000 ? 'Potreros ilimitados' : `Hasta ${val} potreros`
-      if (f.flag_key === 'max_herds') return val >= 9000 ? 'Rodeos ilimitados' : `Hasta ${val} rodeos`
-      if (f.flag_key === 'max_team_members') return val >= 9000 ? 'Equipo ilimitado' : `Hasta ${val} miembros`
+      const isUnlimited = val === -1 || val >= 9000
+      if (f.flag_key === 'max_paddocks') return isUnlimited ? 'Potreros ilimitados' : `Hasta ${val} potreros`
+      if (f.flag_key === 'max_herds') return isUnlimited ? 'Rodeos ilimitados' : `Hasta ${val} rodeos`
+      if (f.flag_key === 'max_team_members') return isUnlimited ? 'Equipo ilimitado' : `Hasta ${val} miembros`
       return null
     })
     .filter(Boolean) as string[]
@@ -136,7 +137,9 @@ function PlanCard({
 
         {/* Price */}
         <div className="mb-6">
-          {price === 0 ? (
+          {plan.slug === 'latifundio' || plan.slug === 'enterprise' ? (
+            <p className="text-4xl font-black text-gray-900">A convenir</p>
+          ) : price === 0 ? (
             <p className="text-4xl font-black text-gray-900">Gratis</p>
           ) : (
             <div>
@@ -196,7 +199,11 @@ function PlanCard({
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                {price === 0 ? 'Seleccionar plan' : 'Contratar ahora'}
+                {plan.slug === 'latifundio' || plan.slug === 'enterprise'
+                  ? 'Hablar con ventas'
+                  : price === 0
+                  ? 'Comenzar gratis'
+                  : 'Contratar ahora'}
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -229,6 +236,12 @@ export default function PlanesPage() {
 
   const handleSelect = async (plan: ApiPlan) => {
     if (!user) return
+    
+    if (plan.slug === 'latifundio' || plan.slug === 'enterprise') {
+      window.location.href = `mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'ventas@rodeoagtech.com'}?subject=Consulta sobre Plan Latifundio`;
+      return;
+    }
+
     setCheckoutLoading(plan.id)
     try {
       // Intentar Stripe primero
