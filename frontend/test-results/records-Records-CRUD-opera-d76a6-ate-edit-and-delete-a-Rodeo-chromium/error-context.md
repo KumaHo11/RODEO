@@ -16,18 +16,20 @@ Test timeout of 30000ms exceeded while running "beforeEach" hook.
 ```
 
 ```
-Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+Error: page.goto: Test timeout of 30000ms exceeded.
 Call log:
-  - waiting for locator('form') to be visible
+  - navigating to "http://localhost:3000/dashboard/herds", waiting until "load"
 
 ```
 
 # Page snapshot
 
 ```yaml
-- generic [active]:
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - img [ref=e3]
+    - paragraph [ref=e5]: Verificando sesión...
   - region "Notifications alt+T"
-  - alert [ref=e1]
 ```
 
 # Test source
@@ -40,8 +42,7 @@ Call log:
   5  |   test.beforeEach(async ({ page }) => {
   6  |     // Log in before each test to ensure IndexedDB session is active
   7  |     await page.goto('/login');
-> 8  |     await page.waitForSelector('form');
-     |                ^ Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+  8  |     await page.waitForSelector('form');
   9  |     await page.fill('input[type="email"]', 'javi.osorio.1@gmail.com');
   10 |     await page.fill('input[type="password"]', '1q2w3e4r');
   11 |     await page.click('button[type="submit"]');
@@ -49,7 +50,8 @@ Call log:
   13 |     await page.waitForURL(/.*(dashboard|onboarding).*/, { timeout: 15000 });
   14 |     
   15 |     // Go to the dashboard herds (Rodeos) as starting point
-  16 |     await page.goto('/dashboard/herds');
+> 16 |     await page.goto('/dashboard/herds');
+     |                ^ Error: page.goto: Test timeout of 30000ms exceeded.
   17 |   });
   18 | 
   19 |   test('Should be able to create, edit and delete a Rodeo', async ({ page }) => {

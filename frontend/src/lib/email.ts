@@ -185,6 +185,51 @@ const templates = {
     `),
   }),
 
+  paddock_overdue_reminder: (p: {
+    ownerName: string
+    orgName: string
+    moves: Array<{
+      paddockName: string
+      herdName: string
+      headCount: number
+      exitDate: string
+    }>
+    dashboardUrl: string
+  }) => ({
+    subject: `Aviso: Movimiento atrasado en ${p.orgName}`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 6px;color:#111827;font-size:22px;font-weight:900">¿Moviste los animales?</h2>
+      <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
+        Hola <strong>${p.ownerName}</strong>, el día de ayer debieron salir animales de 
+        <strong>${p.moves.length} potrero${p.moves.length !== 1 ? 's' : ''}</strong>
+        en <strong>${p.orgName}</strong> y no tenemos el registro.
+      </p>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;margin-bottom:28px">
+        <p style="margin:0 0 8px;color:#92400e;font-size:14px;font-weight:600">
+          Si ya hiciste el movimiento, no olvides aplicar los cambios en el planificador para mantener la autonomía al día.
+        </p>
+      </div>
+      <div style="margin-bottom:28px">
+        ${p.moves.map(m => `
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <div style="width:10px;height:10px;border-radius:50%;background:#d97706;flex-shrink:0"></div>
+              <p style="margin:0;color:#111827;font-size:15px;font-weight:800">${m.paddockName}</p>
+            </div>
+            <p style="margin:0 0 0px;color:#4b5563;font-size:13px;font-weight:500">
+              Rodeo: <strong>${m.herdName}</strong> · <strong>${m.headCount}</strong> cab.
+            </p>
+          </div>
+        `).join('')}
+      </div>
+      <div style="text-align:center;margin-bottom:20px">
+        <a href="${p.dashboardUrl}" style="display:inline-block;background:#16a34a;color:#fff;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:800;text-decoration:none">
+          Aplicar cambios en el Timeline →
+        </a>
+      </div>
+    `),
+  }),
+
   climate_alert: (p: {
     ownerName: string
     paddockName: string

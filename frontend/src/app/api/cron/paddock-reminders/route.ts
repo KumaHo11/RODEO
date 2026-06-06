@@ -94,14 +94,14 @@ export async function GET(req: NextRequest) {
         let body = ''
         
         if (plan.exit_date === tomorrowStr) {
-          title = `Próxima salida ${fmtDateShort(plan.exit_date)} del potrero ${plan.paddock_name}`
-          body = `No olvides ajustar el stock de animales y el remanente que queda después de pastoreo.`
+          title = `Mañana hay que mover los animales del potrero ${plan.paddock_name}`
+          body = `Revisá el planificador y prepará el potrero receptor.`
         } else if (plan.exit_date === yesterdayStr) {
-          title = `Retraso: Los animales debieron salir ayer del potrero ${plan.paddock_name}`
-          body = `No olvides ajustar el stock de animales y el remanente que queda después de pastoreo.`
+          title = `Retraso: Los animales debieron salir ayer de ${plan.paddock_name}`
+          body = `¿Moviste los animales? No olvides aplicar los cambios en el planificador.`
         } else if (plan.exit_date === threeDaysAgoStr) {
-          title = `Alerta de sobrepastoreo: hace tres días debieron salir los animales del potrero ${plan.paddock_name}`
-          body = `Revisá el planificador para ajustar la fecha de salida.`
+          title = `Alerta: hace tres días debieron salir de ${plan.paddock_name}`
+          body = `¿Moviste los animales? No olvides aplicar los cambios en el planificador.`
         }
 
         // We use mutate directly to insert into notifications table
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
             plan.owner_profile_id,
             title,
             body,
-            JSON.stringify({ link: `/dashboard/grazing?planId=${plan.plan_id}` })
+            JSON.stringify({ link: `/dashboard/grazing` })
           ]).catch(e => console.error('Failed to insert notification', e))
         })
       }
@@ -122,16 +122,25 @@ export async function GET(req: NextRequest) {
 
     // ── Group tomorrow's plans by org for Emails ─────────────────────────────
     const plansForEmail = plans ? plans.filter(p => p.exit_date === tomorrowStr) : []
-    const byOrg = new Map<string, typeof plansForEmail>()
+    const byOrgTomorrow = new Map<string, typeof plansForEmail>()
     for (const row of plansForEmail) {
-      if (!byOrg.has(row.org_id)) byOrg.set(row.org_id, [])
-      byOrg.get(row.org_id)!.push(row)
+      if (!byOrgTomorrow.has(row.org_id)) byOrgTomorrow.set(row.org_id, [])
+      byOrgTomorrow.get(row.org_id)!.push(row)
+    }
+
+    // ── Group overdue plans by org for Emails ────────────────────────────────
+    const overduePlansEmail = plans ? plans.filter(p => p.exit_date === yesterdayStr || p.exit_date === threeDaysAgoStr) : []
+    const byOrgOverdue = new Map<string, typeof overduePlansEmail>()
+    for (const row of overduePlansEmail) {
+      if (!byOrgOverdue.has(row.org_id)) byOrgOverdue.set(row.org_id, [])
+      byOrgOverdue.get(row.org_id)!.push(row)
     }
 
     let sent = 0
     const errors: string[] = []
 
-    for (const [, rows] of byOrg) {
+    // 1. Send Tomorrow's Reminders
+    for (const [, rows] of byOrgTomorrow) {
       const first = rows[0]
       if (!first.owner_email) continue
 
@@ -149,9 +158,35 @@ export async function GET(req: NextRequest) {
           dashboardUrl: `${APP_BASE_URL}/dashboard/grazing`,
         })
         sent++
-        console.log(`[paddock-reminders] ✓ sent to ${first.owner_email} (org ${first.org_id})`)
+        console.log(`[paddock-reminders] ✓ sent tomorrow reminder to ${first.owner_email} (org ${first.org_id})`)
       } catch (err: any) {
-        const msg = `org=${first.org_id} email=${first.owner_email}: ${err.message}`
+        const msg = `tomorrow-reminder org=${first.org_id} email=${first.owner_email}: ${err.message}`
+        errors.push(msg)
+        console.error('[paddock-reminders] ✗', msg)
+      }
+    }
+
+    // 2. Send Overdue Reminders
+    for (const [, rows] of byOrgOverdue) {
+      const first = rows[0]
+      if (!first.owner_email) continue
+
+      try {
+        await sendEmail('paddock_overdue_reminder', first.owner_email, {
+          ownerName: first.owner_first_name || 'Productor',
+          orgName: first.org_name,
+          moves: rows.map(r => ({
+            paddockName: r.paddock_name,
+            herdName: r.herd_name,
+            headCount: r.head_count,
+            exitDate: fmtDate(r.exit_date)
+          })),
+          dashboardUrl: `${APP_BASE_URL}/dashboard/grazing`,
+        })
+        sent++
+        console.log(`[paddock-reminders] ✓ sent overdue reminder to ${first.owner_email} (org ${first.org_id})`)
+      } catch (err: any) {
+        const msg = `overdue-reminder org=${first.org_id} email=${first.owner_email}: ${err.message}`
         errors.push(msg)
         console.error('[paddock-reminders] ✗', msg)
       }
@@ -189,7 +224,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       sent,
-      orgs: byOrg.size,
+      orgs: byOrgTomorrow.size + byOrgOverdue.size,
       plansFound: plans?.length || 0,
       eventsFound: events?.length || 0,
       errors: errors.length > 0 ? errors : undefined,

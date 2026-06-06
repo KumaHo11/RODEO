@@ -24,6 +24,7 @@ import { calculateBaseEV, PHYSIO_LABEL } from '@/lib/grazing/evProjection'
 import { fmtDate } from '@/lib/utils/dates'
 import LoteCard, { type LoteData } from '@/components/LoteCard'
 import { IconoRodeos } from '@/components/icons/IconoRodeos'
+import OnboardingTour from '@/components/OnboardingTour'
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SortKey = 'name' | 'head_count' | 'avg_weight_kg' | 'admission_date' | 'total_ev'
 
@@ -450,7 +451,7 @@ export default function HerdsPage() {
     setLoadingMov(false)
   }
 
-  useEffect(() => { loadHerds() }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadHerds() }, [user])  
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -490,7 +491,7 @@ export default function HerdsPage() {
 
   // Flat sorted list for list view (used for ungrouped rows + sort)
   const filteredFlat = useMemo(() => {
-    let list = herds.filter(h => {
+    const list = herds.filter(h => {
       const q = search.toLowerCase()
       const ms = !q || h.name.toLowerCase().includes(q) || (h.breed ?? '').toLowerCase().includes(q) ||
         (h.grupo_manejo_nombre ?? '').toLowerCase().includes(q) ||
@@ -668,6 +669,26 @@ export default function HerdsPage() {
 
   return (
     <div className="space-y-6">
+      <OnboardingTour
+        tourId="tour-rodeos-v1"
+        steps={[
+          {
+            target: '.tour-metricas-rodeos',
+            title: 'Métricas Generales',
+            content: 'Observa la carga animal total, los equivalentes vaca (EV) y el consumo diario de materia seca en tu establecimiento.'
+          },
+          {
+            target: '.tour-inventario-rodeos',
+            title: 'Tu Inventario',
+            content: 'Aquí puedes buscar y filtrar tus rodeos y lotes de manejo. También puedes ver su historial de eventos.'
+          },
+          {
+            target: '.tour-nuevo-rodeo',
+            title: 'Agregar Rodeo',
+            content: 'Haz clic aquí para dar de alta un nuevo rodeo o grupo de animales.'
+          }
+        ]}
+      />
 
       {/* ── Header ── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -718,7 +739,7 @@ export default function HerdsPage() {
           )}
           {canCreateMore ? (
             <button onClick={openCreate}
-              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 whitespace-nowrap shrink-0">
+              className="tour-nuevo-rodeo flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 whitespace-nowrap shrink-0">
               <Plus className="w-4 h-4 shrink-0" /> Nuevo rodeo
             </button>
           ) : (
@@ -740,7 +761,7 @@ export default function HerdsPage() {
       )}
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="tour-metricas-rodeos grid grid-cols-1 sm:grid-cols-3 gap-4">
 
         <div className="sm:col-span-1 bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-5 text-white shadow-md shadow-green-200">
           <p className="text-[10px] font-black tracking-widest uppercase text-green-100 mb-2">Establecimiento</p>
@@ -784,7 +805,7 @@ export default function HerdsPage() {
 
       {/* ── Search + Filters (no en historial) ── */}
       {view !== 'historial' && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3">
+        <div className="tour-inventario-rodeos bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3">
           <div className="flex gap-3 flex-wrap items-center">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />

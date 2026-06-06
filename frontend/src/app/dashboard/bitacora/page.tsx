@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import OnboardingTour from '@/components/OnboardingTour'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
@@ -346,14 +347,14 @@ export default function BitacoraPage() {
   // It reads the blob directly; liveTranscript is always reset before recording starts
   useEffect(() => {
     if (audioBlob && !isRecording) saveNote()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [audioBlob])
 
   // Photo: only fires when photoFile changes AND there is no audioBlob pending
   // (audioBlob was cleared in handlePhotoChange so this is safe)
   useEffect(() => {
     if (photoFile && !audioBlob) saveNote()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [photoFile])
 
   // ── Save ────────────────────────────────────────────────────────────────────
@@ -534,6 +535,21 @@ export default function BitacoraPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="relative min-h-[calc(100vh-120px)] flex flex-col bg-white">
+      <OnboardingTour
+        tourId="tour-bitacora-v1"
+        steps={[
+          {
+            target: '.tour-bitacora-filtros',
+            title: 'Busca y Filtra tus Notas',
+            content: 'Aquí puedes encontrar audios, fotos o notas de texto específicas en tu bitácora.'
+          },
+          {
+            target: '.tour-bitacora-grabar',
+            title: 'Graba una Nota de Voz',
+            content: 'Pulsa el botón rojo para grabar un audio. Se transcribirá automáticamente a texto si tienes conexión, o se guardará para sincronizarse más tarde.'
+          }
+        ]}
+      />
 
       {/* Header */}
       <div className="px-6 pt-10 pb-4">
@@ -606,7 +622,7 @@ export default function BitacoraPage() {
           <div className="flex-1" />
 
           {/* Search + Filter — always visible on the right */}
-          <div className="flex items-center gap-1 bg-gray-100 rounded-2xl px-3 shrink-0">
+          <div className="tour-bitacora-filtros flex items-center gap-1 bg-gray-100 rounded-2xl px-3 shrink-0">
             <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               type="text"
@@ -694,7 +710,7 @@ export default function BitacoraPage() {
                 <Camera className="w-6 h-6" />
               </button>
               <button onClick={startRecording}
-                className="w-24 h-24 rounded-full bg-white border-[6px] border-gray-100 flex items-center justify-center shadow-2xl hover:scale-105 active:scale-90 transition-all">
+                className="tour-bitacora-grabar w-24 h-24 rounded-full bg-white border-[6px] border-gray-100 flex items-center justify-center shadow-2xl hover:scale-105 active:scale-90 transition-all">
                 <div className="w-16 h-16 rounded-full bg-red-600 shadow-lg shadow-red-200" />
               </button>
               <div className="w-14 h-14 invisible" />

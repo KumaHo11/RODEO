@@ -11,6 +11,7 @@ import {
   Wrench, Stethoscope, Tractor, TextCursor, Flag,
   Filter, List, Kanban, ArrowRight, RotateCcw, ChevronRight
 } from 'lucide-react'
+import OnboardingTour from '@/components/OnboardingTour'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Priority = 'BAJA' | 'NORMAL' | 'ALTA' | 'URGENTE'
@@ -313,6 +314,21 @@ function TareasContent({ user }: { user: any }) {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
+      <OnboardingTour
+        tourId="tour-tareas-v1"
+        steps={[
+          {
+            target: '.tour-tablero-tareas',
+            title: 'Tablero de Tareas',
+            content: 'Aquí puedes gestionar tus tareas en columnas según su estado. Puedes cambiar la vista a lista si lo prefieres.'
+          },
+          {
+            target: '.tour-nueva-tarea',
+            title: 'Crear Tarea',
+            content: 'Haz clic aquí para asignar nuevas tareas a tu equipo, establecer prioridades y fechas límite.'
+          }
+        ]}
+      />
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -342,7 +358,7 @@ function TareasContent({ user }: { user: any }) {
           </div>
           <button
             onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 shadow-sm shadow-green-200 transition-all"
+            className="tour-nueva-tarea flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 shadow-sm shadow-green-200 transition-all"
           >
             <Plus className="w-4 h-4" /> Nueva tarea
           </button>
@@ -367,7 +383,7 @@ function TareasContent({ user }: { user: any }) {
         </div>
       ) : view === 'kanban' ? (
         /* ── Kanban view ── */
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="tour-tablero-tareas grid grid-cols-1 md:grid-cols-3 gap-4">
           {KANBAN_STATUSES.map(status => {
             const cfg = STATUS_CONFIG[status]
             const cols = grouped[status] || []

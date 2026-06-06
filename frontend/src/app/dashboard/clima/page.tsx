@@ -20,6 +20,7 @@ import {
   AlertTriangle, CheckCircle2, ArrowRight, ChevronDown, ChevronUp, LayoutGrid, List
 } from 'lucide-react'
 import { calculateBaseEV } from '@/lib/grazing/evProjection'
+import OnboardingTour from '@/components/OnboardingTour'
 
 // ── Tab definition ─────────────────────────────────────────────────────────────
 type Tab = 'resumen' | 'potreros' | 'rodeos' | 'historial'
@@ -161,7 +162,7 @@ function TabResumen({ orgName }: { orgName: string | null }) {
       </div>
 
       {/* Matriz de impacto climático */}
-      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+      <div className="tour-clima-matriz bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
         <button
           onClick={() => setIsMatrixOpen(!isMatrixOpen)}
           className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
@@ -610,6 +611,21 @@ export default function ClimaPage() {
       requiredPlan="Brote"
     >
       <div className="flex flex-col gap-5 pb-8">
+        <OnboardingTour
+          tourId="tour-clima-v1"
+          steps={[
+            {
+              target: '.tour-clima-tabs',
+              title: 'Explora el Clima',
+              content: 'Navega entre el resumen, potreros, rodeos y el historial climático usando estas pestañas.'
+            },
+            {
+              target: '.tour-clima-matriz',
+              title: 'Matriz de Impacto Climático',
+              content: 'Entiende cómo las variables climáticas actuales afectan tanto el crecimiento del pasto como el bienestar de tus animales.'
+            }
+          ]}
+        />
 
         {/* Header */}
         <div>
@@ -620,7 +636,7 @@ export default function ClimaPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit">
+        <div className="tour-clima-tabs flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit">
           {TABS.map(tab => (
             <button
               key={tab.id}

@@ -2,8 +2,28 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const admin = require('firebase-admin');
+
+admin.initializeApp({
+  projectId: process.env.FIREBASE_PROJECT_ID || 'rodeo-app-fac50'
+});
 
 const app = express();
+
+const requireAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  }
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+};
 
 // Restrict CORS to known origins — never allow wildcard in production
 const allowedOrigins = [
@@ -38,11 +58,21 @@ const pool = new Pool({
 
 // GET /map-data
 // Fetches paddocks geometries and converts PostGIS to GeoJSON mapping Format
-app.get('/map-data', async (req, res) => {
+app.get('/map-data', requireAuth, async (req, res) => {
     try {
         const orgId = req.query.org_id;
         if (!orgId) {
             return res.status(400).json({ error: 'Missing org_id parameter' });
+        }
+
+        // Validate IDOR
+        const profileCheck = await pool.query(
+            'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
+            [req.user.uid]
+        );
+        
+        if (profileCheck.rows.length === 0 || profileCheck.rows[0].organization_id !== orgId) {
+            return res.status(403).json({ error: 'Forbidden: You do not have access to this organization' });
         }
 
         // Fetch paddocks for the given organization
@@ -66,7 +96,7 @@ app.get('/map-data', async (req, res) => {
 // Input: Días de Recuperación deseados (ej. 90 días).
 // Proceso: El sistema toma el número de lotes activos y calcula: DE = DR / (P - 1).
 // Output: Genera un calendario de rotación optimizado (Carta de Pastoreo).
-app.post('/calculate-grazing', async (req, res) => {
+app.post('/calculate-grazing', requireAuth, async (req, res) => {
     try {
         const { recoveryDays, paddockCount, startDate, herdId } = req.body;
 

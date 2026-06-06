@@ -500,7 +500,7 @@ export function obtenerEvRodeoParaFecha(
   // ── 2. Determinar categoría fisiológica activa en la fecha objetivo ─────────
   // Por defecto, la categoría fisiológica configurada en el rodeo
   let activePhysio: PhysiologicalCategory | null = physioRaw || null
-  let activeHeadCount = headCount
+  const activeHeadCount = headCount
 
   // ── 3. Aplicar hitos biológicos del usuario ─────────────────────────────────
   if (milestones && milestones.length > 0) {

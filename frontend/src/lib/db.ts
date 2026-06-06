@@ -4,6 +4,32 @@
  * Usa node-postgres (pg) directamente — sin ORM
  */
 import { Pool } from 'pg'
+import { headers } from 'next/headers'
+import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
+
+const tokenCache = new Map<string, { uid: string, expiresAt: number }>()
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+async function getContextUid(): Promise<string | null> {
+  try {
+    const headersList = await headers()
+    const token = headersList.get('authorization')?.replace('Bearer ', '').trim()
+    if (!token) return null
+
+    const cached = tokenCache.get(token)
+    if (cached && Date.now() < cached.expiresAt) return cached.uid
+
+    const decoded = await verifyFirebaseToken(token)
+    if (decoded?.uid) {
+      tokenCache.set(token, { uid: decoded.uid, expiresAt: Date.now() + CACHE_TTL_MS })
+      return decoded.uid
+    }
+  } catch (e) {
+    // Ignorar si no estamos en contexto de request
+  }
+  return null
+}
+
 
 declare global {
   var _pgPool: Pool | undefined
@@ -73,8 +99,31 @@ export async function query<T = Record<string, unknown>>(
   if (!process.env.DATABASE_URL) {
     return []
   }
-  const result = await getPool().query(sql, params)
-  return result.rows as T[]
+  
+  const pool = getPool()
+  const uid = await getContextUid()
+  
+  if (uid) {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      // Prevenir inyección SQL en el set local
+      const safeUid = uid.replace(/'/g, "''")
+      await client.query(`SET LOCAL request.jwt.claim.sub = '${safeUid}'`)
+      const result = await client.query(sql, params)
+      await client.query('COMMIT')
+      return result.rows as T[]
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+  } else {
+    // Fallback sin RLS para jobs internos o llamadas no autenticadas
+    const result = await pool.query(sql, params)
+    return result.rows as T[]
+  }
 }
 
 /**
@@ -99,10 +148,34 @@ export async function mutate(
   if (!process.env.DATABASE_URL) {
     return { rowCount: 0, rows: [] }
   }
-  const result = await getPool().query(sql, params)
-  return {
-    rowCount: result.rowCount ?? 0,
-    rows: result.rows,
+  
+  const pool = getPool()
+  const uid = await getContextUid()
+  
+  if (uid) {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const safeUid = uid.replace(/'/g, "''")
+      await client.query(`SET LOCAL request.jwt.claim.sub = '${safeUid}'`)
+      const result = await client.query(sql, params)
+      await client.query('COMMIT')
+      return {
+        rowCount: result.rowCount ?? 0,
+        rows: result.rows,
+      }
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+  } else {
+    const result = await pool.query(sql, params)
+    return {
+      rowCount: result.rowCount ?? 0,
+      rows: result.rows,
+    }
   }
 }
 

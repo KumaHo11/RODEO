@@ -21,6 +21,8 @@ import { MarketWidget } from '@/components/MarketWidget'
 import nextDynamic from 'next/dynamic'
 const ForageVigorMonitor = nextDynamic(() => import('@/components/ForageVigorMonitor'), { ssr: false })
 import { toast } from 'sonner'
+import OnboardingTour from '@/components/OnboardingTour'
+import { Step } from 'react-joyride'
 
 const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 51: '🌦️', 61: '🌧️', 80: '🌩️', 95: '⛈️' }
 const getWeatherIcon = (code: number) => {
@@ -291,7 +293,7 @@ export default function DashboardOverview() {
   useEffect(() => {
     if (!dataLoaded || ndviLoading || paddocks.length === 0) return
     refreshAllNdvi()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [dataLoaded])
 
   // ── Derived values ────────────────────────────────────────────────────────
@@ -341,8 +343,28 @@ export default function DashboardOverview() {
   const isColdStress = currentTemp < 10
   const isHeatStress = currentTemp > 30
 
+  const tourSteps: Step[] = [
+    {
+      target: '.tour-clima',
+      title: 'Clima en tiempo real',
+      content: 'Monitorea las condiciones climáticas de tu campo y recibe alertas de estrés térmico o heladas al instante.',
+      skipBeacon: true,
+    },
+    {
+      target: '.tour-operativa',
+      title: 'Gestión Operativa',
+      content: 'Lleva el control de todas tus tareas y eventos importantes. Nunca fue tan fácil organizar el trabajo diario.',
+    },
+    {
+      target: '.tour-logistica',
+      title: 'Logística de Movimientos',
+      content: 'Visualiza rápidamente qué rodeos deben moverse y a dónde. Planificación holística al alcance de tu mano.',
+    }
+  ]
+
   return (
     <div className="flex flex-col h-full gap-5 overflow-y-auto pb-24 md:pb-8">
+      <OnboardingTour tourId="dashboard-tour-v1" steps={tourSteps} />
       {/* ══ HEADER ══ */}
       <AppHeader
         title="Panel principal"
@@ -389,7 +411,7 @@ export default function DashboardOverview() {
           title="Clima actual"
           icon={<CloudRain className="w-4 h-4 text-blue-500" />}
           isFeatureEnabled={true}
-          className="md:col-span-1 bg-[#f0f9ff] border-[#bae6fd]"
+          className="tour-clima md:col-span-1 bg-[#f0f9ff] border-[#bae6fd]"
         >
           <div className="flex flex-col justify-between h-full relative overflow-hidden">
             <div className="absolute -top-6 -right-6 text-blue-200/40 w-24 h-24 pointer-events-none">
@@ -473,6 +495,7 @@ export default function DashboardOverview() {
           isFeatureEnabled={true}
           actionLabel="Ver agenda"
           href="/dashboard/agenda"
+          className="tour-operativa"
         >
           <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto divide-y divide-gray-50 pr-2">
@@ -536,6 +559,7 @@ export default function DashboardOverview() {
           isFeatureEnabled={hasFeature('grazing_planner')}
           actionLabel="Planificador"
           href="/dashboard/grazing"
+          className="tour-logistica"
         >
           <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto divide-y divide-gray-50 pr-2">

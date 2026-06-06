@@ -55,7 +55,7 @@ export default function LocationPicker({ lat, lng, onMove }: Props) {
       mapRef.current.setView([lat, lng], 16)
       markerRef.current?.setLatLng([lat, lng])
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   return (

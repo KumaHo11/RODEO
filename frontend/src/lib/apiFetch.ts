@@ -9,7 +9,7 @@
  */
 import { auth } from '@/lib/firebase/client'
 
-const DEFAULT_TIMEOUT_MS = 8000
+const DEFAULT_TIMEOUT_MS = 15000
 
 export async function apiFetch(url: string, options?: RequestInit & { timeout?: number }): Promise<Response> {
   const token = await auth.currentUser?.getIdToken()
@@ -17,11 +17,11 @@ export async function apiFetch(url: string, options?: RequestInit & { timeout?: 
 
   // Merge caller's signal with our timeout signal
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), options?.timeout || DEFAULT_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(new Error('TimeoutError')), options?.timeout || DEFAULT_TIMEOUT_MS)
 
   // If caller already provided a signal, abort ours when theirs fires too
   if (options?.signal) {
-    options.signal.addEventListener('abort', () => controller.abort(), { once: true })
+    options.signal.addEventListener('abort', () => controller.abort(options.signal?.reason), { once: true })
   }
 
   try {

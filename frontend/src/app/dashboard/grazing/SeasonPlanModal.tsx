@@ -176,7 +176,7 @@ export default function SeasonPlanModal({
 
   useEffect(() => {
     import('@/lib/analytics').then(({ event }) => event({ action: 'plan_wizard_start', category: 'planner', mode: isSuggestedMode ? 'sugerido' : 'manual' }))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [])
 
   // ── Paso 1: El Plan ─────────────────────────────────────────────────────────
@@ -275,7 +275,7 @@ export default function SeasonPlanModal({
         if (org.default_target_remnant_kg_ha != null) setTargetRemnant(Number(org.default_target_remnant_kg_ha))
       })
       .catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [])
 
   // ── Cálculos ─────────────────────────────────────────────────────────────────

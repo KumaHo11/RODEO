@@ -12,22 +12,10 @@
 # Error details
 
 ```
-Test timeout of 30000ms exceeded while running "beforeEach" hook.
-```
-
-```
-Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+Error: page.goto: net::ERR_ABORTED at http://localhost:3000/dashboard/herds
 Call log:
-  - waiting for locator('form') to be visible
+  - navigating to "http://localhost:3000/dashboard/herds", waiting until "load"
 
-```
-
-# Page snapshot
-
-```yaml
-- generic [active]:
-  - region "Notifications alt+T"
-  - alert [ref=e1]
 ```
 
 # Test source
@@ -39,15 +27,15 @@ Call log:
   4  |   test.beforeEach(async ({ page }) => {
   5  |     // Log in while online
   6  |     await page.goto('/login');
-> 7  |     await page.waitForSelector('form');
-     |                ^ Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+  7  |     await page.waitForSelector('form');
   8  |     await page.fill('input[type="email"]', 'javi.osorio.1@gmail.com');
   9  |     await page.fill('input[type="password"]', '1q2w3e4r');
   10 |     await page.click('button[type="submit"]');
   11 |     await page.waitForURL(/.*(dashboard|onboarding).*/, { timeout: 15000 });
   12 |     
   13 |     // Visit Rodeos to cache it
-  14 |     await page.goto('/dashboard/herds');
+> 14 |     await page.goto('/dashboard/herds');
+     |                ^ Error: page.goto: net::ERR_ABORTED at http://localhost:3000/dashboard/herds
   15 |     await page.waitForSelector('h1:has-text("Rodeos")');
   16 |   });
   17 | 

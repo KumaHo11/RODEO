@@ -22,7 +22,7 @@
  *   />
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, Check } from 'lucide-react'
 
@@ -78,7 +78,7 @@ export function CustomSelect({
   const selectedDot   = allOptions.find(o => o.value === value)?.dotColor
 
   // Position the portal dropdown to align with the trigger
-  const updatePosition = useCallback(() => {
+  const updatePosition = () => {
     if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
     const spaceBelow = window.innerHeight - rect.bottom
@@ -94,7 +94,7 @@ export function CustomSelect({
         ? { bottom: window.innerHeight - rect.top + 4 }
         : { top: rect.bottom + 4 }),
     })
-  }, [allOptions.length])
+  }
 
   const toggle = () => {
     if (disabled) return
@@ -119,7 +119,8 @@ export function CustomSelect({
       document.removeEventListener('touchstart', close)
       window.removeEventListener('scroll', onScroll, true)
     }
-  }, [open, updatePosition])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const select = (opt: SelectOption) => {
     onChange(opt.value)

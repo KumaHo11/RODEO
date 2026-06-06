@@ -8,6 +8,7 @@ import { isOffline } from '@/lib/connectivity'
 import { addToOfflineQueue } from '@/components/OfflineManager'
 import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify, Loader2, WifiOff } from 'lucide-react'
 import { FeatureGate } from '@/components/FeatureGate'
+import OnboardingTour from '@/components/OnboardingTour'
 
 const EVENT_TYPES = [
   { id: 'servicio',             label: 'Servicio',                 color: '#be185d', bg: 'bg-red-50',     text: 'text-red-700',    dot: 'bg-red-500',    emoji: '' },
@@ -155,7 +156,7 @@ export default function AgendaPage() {
     }
     window.addEventListener('rodeo_sync_completed', handleSyncCompleted)
     return () => window.removeEventListener('rodeo_sync_completed', handleSyncCompleted)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [user])
 
   const openCreate = () => {
@@ -377,6 +378,21 @@ export default function AgendaPage() {
       requiredPlan="Brote"
     >
     <div className="space-y-6">
+      <OnboardingTour
+        tourId="tour-agenda-v1"
+        steps={[
+          {
+            target: '.tour-eventos-agenda',
+            title: 'Eventos y Agenda',
+            content: 'Aquí puedes ver un resumen de todos tus eventos ganaderos pasados y próximos a realizarse.'
+          },
+          {
+            target: '.tour-nueva-fecha',
+            title: 'Agendar Nuevo Evento',
+            content: 'Usa este botón para registrar servicios, pariciones, saneamientos y más.'
+          }
+        ]}
+      />
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -409,7 +425,7 @@ export default function AgendaPage() {
           </div>
           <button
             onClick={openCreate}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 whitespace-nowrap shrink-0"
+            className="tour-nueva-fecha flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 whitespace-nowrap shrink-0"
           >
             <Plus className="w-4 h-4 shrink-0" /> Nuevo evento
           </button>
@@ -417,7 +433,7 @@ export default function AgendaPage() {
       </div>
 
       {/* KPIs Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="tour-eventos-agenda grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
           <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Total eventos</p>
           <p className="text-3xl font-black text-gray-950">{events.length}</p>

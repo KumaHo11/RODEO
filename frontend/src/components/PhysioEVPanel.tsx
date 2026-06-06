@@ -132,7 +132,7 @@ export function PhysioEVPanel({
     } else if (physioCategory === 'VACA_CON_TERNERO') {
       onChange({ adpvKgDay: 0 })
     }
-  }, [physioCategory]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [physioCategory])  
 
   // ── Calcular EV usando tablas Cocimano ──────────────────────────────────────
   const evResult = useMemo(() => {

@@ -199,7 +199,7 @@ function KmlLayerRenderer({
       Object.values(layersRef.current).forEach(l => { try { map.removeLayer(l) } catch {} })
       layersRef.current = {}
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [map, features, acceptedIndices])
 
   return null

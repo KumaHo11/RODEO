@@ -12,22 +12,47 @@
 # Error details
 
 ```
-Test timeout of 30000ms exceeded while running "beforeEach" hook.
-```
-
-```
-Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.
 Call log:
-  - waiting for locator('form') to be visible
+  - waiting for locator('text=Nuevo registro') to be visible
 
 ```
 
 # Page snapshot
 
 ```yaml
-- generic [active]:
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - heading "Inicia sesión" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Ingresa a tu cuenta para gestionar tu campo.
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - text: Correo electrónico
+          - textbox "tu@email.com" [ref=e10]
+        - generic [ref=e11]:
+          - generic [ref=e12]:
+            - generic [ref=e13]: Contraseña
+            - link "¿Olvidaste tu contraseña?" [ref=e14] [cursor=pointer]:
+              - /url: /forgot-password
+          - generic [ref=e15]:
+            - textbox "••••••••" [ref=e16]
+            - button [ref=e17] [cursor=pointer]:
+              - img [ref=e18]
+        - button "Ingresar" [ref=e21] [cursor=pointer]:
+          - text: Ingresar
+          - img [ref=e22]
+      - paragraph [ref=e24]:
+        - text: ¿No tienes una cuenta?
+        - link "Regístrate" [ref=e25] [cursor=pointer]:
+          - /url: /register
   - region "Notifications alt+T"
-  - alert [ref=e1]
+  - button "Open Next.js Dev Tools" [ref=e31] [cursor=pointer]:
+    - img [ref=e32]
+  - alert [ref=e35]: Inicia sesión
+  - iframe [ref=e36]:
+    
 ```
 
 # Test source
@@ -40,8 +65,7 @@ Call log:
   5  |   test.beforeEach(async ({ page }) => {
   6  |     // Log in before each test to ensure IndexedDB session is active
   7  |     await page.goto('/login');
-> 8  |     await page.waitForSelector('form');
-     |                ^ Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+  8  |     await page.waitForSelector('form');
   9  |     await page.fill('input[type="email"]', 'javi.osorio.1@gmail.com');
   10 |     await page.fill('input[type="password"]', '1q2w3e4r');
   11 |     await page.click('button[type="submit"]');
@@ -109,7 +133,8 @@ Call log:
   73 |   // Bitácora test
   74 |   test('Should be able to navigate to Bitácora and add a note', async ({ page }) => {
   75 |     await page.goto('/dashboard/bitacora');
-  76 |     await page.waitForSelector('text=Nuevo registro', { timeout: 10000 });
+> 76 |     await page.waitForSelector('text=Nuevo registro', { timeout: 10000 });
+     |                ^ TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.
   77 |     await expect(page.locator('h1')).toContainText('Bitácora');
   78 |   });
   79 | });

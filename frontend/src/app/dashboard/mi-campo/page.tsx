@@ -13,6 +13,7 @@ import { X, Check, Plus, Satellite, Image as ImageIcon, MapPin, Building2, Loade
 import { useConfirm } from '@/components/ui/ConfirmModal'
 import { toast } from 'sonner'
 import type { ParsedKmlFeature } from '@/lib/kmlParser'
+import OnboardingTour from '@/components/OnboardingTour'
 
 const MiCampoMap = dynamic(() => import('./components/MiCampoMap'), {
   ssr: false,
@@ -519,9 +520,24 @@ export default function MiCampoPage() {
 
   return (
     <div className="flex flex-col md:flex-row md:h-full md:overflow-hidden bg-gray-100 md:p-4 md:gap-4">
+      <OnboardingTour
+        tourId="tour-potreros-v1"
+        steps={[
+          {
+            target: '.tour-mapa-potreros',
+            title: 'Mapa Interactivo',
+            content: 'Aquí puedes visualizar tu campo, alternar a vista satelital y usar las herramientas para dibujar potreros.'
+          },
+          {
+            target: '.tour-lista-potreros',
+            title: 'Panel de Control',
+            content: 'Gestiona la información técnica, carga archivos KML con tus linderos y visualiza índices NDVI.'
+          }
+        ]}
+      />
 
       {/* ── Map panel — mobile sticky top, desktop right 65% ────────────────── */}
-      <div className="order-1 md:order-2 w-full md:w-[65%] flex flex-col h-[70vw] max-h-[420px] md:h-full md:max-h-none rounded-none md:rounded-2xl overflow-hidden shadow-none md:shadow-md border-0 md:border md:border-gray-200 relative min-h-[260px] sticky top-0 z-[400] md:static md:z-auto">
+      <div className="tour-mapa-potreros order-1 md:order-2 w-full md:w-[65%] flex flex-col h-[70vw] max-h-[420px] md:h-full md:max-h-none rounded-none md:rounded-2xl overflow-hidden shadow-none md:shadow-md border-0 md:border md:border-gray-200 relative min-h-[260px] sticky top-0 z-[400] md:static md:z-auto">
 
         {/* View toggle — always visible when fieldImg exists OR always available as overlay */}
         <div className="flex border-b border-gray-200 bg-white shrink-0 z-[500] relative">
@@ -663,7 +679,7 @@ export default function MiCampoPage() {
       </div>
 
       {/* ── Side Panel — mobile scrolls below map, desktop left 35% ─────────── */}
-      <div className="order-2 md:order-1 w-full md:w-[35%] md:shrink-0 flex flex-col md:overflow-hidden px-3 pb-4 pt-3 md:p-0 gap-3">
+      <div className="tour-lista-potreros order-2 md:order-1 w-full md:w-[35%] md:shrink-0 flex flex-col md:overflow-hidden px-3 pb-4 pt-3 md:p-0 gap-3">
         {/* Banner de datos sin conexión */}
         {isOfflineData && (
           <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 mx-0 md:mx-1 mt-1 md:mt-2">

@@ -257,7 +257,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
   useEffect(() => {
     if (!isEditing && catKey && !weight) setWeight(CATEGORIA_PESO_DEFAULT[catKey] ?? '')
-  }, [catKey, isEditing]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [catKey, isEditing])  
 
   // Auto-sincronizar catKey/catLabel desde la categoría fisiológica (SSOT)
   // Cuando el usuario selecciona un estado fisiológico, la categoría comercial
@@ -268,7 +268,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       setCatKey(comercial)
       setCatLabel(CATEGORIA_LABEL_RAE[comercial] ?? comercial)
     }
-  }, [physioPanel.physioCategory]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [physioPanel.physioCategory])  
 
   // Precargar peso desde PHYSIO_PESO_DEFAULT cuando se selecciona categoría fisiológica
   // y el campo de peso está vacío (no sobreescribir pesos ya ingresados)
@@ -280,7 +280,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         if (!weight) setWeight(defaultWeight)
       }
     }
-  }, [physioPanel.physioCategory]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [physioPanel.physioCategory])  
 
   // GDP defaults inteligentes por categoría fisiológica
   useEffect(() => {
@@ -293,7 +293,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       setDailyGainKg(0)
     }
     // VACA_PRENADA / VACA_VACIA: no pisar si el usuario ya cargó un valor
-  }, [physioCategory]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [physioCategory])  
 
   const availableBreeds = useMemo(() => catKey ? (RAZAS_POR_CATEGORIA[catKey] ?? ['Otra']) : ['Otra'], [catKey])
   const currentRef = catKey ? CATEGORIA_REF[catKey] : undefined
@@ -503,7 +503,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       if (!excl) return true
       return !excl.has(activePhysio as string) && !excl.has(activeComCat as string)
     }),
-    [activePhysio, activeComCat]  // eslint-disable-line react-hooks/exhaustive-deps
+    [activePhysio, activeComCat]   
   )
 
   // EV live preview del destete (crías)

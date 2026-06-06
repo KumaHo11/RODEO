@@ -1,7 +1,23 @@
 import io
 import pandas as pd
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
+import firebase_admin
+from firebase_admin import auth
+
+if not firebase_admin._apps:
+    firebase_admin.initialize_app()
+
+def get_current_user(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized: No token provided")
+    
+    token = authorization.split("Bearer ")[1]
+    try:
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid token")
 
 from app.schemas import (
     AnalyzeResponse, CleanseMappingRequest, ResolveResponse,
@@ -27,7 +43,8 @@ app.add_middleware(
 @app.post("/api/parser/analyze", response_model=AnalyzeResponse)
 async def analyze_file(
     file: UploadFile = File(...),
-    tenant_id: str = Form("default_tenant")
+    tenant_id: str = Form("default_tenant"),
+    user: dict = Depends(get_current_user)
 ):
     """
     Recibe un archivo crudo (CSV/XLSX), lo perfila, identifica las columnas usando NLP 
@@ -55,7 +72,7 @@ async def analyze_file(
         raise HTTPException(status_code=400, detail=f"Error leyendo el archivo: {str(e)}")
 
 @app.post("/api/parser/resolve", response_model=ResolveResponse)
-async def resolve_and_cleanse(req: CleanseMappingRequest):
+async def resolve_and_cleanse(req: CleanseMappingRequest, user: dict = Depends(get_current_user)):
     """
     Recibe el JSON crudo y la configuración final de mappings (manual y automática).
     Aplica limpieza estructural (tipo casteo y regex) a las variables objetivo.
@@ -75,7 +92,7 @@ async def resolve_and_cleanse(req: CleanseMappingRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/insights/financial-scenarios", response_model=FinancialInsightResponse)
-async def get_financial_scenarios(req: FinancialScenarioRequest):
+async def get_financial_scenarios(req: FinancialScenarioRequest, user: dict = Depends(get_current_user)):
     """
     Ticket 2: Cruza la biología del campo con la economía local.
     Sugiere si suplementar o vender basado en precios del MAG.
@@ -89,7 +106,7 @@ async def get_financial_scenarios(req: FinancialScenarioRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/predictions/biomass-growth", response_model=ClimatePredictionResponse)
-async def get_biomass_prediction(req: ClimatePredictionRequest):
+async def get_biomass_prediction(req: ClimatePredictionRequest, user: dict = Depends(get_current_user)):
     """
     Ticket 3: Motor Predictivo Climático.
     Traduce milímetros de lluvia en kg MS/ha proyectados.

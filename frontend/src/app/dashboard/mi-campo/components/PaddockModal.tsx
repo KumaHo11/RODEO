@@ -895,7 +895,7 @@ export default function PaddockModal({
     // Si cualquier fetch falla con TypeError (error de red), encolamos offline.
     try {
       let photo_url: string | null = null
-      let photo_urls: string[] = []
+      const photo_urls: string[] = []
       if (noteImages.length > 0) {
         try {
           for (const img of noteImages) {

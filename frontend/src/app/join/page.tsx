@@ -64,7 +64,7 @@ function JoinContent() {
       }
     }
     init()
-  }, [token, isLoading]) // eslint-disable-line
+  }, [token, isLoading])  
 
   // ── Accept invitation (calls API) ──────────────────────────────────────────
   const acceptInvitation = async (firebaseUser: any, inv: any) => {

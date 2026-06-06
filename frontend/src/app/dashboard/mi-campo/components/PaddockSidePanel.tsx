@@ -186,7 +186,7 @@ export default function PaddockSidePanel({
       autoOpenDone.current = true
       openModal(target)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [defaultEditPaddockId, paddocks, loading])
 
   const handleModalSave = async (

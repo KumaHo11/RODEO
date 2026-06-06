@@ -19,6 +19,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { parseKmlFile } from '@/lib/kmlParser'
 import type { ParsedKmlFeature } from '@/lib/kmlParser'
+import OnboardingTour from '@/components/OnboardingTour'
+import { Step } from 'react-joyride'
 
 // ─── KML / GeoJSON file extractor ─────────────────────────────────────────────
 async function parseSpatialFile(file: File): Promise<{ lat: number; lng: number; address: string } | null> {
@@ -133,8 +135,23 @@ export default function Step1Panel({ onKmlFeaturesLoaded }: Step1PanelProps) {
 
   const isValid = !!(data.fieldName.trim() && data.location)
 
+  const tourSteps: Step[] = [
+    {
+      target: '.tour-nombre-campo',
+      title: 'Nombre de tu campo',
+      content: 'Escribe aquí cómo se llama tu establecimiento o campo. Este será el nombre de tu organización.',
+      skipBeacon: true,
+    },
+    {
+      target: '.tour-ubicacion',
+      title: 'Ubicación exacta',
+      content: 'Escribe la ciudad o provincia más cercana a tu campo si no tienes las coordenadas exactas. Luego podrás mover el pin sobre la ubicación precisa de tu establecimiento en el mapa.',
+    }
+  ]
+
   return (
     <div className="flex flex-col h-full overflow-y-auto">
+      <OnboardingTour tourId="onboarding-step1-v1" steps={tourSteps} />
 
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-gray-100 shrink-0">
@@ -146,7 +163,7 @@ export default function Step1Panel({ onKmlFeaturesLoaded }: Step1PanelProps) {
       <div className="px-6 py-5 space-y-5 flex-1">
 
         {/* Field name */}
-        <div className="space-y-2">
+        <div className="tour-nombre-campo space-y-2">
           <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 tracking-widest uppercase">
             <Building2 className="w-3 h-3" /> Nombre del establecimiento
           </label>
@@ -160,7 +177,7 @@ export default function Step1Panel({ onKmlFeaturesLoaded }: Step1PanelProps) {
         </div>
 
         {/* Mode tabs */}
-        <div className="space-y-3">
+        <div className="tour-ubicacion space-y-3">
           <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 tracking-widest uppercase">
             <MapPin className="w-3 h-3" /> Ubicación
           </label>

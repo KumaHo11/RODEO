@@ -544,7 +544,7 @@ export function ClimateAdjustmentPanel({
 
   useEffect(() => {
     if (hasAccess && paddocks.length > 0) calculateAll()
-  }, [paddocks]) // eslint-disable-line
+  }, [paddocks])  
 
   // Group snapshots by paddock name
   const snapshotsByPaddock = useMemo(() => {

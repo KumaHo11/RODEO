@@ -28,6 +28,8 @@ import {
   PHYSIO_PESO_DEFAULT,
 } from '@/lib/grazing/evProjection'
 import { CATEGORIA_COLORS, CATEGORIA_LABEL_RAE, type CategoriaComercial } from '@/lib/categorias'
+import OnboardingTour from '@/components/OnboardingTour'
+import { Step } from 'react-joyride'
 
 const MS_PER_EV = 12  // kg MS/EV/día — ración base unificada
 
@@ -150,8 +152,28 @@ export default function Step3Herds() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const tourSteps: Step[] = [
+    {
+      target: '.tour-categoria-hacienda',
+      title: 'Categorías y Consumo',
+      content: 'Selecciona la categoría de tu ganado. El sistema calculará automáticamente sus requerimientos de Equivalente Vaca (EV) según las tablas de consumo oficiales.',
+      skipBeacon: true,
+    },
+    {
+      target: '#add-herd-btn',
+      title: 'Añadir al Inventario',
+      content: 'Una vez cargados los datos, agrégalos a tu inventario. Podrás ver en tiempo real cómo impactan en la carga total de tu campo.',
+    },
+    {
+      target: '#finish-onboarding-btn',
+      title: '¡Todo listo!',
+      content: 'Cuando termines, finaliza la configuración para ingresar al Dashboard principal. Puedes volver a editar tu inventario en cualquier momento.',
+    }
+  ]
+
   return (
     <>
+      <OnboardingTour tourId="onboarding-step3-v1" steps={tourSteps} />
       <SuccessModal
         isOpen={showSuccess}
         fieldName={data.fieldName}
@@ -196,7 +218,7 @@ export default function Step3Herds() {
               </p>
             </div>
 
-            <div className="flex-1 px-5 py-4 overflow-y-auto min-h-0">
+            <div className="tour-categoria-hacienda flex-1 px-5 py-4 overflow-y-auto min-h-0">
               <HerdFormFields
                 value={form}
                 onChange={setForm}

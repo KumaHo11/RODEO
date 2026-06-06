@@ -18,16 +18,49 @@ Test timeout of 30000ms exceeded while running "beforeEach" hook.
 ```
 Error: page.waitForSelector: Test timeout of 30000ms exceeded.
 Call log:
-  - waiting for locator('form') to be visible
+  - waiting for locator('h1:has-text("Rodeos")') to be visible
 
 ```
 
 # Page snapshot
 
 ```yaml
-- generic [active]:
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - img "RODEO Ganadería Regenerativa" [ref=e6]
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - heading "Inicia sesión" [level=1] [ref=e10]
+        - paragraph [ref=e11]: Ingresa a tu cuenta para gestionar tu campo.
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - text: Correo electrónico
+          - textbox "tu@email.com" [ref=e14]
+        - generic [ref=e15]:
+          - generic [ref=e16]:
+            - generic [ref=e17]: Contraseña
+            - link "¿Olvidaste tu contraseña?" [ref=e18] [cursor=pointer]:
+              - /url: /forgot-password
+          - generic [ref=e19]:
+            - textbox "••••••••" [ref=e20]
+            - button [ref=e21] [cursor=pointer]:
+              - img [ref=e22]
+        - button "Ingresar" [ref=e25] [cursor=pointer]:
+          - text: Ingresar
+          - img [ref=e26]
+      - paragraph [ref=e28]:
+        - text: ¿No tienes una cuenta?
+        - link "Regístrate" [ref=e29] [cursor=pointer]:
+          - /url: /register
   - region "Notifications alt+T"
-  - alert [ref=e1]
+  - button "Open Next.js Dev Tools" [ref=e35] [cursor=pointer]:
+    - generic [ref=e38]:
+      - text: Compiling
+      - generic [ref=e39]:
+        - generic [ref=e40]: .
+        - generic [ref=e41]: .
+        - generic [ref=e42]: .
+  - alert [ref=e43]
 ```
 
 # Test source
@@ -39,8 +72,7 @@ Call log:
   4  |   test.beforeEach(async ({ page }) => {
   5  |     // Log in while online
   6  |     await page.goto('/login');
-> 7  |     await page.waitForSelector('form');
-     |                ^ Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+  7  |     await page.waitForSelector('form');
   8  |     await page.fill('input[type="email"]', 'javi.osorio.1@gmail.com');
   9  |     await page.fill('input[type="password"]', '1q2w3e4r');
   10 |     await page.click('button[type="submit"]');
@@ -48,7 +80,8 @@ Call log:
   12 |     
   13 |     // Visit Rodeos to cache it
   14 |     await page.goto('/dashboard/herds');
-  15 |     await page.waitForSelector('h1:has-text("Rodeos")');
+> 15 |     await page.waitForSelector('h1:has-text("Rodeos")');
+     |                ^ Error: page.waitForSelector: Test timeout of 30000ms exceeded.
   16 |   });
   17 | 
   18 |   test('Should show offline indicator and allow basic navigation when offline', async ({ page, context }) => {

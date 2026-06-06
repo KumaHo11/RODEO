@@ -53,7 +53,7 @@ export default function Step1Field() {
         { timeout: 6000, enableHighAccuracy: false }
       )
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [])
 
   // ── Drawing state ────────────────────────────────────

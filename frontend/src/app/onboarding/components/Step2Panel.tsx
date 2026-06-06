@@ -27,6 +27,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { PADDOCK_COLORS } from './paddockColors'
 import { parseKmlFile } from '@/lib/kmlParser'
 import type { ParsedKmlFeature } from '@/lib/kmlParser'
+import OnboardingTour from '@/components/OnboardingTour'
+import { Step } from 'react-joyride'
 
 interface Props {
   midDrawArea: number | null
@@ -125,8 +127,28 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
     nextStep()
   }
 
+  const tourSteps: Step[] = [
+    {
+      target: '.tour-herramientas-potreros',
+      title: 'Crear Potreros',
+      content: 'Puedes dibujar cada uno de tus potreros en el mapa usando las herramientas, o si tienes un archivo KML de tu campo, ¡cárgalo directamente aquí!',
+      skipBeacon: true,
+    },
+    {
+      target: '.leaflet-pm-toolbar',
+      title: 'Herramientas de Dibujo',
+      content: 'Utiliza esta barra lateral en el mapa para trazar polígonos, editarlos o borrarlos. El área se calculará automáticamente.',
+    },
+    {
+      target: '.tour-perimetro-campo',
+      title: 'Demarcar tu Campo (Opcional)',
+      content: 'Si quieres, también puedes dibujar el perímetro exterior total de tu establecimiento.',
+    }
+  ]
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      <OnboardingTour tourId="onboarding-step2-v1" steps={tourSteps} />
 
       {/* ── Header ── */}
       <div className="px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
@@ -191,7 +213,7 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
             </div>
 
             {/* KML import or draw hint */}
-            <div className="border-2 border-dashed border-gray-100 rounded-2xl py-7 flex flex-col items-center gap-3 text-center">
+            <div className="tour-herramientas-potreros border-2 border-dashed border-gray-100 rounded-2xl py-7 flex flex-col items-center gap-3 text-center">
               <PenLine className="w-7 h-7 text-gray-200" />
               <div>
                 <p className="text-xs font-bold text-gray-400">Dibujá los potreros en el mapa</p>
@@ -217,7 +239,7 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
         {/* ── C) Optional: demarcar área total del campo ── */}
         {/* Only show if the user has not already drawn/confirmed the field */}
         {!hasField && !hasDraft && (
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3.5">
+          <div className="tour-perimetro-campo rounded-2xl border border-gray-100 bg-gray-50 p-3.5">
             <div className="flex items-start gap-2.5">
               <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-blue-100">
                 <Info className="w-3 h-3 text-blue-500" />

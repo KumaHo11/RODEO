@@ -14,6 +14,7 @@ import {
 import { AppHeader } from '@/components/AppHeader'
 import { Button, FormField } from '@/design-system'
 import { FeatureGate } from '@/components/FeatureGate'
+import OnboardingTour from '@/components/OnboardingTour'
 
 // ── Role config ────────────────────────────────────────────────────────────────
 const PRESET_ROLES = [
@@ -374,6 +375,21 @@ export default function EquipoPage() {
       requiredPlan="Planificador"
     >
     <div className="space-y-5">
+      <OnboardingTour
+        tourId="tour-equipo-v1"
+        steps={[
+          {
+            target: '.tour-equipo-miembros',
+            title: 'Gestiona tu Equipo',
+            content: 'Aquí puedes ver los miembros activos de tu equipo, invitaciones pendientes y el historial.'
+          },
+          {
+            target: '.tour-nuevo-miembro',
+            title: 'Invitar Miembro',
+            content: 'Haz clic aquí para invitar a nuevos colaboradores a tu establecimiento y asignarles roles específicos.'
+          }
+        ]}
+      />
       <AppHeader title="Equipo" subtitle="Gestión de miembros y permisos" />
 
       {/* Read-only banner for guests */}
@@ -394,14 +410,14 @@ export default function EquipoPage() {
           </p>
         </div>
         {isOwner && (
-          <Button onClick={() => setModalOpen(true)} leftIcon={<Plus className="w-4 h-4" />}>
+          <Button className="tour-nuevo-miembro" onClick={() => setModalOpen(true)} leftIcon={<Plus className="w-4 h-4" />}>
             Invitar al equipo
           </Button>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+      <div className="tour-equipo-miembros flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
         {([
           { key: 'members' as Tab, label: 'Miembros', count: members.length },
           { key: 'pending' as Tab, label: 'Pendientes', count: pendingInvitations.length },

@@ -72,6 +72,12 @@ export async function dispatchClimateAlert(payload: ClimateAlertPayload): Promis
   // Solo despachar en warning/critical
   if (alertLevel === 'ok') return
 
+  // === NOTIFICACIONES PAUSADAS POR REQUERIMIENTO ===
+  // Ya no enviamos notificaciones in-app ni por email sobre el ajuste climático.
+  // El motor de Ajuste Clima seguirá corriendo para actualizar el UI pero sin notificar.
+  const CLIMATE_NOTIFICATIONS_ENABLED = false;
+  if (!CLIMATE_NOTIFICATIONS_ENABLED) return;
+
   // Deduplicación: no repetir en cooldown
   const alreadyNotified = await wasRecentlyAlerted(paddockId, alertLevel)
   if (alreadyNotified) {
@@ -131,11 +137,11 @@ export async function dispatchClimateAlert(payload: ClimateAlertPayload): Promis
       LIMIT 1
     `, [orgId])
 
-    if (owner?.email) {
+    if (owner && owner.email) {
       await sendEmail('climate_alert', owner.email, {
         ownerName:    owner.first_name || 'Productor',
         paddockName,
-        alertLevel,
+        alertLevel:   alertLevel as 'warning' | 'critical',
         alertMessage,
         adjustedDays,
         originalDays,

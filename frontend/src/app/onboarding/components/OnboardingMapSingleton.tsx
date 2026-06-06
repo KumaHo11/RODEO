@@ -246,7 +246,7 @@ function MapController({
       layer.addTo(map)
       kmlLayersRef.current[idx] = layer
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [map, kmlFeatures, acceptedKmlIndices])
 
   // -- Mode switching — hide/show Geoman controls ----------------------------─
