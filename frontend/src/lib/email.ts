@@ -16,8 +16,8 @@ const FROM_NAME  = 'RODEO'
 
 function baseLayout(body: string): string {
   const envUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rodeoagtech.com';
-  // Emails need a publicly accessible URL for images. If running locally, fallback to staging domain so images don't break.
-  const imgBaseUrl = envUrl.includes('localhost') ? 'https://staging.rodeoagtech.com' : envUrl;
+  // Emails need a publicly accessible URL for images. If running locally, fallback to Github CDN so images don't break.
+  const imgBaseUrl = envUrl.includes('localhost') ? 'https://raw.githubusercontent.com/KumaHo11/RODEO/staging/frontend/public' : envUrl;
   
   return `<!DOCTYPE html>
 <html lang="es">
@@ -29,7 +29,7 @@ function baseLayout(body: string): string {
     <!-- Header -->
     <tr><td style="background:#16a34a;padding:28px 40px;text-align:left">
       <div style="width:259px;height:56px;overflow:hidden;margin:0 auto;display:inline-block;text-align:left;">
-        <img src="${imgBaseUrl}/LogoHeaderBlanco.png" alt="RODEO" width="259" height="56" style="display:block;width:259px;height:56px;object-fit:contain;" />
+        <img src="${imgBaseUrl}/LogoHeaderBlanco259x56.png" alt="RODEO" width="259" height="56" style="display:block;width:259px;height:56px;object-fit:contain;" />
       </div>
     </td></tr>
     <!-- Body -->
