@@ -138,7 +138,7 @@ function PlanCard({
         {/* Price */}
         <div className="mb-6">
           {plan.slug === 'latifundio' || plan.slug === 'enterprise' ? (
-            <p className="text-4xl font-black text-gray-900">A convenir</p>
+            <p className="text-4xl font-black text-gray-900">A medida</p>
           ) : price === 0 ? (
             <p className="text-4xl font-black text-gray-900">Gratis</p>
           ) : (

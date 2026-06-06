@@ -40,7 +40,7 @@ VALUES
   (
     'Latifundio',  'latifundio',
     0,             0,
-    'Para grupos inversores y campos corporativos. Precio a convenir.',
+    'Para grupos inversores y campos corporativos. Precio a medida.',
     '#111827',     false, 4, -1, -1, true,  45, true
   )
 ON CONFLICT (slug) DO UPDATE SET
