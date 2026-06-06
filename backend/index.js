@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const admin = require('firebase-admin');
+const rateLimit = require('express-rate-limit');
 
 admin.initializeApp({
   projectId: process.env.FIREBASE_PROJECT_ID || 'rodeo-app-fac50'
@@ -41,6 +42,14 @@ app.use(cors({
   credentials: true,
 }))
 app.use(express.json())
+
+// Express Rate Limiter
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // limit each IP to 200 requests per windowMs
+  message: { error: 'Too many requests from this IP, please try again later.' }
+});
+app.use(limiter);
 
 // Validate required env vars at startup
 const REQUIRED_ENV = ['DATABASE_URL']

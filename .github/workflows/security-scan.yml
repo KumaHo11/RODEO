@@ -1,0 +1,41 @@
+name: Security Scan (Trivy & Audit)
+
+on:
+  push:
+    branches: [ "staging", "main" ]
+  pull_request:
+    branches: [ "staging", "main" ]
+  schedule:
+    - cron: '0 0 * * 1' # Run weekly on Monday
+
+jobs:
+  security:
+    name: Run Security Audits
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Run npm audit (Frontend)
+        working-directory: ./frontend
+        run: npm audit --audit-level=high
+
+      - name: Run npm audit (Backend)
+        working-directory: ./backend
+        run: npm audit --audit-level=high
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'

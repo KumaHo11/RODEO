@@ -14,6 +14,27 @@ const JWKS = createRemoteJWKSet(
   new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
 )
 
+// In-memory rate limiter (WAF / DDoS protection)
+const rateLimitMap = new Map<string, { count: number, resetAt: number }>()
+
+function checkRateLimit(request: NextRequest): boolean {
+  const ip = request.headers.get('x-forwarded-for') || request.ip || 'unknown'
+  const now = Date.now()
+  const windowMs = 60 * 1000 // 1 min
+  const maxRequests = 300 // allow normal usage but block spam
+  
+  const record = rateLimitMap.get(ip)
+  if (!record || record.resetAt < now) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs })
+    return true
+  }
+  if (record.count >= maxRequests) {
+    return false
+  }
+  record.count += 1
+  return true
+}
+
 /**
  * Resultado de la verificación del token Firebase.
  * - { payload } → token válido y verificado
@@ -70,6 +91,14 @@ function isAdminSubdomain(request: NextRequest): boolean {
 }
 
 export async function middleware(request: NextRequest) {
+  // WAF Rate Limiting
+  if (!checkRateLimit(request)) {
+    return new NextResponse(
+      JSON.stringify({ error: 'Too Many Requests (WAF Blocked)' }),
+      { status: 429, headers: { 'content-type': 'application/json' } }
+    )
+  }
+
   const { pathname } = request.nextUrl
   const response = NextResponse.next({ request: { headers: request.headers } })
 
