@@ -87,8 +87,8 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (c: boolean
 
 export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Props) {
   // Configuración de Temporada Global
-  const [seasonDays, setSeasonDays] = useState(90)
-  const [recoveryDays, setRecoveryDays] = useState(60)
+  const [fastRecovery, setFastRecovery] = useState(30)
+  const [slowRecovery, setSlowRecovery] = useState(90)
 
   // Excepciones Granulares (solo viven en esta tab)
   const [activeHerds, setActiveHerds] = useState<Record<string, boolean>>({})
