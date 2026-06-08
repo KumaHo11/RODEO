@@ -1,8 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
-import { Card } from './FormulasTab'
-import { CalculatorInput, CategoriaAnimal, CalculatorResult } from '../calculatorEngine'
+import { CalculatorInput, CalculatorResult } from '../calculatorEngine'
 
 interface Props {
   paddocks: any[]
@@ -19,43 +18,82 @@ function getCategoriaFactor(categoria: string): number {
   return 1.0 // Vacas, novillos, vaquillonas
 }
 
+// ── COMPONENTES DE UI ──
+
 function SimpleInput({ label, value, onChange, unit, min, max, step }: any) {
   const [localStr, setLocalStr] = useState<string | null>(null)
-  
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none">{label}</label>
+      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none">{label}</label>
       <div className="relative">
         <input 
-          type="number"
-          min={min} max={max} step={step}
+          type="number" min={min} max={max} step={step}
           value={localStr !== null ? localStr : value}
-          onChange={e => {
-            setLocalStr(e.target.value)
-            const v = parseFloat(e.target.value)
-            if (!isNaN(v) && v >= min && v <= max) {
-              onChange(v)
-            }
-          }}
+          onChange={e => setLocalStr(e.target.value)}
           onBlur={() => {
             let v = parseFloat(localStr ?? '')
-            if (isNaN(v)) v = min
-            v = Math.max(min, Math.min(max, v))
+            if (isNaN(v)) v = value
+            else {
+              v = Math.max(min, Math.min(max, v))
+              onChange(v)
+            }
             setLocalStr(null)
-            onChange(v)
           }}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-black text-gray-900 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 outline-none transition-all pr-12 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition-all pr-12 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
-        {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">{unit}</span>}
+        {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold pointer-events-none">{unit}</span>}
       </div>
     </div>
   )
 }
 
+function InlineInput({ value, onChange, min, max, unit, step = 1 }: any) {
+  const [local, setLocal] = useState<string | null>(null)
+  return (
+    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded md:px-1.5 py-0.5 focus-within:border-green-500 focus-within:ring-1 focus-within:ring-green-500 transition-all w-24 mx-auto md:mx-0">
+      <input
+        type="number" min={min} max={max} step={step}
+        value={local !== null ? local : value}
+        onChange={e => setLocal(e.target.value)}
+        onBlur={() => {
+          let v = parseFloat(local ?? '')
+          if (isNaN(v)) v = value
+          else {
+            v = Math.max(min, Math.min(max, v))
+            onChange(v)
+          }
+          setLocal(null)
+        }}
+        className="w-full text-right bg-transparent text-xs font-bold text-gray-800 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      {unit && <span className="text-[9px] text-gray-400 font-medium select-none">{unit}</span>}
+    </div>
+  )
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (c: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 ${checked ? 'bg-green-500' : 'bg-gray-200'}`}
+    >
+      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+    </button>
+  )
+}
+
+// ── COMPONENTE PRINCIPAL ──
+
 export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Props) {
-  // Estados locales para métricas que solo aplican a la vista Savory / Potreros y no a toda la calculadora global
+  // Configuración de Temporada Global
   const [seasonDays, setSeasonDays] = useState(90)
   const [recoveryDays, setRecoveryDays] = useState(60)
+
+  // Excepciones Granulares (solo viven en esta tab)
+  const [activeHerds, setActiveHerds] = useState<Record<string, boolean>>({})
+  const [customRations, setCustomRations] = useState<Record<string, number>>({})
+  const [customRemnants, setCustomRemnants] = useState<Record<string, number>>({})
 
   // ── Cálculos a nivel de rodeos (EV) ──
   const herdsMath = useMemo(() => {
@@ -64,181 +102,229 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
       const factorCat = getCategoriaFactor(cat)
       const peso = Number(h.avg_weight_kg) || 450
       const cabezas = Number(h.head_count) || 0
+      
+      const isActive = activeHerds[h.id] ?? true
+      const ration = customRations[h.id] ?? input.dailyRationKgEv
+
       const evHead = Math.pow(peso / 450, 0.75) * factorCat
       const evTotal = evHead * cabezas
-      const diaAnimal = evHead * input.dailyRationKgEv
-      const demandaTotalDiaria = evTotal * input.dailyRationKgEv
+      const diaAnimal = evHead * ration
+      const demandaTotalDiaria = evTotal * ration
 
       return {
-        ...h, cat, factorCat, peso, cabezas, evHead, evTotal, diaAnimal, demandaTotalDiaria
+        ...h, cat, factorCat, peso, cabezas, evHead, evTotal, diaAnimal, demandaTotalDiaria, isActive, ration
       }
     })
-  }, [herds, input.dailyRationKgEv])
+  }, [herds, input.dailyRationKgEv, activeHerds, customRations])
 
-  const globalEv = herdsMath.reduce((sum, h) => sum + h.evTotal, 0)
-  const globalDemand = herdsMath.reduce((sum, h) => sum + h.demandaTotalDiaria, 0)
+  // La demanda global solo suma los rodeos activos
+  const globalEv = herdsMath.filter(h => h.isActive).reduce((sum, h) => sum + h.evTotal, 0)
+  const globalDemand = herdsMath.filter(h => h.isActive).reduce((sum, h) => sum + h.demandaTotalDiaria, 0)
 
   // ── Cálculos a nivel de potreros ──
   const totalArea = paddocks.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0)
   const paddocksMath = useMemo(() => {
     return paddocks.map(p => {
       const area = Number(p.area_ha) || 0
-      // Usar dato del potrero si existe, sino el global de input
       const msHa = Number(p.dry_matter_kg_ha) || input.msKgHa
-      const remnant = input.remnantMsKgHa
+      
+      // Remanente específico o global
+      const remnant = customRemnants[p.id] ?? input.remnantMsKgHa
       
       const ofertaTotal = area * msHa
       const msAprovechable = Math.max(0, msHa - remnant) * area
       
-      const racPot = msAprovechable / input.dailyRationKgEv // Raciones totales del potrero
+      const standardRation = input.dailyRationKgEv
+      const racPot = msAprovechable / standardRation
+
       const diasSugeridosRodeoTotal = globalDemand > 0 ? (msAprovechable / globalDemand) : 0
       const usoPct = ofertaTotal > 0 ? (msAprovechable / ofertaTotal) * 100 : 0
 
-      // Días mínimos (proporcional al área)
-      const minDays = totalArea > 0 ? (area / totalArea) * (seasonDays / (paddocks.length || 1)) : 0
-
-      // Ley de permanencia de Savory
-      const maxDaysPermanencia = paddocks.length > 1 ? recoveryDays / (paddocks.length - 1) : 0
+      const minDays = totalArea > 0 ? (area / totalArea) * fastRecovery : 0
+      const maxDaysPermanencia = totalArea > 0 ? (area / totalArea) * slowRecovery : 0
 
       return {
-        ...p, area, msHa, ofertaTotal, msAprovechable, racPot, diasSugeridosRodeoTotal, usoPct, minDays, maxDaysPermanencia
+        ...p, area, msHa, remnant, ofertaTotal, msAprovechable, racPot, diasSugeridosRodeoTotal, usoPct, minDays, maxDaysPermanencia
       }
     }).sort((a, b) => b.racPot - a.racPot)
-  }, [paddocks, input.msKgHa, input.remnantMsKgHa, input.dailyRationKgEv, globalDemand, totalArea, seasonDays, recoveryDays])
+  }, [paddocks, input.msKgHa, input.remnantMsKgHa, input.dailyRationKgEv, globalDemand, totalArea, fastRecovery, slowRecovery, customRemnants])
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-200 relative">
+    <div className="space-y-6 animate-in fade-in duration-300 relative">
       
-      {/* ── CONTROLES INTERACTIVOS (Sticky) ── */}
-      <div className="sticky top-4 z-20 bg-white/90 backdrop-blur-md border border-gray-200 rounded-2xl p-4 shadow-md">
+      {/* ── CONTROLES INTERACTIVOS (Sticky Header) ── */}
+      <div className="sticky top-4 z-20 bg-gray-50/95 backdrop-blur-md border border-gray-200 rounded-2xl p-4 shadow-sm">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-xs font-bold text-gray-800 uppercase tracking-widest">Parámetros Globales</h3>
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <SimpleInput
-            label="Ración diaria"
-            value={input.dailyRationKgEv}
+            label="Ración base" value={input.dailyRationKgEv}
             min={6} max={20} step={0.5} unit="kg MS/EV"
             onChange={(v: number) => onChangeInput?.('dailyRationKgEv', v)}
+            title="Ración diaria base por Equivalente Vaca"
           />
           <SimpleInput
-            label="Remanente obj."
-            value={input.remnantMsKgHa}
+            label="Remanente base" value={input.remnantMsKgHa}
             min={0} max={2000} step={50} unit="kg MS/ha"
             onChange={(v: number) => onChangeInput?.('remnantMsKgHa', v)}
+            title="Materia seca base a dejar como residuo"
           />
           <SimpleInput
-            label="Días Temporada"
-            value={seasonDays}
-            min={10} max={365} step={5} unit="días"
-            onChange={(v: number) => setSeasonDays(v)}
+            label="Recup. Rápida" value={fastRecovery}
+            min={10} max={150} step={5} unit="días"
+            onChange={(v: number) => setFastRecovery(v)}
+            title="Días de recuperación en época de crecimiento rápido. Define el tiempo mínimo de permanencia."
           />
           <SimpleInput
-            label="Recuperación"
-            value={recoveryDays}
-            min={20} max={120} step={5} unit="días"
-            onChange={(v: number) => setRecoveryDays(v)}
+            label="Recup. Lenta" value={slowRecovery}
+            min={20} max={365} step={5} unit="días"
+            onChange={(v: number) => setSlowRecovery(v)}
+            title="Días de recuperación en época de crecimiento lento. Define el tiempo máximo de permanencia."
           />
         </div>
       </div>
 
-      {/* ── SECCIÓN RODEOS Y DEMANDA ── */}
-      <div>
-        <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-4">Demanda y Rodeos</h3>
-        {herdsMath.length === 0 ? (
-          <p className="text-xs text-gray-500 bg-white p-4 rounded-xl border border-gray-100">No hay rodeos cargados en la cuenta.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {herdsMath.map(h => (
-              <div key={h.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
-                <div className="border-b border-gray-50 pb-2">
-                  <h4 className="text-sm font-black text-gray-900">{h.name || 'Rodeo sin nombre'}</h4>
-                  <p className="text-[10px] text-gray-500 font-medium">{h.cabezas} cabezas • {h.cat} ({h.peso} kg)</p>
+      <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-6 items-start">
+        <div className="space-y-4">
+          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest">Rodeos de Simulación</h3>
+            <span className="text-[10px] text-gray-500 font-medium">{herdsMath.filter(h => h.isActive).length} Activos</span>
+          </div>
+          
+          {herdsMath.length === 0 ? (
+            <p className="text-xs text-gray-500">No hay rodeos cargados.</p>
+          ) : (
+            <div className="space-y-3">
+              {herdsMath.map(h => (
+                <div key={h.id} className={`bg-white border rounded-xl p-3 shadow-sm transition-all ${h.isActive ? 'border-gray-200' : 'border-gray-200 opacity-60'}`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 leading-tight">{h.name || 'Sin nombre'}</h4>
+                      <p className="text-[10px] text-gray-500 font-medium">{h.cabezas} cab. • {h.cat}</p>
+                    </div>
+                    <Toggle 
+                      checked={h.isActive} 
+                      onChange={(c) => setActiveHerds(prev => ({ ...prev, [h.id]: c }))}
+                    />
+                  </div>
+                  
+                  {h.isActive && (
+                    <div className="pt-2 mt-2 border-t border-gray-50 grid grid-cols-2 gap-y-2 gap-x-2">
+                      <div className="col-span-2 flex justify-between items-center">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase">Ración (kg MS)</span>
+                        <InlineInput 
+                          value={h.ration} 
+                          min={6} max={25} step={0.5} 
+                          onChange={(v: number) => setCustomRations(prev => ({ ...prev, [h.id]: v }))}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase">Total EV</p>
+                        <p className="font-black text-black text-sm">{h.evTotal.toFixed(1)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] text-gray-400 font-bold uppercase">Demanda</p>
+                        <p className="font-black text-red-600 text-sm">{h.demandaTotalDiaria.toFixed(0)} <span className="text-[9px] text-red-400 font-normal">kg/d</span></p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-semibold">EV por cabeza</p>
-                    <p className="font-black text-gray-800">{h.evHead.toFixed(2)} EV</p>
-                    <p className="text-[9px] text-gray-400 mt-0.5">({h.peso}/450)^0.75 × {h.factorCat}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-semibold">Total EV</p>
-                    <p className="font-black text-gray-800">{h.evTotal.toFixed(1)} EV</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-semibold">Día Animal</p>
-                    <p className="font-black text-gray-800">{h.diaAnimal.toFixed(1)} kg MS</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-semibold">Demanda Lote</p>
-                    <p className="font-black text-gray-800 text-red-600">{h.demandaTotalDiaria.toFixed(0)} kg/día</p>
-                  </div>
-                </div>
+              ))}
+              
+              <div className="bg-gray-800 rounded-xl p-3 text-white mt-4 shadow-md">
+                <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Total Demanda Activa</p>
+                <p className="text-xl font-black text-green-600">{globalDemand.toFixed(0)} <span className="text-xs text-gray-300 font-normal">kg MS/día</span></p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
 
-      {/* ── SECCIÓN POTREROS Y OFERTA ── */}
-      <div>
-        <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-4 mt-8">Oferta y Potreros (Ordenados por RAC)</h3>
-        {paddocksMath.length === 0 ? (
-          <p className="text-xs text-gray-500 bg-white p-4 rounded-xl border border-gray-100">No hay potreros cargados en la cuenta.</p>
-        ) : (
-          <div className="overflow-x-auto bg-white border border-gray-100 rounded-2xl shadow-sm">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-wider">
-                  <th className="px-4 py-3 font-bold border-b border-gray-100">Potrero</th>
-                  <th className="px-4 py-3 font-bold border-b border-gray-100">Área</th>
-                  <th className="px-4 py-3 font-bold border-b border-gray-100">Disponibilidad</th>
-                  <th className="px-4 py-3 font-bold border-b border-gray-100">Oferta MS</th>
-                  <th className="px-4 py-3 font-bold border-b border-gray-100 text-blue-600">RAC/POT</th>
-                  <th className="px-4 py-3 font-bold border-b border-gray-100">Días al Rodeo</th>
-                  <th className="px-4 py-3 font-bold border-b border-gray-100 text-right">% Uso</th>
-                </tr>
-              </thead>
-              <tbody className="text-xs">
-                {paddocksMath.map(p => (
-                  <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 font-bold text-gray-900">{p.name || 'Sin nombre'}</td>
-                    <td className="px-4 py-3 text-gray-600">{p.area.toFixed(1)} ha</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {p.msHa.toFixed(0)} kg/ha
-                      <span className="block text-[9px] text-gray-400">Remanente: {input.remnantMsKgHa}</span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{p.ofertaTotal.toFixed(0)} kg</td>
-                    <td className="px-4 py-3 font-black text-blue-700">{p.racPot.toFixed(0)} rac</td>
-                    <td className="px-4 py-3">
-                      <span className="font-bold text-gray-800">{p.diasSugeridosRodeoTotal.toFixed(1)} días</span>
-                      <span className="block text-[9px] text-gray-400">Mín: {p.minDays.toFixed(1)} • Máx Savory: {p.maxDaysPermanencia.toFixed(1)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={`inline-flex px-2 py-1 rounded-md font-bold text-[10px] ${
-                        p.usoPct > 80 ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {p.usoPct.toFixed(1)}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest">Oferta Forrajera</h3>
+            <span className="text-[10px] text-gray-500 font-medium">Ordenado por RAC/POT</span>
           </div>
-        )}
-      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 border-t border-gray-100 pt-6">
-         <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
-           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Días Totales con el Rodeo Actual</p>
-           <p className="text-2xl font-black text-gray-900 mt-1">
-             {globalDemand > 0 ? (paddocksMath.reduce((s, p) => s + p.msAprovechable, 0) / globalDemand).toFixed(1) : 0} <span className="text-sm font-medium text-gray-500">días</span>
-           </p>
-         </div>
-         <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
-           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Raciones Totales del Campo</p>
-           <p className="text-2xl font-black text-gray-900 mt-1">
-             {paddocksMath.reduce((s, p) => s + p.racPot, 0).toFixed(0)} <span className="text-sm font-medium text-gray-500">rac</span>
-           </p>
-         </div>
+          {paddocksMath.length === 0 ? (
+            <p className="text-xs text-gray-500">No hay potreros cargados.</p>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse whitespace-nowrap">
+                  <thead>
+                    <tr className="bg-gray-50 text-[9px] text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                      <th className="px-4 py-3 font-bold" title="Nombre del lote">Potrero</th>
+                      <th className="px-4 py-3 font-bold">Área</th>
+                      <th className="px-4 py-3 font-bold" title="Materia seca base a dejar">Remanente (kg MS/ha)</th>
+                      <th className="px-4 py-3 font-bold">Oferta MS</th>
+                      <th className="px-4 py-3 font-bold text-blue-600" title="Raciones. Equiv a 1 día para 1 EV">RAC</th>
+                      <th className="px-4 py-3 font-bold" title="Días que el rodeo puede permanecer">Días al Rodeo</th>
+                      <th className="px-4 py-3 font-bold text-right">% Uso</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-xs divide-y divide-gray-100">
+                    {paddocksMath.map(p => (
+                      <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3 font-bold text-gray-900">{p.name || 'Sin nombre'}</td>
+                        <td className="px-4 py-3 text-gray-600">{p.area.toFixed(1)} ha</td>
+                        <td className="px-4 py-3">
+                          <InlineInput 
+                            value={p.remnant} 
+                            min={0} max={2500} step={50}
+                            onChange={(v: number) => setCustomRemnants(prev => ({ ...prev, [p.id]: v }))}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 font-medium">{p.ofertaTotal.toFixed(0)} kg</td>
+                        <td className="px-4 py-3 font-black text-black">{p.racPot.toFixed(0)}</td>
+                        <td className="px-4 py-3">
+                          {globalDemand > 0 ? (
+                            <>
+                              <span className="font-bold text-gray-800 block">{p.diasSugeridosRodeoTotal.toFixed(1)} días</span>
+                              <span className="text-[9px] text-gray-400">Mín: {p.minDays.toFixed(1)} • Máx: {p.maxDaysPermanencia.toFixed(1)}</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">No hay rodeo</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right w-24">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`font-bold text-[10px] ${p.usoPct > 80 ? 'text-red-600' : 'text-gray-700'}`}>
+                              {p.usoPct.toFixed(1)}%
+                            </span>
+                            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full ${p.usoPct > 80 ? 'bg-red-500' : 'bg-green-500'}`} 
+                                style={{ width: `${Math.min(100, p.usoPct)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row gap-6 mt-4 justify-around items-center">
+            <div className="text-center">
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Días Totales c/ Rodeo</p>
+              <p className="text-2xl font-black text-gray-900 mt-1">
+                {globalDemand > 0 ? (paddocksMath.reduce((s, p) => s + p.msAprovechable, 0) / globalDemand).toFixed(1) : 0} <span className="text-sm font-medium text-gray-500">días</span>
+              </p>
+            </div>
+            <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
+            <div className="text-center">
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Raciones Totales</p>
+              <p className="text-2xl font-black text-gray-900 mt-1">
+                {paddocksMath.reduce((s, p) => s + p.racPot, 0).toFixed(0)} <span className="text-sm font-medium text-gray-500">rac</span>
+              </p>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
   )
