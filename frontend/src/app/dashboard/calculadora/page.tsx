@@ -8,6 +8,7 @@ import { MetricCard } from './components/MetricCard'
 import { ForageGauge } from './components/ForageGauge'
 import { ScenarioComparison } from './components/ScenarioComparison'
 import { FormulasTab } from './components/FormulasTab'
+import { MiCampoTab } from './components/MiCampoTab'
 import { EvTab }        from './components/EvTab'
 import { HidricoTab }   from './components/HidricoTab'
 import {
@@ -70,10 +71,12 @@ export default function CalculadoraPage() {
 
   const [input, setInput] = useState<CalculatorInput>(DEFAULT_INPUT)
   const [realSources, setRealSources] = useState<Partial<Record<keyof CalculatorInput, boolean>>>({})
+  const [paddocksData, setPaddocksData] = useState<any[]>([])
+  const [herdsData, setHerdsData] = useState<any[]>([])
   const [scenario, setScenario] = useState<ScenarioMode>('base')
   const [showComparison, setShowComparison] = useState(false)
-  type MainTab = 'formulas' | 'proyecciones'
-  const [activeTab, setActiveTab] = useState<MainTab>('formulas')
+  type MainTab = 'formulas' | 'mi_campo' | 'proyecciones'
+  const [activeTab, setActiveTab] = useState<MainTab>('mi_campo')
   const [loadingField, setLoadingField] = useState(true)
   const comparisonRef = useRef<HTMLDivElement>(null)
 
@@ -91,6 +94,7 @@ export default function CalculadoraPage() {
       if (paddocksRes.ok) {
         const { paddocks = [] } = await paddocksRes.json()
         const active = paddocks.filter((p: any) => p.is_active !== false)
+        setPaddocksData(active)
         if (active.length > 0) {
           const totalArea = active.reduce((s: number, p: any) => s + (Number(p.area_ha) || 0), 0)
           const avgMs = active
@@ -123,6 +127,7 @@ export default function CalculadoraPage() {
       })
       if (herdsRes.ok) {
         const { herds = [] } = await herdsRes.json()
+        setHerdsData(herds)
         if (herds.length > 0) {
           const totalHead = herds.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
           const avgWeight = herds.reduce((s: number, h: any, _: any, arr: any[]) =>
@@ -205,8 +210,9 @@ export default function CalculadoraPage() {
       {/* ── Tabs estilo Clima (pill) ──────────────────────────────────────── */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit">
         {([
-          { id: 'formulas',     label: 'Fórmulas' },
-          { id: 'proyecciones', label: 'Proyecciones' },
+          { id: 'mi_campo',     label: 'Mi Campo' },
+          { id: 'proyecciones', label: 'Proyecciones Globales' },
+          { id: 'formulas',     label: 'Fórmulas Teóricas' },
         ] as { id: MainTab; label: string }[]).map(tab => (
           <button
             key={tab.id}
@@ -225,6 +231,9 @@ export default function CalculadoraPage() {
 
       {/* ── Tab Fórmulas ─────────────────────────────────────────────────── */}
       {activeTab === 'formulas' && <FormulasTab />}
+
+      {/* ── Tab Mi Campo ─────────────────────────────────────────────────── */}
+      {activeTab === 'mi_campo' && <MiCampoTab paddocks={paddocksData} herds={herdsData} input={input} result={result} onChangeInput={set} />}
 
       {/* ── Tab Proyecciones ─────────────────────────────────────────────── */}
       {activeTab === 'proyecciones' && (

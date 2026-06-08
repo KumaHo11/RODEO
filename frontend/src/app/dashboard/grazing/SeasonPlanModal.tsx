@@ -144,13 +144,38 @@ function WizardStepper({ step, isSuggested }: { step: number; isSuggested: boole
 function Stepper({
   value, onChange, min, max, step = 1, unit,
 }: { value: number; onChange: (v: number) => void; min: number; max: number; step?: number; unit?: string }) {
+  const [inputValue, setInputValue] = useState(value.toString())
+
+  useEffect(() => {
+    setInputValue(value.toString())
+  }, [value])
+
   return (
     <div className="flex items-center gap-2">
       <button type="button"
         onClick={() => onChange(Math.max(min, value - step))}
         className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-700 font-black text-base transition-all shrink-0">−</button>
-      <div className="flex-1 text-center">
-        <p className="text-lg font-black text-gray-900">{value}</p>
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <input 
+          type="number"
+          min={min} max={max} step={step}
+          value={inputValue}
+          onChange={e => {
+            setInputValue(e.target.value)
+            const v = parseFloat(e.target.value)
+            if (!isNaN(v) && v >= min && v <= max) {
+              onChange(v)
+            }
+          }}
+          onBlur={() => {
+            let v = parseFloat(inputValue)
+            if (isNaN(v)) v = min
+            v = Math.max(min, Math.min(max, v))
+            setInputValue(v.toString())
+            onChange(v)
+          }}
+          className="w-20 text-center text-lg font-black text-gray-900 bg-transparent border-none focus:outline-none focus:ring-0 p-0 m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
         {unit && <p className="text-[9px] text-gray-400 leading-none">{unit}</p>}
       </div>
       <button type="button"
@@ -307,6 +332,15 @@ export default function SeasonPlanModal({
     const directTotalEV = selectedHerds.reduce((sum, h) => sum + (Number(h.total_ev) || 0), 0)
     const baseTotalEV = directTotalEV > 0 ? directTotalEV : (projectedEVByMonth[0]?.totalEV ?? 0)
 
+    const totalAreaSelected = sortedPaddocks.reduce((sum, p) => {
+      const isSelected = isSuggestedMode ? !dismissedPaddockIds.includes(p.id) : selectedPaddockIds.includes(p.id)
+      return sum + (isSelected ? (Number(p.area_ha) || 0) : 0)
+    }, 0)
+    const selectedPaddocksCount = sortedPaddocks.reduce((sum, p) => {
+      const isSelected = isSuggestedMode ? !dismissedPaddockIds.includes(p.id) : selectedPaddockIds.includes(p.id)
+      return sum + (isSelected ? 1 : 0)
+    }, 0)
+
     return sortedPaddocks.map(p => {
       const isSelected = isSuggestedMode ? !dismissedPaddockIds.includes(p.id) : selectedPaddockIds.includes(p.id)
       const msHa = Number(p.dry_matter_kg_ha) || 0
@@ -319,11 +353,17 @@ export default function SeasonPlanModal({
       const usableKgMs = calculateUsableForage(msHa, targetRemnant, areaHa)
       const dailyDemand = baseTotalEV * dailyAllocationKg
       const availDays = calculateGrazingDays(usableKgMs, dailyDemand)
+
+      const minDays = (totalAreaSelected > 0 && selectedPaddocksCount > 0) ? Math.round((areaHa / totalAreaSelected) * (durationDays / selectedPaddocksCount)) : 0
+      const racPot = availDays * dailyDemand
+      const usoPct = totalKgMs > 0 ? Math.round((racPot / totalKgMs) * 100) : 0
+
       return {
         paddock: p, msHa, areaHa, totalMs: totalKgMs,
         usableMs: isSelected ? usableKgMs : 0,
         projectedUsableMs: isSelected ? projectedUsableKgMs : 0,
         growthKgMs, stockKgMs, availDays, isSelected,
+        minDays, racPot, usoPct
       }
     })
   }, [sortedPaddocks, selectedPaddockIds, dismissedPaddockIds, projectedEVByMonth, dailyAllocationKg, targetRemnant, startDate, seasonDays, isSuggestedMode, selectedHerds])
@@ -744,8 +784,25 @@ export default function SeasonPlanModal({
                               </div>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-[10px] text-gray-400">{areaHa.toFixed(1)} ha · {msHa > 0 ? `${msHa.toLocaleString('es')} kg MS/ha` : 'Sin datos MS'}</span>
-                                {availDays > 0 && <span className="text-[9px] font-black text-green-700 bg-green-50 px-1.5 py-0.5 rounded-md">{availDays}d</span>}
+                                {availDays > 0 && <span className="text-[9px] font-black text-green-700 bg-green-50 px-1.5 py-0.5 rounded-md" title="Días sugeridos">{availDays}d</span>}
                               </div>
+                              {isActive && isChecked && (
+                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                  <span className="text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded">
+                                    Mín: {supplyData.find(d => d.paddock.id === paddock.id)?.minDays || 0}d
+                                  </span>
+                                  <span className="text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded">
+                                    RAC: {Math.round(supplyData.find(d => d.paddock.id === paddock.id)?.racPot || 0).toLocaleString('es')} kg
+                                  </span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                    (supplyData.find(d => d.paddock.id === paddock.id)?.usoPct || 0) > 100 ? 'text-red-700 bg-red-50 border-red-200' : 
+                                    (supplyData.find(d => d.paddock.id === paddock.id)?.usoPct || 0) > 80 ? 'text-amber-700 bg-amber-50 border-amber-200' : 
+                                    'text-blue-700 bg-blue-50 border-blue-100'
+                                  }`}>
+                                    Uso: {supplyData.find(d => d.paddock.id === paddock.id)?.usoPct || 0}%
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           {/* Right: quality + toggle */}
