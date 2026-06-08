@@ -16,7 +16,7 @@ interface Props {
   onCancel: () => void
 }
 
-export function MercadoPagoBrick({ planId, amount, onSuccess, onCancel }: Props) {
+export function MercadoPagoBrick({ planId, amount, onSuccess, onCancel, hideHeader }: Props & { hideHeader?: boolean }) {
   const [loading, setLoading] = useState(true)
 
   const initialization = {
@@ -77,16 +77,18 @@ export function MercadoPagoBrick({ planId, amount, onSuccess, onCancel }: Props)
   }
 
   return (
-    <div className="w-full max-w-md mx-auto bg-white p-4 rounded-2xl">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-black text-gray-900">Completar Pago</h3>
-        <button 
-          onClick={onCancel}
-          className="text-gray-400 hover:text-gray-600 text-sm font-bold"
-        >
-          Cancelar
-        </button>
-      </div>
+    <div className={hideHeader ? "w-full mx-auto" : "w-full max-w-md mx-auto bg-white p-4 rounded-2xl"}>
+      {!hideHeader && (
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-black text-gray-900">Completar Pago</h3>
+          <button 
+            onClick={onCancel}
+            className="text-gray-400 hover:text-gray-600 text-sm font-bold"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
 
       {loading && (
         <div className="flex justify-center items-center py-10">

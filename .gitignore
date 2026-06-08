@@ -15,3 +15,4 @@ server_logs.txt
 *.resolved
 modal_code.tsx
 tmp/
+*.log

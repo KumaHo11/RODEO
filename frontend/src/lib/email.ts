@@ -16,8 +16,8 @@ const FROM_NAME  = 'RODEO'
 
 function baseLayout(body: string): string {
   const envUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rodeoagtech.com';
-  // Emails need a publicly accessible URL for images. If running locally, fallback to Github CDN so images don't break.
-  const imgBaseUrl = envUrl.includes('localhost') ? 'https://raw.githubusercontent.com/KumaHo11/RODEO/staging/frontend/public' : envUrl;
+  // Use a fully reliable public CDN for the email logo to avoid environment variable 404s
+  const imgBaseUrl = 'https://raw.githubusercontent.com/KumaHo11/RODEO/staging/frontend/public';
   
   return `<!DOCTYPE html>
 <html lang="es">

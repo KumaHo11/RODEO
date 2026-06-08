@@ -35,10 +35,15 @@ export async function POST(req: NextRequest) {
     const frequency = plan.billing_period === 'yearly' ? 1 : 1
     const frequencyType = plan.billing_period === 'yearly' ? 'years' : 'months'
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || req.headers.get('origin') || 'http://localhost:3000'
+    const backUrl = appUrl.includes('localhost') 
+      ? 'https://rodeoagtech.com/dashboard/planes' 
+      : `${appUrl}/billing`
+
     // 3. Crear suscripción en Mercado Pago
     const subscriptionParams = {
       body: {
-        back_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
+        back_url: backUrl,
         card_token_id: token,
         payer_email: payerEmail,
         reason: `RODEO - ${plan.name}`,

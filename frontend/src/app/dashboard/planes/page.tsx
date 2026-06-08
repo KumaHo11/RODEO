@@ -7,12 +7,14 @@
  */
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { usePlan } from '@/hooks/usePlan'
 import { apiFetch } from '@/lib/apiFetch'
 import { Check, Sparkles, Zap, Crown, Building2, Loader2, ArrowRight, Star } from 'lucide-react'
 import { toast } from 'sonner'
 import { MercadoPagoBrick } from '@/components/MercadoPagoBrick'
+import { Modal } from '@/design-system/molecules/Modal'
 
 interface ApiPlan {
   id: string
@@ -225,6 +227,17 @@ export default function PlanesPage() {
   const [mpPlanSelected, setMpPlanSelected] = useState<{ planId: string, amount: number } | null>(null)
 
   useEffect(() => {
+    if (mpPlanSelected) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mpPlanSelected])
+
+  useEffect(() => {
     fetch('/api/plans')
       .then(r => r.json())
       .then(d => {
@@ -363,21 +376,25 @@ export default function PlanesPage() {
         Para consultas: <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="text-green-600 font-bold">{process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}</a>
       </p>
 
-      {mpPlanSelected && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto bg-black/50 backdrop-blur-sm flex flex-col items-center">
-          <div className="w-full max-w-md my-auto shrink-0 py-8 px-4">
-            <MercadoPagoBrick 
-              planId={mpPlanSelected.planId} 
-              amount={mpPlanSelected.amount} 
-              onCancel={() => setMpPlanSelected(null)}
-              onSuccess={() => {
-                setMpPlanSelected(null)
-                window.location.href = '/dashboard/planes?success=1'
-              }}
-            />
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!mpPlanSelected}
+        onClose={() => setMpPlanSelected(null)}
+        title="Completar Pago"
+        maxWidth="md"
+      >
+        {mpPlanSelected && (
+          <MercadoPagoBrick 
+            planId={mpPlanSelected.planId} 
+            amount={mpPlanSelected.amount} 
+            hideHeader={true}
+            onCancel={() => setMpPlanSelected(null)}
+            onSuccess={() => {
+              setMpPlanSelected(null)
+              window.location.href = '/dashboard/planes?success=1'
+            }}
+          />
+        )}
+      </Modal>
     </div>
   )
 }

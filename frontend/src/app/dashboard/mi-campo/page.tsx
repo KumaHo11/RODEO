@@ -526,12 +526,14 @@ export default function MiCampoPage() {
           {
             target: '.tour-mapa-potreros',
             title: 'Mapa Interactivo',
-            content: 'Aquí puedes visualizar tu campo, alternar a vista satelital y usar las herramientas para dibujar potreros.'
+            content: 'Aquí puedes visualizar tu campo, alternar a vista satelital y usar las herramientas para dibujar potreros.',
+            placement: 'left'
           },
           {
             target: '.tour-lista-potreros',
             title: 'Panel de Control',
-            content: 'Gestiona la información técnica, carga archivos KML con tus linderos y visualiza índices NDVI.'
+            content: 'Gestiona la información técnica, carga archivos KML con tus linderos y visualiza índices NDVI.',
+            placement: 'right'
           }
         ]}
       />

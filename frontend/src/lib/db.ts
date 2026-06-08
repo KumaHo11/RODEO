@@ -33,6 +33,7 @@ async function getContextUid(): Promise<string | null> {
 
 declare global {
   var _pgPool: Pool | undefined
+  var _pgUrl: string | undefined
 }
 
 function createPool(): Pool {
@@ -73,10 +74,15 @@ function createPool(): Pool {
  * Esto evita que `new URL('')` explote durante el build de Next.js.
  */
 function getPool(): Pool {
+  const currentUrl = process.env.DATABASE_URL || ''
   if (process.env.NODE_ENV !== 'production') {
     // En desarrollo, usar singleton global para sobrevivir hot-reloads
-    if (!globalThis._pgPool) {
+    if (!globalThis._pgPool || globalThis._pgUrl !== currentUrl) {
+      if (globalThis._pgPool) {
+        globalThis._pgPool.end().catch(console.error)
+      }
       globalThis._pgPool = createPool()
+      globalThis._pgUrl = currentUrl
     }
     return globalThis._pgPool
   }
