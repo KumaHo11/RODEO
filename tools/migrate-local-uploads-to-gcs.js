@@ -14,7 +14,7 @@ const crypto = require('crypto')
 const BUCKET_NAME = 'rodeo-media'
 const UPLOADS_DIR = path.join(__dirname, '../frontend/public/uploads')
 const SA_KEY_FILE = '/tmp/rodeo-sa-new.json'
-const DB_URL = 'postgresql://postgres:Fottballer1144@35.247.199.183:5432/rodeo'
+const DB_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/rodeo'
 
 async function main() {
   // Init GCS

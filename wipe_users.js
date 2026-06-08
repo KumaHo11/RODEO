@@ -1,6 +1,6 @@
 const { Client } = require('pg');
 
-const DATABASE_URL = "postgresql://postgres:Fottballer1144@35.247.199.183:5432/rodeo?schema=public";
+const DATABASE_URL = process.env.DATABASE_URL || "postgresql://localhost:5432/rodeo?schema=public";
 
 const emailsToWipe = [
   'jeronimollamazares@gmail.com',

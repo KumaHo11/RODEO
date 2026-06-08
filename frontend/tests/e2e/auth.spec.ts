@@ -5,7 +5,7 @@ test.describe('Autenticación y Accesos', () => {
     await page.goto('/register');
     await page.fill('input[name="fullName"]', 'Productor Demo');
     await page.fill('input[name="email"]', 'qa+demo@rodeo.test');
-    await page.fill('input[name="password"]', 'S3gur1d4d#2024');
+    await page.fill('input[name="password"]', 'TestPassword123!');
     await page.check('input[name="acceptTerms"]');
     
     // In a real app, you might wait for a specific request
@@ -20,7 +20,7 @@ test.describe('Autenticación y Accesos', () => {
   test('Inicio de Sesión y Dashboard', async ({ page }) => {
     await page.goto('/login');
     await page.fill('input[type="email"]', 'javi.osorio.1@gmail.com');
-    await page.fill('input[type="password"]', '1q2w3e4r');
+    await page.fill('input[type="password"]', 'TestPassword123!');
     await page.click('button[type="submit"]');
     
     await expect(page).toHaveURL(/\/dashboard|\/onboarding/);
@@ -45,7 +45,7 @@ test.describe('Autenticación y Accesos', () => {
     // Wait for the join form
     if (await page.locator('input[type="email"]').isVisible()) {
       await page.fill('input[type="email"]', 'invitado@rodeo.test');
-      await page.fill('input[type="password"]', 'Pass123!');
+      await page.fill('input[type="password"]', 'TestPassword123!');
       await page.click('button[type="submit"]');
       // Verify role or redirect
       await expect(page).toHaveURL(/\/dashboard|\/onboarding/);
