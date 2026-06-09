@@ -86,68 +86,61 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (c: boolean
 // ── COMPONENTE PRINCIPAL ──
 
 export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Props) {
-  // Configuración de Temporada Global
-  const [fastRecovery, setFastRecovery] = useState(30)
-  const [slowRecovery, setSlowRecovery] = useState(90)
+  const [seasonStart, setSeasonStart] = useState<string>(() => new Date().toISOString().split('T')[0])
+  const [seasonEnd, setSeasonEnd] = useState<string>(() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() + 3)
+    return d.toISOString().split('T')[0]
+  })
+  const [recoveryDays, setRecoveryDays] = useState(60)
 
-  // Excepciones Granulares (solo viven en esta tab)
+  const seasonDays = useMemo(() => {
+    const d1 = new Date(seasonStart)
+    const d2 = new Date(seasonEnd)
+    const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24))
+    return Math.max(1, diff)
+  }, [seasonStart, seasonEnd])
+
   const [activeHerds, setActiveHerds] = useState<Record<string, boolean>>({})
   const [customRations, setCustomRations] = useState<Record<string, number>>({})
   const [customRemnants, setCustomRemnants] = useState<Record<string, number>>({})
 
-  // ── Cálculos a nivel de rodeos (EV) ──
-  const herdsMath = useMemo(() => {
-    return herds.map(h => {
-      const cat = h.categoria || 'VACAS'
-      const factorCat = getCategoriaFactor(cat)
-      const peso = Number(h.avg_weight_kg) || 450
+  const totalArea = useMemo(() => paddocks.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0), [paddocks])
+
+  const { globalDemand } = useMemo(() => {
+    let globalDemand = 0
+    herds.forEach(h => {
+      if (activeHerds[h.id] === false) return
+      const catObj = CategoriaAnimal[h.categoria as keyof typeof CategoriaAnimal] || { ev: 1.0 }
+      const evRatio = catObj.ev
       const cabezas = Number(h.head_count) || 0
-      
-      const isActive = activeHerds[h.id] ?? true
-      const ration = customRations[h.id] ?? input.dailyRationKgEv
-
-      const evHead = Math.pow(peso / 450, 0.75) * factorCat
-      const evTotal = evHead * cabezas
-      const diaAnimal = evHead * ration
-      const demandaTotalDiaria = evTotal * ration
-
-      return {
-        ...h, cat, factorCat, peso, cabezas, evHead, evTotal, diaAnimal, demandaTotalDiaria, isActive, ration
-      }
+      const evs = cabezas * evRatio
+      const rasc = customRations[h.id] !== undefined ? customRations[h.id] : input.dailyRationKgEv
+      globalDemand += (evs * rasc)
     })
-  }, [herds, input.dailyRationKgEv, activeHerds, customRations])
+    return { globalDemand }
+  }, [herds, activeHerds, customRations, input.dailyRationKgEv])
 
-  // La demanda global solo suma los rodeos activos
-  const globalEv = herdsMath.filter(h => h.isActive).reduce((sum, h) => sum + h.evTotal, 0)
-  const globalDemand = herdsMath.filter(h => h.isActive).reduce((sum, h) => sum + h.demandaTotalDiaria, 0)
-
-  // ── Cálculos a nivel de potreros ──
-  const totalArea = paddocks.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0)
   const paddocksMath = useMemo(() => {
     return paddocks.map(p => {
       const area = Number(p.area_ha) || 0
       const msHa = Number(p.dry_matter_kg_ha) || input.msKgHa
-      
-      // Remanente específico o global
       const remnant = customRemnants[p.id] ?? input.remnantMsKgHa
       
       const ofertaTotal = area * msHa
       const msAprovechable = Math.max(0, msHa - remnant) * area
-      
-      const standardRation = input.dailyRationKgEv
-      const racPot = msAprovechable / standardRation
-
+      const racPot = msAprovechable / input.dailyRationKgEv
       const diasSugeridosRodeoTotal = globalDemand > 0 ? (msAprovechable / globalDemand) : 0
       const usoPct = ofertaTotal > 0 ? (msAprovechable / ofertaTotal) * 100 : 0
 
-      const minDays = totalArea > 0 ? (area / totalArea) * fastRecovery : 0
-      const maxDaysPermanencia = totalArea > 0 ? (area / totalArea) * slowRecovery : 0
+      const minDays = totalArea > 0 ? (area / totalArea) * (seasonDays / (paddocks.length || 1)) : 0
+      const maxDaysPermanencia = paddocks.length > 1 ? recoveryDays / (paddocks.length - 1) : 0
 
       return {
         ...p, area, msHa, remnant, ofertaTotal, msAprovechable, racPot, diasSugeridosRodeoTotal, usoPct, minDays, maxDaysPermanencia
       }
     }).sort((a, b) => b.racPot - a.racPot)
-  }, [paddocks, input.msKgHa, input.remnantMsKgHa, input.dailyRationKgEv, globalDemand, totalArea, fastRecovery, slowRecovery, customRemnants])
+  }, [paddocks, input.msKgHa, input.remnantMsKgHa, input.dailyRationKgEv, globalDemand, totalArea, seasonDays, recoveryDays, customRemnants])
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 relative">
@@ -157,7 +150,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-xs font-bold text-gray-800 uppercase tracking-widest">Parámetros Globales</h3>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex flex-wrap gap-4">
           <SimpleInput
             label="Ración base" value={input.dailyRationKgEv}
             min={6} max={20} step={0.5} unit="kg MS/EV"
@@ -170,17 +163,29 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
             onChange={(v: number) => onChangeInput?.('remnantMsKgHa', v)}
             title="Materia seca base a dejar como residuo"
           />
+          <div className="flex flex-col flex-1 min-w-[120px]">
+            <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Inicio Temp.</label>
+            <input 
+              type="date" value={seasonStart} 
+              onChange={(e) => setSeasonStart(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:border-green-500 focus:ring-1 outline-none transition-all"
+              title="Fecha de inicio de la temporada"
+            />
+          </div>
+          <div className="flex flex-col flex-1 min-w-[120px]">
+            <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Fin Temp.</label>
+            <input 
+              type="date" value={seasonEnd} 
+              onChange={(e) => setSeasonEnd(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:border-green-500 focus:ring-1 outline-none transition-all"
+              title="Fecha de fin de la temporada"
+            />
+          </div>
           <SimpleInput
-            label="Recup. Rápida" value={fastRecovery}
-            min={10} max={150} step={5} unit="días"
-            onChange={(v: number) => setFastRecovery(v)}
-            title="Días de recuperación en época de crecimiento rápido. Define el tiempo mínimo de permanencia."
-          />
-          <SimpleInput
-            label="Recup. Lenta" value={slowRecovery}
+            label="Recuperación" value={recoveryDays}
             min={20} max={365} step={5} unit="días"
-            onChange={(v: number) => setSlowRecovery(v)}
-            title="Días de recuperación en época de crecimiento lento. Define el tiempo máximo de permanencia."
+            onChange={(v: number) => setRecoveryDays(v)}
+            title="Días de descanso necesarios para la recuperación del pasto. Define el tiempo máximo de permanencia."
           />
         </div>
       </div>
