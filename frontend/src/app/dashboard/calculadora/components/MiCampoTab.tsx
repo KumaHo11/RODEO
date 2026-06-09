@@ -86,13 +86,30 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (c: boolean
 // ── COMPONENTE PRINCIPAL ──
 
 export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Props) {
-  const [seasonStart, setSeasonStart] = useState<string>(() => new Date().toISOString().split('T')[0])
-  const [seasonEnd, setSeasonEnd] = useState<string>(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() + 3)
-    return d.toISOString().split('T')[0]
+  const [seasonType, setSeasonType] = useState<'abierta' | 'cerrada' | 'personalizada'>('abierta')
+  const [seasonStart, setSeasonStart] = useState<string>(() => {
+    const y = new Date().getFullYear()
+    return `${y}-10-01`
   })
-  const [recoveryDays, setRecoveryDays] = useState(60)
+  const [seasonEnd, setSeasonEnd] = useState<string>(() => {
+    const y = new Date().getFullYear()
+    return `${y+1}-04-30`
+  })
+  
+  const [minRecoveryDays, setMinRecoveryDays] = useState(30)
+  const [maxRecoveryDays, setMaxRecoveryDays] = useState(90)
+
+  const handleSeasonTypeChange = (type: string) => {
+    setSeasonType(type as any)
+    const y = new Date().getFullYear()
+    if (type === 'abierta') {
+      setSeasonStart(`${y}-10-01`)
+      setSeasonEnd(`${y+1}-04-30`)
+    } else if (type === 'cerrada') {
+      setSeasonStart(`${y}-04-01`)
+      setSeasonEnd(`${y}-10-31`)
+    }
+  }
 
   const seasonDays = useMemo(() => {
     const d1 = new Date(seasonStart)
@@ -143,21 +160,31 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
       const msAprovechable = Math.max(0, msHa - remnant) * area
       const racPot = msAprovechable / input.dailyRationKgEv
       const diasSugeridosRodeoTotal = globalDemand > 0 ? (msAprovechable / globalDemand) : 0
-      
-      const minDays = totalArea > 0 ? (area / totalArea) * (seasonDays / (paddocks.length || 1)) : 0
-      const maxDaysPermanencia = paddocks.length > 1 ? recoveryDays / (paddocks.length - 1) : 0
+      const N = paddocks.length || 1
+      const avgArea = totalArea / N
+      const coef = avgArea > 0 ? area / avgArea : 1
 
-      // Días planificados por el usuario en esta pestaña de simulación (por defecto sugerimos minDays para que jueguen desde ahí)
+      // Fórmulas de Leyes Universales del Pastoreo
+      const tpMinimo = minRecoveryDays / (N > 1 ? N - 1 : 1)
+      const tpMaximo = maxRecoveryDays / (N > 1 ? N - 1 : 1)
+
+      const minDays = coef * tpMinimo
+      const maxDaysPermanencia = coef * tpMaximo
+
+      // Días planificados por el usuario en esta pestaña de simulación
       const diasPlan = customDiasPlan[p.id] !== undefined ? customDiasPlan[p.id] : Math.max(1, Math.round(minDays))
       
-      // Nueva fórmula % Uso = (Días Plan / Días Permitidos) * 100
-      const usoPct = diasSugeridosRodeoTotal > 0 ? (diasPlan / diasSugeridosRodeoTotal) * 100 : 0
+      // Ración por potrero = días planificados * demanda diaria de todos los EV
+      const racionPotreroKg = diasPlan * globalDemand
+      
+      // Nueva fórmula % Uso = (Ración por Potrero / MS Disponible) * 100
+      const usoPct = msAprovechable > 0 ? (racionPotreroKg / msAprovechable) * 100 : 0
 
       return {
-        ...p, area, msHa, remnant, ofertaTotal, msAprovechable, racPot, diasSugeridosRodeoTotal, usoPct, minDays, maxDaysPermanencia, diasPlan
+        ...p, area, msHa, remnant, ofertaTotal, msAprovechable, racPot, diasSugeridosRodeoTotal, usoPct, minDays, maxDaysPermanencia, diasPlan, racionPotreroKg
       }
     }).sort((a, b) => b.racPot - a.racPot)
-  }, [paddocks, input.msKgHa, input.remnantMsKgHa, input.dailyRationKgEv, globalDemand, totalArea, seasonDays, recoveryDays, customRemnants, customDiasPlan])
+  }, [paddocks, input.msKgHa, input.remnantMsKgHa, input.dailyRationKgEv, globalDemand, totalArea, seasonDays, minRecoveryDays, maxRecoveryDays, customRemnants, customDiasPlan])
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 relative">
@@ -181,10 +208,22 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
             title="Materia seca base a dejar como residuo"
           />
           <div className="flex flex-col flex-1 min-w-[120px]">
+            <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Temporada</label>
+            <select 
+              value={seasonType}
+              onChange={(e) => handleSeasonTypeChange(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:border-green-500 focus:ring-1 outline-none transition-all"
+            >
+              <option value="abierta">Abierta (Oct-Abr)</option>
+              <option value="cerrada">Cerrada (Abr-Oct)</option>
+              <option value="personalizada">Personalizada</option>
+            </select>
+          </div>
+          <div className="flex flex-col flex-1 min-w-[120px]">
             <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Inicio Temp.</label>
             <input 
               type="date" value={seasonStart} 
-              onChange={(e) => setSeasonStart(e.target.value)}
+              onChange={(e) => { setSeasonStart(e.target.value); setSeasonType('personalizada') }}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:border-green-500 focus:ring-1 outline-none transition-all"
               title="Fecha de inicio de la temporada"
             />
@@ -193,16 +232,22 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
             <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Fin Temp.</label>
             <input 
               type="date" value={seasonEnd} 
-              onChange={(e) => setSeasonEnd(e.target.value)}
+              onChange={(e) => { setSeasonEnd(e.target.value); setSeasonType('personalizada') }}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:border-green-500 focus:ring-1 outline-none transition-all"
               title="Fecha de fin de la temporada"
             />
           </div>
           <SimpleInput
-            label="Recuperación" value={recoveryDays}
-            min={20} max={365} step={5} unit="días"
-            onChange={(v: number) => setRecoveryDays(v)}
-            title="Días de descanso necesarios para la recuperación del pasto. Define el tiempo máximo de permanencia."
+            label="Recup. Mín" value={minRecoveryDays}
+            min={10} max={365} step={1} unit="días"
+            onChange={(v: number) => setMinRecoveryDays(v)}
+            title="Días mínimos de descanso necesarios para la recuperación del pasto."
+          />
+          <SimpleInput
+            label="Recup. Máx" value={maxRecoveryDays}
+            min={10} max={365} step={1} unit="días"
+            onChange={(v: number) => setMaxRecoveryDays(v)}
+            title="Días máximos de descanso necesarios para la recuperación del pasto."
           />
         </div>
       </div>
@@ -280,9 +325,9 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                       <th className="px-4 py-3 font-bold">Área</th>
                       <th className="px-4 py-3 font-bold" title="Materia seca base a dejar">Remanente (kg MS/ha)</th>
                       <th className="px-4 py-3 font-bold">Oferta MS</th>
-                      <th className="px-4 py-3 font-bold text-blue-600" title="Raciones. Equiv a 1 día para 1 EV">RAC</th>
                       <th className="px-4 py-3 font-bold" title="Días que el rodeo puede permanecer">Días Permitidos</th>
                       <th className="px-4 py-3 font-bold text-blue-600" title="Días a asignar en el plan de simulación">Días Plan</th>
+                      <th className="px-4 py-3 font-bold text-purple-600" title="Ración total calculada para los días planificados">Ración Potrero</th>
                       <th className="px-4 py-3 font-bold text-right">% Uso</th>
                     </tr>
                   </thead>
@@ -299,7 +344,6 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                           />
                         </td>
                         <td className="px-4 py-3 text-gray-600 font-medium">{p.ofertaTotal.toFixed(0)} kg</td>
-                        <td className="px-4 py-3 font-black text-black">{p.racPot.toFixed(0)}</td>
                         <td className="px-4 py-3">
                           {globalDemand > 0 ? (
                             <>
@@ -314,6 +358,9 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                             min={0} max={365} step={0.5}
                             onChange={(v: number) => setCustomDiasPlan(prev => ({ ...prev, [p.id]: v }))}
                           />
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-bold text-purple-700">{p.racionPotreroKg.toFixed(0)} kg</span>
                         </td>
                         <td className="px-4 py-3 text-right w-24">
                           <div className="flex flex-col items-end gap-1">
