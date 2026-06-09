@@ -9,7 +9,7 @@
  */
 import { auth } from '@/lib/firebase/client'
 
-const DEFAULT_TIMEOUT_MS = 15000
+const DEFAULT_TIMEOUT_MS = 30000
 
 export async function apiFetch(url: string, options?: RequestInit & { timeout?: number }): Promise<Response> {
   const token = await auth.currentUser?.getIdToken()
@@ -34,6 +34,16 @@ export async function apiFetch(url: string, options?: RequestInit & { timeout?: 
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     })
+  } catch (err: any) {
+    if (err.name === 'AbortError' || err.message === 'TimeoutError') {
+      console.warn(`[apiFetch] Timeout fetching ${url}`)
+      return new Response(JSON.stringify({ error: 'Request timed out' }), {
+        status: 504,
+        statusText: 'Gateway Timeout',
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+    throw err
   } finally {
     clearTimeout(timer)
   }
