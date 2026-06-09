@@ -107,19 +107,30 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
 
   const totalArea = useMemo(() => paddocks.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0), [paddocks])
 
-  const { globalDemand } = useMemo(() => {
-    let globalDemand = 0
-    herds.forEach(h => {
-      if (activeHerds[h.id] === false) return
-      const catObj = CategoriaAnimal[h.categoria as keyof typeof CategoriaAnimal] || { ev: 1.0 }
-      const evRatio = catObj.ev
+  // ── Cálculos a nivel de rodeos (EV) ──
+  const herdsMath = useMemo(() => {
+    return herds.map(h => {
+      const cat = h.categoria || 'VACAS'
+      const factorCat = getCategoriaFactor(cat)
+      const peso = Number(h.avg_weight_kg) || 450
       const cabezas = Number(h.head_count) || 0
-      const evs = cabezas * evRatio
-      const rasc = customRations[h.id] !== undefined ? customRations[h.id] : input.dailyRationKgEv
-      globalDemand += (evs * rasc)
+      
+      const isActive = activeHerds[h.id] ?? true
+      const ration = customRations[h.id] ?? input.dailyRationKgEv
+
+      const evHead = Math.pow(peso / 450, 0.75) * factorCat
+      const evTotal = evHead * cabezas
+      const diaAnimal = evHead * ration
+      const demandaTotalDiaria = evTotal * ration
+
+      return {
+        ...h, cat, factorCat, peso, cabezas, evHead, evTotal, diaAnimal, demandaTotalDiaria, isActive, ration
+      }
     })
-    return { globalDemand }
-  }, [herds, activeHerds, customRations, input.dailyRationKgEv])
+  }, [herds, input.dailyRationKgEv, activeHerds, customRations])
+
+  const globalDemand = herdsMath.filter(h => h.isActive).reduce((sum, h) => sum + h.demandaTotalDiaria, 0)
+  const totalActiveEV = herdsMath.filter(h => h.isActive).reduce((sum, h) => sum + h.evTotal, 0)
 
   const paddocksMath = useMemo(() => {
     return paddocks.map(p => {
@@ -237,9 +248,9 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                 </div>
               ))}
               
-              <div className="bg-gray-800 rounded-xl p-3 text-white mt-4 shadow-md">
-                <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Total Demanda Activa</p>
-                <p className="text-xl font-black text-green-600">{globalDemand.toFixed(0)} <span className="text-xs text-gray-300 font-normal">kg MS/día</span></p>
+              <div className="bg-green-600 rounded-xl p-3 text-white mt-4 shadow-md">
+                <p className="text-[10px] text-green-100 font-bold uppercase mb-1">Total Demanda Activa</p>
+                <p className="text-xl font-black text-white">{globalDemand.toFixed(0)} <span className="text-xs text-green-100 font-normal">kg MS/día</span></p>
               </div>
             </div>
           )}
