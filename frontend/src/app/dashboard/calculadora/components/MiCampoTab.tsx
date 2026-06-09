@@ -388,16 +388,23 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
 
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row gap-6 mt-4 justify-around items-center">
             <div className="text-center">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Días Totales c/ Rodeo</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Días Totales Planificados</p>
               <p className="text-2xl font-black text-gray-900 mt-1">
-                {globalDemand > 0 ? (paddocksMath.reduce((s, p) => s + p.msAprovechable, 0) / globalDemand).toFixed(1) : 0} <span className="text-sm font-medium text-gray-500">días</span>
+                {paddocksMath.reduce((s, p) => s + p.diasPlan, 0).toFixed(1)} <span className="text-sm font-medium text-gray-500">días</span>
               </p>
             </div>
             <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
             <div className="text-center">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Raciones Totales</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Ración Total Planificada</p>
               <p className="text-2xl font-black text-gray-900 mt-1">
-                {paddocksMath.reduce((s, p) => s + p.racPot, 0).toFixed(0)} <span className="text-sm font-medium text-gray-500">rac</span>
+                {paddocksMath.reduce((s, p) => s + p.racionPotreroKg, 0).toFixed(0)} <span className="text-sm font-medium text-gray-500">kg MS</span>
+              </p>
+            </div>
+            <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
+            <div className="text-center">
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Oferta Total Aprovechable</p>
+              <p className="text-2xl font-black text-gray-900 mt-1">
+                {paddocksMath.reduce((s, p) => s + p.msAprovechable, 0).toFixed(0)} <span className="text-sm font-medium text-gray-500">kg MS</span>
               </p>
             </div>
           </div>
