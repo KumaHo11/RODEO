@@ -104,6 +104,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
   const [activeHerds, setActiveHerds] = useState<Record<string, boolean>>({})
   const [customRations, setCustomRations] = useState<Record<string, number>>({})
   const [customRemnants, setCustomRemnants] = useState<Record<string, number>>({})
+  const [customDiasPlan, setCustomDiasPlan] = useState<Record<string, number>>({})
 
   const totalArea = useMemo(() => paddocks.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0), [paddocks])
 
@@ -142,16 +143,21 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
       const msAprovechable = Math.max(0, msHa - remnant) * area
       const racPot = msAprovechable / input.dailyRationKgEv
       const diasSugeridosRodeoTotal = globalDemand > 0 ? (msAprovechable / globalDemand) : 0
-      const usoPct = ofertaTotal > 0 ? (msAprovechable / ofertaTotal) * 100 : 0
-
+      
       const minDays = totalArea > 0 ? (area / totalArea) * (seasonDays / (paddocks.length || 1)) : 0
       const maxDaysPermanencia = paddocks.length > 1 ? recoveryDays / (paddocks.length - 1) : 0
 
+      // Días planificados por el usuario en esta pestaña de simulación (por defecto sugerimos minDays para que jueguen desde ahí)
+      const diasPlan = customDiasPlan[p.id] !== undefined ? customDiasPlan[p.id] : Math.max(1, Math.round(minDays))
+      
+      // Nueva fórmula % Uso = (Días Plan / Días Permitidos) * 100
+      const usoPct = diasSugeridosRodeoTotal > 0 ? (diasPlan / diasSugeridosRodeoTotal) * 100 : 0
+
       return {
-        ...p, area, msHa, remnant, ofertaTotal, msAprovechable, racPot, diasSugeridosRodeoTotal, usoPct, minDays, maxDaysPermanencia
+        ...p, area, msHa, remnant, ofertaTotal, msAprovechable, racPot, diasSugeridosRodeoTotal, usoPct, minDays, maxDaysPermanencia, diasPlan
       }
     }).sort((a, b) => b.racPot - a.racPot)
-  }, [paddocks, input.msKgHa, input.remnantMsKgHa, input.dailyRationKgEv, globalDemand, totalArea, seasonDays, recoveryDays, customRemnants])
+  }, [paddocks, input.msKgHa, input.remnantMsKgHa, input.dailyRationKgEv, globalDemand, totalArea, seasonDays, recoveryDays, customRemnants, customDiasPlan])
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 relative">
@@ -275,7 +281,8 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                       <th className="px-4 py-3 font-bold" title="Materia seca base a dejar">Remanente (kg MS/ha)</th>
                       <th className="px-4 py-3 font-bold">Oferta MS</th>
                       <th className="px-4 py-3 font-bold text-blue-600" title="Raciones. Equiv a 1 día para 1 EV">RAC</th>
-                      <th className="px-4 py-3 font-bold" title="Días que el rodeo puede permanecer">Días al Rodeo</th>
+                      <th className="px-4 py-3 font-bold" title="Días que el rodeo puede permanecer">Días Permitidos</th>
+                      <th className="px-4 py-3 font-bold text-blue-600" title="Días a asignar en el plan de simulación">Días Plan</th>
                       <th className="px-4 py-3 font-bold text-right">% Uso</th>
                     </tr>
                   </thead>
@@ -299,18 +306,23 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                               <span className="font-bold text-gray-800 block">{p.diasSugeridosRodeoTotal.toFixed(1)} días</span>
                               <span className="text-[9px] text-gray-400">Mín: {p.minDays.toFixed(1)} • Máx: {p.maxDaysPermanencia.toFixed(1)}</span>
                             </>
-                          ) : (
-                            <span className="text-gray-400 italic">No hay rodeo</span>
-                          )}
+                          ) : '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <InlineInput 
+                            value={p.diasPlan} 
+                            min={0} max={365} step={0.5}
+                            onChange={(v: number) => setCustomDiasPlan(prev => ({ ...prev, [p.id]: v }))}
+                          />
                         </td>
                         <td className="px-4 py-3 text-right w-24">
                           <div className="flex flex-col items-end gap-1">
-                            <span className={`font-bold text-[10px] ${p.usoPct > 80 ? 'text-red-600' : 'text-gray-700'}`}>
+                            <span className={`font-bold text-[10px] ${p.usoPct > 100 ? 'text-red-600' : p.usoPct < 90 ? 'text-amber-500' : 'text-green-600'}`}>
                               {p.usoPct.toFixed(1)}%
                             </span>
                             <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                               <div 
-                                className={`h-full rounded-full ${p.usoPct > 80 ? 'bg-red-500' : 'bg-green-500'}`} 
+                                className={`h-full rounded-full ${p.usoPct > 100 ? 'bg-red-500' : p.usoPct < 90 ? 'bg-amber-400' : 'bg-green-500'}`} 
                                 style={{ width: `${Math.min(100, p.usoPct)}%` }}
                               />
                             </div>
