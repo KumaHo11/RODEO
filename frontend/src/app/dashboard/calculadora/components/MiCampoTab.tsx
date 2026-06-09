@@ -136,8 +136,11 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
       const isActive = activeHerds[h.id] ?? true
       const ration = customRations[h.id] ?? input.dailyRationKgEv
 
-      const evHead = Math.pow(peso / 450, 0.75) * factorCat
-      const evTotal = evHead * cabezas
+      const evHeadBase = Math.pow(peso / 450, 0.75) * factorCat
+      const evTotalFallback = evHeadBase * cabezas
+      const evTotal = Number(h.total_ev) || evTotalFallback
+      const evHead = cabezas > 0 ? evTotal / cabezas : evHeadBase
+      
       const diaAnimal = evHead * ration
       const demandaTotalDiaria = evTotal * ration
 
