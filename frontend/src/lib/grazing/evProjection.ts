@@ -593,8 +593,9 @@ export function projectEVDemand(
   dailyAlloc: number,
   paritionSeason: ParitionSeason,
   months = 6,
+  startDate?: Date
 ): EVProjection[] {
-  const today = new Date()
+  const today = startDate || new Date()
 
   return Array.from({ length: months }, (_, i) => {
     const dt = new Date(today.getFullYear(), today.getMonth() + i, 1)
@@ -624,6 +625,8 @@ export function projectEVDemand(
         ev *= growthMultiplier
 
         // Relative fenology multiplier for breeding cows
+        // (Desactivado a pedido del usuario: EV debe subir lógicamente con el peso, no bajar por destete)
+        /*
         if (['VACAS', 'VAQUILLONAS'].includes(categoria)) {
           const factor0 = vacaFenologiaFactor(0, paritionSeason)
           const factorI = vacaFenologiaFactor(i, paritionSeason)
@@ -631,6 +634,7 @@ export function projectEVDemand(
             ev *= (factorI / factor0)
           }
         }
+        */
       }
 
       return { herdName: h.name, ev: parseFloat(ev.toFixed(2)), headCount }

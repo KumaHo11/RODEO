@@ -78,6 +78,7 @@ interface Props {
   bioMilestones?: BioMilestone[]
   initialDailyAllocationKg?: number
   initialTargetRemnant?: number
+  className?: string
   onClose: () => void
   onSaved: (plan: SeasonPlan) => void
 }
@@ -188,8 +189,11 @@ function Stepper({
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function SeasonPlanModal({
   paddocks, herds, existingPlan, isSuggestedMode, bioMilestones,
-  initialDailyAllocationKg, initialTargetRemnant,
-  onClose, onSaved,
+  initialDailyAllocationKg = 12,
+  initialTargetRemnant = 1000,
+  className = '',
+  onClose,
+  onSaved,
 }: Props) {
   const router = useRouter()
   const isEditing = !!existingPlan?.id
@@ -209,14 +213,38 @@ export default function SeasonPlanModal({
   const [seasonType, setSeasonType] = useState<'cerrado' | 'abierto' | 'ambos'>(
     existingPlan?.season_type ?? 'cerrado'
   )
-  const [startDate, setStartDate] = useState(existingPlan?.start_date ?? '')
-  const [endDate, setEndDate] = useState(existingPlan?.end_date ?? '')
+  const [startDate, setStartDate] = useState(() => {
+    if (existingPlan?.start_date) return existingPlan.start_date
+    if (!isSuggestedMode) return todayISO()
+    return ''
+  })
+  const [endDate, setEndDate] = useState(() => {
+    if (existingPlan?.end_date) return existingPlan.end_date
+    if (!isSuggestedMode) {
+      const d = new Date()
+      d.setDate(d.getDate() + 180)
+      return d.toISOString().split('T')[0]
+    }
+    return ''
+  })
   const [noGrowthFrom, setNoGrowthFrom] = useState(existingPlan?.no_growth_from ?? '')
   const [noGrowthTo, setNoGrowthTo] = useState(existingPlan?.no_growth_to ?? '')
   const [notes, setNotes] = useState(existingPlan?.notes ?? '')
 
+  // Días de recuperación del pasto (solo para temporada abierta/ambos)
+  const [recoveryMin, setRecoveryMin] = useState<number>(existingPlan?.recovery_days?.min ?? 50)
+  const [recoveryMax, setRecoveryMax] = useState<number>(existingPlan?.recovery_days?.max ?? 100)
+
   // ── Paso 2: El Rodeo ────────────────────────────────────────────────────────
   const [selectedHerdIds, setSelectedHerdIds] = useState<string[]>(() => herds.map(h => h.id))
+  const [hasInitializedHerds, setHasInitializedHerds] = useState(false)
+  useEffect(() => {
+    if (!hasInitializedHerds && herds.length > 0) {
+      setSelectedHerdIds(herds.map(h => h.id))
+      setHasInitializedHerds(true)
+    }
+  }, [herds, hasInitializedHerds])
+
   const toggleHerd = (id: string) =>
     setSelectedHerdIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   const selectedHerds = herds.filter(h => selectedHerdIds.includes(h.id))
@@ -233,7 +261,16 @@ export default function SeasonPlanModal({
     setDismissedPaddockIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
     if (id === startPaddockId) setStartPaddockId('')
   }
+  
   const [selectedPaddockIds, setSelectedPaddockIds] = useState<string[]>(() => paddocks.map(p => p.id))
+  const [hasInitializedPaddocks, setHasInitializedPaddocks] = useState(false)
+  useEffect(() => {
+    if (!hasInitializedPaddocks && paddocks.length > 0) {
+      setSelectedPaddockIds(paddocks.map(p => p.id))
+      setHasInitializedPaddocks(true)
+    }
+  }, [paddocks, hasInitializedPaddocks])
+
   const togglePaddock = (id: string) =>
     setSelectedPaddockIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
@@ -245,6 +282,12 @@ export default function SeasonPlanModal({
   // Remanente
   const [targetRemnant, setTargetRemnant] = useState<number>(
     existingPlan ? ((existingPlan as any).target_remnant_kg_ha ?? initialTargetRemnant ?? 600) : (initialTargetRemnant ?? 600)
+  )
+  const [remnantMode, setRemnantMode] = useState<'global' | 'specific'>(
+    (existingPlan as any)?.specific_remnants ? 'specific' : 'global'
+  )
+  const [specificRemnants, setSpecificRemnants] = useState<Record<string, number>>(
+    (existingPlan as any)?.specific_remnants ?? {}
   )
 
   // Días de descanso regenerativo
@@ -316,14 +359,16 @@ export default function SeasonPlanModal({
   const currentTotalEV = projectedEVByMonth.length > 0 ? projectedEVByMonth[0].totalEV : 0
 
   const sortedPaddocks = useMemo(() =>
-    [...paddocks].sort((a, b) => {
-      const numA = parseInt(a.name, 10)
-      const numB = parseInt(b.name, 10)
-      if (!isNaN(numA) && !isNaN(numB)) return numA - numB
-      if (!isNaN(numA)) return -1
-      if (!isNaN(numB)) return 1
-      return a.name.localeCompare(b.name)
-    }), [paddocks])
+    [...paddocks]
+      .filter(p => p.is_active !== false)
+      .sort((a, b) => {
+        const numA = parseInt(a.name, 10)
+        const numB = parseInt(b.name, 10)
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB
+        if (!isNaN(numA)) return -1
+        if (!isNaN(numB)) return 1
+        return a.name.localeCompare(b.name)
+      }), [paddocks])
 
   const supplyData = useMemo(() => {
     const startMonthIndex = startDate ? new Date(startDate + 'T12:00:00').getMonth() : new Date().getMonth()
@@ -332,29 +377,50 @@ export default function SeasonPlanModal({
     const directTotalEV = selectedHerds.reduce((sum, h) => sum + (Number(h.total_ev) || 0), 0)
     const baseTotalEV = directTotalEV > 0 ? directTotalEV : (projectedEVByMonth[0]?.totalEV ?? 0)
 
-    const totalAreaSelected = sortedPaddocks.reduce((sum, p) => {
+    const totalOfertaGlobal = sortedPaddocks.reduce((sum, p) => {
       const isSelected = isSuggestedMode ? !dismissedPaddockIds.includes(p.id) : selectedPaddockIds.includes(p.id)
-      return sum + (isSelected ? (Number(p.area_ha) || 0) : 0)
+      return sum + (isSelected ? ((Number(p.area_ha) || 0) * (Number(p.dry_matter_kg_ha) || 0)) : 0)
     }, 0)
     const selectedPaddocksCount = sortedPaddocks.reduce((sum, p) => {
       const isSelected = isSuggestedMode ? !dismissedPaddockIds.includes(p.id) : selectedPaddockIds.includes(p.id)
       return sum + (isSelected ? 1 : 0)
     }, 0)
+    const avgOfertaGlobal = selectedPaddocksCount > 0 ? totalOfertaGlobal / selectedPaddocksCount : 0
 
     return sortedPaddocks.map(p => {
       const isSelected = isSuggestedMode ? !dismissedPaddockIds.includes(p.id) : selectedPaddockIds.includes(p.id)
       const msHa = Number(p.dry_matter_kg_ha) || 0
       const areaHa = Number(p.area_ha) || 0
+      
+      const currentRemnant = remnantMode === 'specific' && specificRemnants[p.id] != null 
+        ? specificRemnants[p.id] 
+        : targetRemnant
+
       const { growthKgMs, stockKgMs, totalKgMs } = paddockForageOffer({
         initialMsKgHa: msHa, areaHa, startMonthIndex, durationDays,
-        targetRemnantKgHa: targetRemnant, startYear,
+        targetRemnantKgHa: currentRemnant, startYear,
       })
-      const projectedUsableKgMs = Math.max(0, totalKgMs - (targetRemnant * areaHa))
-      const usableKgMs = calculateUsableForage(msHa, targetRemnant, areaHa)
+      const projectedUsableKgMs = Math.max(0, totalKgMs - (currentRemnant * areaHa))
+      const usableKgMs = calculateUsableForage(msHa, currentRemnant, areaHa)
       const dailyDemand = baseTotalEV * dailyAllocationKg
       const availDays = calculateGrazingDays(usableKgMs, dailyDemand)
 
-      const minDays = (totalAreaSelected > 0 && selectedPaddocksCount > 0) ? Math.round((areaHa / totalAreaSelected) * (durationDays / selectedPaddocksCount)) : 0
+      const coef = avgOfertaGlobal > 0 ? (areaHa * msHa) / avgOfertaGlobal : 1
+      const divisor = selectedPaddocksCount > 1 ? selectedPaddocksCount - 1 : 1
+      
+      let minDays = 0
+      let maxDays = 0
+      
+      if (seasonType === 'cerrado') {
+         minDays = Math.round(availDays) // Se usa como días de ocupación sugerida
+         maxDays = Math.round(availDays)
+      } else {
+         const avgGrazingTimeMin = recoveryMin / divisor
+         const avgGrazingTimeMax = recoveryMax / divisor
+         minDays = Math.round(coef * avgGrazingTimeMin)
+         maxDays = Math.round(coef * avgGrazingTimeMax)
+      }
+
       const racPot = availDays * dailyDemand
       const usoPct = totalKgMs > 0 ? Math.round((racPot / totalKgMs) * 100) : 0
 
@@ -363,10 +429,10 @@ export default function SeasonPlanModal({
         usableMs: isSelected ? usableKgMs : 0,
         projectedUsableMs: isSelected ? projectedUsableKgMs : 0,
         growthKgMs, stockKgMs, availDays, isSelected,
-        minDays, racPot, usoPct
+        minDays, maxDays, racPot, usoPct
       }
     })
-  }, [sortedPaddocks, selectedPaddockIds, dismissedPaddockIds, projectedEVByMonth, dailyAllocationKg, targetRemnant, startDate, seasonDays, isSuggestedMode, selectedHerds])
+  }, [sortedPaddocks, selectedPaddockIds, dismissedPaddockIds, projectedEVByMonth, dailyAllocationKg, targetRemnant, remnantMode, specificRemnants, startDate, seasonDays, isSuggestedMode, selectedHerds, seasonType, recoveryMin, recoveryMax])
 
   const totalOfertaKgMs = supplyData.filter(d => d.isSelected).reduce((s, d) => s + d.projectedUsableMs, 0)
   const demandaTotalKgMs = currentTotalEV * dailyAllocationKg * Math.max(1, seasonDays)
@@ -416,6 +482,7 @@ export default function SeasonPlanModal({
         id: d.paddock.id, name: d.paddock.name,
         area_ha: d.areaHa, ms_ha: d.msHa,
         total_ms: d.totalMs, usable_ms: d.usableMs, avail_days: d.availDays,
+        min_days: d.minDays, max_days: d.maxDays,
       })),
     }
 
@@ -475,7 +542,8 @@ export default function SeasonPlanModal({
       drought_reserve_mode: droughtReserveMode,
       daily_allocation_kg: dailyAllocationKg,
       target_remnant_kg_ha: targetRemnant,
-      recovery_days: { spring_summer: recoverySpringSum, autumn: recoveryAutumn, winter: recoveryWinter },
+      specific_remnants: specificRemnants,
+      recovery_days: { min: recoveryMin, max: recoveryMax, spring_summer: recoverySpringSum, autumn: recoveryAutumn, winter: recoveryWinter },
       cell_name: null,
       source: isSuggestedMode ? 'suggested' : 'manual', status: 'draft',
       notes: notes.trim() || null,
@@ -522,12 +590,12 @@ export default function SeasonPlanModal({
   // ── Accent según modo ────────────────────────────────────────────────────────
   const accent = isSuggestedMode
     ? { btn: 'bg-violet-600 hover:bg-violet-700', ring: 'ring-violet-500/20', border: 'border-violet-500', text: 'text-violet-600', chip: 'bg-violet-600 border-violet-600', chipBg: 'bg-violet-50 border-violet-500' }
-    : { btn: 'bg-gray-900 hover:bg-gray-800', ring: 'ring-gray-900/20', border: 'border-gray-900', text: 'text-gray-900', chip: 'bg-gray-900 border-gray-900', chipBg: 'bg-gray-50 border-gray-900' }
+    : { btn: 'bg-green-600 hover:bg-green-700', ring: 'ring-green-500/20', border: 'border-green-500', text: 'text-green-600', chip: 'bg-green-600 border-green-600', chipBg: 'bg-green-50 border-green-500' }
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   if (typeof document === 'undefined') return null
   return createPortal(
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: 2147483647 }}>
+    <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 ${className}`} style={{ zIndex: 2147483647 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col">
 
         {/* ── Header fijo ── */}
@@ -571,17 +639,14 @@ export default function SeasonPlanModal({
                 <label className={LABEL}>Tipo de temporada</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(['cerrado', 'abierto'] as const).map(t => {
-                    const sel = seasonType === 'ambos' || seasonType === t
+                    const sel = seasonType === t
                     return (
                       <button key={t} type="button"
-                        onClick={() => {
-                          if (seasonType === 'ambos') setSeasonType(t === 'cerrado' ? 'abierto' : 'cerrado')
-                          else if (seasonType !== t) setSeasonType('ambos')
-                        }}
+                        onClick={() => setSeasonType(t)}
                         className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 text-left transition-all ${sel ? `${accent.chipBg} ${accent.border}` : 'border-gray-200 bg-white hover:border-gray-300'}`}
                       >
-                        <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border-2 ${sel ? `${accent.chip} text-white` : 'border-gray-300'}`}>
-                          {sel && <Check className="w-2.5 h-2.5" strokeWidth={4} />}
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border-2 ${sel ? `${accent.chip} text-white` : 'border-gray-300'}`}>
+                          {sel && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                         </div>
                         <div>
                           <p className={`text-xs font-black ${sel ? accent.text : 'text-gray-700'}`}>
@@ -598,25 +663,49 @@ export default function SeasonPlanModal({
               </div>
 
               {/* Fechas del plan */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className={LABEL}>Fecha inicio</label>
-                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INPUT} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className={LABEL}>Fecha fin</label>
-                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={INPUT} />
-                </div>
-              </div>
+              {isSuggestedMode && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className={LABEL}>Fecha inicio</label>
+                      <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INPUT} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={LABEL}>Fecha fin</label>
+                      <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={INPUT} />
+                    </div>
+                  </div>
 
-              {/* Días del plan */}
-              {startDate && endDate && (
-                <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5">
-                  <Leaf className="w-4 h-4 text-green-600" />
-                  <p className="text-sm font-black text-gray-700">{seasonDays} días de temporada</p>
-                  <span className="text-xs text-gray-400 font-medium">
-                    ({new Date(startDate + 'T12:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })} → {new Date(endDate + 'T12:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })})
-                  </span>
+                  {/* Días del plan */}
+                  {startDate && endDate && (
+                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5">
+                      <Leaf className="w-4 h-4 text-green-600" />
+                      <p className="text-sm font-black text-gray-700">{seasonDays} días de temporada</p>
+                      <span className="text-xs text-gray-400 font-medium">
+                        ({new Date(startDate + 'T12:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })} → {new Date(endDate + 'T12:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })})
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Tiempos de recuperación (solo temporada abierta/ambos) */}
+              {seasonType !== 'cerrado' && (
+                <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3">
+                  <div>
+                    <p className={LABEL}>Tiempos de recuperación del pasto</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Define los días mínimos y máximos de recuperación esperados para calcular los tiempos de ocupación sugeridos.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-[10px] font-black text-gray-700 mb-2">Recuperación Mínima</p>
+                      <Stepper value={recoveryMin} onChange={setRecoveryMin} min={20} max={100} step={5} unit="días" />
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-[10px] font-black text-gray-700 mb-2">Recuperación Máxima</p>
+                      <Stepper value={recoveryMax} onChange={setRecoveryMax} min={30} max={180} step={5} unit="días" />
+                    </div>
+                  </div>
                 </div>
               )}
             </>
@@ -689,6 +778,28 @@ export default function SeasonPlanModal({
           ════════════════════════════════════════════════════════════ */}
           {step === 3 && (
             <>
+              {/* Remanente Objetivo */}
+              <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3 mb-6">
+                <div>
+                  <p className={LABEL}>Remanente objetivo</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Biomasa mínima que dejás en el potrero al salir</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 bg-gray-100 rounded-lg p-1.5">
+                  <button type="button" onClick={() => setRemnantMode('global')}
+                    className={`px-3 py-2 text-xs font-black rounded-md transition-all ${remnantMode === 'global' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                    Global
+                  </button>
+                  <button type="button" onClick={() => setRemnantMode('specific')}
+                    className={`px-3 py-2 text-xs font-black rounded-md transition-all ${remnantMode === 'specific' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                    Específico
+                  </button>
+                </div>
+
+                {remnantMode === 'global' && (
+                  <Stepper value={targetRemnant} onChange={setTargetRemnant} min={100} max={2000} step={50} unit="kg MS/ha" />
+                )}
+              </div>
+
               {/* Lista de potreros */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -807,6 +918,19 @@ export default function SeasonPlanModal({
                           </div>
                           {/* Right: quality + toggle */}
                           <div className="flex items-center gap-2 shrink-0">
+                            {remnantMode === 'specific' && isActive && (
+                              <div className="flex items-center gap-1.5 mr-2" onClick={e => e.stopPropagation()}>
+                                <input type="number" min="0" step="50"
+                                  value={specificRemnants[paddock.id] ?? targetRemnant}
+                                  onChange={e => {
+                                    const val = Number(e.target.value)
+                                    setSpecificRemnants(prev => ({ ...prev, [paddock.id]: val }))
+                                  }}
+                                  className="w-16 text-right px-2 py-1 text-[11px] font-black bg-white border border-gray-200 rounded-md focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                                />
+                                <span className="text-[9px] text-gray-400 font-bold hidden sm:inline">kg MS</span>
+                              </div>
+                            )}
                             {relQuality != null && relQuality > 0 && (
                               <div className="flex items-center gap-0.5">
                                 <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
@@ -835,140 +959,6 @@ export default function SeasonPlanModal({
                 )}
               </div>
 
-              {/* Remanente */}
-              <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3">
-                <div>
-                  <p className={LABEL}>Remanente objetivo</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Biomasa mínima que dejás en el potrero al salir</p>
-                </div>
-                <Stepper value={targetRemnant} onChange={setTargetRemnant} min={100} max={2000} step={50} unit="kg MS/ha" />
-              </div>
-
-              {/* Días de descanso */}
-              <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3">
-                <div>
-                  <p className={LABEL}>Días de descanso regenerativo</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    Tiempo que el potrero descansa entre pastoreos. Ajustá según tu sistema y zona.
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Primavera / Verano', value: recoverySpringSum, set: setRecoverySpringSum, min: 20, max: 80, rate: '20–38', months: 'Sep–Feb' },
-                    { label: 'Otoño', value: recoveryAutumn, set: setRecoveryAutumn, min: 50, max: 100, rate: '5–18', months: 'Mar–May' },
-                    { label: 'Invierno', value: recoveryWinter, set: setRecoveryWinter, min: 80, max: 160, rate: '2–5', months: 'Jun–Ago' },
-                  ].map(({ label, value, set, min, max, rate, months }) => (
-                    <div key={label} className="bg-gray-50 border border-gray-100 rounded-xl p-3 space-y-2">
-                      <div>
-                        <p className="text-[10px] font-black text-gray-700 leading-tight">{label}</p>
-                        <p className="text-[9px] text-gray-400">{months}</p>
-                        <p className="text-[9px] text-green-600 font-bold">~{rate} kg MS/ha/d</p>
-                      </div>
-                      <Stepper value={value} onChange={set} min={min} max={max} step={5} unit="días" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Reserva de sequía */}
-              {(seasonType === 'cerrado' || seasonType === 'ambos') && (() => {
-                const suggestedReserveDays = Math.round(seasonDays * 0.15)
-                return (
-                  <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className={LABEL}>Reserva de sequía</p>
-                          <div className="group relative">
-                            <button type="button" className="w-4 h-4 rounded-full bg-gray-100 text-gray-400 text-[10px] font-black flex items-center justify-center hover:bg-gray-200 transition-all">?</button>
-                            <div className="absolute left-5 top-0 z-10 hidden group-hover:block w-56 bg-gray-900 text-white text-[10px] font-medium rounded-xl p-3 shadow-xl leading-relaxed">
-                              Forraje que reservás como colchón ante una sequía u otro evento climático. No se cuenta en la oferta efectiva del plan. Recomendado: 10–20% de los días de temporada.
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-[10px] text-gray-400 mt-0.5">Colchón ante sequía u eventos climáticos adversos</p>
-                      </div>
-                    </div>
-                    {droughtReserveDays === 0 && suggestedReserveDays > 0 && (
-                      <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                        <span className="text-[10px] text-blue-700 font-medium flex-1">
-                          Sugerido: <span className="font-black">{suggestedReserveDays} días</span> (~15% de los {seasonDays} días del plan)
-                        </span>
-                        <button type="button"
-                          onClick={() => setDroughtReserveDays(suggestedReserveDays)}
-                          className="text-[10px] font-black text-blue-700 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded-lg transition-all whitespace-nowrap">
-                          Aplicar
-                        </button>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-3">
-                      <input type="number" min="0"
-                        value={droughtReserveDays || ''}
-                        onChange={e => {
-                          const val = Number(e.target.value)
-                          if (droughtReserveMode === 'days') { setDroughtReserveDays(val) }
-                          else if (droughtReserveMode === 'pct') {
-                            const totalMs = supplyData.filter(d => d.isSelected).reduce((s, d) => s + d.usableMs, 0)
-                            const dd = currentTotalEV * dailyAllocationKg
-                            setDroughtReserveDays(dd > 0 ? Math.round((val / 100) * totalMs / dd) : 0)
-                          } else {
-                            const dd = currentTotalEV * dailyAllocationKg
-                            setDroughtReserveDays(dd > 0 ? Math.round(val / dd) : 0)
-                          }
-                        }}
-                        placeholder={`Ej: ${suggestedReserveDays}`}
-                        className={INPUT}
-                      />
-                      <span className="text-xs font-bold text-gray-400 whitespace-nowrap">
-                        {droughtReserveMode === 'days' ? 'días' : droughtReserveMode === 'pct' ? '% del campo' : 'kg MS'}
-                      </span>
-                      {droughtReserveDays > 0 && <span className="text-[10px] text-gray-500 font-bold whitespace-nowrap">≈ {droughtReserveDays} días</span>}
-                    </div>
-                  </div>
-                )
-              })()}
-
-
-              {/* Balance forrajero */}
-              {selectedHerdIds.length > 0 && (
-                <div className={`border rounded-xl p-4 ${balance.bg} ${balance.border}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className={`text-sm font-black ${balance.text}`}>{balance.label}</p>
-                    <div className="flex items-center gap-1.5">
-                      <div className={`w-2 h-2 rounded-full ${balancePct >= 110 ? 'bg-green-500' : balancePct >= 80 ? 'bg-amber-500' : 'bg-red-500'}`} />
-                      <span className={`text-sm font-black ${balance.text}`}>{balancePct}%</span>
-                    </div>
-                  </div>
-                  <div className="h-2 bg-white/60 rounded-full overflow-hidden mb-4">
-                    <div className={`h-full rounded-full transition-all ${balancePct >= 110 ? 'bg-green-500' : balancePct >= 80 ? 'bg-amber-500' : 'bg-red-500'}`}
-                      style={{ width: `${Math.min(balancePct, 100)}%` }} />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <p className={`text-sm font-black ${balance.text}`}>{Math.round(ofertaEfectivaKgMs).toLocaleString('es')}</p>
-                      <p className="text-[9px] text-gray-500 font-bold">kg MS oferta efectiva</p>
-                      <p className="text-[9px] text-gray-400">(stock + crecimiento {seasonDays}d)</p>
-                    </div>
-                    <div>
-                      <p className={`text-sm font-black ${balance.text}`}>{Math.round(demandaTotalKgMs).toLocaleString('es')}</p>
-                      <p className="text-[9px] text-gray-500 font-bold">kg MS demanda</p>
-                      <p className="text-[9px] text-gray-400">{seasonDays}d · {(currentTotalEV * dailyAllocationKg).toFixed(0)} kg/día</p>
-                    </div>
-                    <div>
-                      <p className={`text-sm font-black ${totalAvailableDays >= seasonDays ? 'text-green-700' : 'text-red-700'}`}>
-                        {totalAvailableDays >= seasonDays ? `+${totalAvailableDays - seasonDays}d` : `-${daysWithoutForage}d`}
-                      </p>
-                      <p className="text-[9px] text-gray-500 font-bold">{totalAvailableDays >= seasonDays ? 'excedente' : 'sin forraje'}</p>
-                    </div>
-                  </div>
-                  {balancePct < 80 && (
-                    <button onClick={() => { onClose(); router.push('/dashboard/insights') }}
-                      className="mt-3 w-full flex items-center justify-center gap-1 text-xs font-bold text-red-600 hover:text-red-700 transition-colors">
-                      Ver sugerencias en Insights <ArrowRight className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              )}
             </>
           )}
 
@@ -1007,17 +997,17 @@ export default function SeasonPlanModal({
                   import('@/lib/analytics').then(({ event }) => event({ action: 'plan_wizard_step_change', category: 'planner', mode: isSuggestedMode ? 'sugerido' : 'manual', from_step: step, to_step: step + 1 }))
                   setError(null); setStep(s => (s + 1) as any)
                 }}
-                disabled={step === 1 && !name.trim()}
+                disabled={(step === 1 && !name.trim()) || (step === 2 && selectedHerdIds.length === 0)}
                 className={`flex items-center gap-2 px-5 py-2 text-sm font-black text-white rounded-xl transition-all disabled:opacity-40 ${accent.btn}`}
               >
                 Siguiente <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
               <button onClick={handleSave}
-                disabled={saving || !name.trim() || (isSuggestedMode && !startPaddockId)}
+                disabled={saving || !name.trim() || (isSuggestedMode && !startPaddockId) || (!isSuggestedMode && selectedPaddockIds.length === 0)}
                 className={`flex items-center gap-2 px-5 py-2 text-sm font-black text-white rounded-xl transition-all disabled:opacity-40 ${accent.btn}`}
               >
-                {saving ? <><Loader2 className="w-4 h-4 animate-spin" />Guardando…</> : <><Check className="w-4 h-4" />{isEditing ? 'Actualizar plan' : 'Guardar plan'}</>}
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin" />Guardando…</> : <><Check className="w-4 h-4" />{isEditing ? 'Actualizar plan' : isSuggestedMode ? 'Generar plan' : 'Comenzar a trazar'}</>}
               </button>
             )}
           </div>

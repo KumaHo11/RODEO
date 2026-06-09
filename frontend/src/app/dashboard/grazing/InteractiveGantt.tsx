@@ -321,7 +321,7 @@ function InteractiveGantt({
   plans, paddocks, herds, farmEvents, movements = [], windowStart, windowDays, onBlockClick, onBlockMove,
   rainfallData, onRainfallChange, weatherEvents = [], onPaddockClick,
   droughtThresholdMm, onDroughtThresholdChange,
-  targetRemnant, dailyAllocationKg,
+  targetRemnant, dailyAllocationKg, activeSeasonPlan,
   climateViewEnabled = false, paddockCAdj = {}, paddockAAdj = {},
   isDrawingMode = false, onDrawEnd, onHerdUpdate, onEditEvent, onDeleteEvent, onAddHerd, onHerdClick,
   paddockOrder = [],
@@ -337,6 +337,7 @@ function InteractiveGantt({
   paddocks: any[]
   herds: any[]
   farmEvents: any[]
+  activeSeasonPlan?: any | null
   movements?: any[]
   windowStart: string
   windowDays: number
@@ -398,7 +399,7 @@ function InteractiveGantt({
         ...paddocks.filter((p: any) => !paddockOrder.includes(p.id)),
       ]
     : paddocks
-  const ROW_H = 84
+  const ROW_H = 96
   const LABEL_W = 220
   const HEADER_H = 48
   const containerRef = useRef<HTMLDivElement>(null)
@@ -904,7 +905,33 @@ function InteractiveGantt({
       style={{ cursor: isDrawingMode ? 'crosshair' : 'default', maxHeight: 'calc(100vh - 220px)' }}
       onClick={() => { setSelectedEvent(null); setPopupPos(null) }}
     >
-      <div className="w-full" style={{ minWidth: Math.max(1000, windowDays * 6 + LABEL_W) }}>
+      <div className="w-full relative" style={{ minWidth: Math.max(1000, windowDays * 6 + LABEL_W) }}>
+        {(() => {
+          if (!activeSeasonPlan) return null
+          const planBlocks = plans.filter(p => p.season_plan_id === activeSeasonPlan.id && p.status !== 'DELETED')
+          if (planBlocks.length === 0) return null
+          let maxExitStr = ''
+          for (const p of planBlocks) {
+            const exit = p.exit_date || p.estimated_exit_date || addDays(p.entry_date, 14)
+            if (!maxExitStr || exit > maxExitStr) maxExitStr = exit
+          }
+          if (!maxExitStr) return null
+          
+          const exitDiff = daysBetween(windowStart, maxExitStr)
+          if (exitDiff >= 0 && exitDiff <= windowDays) {
+            return (
+              <div
+                className="absolute top-0 bottom-0 z-20 pointer-events-none"
+                style={{ left: `calc(${LABEL_W}px + ${(exitDiff / windowDays) * 100} * (100% - ${LABEL_W}px) / 100)` }}
+              >
+                <div className="h-full w-px" style={{ borderLeft: '2px dashed rgba(168,85,247,0.7)' }} />
+                <div className="absolute top-[80px] -left-12 bg-purple-600 text-white text-[9px] font-bold px-2 py-1 rounded shadow-sm">Continúa acá</div>
+              </div>
+            )
+          }
+          return null
+        })()}
+
         {/* Header row */}
         <div className="flex flex-col border-b border-gray-200 bg-gray-50 sticky top-0 z-30">
           {/* Gap health bar — 4px strip above time markers */}
@@ -1034,7 +1061,7 @@ function InteractiveGantt({
               }}
             >
               {/* Label — datos del potrero */}
-              <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`px-3 py-2 flex items-center gap-2 border-r border-gray-100 shrink-0 overflow-hidden sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${!isEnabled ? 'bg-gray-100' : rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}>
+              <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`px-3 py-2 flex items-center gap-2 border-r border-gray-100 shrink-0 sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${!isEnabled ? 'bg-gray-100' : rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}>
                 {/* Paddock toggle — habilitar/deshabilitar directo en el Gantt */}
                 <button
                   onClick={() => onPaddockToggle?.(paddock.id, !isEnabled)}
@@ -1098,14 +1125,6 @@ function InteractiveGantt({
                   {(() => {
                     return (
                       <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                        {/* DAH badge */}
-                        {estimatedDah !== null && (
-                            <HoverTooltip text={HOLISTIC_TOOLTIPS.estimatedDah}>
-                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">
-                                {estimatedDah}d DAH
-                              </span>
-                            </HoverTooltip>
-                        )}
                         {/* Yield Coefficient badge */}
                         {yieldCoef !== null && (
                             <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
@@ -1118,6 +1137,23 @@ function InteractiveGantt({
                               </span>
                             </HoverTooltip>
                         )}
+                        {/* Min / Max / Occupation Days from active season plan */}
+                        {(() => {
+                           if (!activeSeasonPlan) return null;
+                           const activeSupply = activeSeasonPlan.supply_snapshot?.by_paddock?.find((d: any) => d.id === paddock.id);
+                           if (!activeSupply) return null;
+                           const isClosed = activeSeasonPlan.season_type === 'cerrado';
+                           return (
+                             <HoverTooltip text={isClosed ? "Días permitidos en base a la oferta forrajera" : "Rango sugerido de pastoreo (Mínimo y Máximo)"}>
+                               <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">
+                                 {isClosed 
+                                   ? `Días de pastoreo: ${activeSupply.min_days || 0}d` 
+                                   : `Mín: ${activeSupply.min_days || 0}d • Máx: ${activeSupply.max_days || 0}d`
+                                 }
+                               </span>
+                             </HoverTooltip>
+                           )
+                        })()}
                       </div>
                     )
                   })()}
@@ -1777,9 +1813,10 @@ function InteractiveGantt({
                               </div>
                             )}
                             <div className="flex w-full">
-                              {(['Núm.', 'Peso', '%EQ', 'Total EQ'] as const).map(col => (
-                                <span key={col} className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-center truncate">{col}</span>
-                              ))}
+                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-[2] text-center truncate">Núm.</span>
+                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-center truncate">Peso</span>
+                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-center truncate">%EV</span>
+                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-center truncate">Total EV</span>
                             </div>
                           </div>
                           )
@@ -2278,7 +2315,7 @@ function InteractiveGantt({
                       <React.Fragment key={m.key}>
                         <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-center bg-gray-50 border-t border-gray-200">Núm</th>
                         <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-center bg-gray-50 border-t border-gray-200">Peso</th>
-                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-center bg-gray-50 border-t border-gray-200">%EQ</th>
+                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-center bg-gray-50 border-t border-gray-200">%EV</th>
                         <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-green-700 uppercase text-center border-r border-gray-200 bg-gray-50 border-t border-gray-200">EV</th>
                       </React.Fragment>
                     ))}
@@ -2288,8 +2325,18 @@ function InteractiveGantt({
                   {herds.map((herd: any, i: number) => {
                     const currentHeadCount = Number(herd.head_count) || 0
                     const peso = Number(herd.avg_weight_kg) || 0
-                    const herdEntry = herd.admission_date || '2000-01-01'
+                    let herdEntry = herd.admission_date || '2000-01-01'
                     const herdExit = herd.exit_date || '2100-01-01'
+
+                    // Asegurar que si el rodeo está planificado antes de su fecha de alta, aparezca
+                    const herdPlans = plans.filter(p => (p.herd_ids || []).includes(herd.id) && p.status !== 'DELETED')
+                    for (const p of herdPlans) {
+                      const entry = p.entry_date || p.estimated_entry_date
+                      if (entry && entry < herdEntry) {
+                        herdEntry = entry
+                      }
+                    }
+
                     return (
                       <tr key={herd.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                         <td className="py-3 px-4 text-xs font-black text-gray-800 border-r border-gray-200 bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] whitespace-nowrap cursor-pointer hover:text-green-700 transition-colors">

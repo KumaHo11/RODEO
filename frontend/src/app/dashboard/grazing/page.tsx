@@ -18,11 +18,13 @@ import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
 import { DashboardMetricsBar, DashboardMetricsData } from '@/design-system/molecules/DashboardMetricsBar'
 import OnboardingTour from '@/components/OnboardingTour'
 import SeasonPlanModal from './SeasonPlanModal'
+import PlanBlockModal from './PlanBlockModal'
 import dynamic from 'next/dynamic'
 const ExcelImporter = dynamic(() => import('./ExcelImporter'), { ssr: false })
 import RawDataModal from './RawDataModal'
 import { HOLISTIC_TOOLTIPS, HoverTooltip } from '@/components/ui/atoms/UsageRing'
 import { calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
+import { projectEVDemand } from '@/lib/grazing/evProjection'
 import { detectForageGaps, type ForageGap } from '@/lib/forage-gaps'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ui/ConfirmModal'
@@ -1465,7 +1467,13 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
   let dynamicWindowDays = PERIODS[ganttPeriod] ?? 365
 
-  if (viewMode === 'gantt' && typeof filteredPlans !== 'undefined' && filteredPlans.length > 0) {
+  const activeSeasonPlan = seasonPlans.find(sp => sp.id === activeSeasonPlanId)
+  if (viewMode === 'gantt' && activeSeasonPlan?.start_date && activeSeasonPlan?.end_date) {
+    const s = new Date(activeSeasonPlan.start_date + 'T00:00:00').getTime()
+    const e = new Date(activeSeasonPlan.end_date + 'T00:00:00').getTime()
+    const diff = Math.ceil((e - s) / 86400000)
+    if (diff > 0) dynamicWindowDays = diff + 14
+  } else if (viewMode === 'gantt' && typeof filteredPlans !== 'undefined' && filteredPlans.length > 0) {
     const startObj = new Date(ganttWindow + 'T00:00:00')
     let maxDate = startObj.getTime() + dynamicWindowDays * 24 * 60 * 60 * 1000
 
@@ -1705,7 +1713,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         actual_exit_date: null,
         planned_recovery_days: 60,
         status: 'PLANNED',
-        ai_analysis: { plan_source: 'manual' },
+        ai_analysis: { plan_source: 'manual', season_plan_id: activeSeasonPlanId || null },
+        season_plan_id: activeSeasonPlanId || null,
       }
       const res = await apiFetch('/api/grazing-plans', {
         method: 'POST',
@@ -1720,7 +1729,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     } finally {
       setSavingQuick(false)
     }
-  }, [quickConfirm, drawingHerdIds])
+  }, [quickConfirm, drawingHerdIds, activeSeasonPlanId, loadData])
 
   // Esc key handler — desactiva modo dibujo
   useEffect(() => {
@@ -1961,7 +1970,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             {/* Show the active plan name directly below the title, as requested */}
             {activeSeasonPlanId && viewMode === 'gantt' && (
               <p className="text-sm font-bold text-gray-500 mt-2 px-2">
-                {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan activo'}
+                {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan Forrajero'}
               </p>
             )}
 
@@ -2066,22 +2075,26 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   }
                   setShowSeasonPlan(true)
                 } else {
-                  if (plans.length === 0) {
-                    setFormData({
-                      id: '',
-                      paddock_id: '',
-                      herd_ids: [] as string[],
-                      entry_date: new Date().toISOString().split('T')[0],
-                      exit_date: '',
-                      actual_entry_date: '',
-                      actual_exit_date: '',
-                      planned_recovery_days: 0,
-                      status: 'PLANNED',
+                  // Manual Mode
+                  const recentManualPlans = seasonPlans.filter(sp => sp.source !== 'suggested' && sp.status !== 'COMPLETED')
+                  
+                  if (recentManualPlans.length > 0 && activeSeasonPlanId) {
+                    const isNew = await confirm({
+                      title: '¿Continuar plan o empezar uno nuevo?',
+                      description: 'Si empezás uno nuevo, tu trabajo actual quedará guardado en el Historial y podrás retomarlo cuando quieras.',
+                      confirmLabel: 'Nuevo plan',
+                      cancelLabel: 'Continuar actual',
+                      variant: 'primary',
                     })
-                    setIsModalOpen(true)
+                    if (isNew) {
+                      setActiveSeasonPlanId(null)
+                      setShowSeasonPlan(true)
+                    } else {
+                      // Ya tiene activeSeasonPlanId, simplemente nos aseguramos de estar en la vista Gantt para que pueda seguir dibujando.
+                      setViewMode('gantt')
+                    }
                   } else {
-                    // Manual mode: show HerdSelector to choose herds before drawing
-                    setShowHerdSelector(true)
+                    setShowSeasonPlan(true)
                   }
                 }
               }}
@@ -2194,11 +2207,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             </div>
             <button
               onClick={() => {
-                if (activeGanttTab === 'suggested') {
-                  setShowSeasonPlan(true)
-                } else {
-                  setShowHerdSelector(true)
-                }
+                setShowSeasonPlan(true)
               }}
               disabled={loading}
               className={`flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50 ${
@@ -2444,6 +2453,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             plans={filteredPlans}
             paddocks={paddocks}
             herds={herds}
+            activeSeasonPlan={seasonPlans.find(sp => sp.id === activeSeasonPlanId) || null}
             farmEvents={farmEvents}
             movements={movements}
             windowStart={ganttWindow}
@@ -2776,7 +2786,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Potrero / Rodeo', 'Estado', 'Entrada plan', 'Entrada real', 'Salida plan', 'Salida real', 'Días plan', 'Días reales', 'Stock inicio', 'Stock fin', 'Remanente', 'Desvío vs plan', 'Comentarios'].map(h => (
+                  {['Potrero / Rodeo', 'Estado', 'Entrada plan', 'Entrada real', 'Salida plan', 'Salida real', 'Días plan', 'Días reales', 'Raciones Totales', 'Rac. Disp.', '% Uso', 'Stock inicio', 'Stock fin', 'Remanente', 'Desvío vs plan', 'Comentarios'].map(h => (
                     <th key={h} className="px-4 py-3.5 text-left text-[10px] font-black text-gray-400 tracking-widest uppercase whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -2815,6 +2825,41 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   } else if (isCompletedPlan) {
                     stockFinVal = stockInicio
                   }
+
+                  const dailyAllocationKg = Number(plan.daily_allocation_kg) || 12
+                  const targetDays = actualDays !== null ? actualDays : plannedDays
+                  const racionesTotales = (() => {
+                    if (targetDays <= 0) return 0
+                    const startDateStr = effectiveEntry || plan.entry_date
+                    if (!startDateStr) return 0
+                    const dStart = new Date(startDateStr + 'T12:00:00')
+                    const evData = projectEVDemand(pHerds, dailyAllocationKg, 'otono', 12, dStart)
+                    const current = new Date(dStart)
+                    let totalRaciones = 0
+                    for (let i = 0; i < targetDays; i++) {
+                      const mDiff = (current.getFullYear() - dStart.getFullYear()) * 12 + (current.getMonth() - dStart.getMonth())
+                      const evRecord = evData[mDiff]
+                      const dailyRacion = evRecord ? evRecord.dailyDemandKg : (pHerds.reduce((s, h) => s + Number(h.total_ev), 0) * dailyAllocationKg)
+                      totalRaciones += dailyRacion
+                      current.setDate(current.getDate() + 1)
+                    }
+                    return totalRaciones
+                  })()
+
+                  const usableForage = (() => {
+                    const pad = paddocks.find(p => p.id === plan.paddock_id)
+                    if (!pad) return 0
+                    const targetRemnant = Number(plan.target_remnant_kg_ha) || 400
+                    const area = Number(pad.area_ha) || 0
+                    const msStart = plan.ai_analysis?.supply_snapshot?.by_paddock?.[pad.id]?.dry_matter_kg_ha 
+                      || plan.entry_dry_matter_kg_ha 
+                      || Number(pad.dry_matter_kg_ha) || 0
+                    
+                    return Math.max(0, (msStart - targetRemnant) * area)
+                  })()
+
+                  const usoPct = usableForage > 0 ? (racionesTotales / usableForage) * 100 : 0
+
                   return (
                     <tr
                       key={plan.id}
@@ -2893,6 +2938,24 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       <td className="px-4 py-3.5 text-xs tabular-nums">
                         {actualDays !== null
                           ? <><span className="font-black text-gray-900">{actualDays}</span> <span className="text-[10px] text-gray-400">d</span></>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      {/* Raciones Totales */}
+                      <td className="px-4 py-3.5 text-xs tabular-nums">
+                        {racionesTotales > 0
+                          ? <span className="font-bold text-gray-700">{Math.round(racionesTotales).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">kg</span></span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      {/* Rac. Disp. */}
+                      <td className="px-4 py-3.5 text-xs tabular-nums">
+                        {usableForage > 0
+                          ? <span className="font-bold text-gray-700">{Math.round(usableForage).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">kg</span></span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      {/* % Uso */}
+                      <td className="px-4 py-3.5 text-xs tabular-nums">
+                        {usoPct > 0
+                          ? <span className={`font-black ${usoPct > 100 ? 'text-red-600' : 'text-blue-600'}`}>{Math.round(usoPct)}%</span>
                           : <span className="text-gray-300">—</span>}
                       </td>
                       {/* Stock inicio */}
@@ -3876,7 +3939,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   onClick={() => {
                     setQuickConfirm(null)
                     setDrawingMode(false)
-                    setInlineDryMatter('')
                     setFormData({
                       id: '',
                       paddock_id: quickConfirm.paddockId,
@@ -3888,11 +3950,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       planned_recovery_days: 60,
                       status: 'PLANNED',
                     })
-                    setTempAnimals([])
-                    setCompletionPhoto('')
-                    setRemnantAnalysis(null)
-                    setExitDateWarning(false)
-                    setModalStep(1)
                     setIsModalOpen(true)
                   }}
                   className="flex-1 py-2 rounded-xl border border-gray-200 text-[11px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
@@ -3913,732 +3970,19 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         </div>
       )}
 
-      {/* ─── MODAL: Vista única — diseño unificado ─────────────────────────── */}
-      {isModalOpen && (
-
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-
-            {/* ─── MODAL HEADER ─── */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-white shrink-0">
-              <div>
-                {/* Title: distinguish suggested vs manual */}
-                <div className="flex items-center gap-2">
-                  {formData.id && formData.ai_analysis?.plan_source === 'suggested' && (
-                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 uppercase tracking-widest">Sugerida</span>
-                  )}
-                  {formData.id && formData.ai_analysis?.plan_source === 'manual' && (
-                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200 uppercase tracking-widest">Manual</span>
-                  )}
-                  <h3 className="text-base font-black text-gray-950">
-                    {formData.id ? 'Editar planificación manual' : 'Planificación manual'}
-                  </h3>
-                </div>
-                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
-                  {(() => {
-                    const isSuggested = formData.ai_analysis?.plan_source === 'suggested'
-                    const cycleAllPaddockIds = formData.ai_analysis?.cycle_all_paddock_ids as string[] | undefined
-                    const paddockName = paddocks.find(p => p.id === formData.paddock_id)?.name
-                    if (isSuggested && cycleAllPaddockIds && cycleAllPaddockIds.length > 0) {
-                      const nPaddocks = cycleAllPaddockIds.length
-                      const nHerds   = (formData.ai_analysis?.cycle_all_herd_ids as string[] | undefined)?.length || formData.herd_ids.length
-                      return `Ciclo ${nPaddocks}P × ${nHerds}R · Bloque en ${paddockName} · ${totalPlanEV.toFixed(0)} EV`
-                    }
-                    if (formData.paddock_id && formData.herd_ids.length > 0) {
-                      return `${paddockName} · ${formData.herd_ids.length} rodeo${formData.herd_ids.length > 1 ? 's' : ''} · ${totalPlanEV > 0 ? `${totalPlanEV.toFixed(0)} EV total` : ''}`
-                    }
-                    return 'Elegí los rodeos y el potrero de destino'
-                  })()}
-                </p>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="w-9 h-9 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-500 transition-all">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-
-            {/* ─── MODAL BODY ─── */}
-            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
-
-              {/* Cycle info banner — only for suggested plans */}
-              {formData.id && formData.ai_analysis?.plan_source === 'suggested' && formData.ai_analysis?.cycle_id && (() => {
-                const cycleAllPaddockIds = formData.ai_analysis.cycle_all_paddock_ids as string[] | undefined || []
-                const cycleAllHerdIds    = formData.ai_analysis.cycle_all_herd_ids    as string[] | undefined || []
-                const cyclePaddocks = paddocks.filter(p => cycleAllPaddockIds.includes(p.id))
-                const cycleHerds   = herds.filter(h => cycleAllHerdIds.includes(h.id))
-                return (
-                  <div className="bg-green-50 border border-green-200 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-green-600 shrink-0" />
-                      <p className="text-xs font-black text-green-800 uppercase tracking-wider">
-                        Ciclo Sugerido — {cyclePaddocks.length} Potreros × {cycleHerds.length} Rodeos
-                      </p>
-                    </div>
-                    {/* Paddocks in cycle */}
-                    {cyclePaddocks.length > 0 && (
-                      <div>
-                        <p className="text-[9px] font-black text-green-600 tracking-widest uppercase mb-1.5">Potreros en la rotación</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {cyclePaddocks.map(p => (
-                            <span
-                              key={p.id}
-                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                                p.id === formData.paddock_id
-                                  ? 'bg-green-600 text-white border-green-600'
-                                  : 'bg-white text-green-700 border-green-300'
-                              }`}
-                            >
-                              {p.id === formData.paddock_id ? '✓ ' : ''}{p.name}
-                              <span className={`text-[8px] ${p.id === formData.paddock_id ? 'text-green-200' : 'text-green-400'}`}>
-                                {Number(p.area_ha).toFixed(0)}ha
-                              </span>
-                              {p.technical_data?.relative_quality && (
-                                <span className={`text-[8px] font-black ${p.id === formData.paddock_id ? 'text-green-800' : 'text-green-700'}`}>
-                                  {p.technical_data.relative_quality}/10
-                                </span>
-                              )}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* Herds in cycle */}
-                    {cycleHerds.length > 0 && (
-                      <div>
-                        <p className="text-[9px] font-black text-green-600 tracking-widest uppercase mb-1.5">Rodeos en la rotación</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {cycleHerds.map(h => (
-                            <span
-                              key={h.id}
-                              className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white text-blue-700 border border-blue-200"
-                            >
-                              {h.name} · {Number(h.total_ev).toFixed(0)} EV
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <p className="text-[9px] text-green-600 font-medium">
-                      Este bloque corresponde a un giro del ciclo. Editando las fechas sólo afectars este movimiento.
-                    </p>
-                  </div>
-                )
-              })()}
-
-              {/* ① RODEOS — lo más importante primero, tarjetas grandes */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-black text-gray-700 tracking-widest uppercase">
-                    {formData.ai_analysis?.plan_source === 'suggested' && formData.id
-                      ? 'Rodeos del ciclo (este bloque usa el rodeo activo)'
-                      : 'Selecciona Rodeos'
-                    }
-                  </label>
-
-                  {formData.herd_ids.length > 0 && (
-                    <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
-                      {formData.herd_ids.length} seleccionado{formData.herd_ids.length > 1 ? 's' : ''} · {totalPlanEV.toFixed(0)} EV
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 gap-1.5">
-                  {herds.map(h => {
-                    const isSelected = formData.herd_ids.includes(h.id)
-                    const hColor = herdColorMap[h.id] || '#16a34a'
-                    const isSuggestedEdit  = formData.ai_analysis?.plan_source === 'suggested' && formData.id
-                    // For suggested: the active grazing herd = the original plan.herd_id (first in original herd_ids before expansion)
-                    // We stored it before; use the stored plan data which had herd_ids=[activeHerd]
-                    // Fallback: first selected herd alphabetically to indicate which is "active" this block
-                    const isActiveHerd = isSuggestedEdit
-                      ? (formData as any)._original_herd_id
-                        ? h.id === (formData as any)._original_herd_id
-                        : false
-                      : false
-                    return (
-                      <button
-                        key={h.id}
-                        type="button"
-                        onClick={() => {
-                          if (!isSuggestedEdit) {
-                            if (isSelected) setFormData({ ...formData, herd_ids: formData.herd_ids.filter(id => id !== h.id) })
-                            else setFormData({ ...formData, herd_ids: [...formData.herd_ids, h.id] })
-                          }
-                        }}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl border-2 text-left transition-all ${
-                          isSuggestedEdit
-                            ? isSelected
-                              ? 'border-green-600 bg-white shadow-sm'
-                              : 'border-gray-100 bg-white text-gray-400 opacity-50 cursor-default'
-                            : isSelected
-                              ? 'border-green-600 bg-white shadow-sm'
-                              : 'border-gray-200 bg-white hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          {isSelected
-                            ? <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center shrink-0"><Check className="w-2.5 h-2.5 text-white" /></div>
-                            : <div className="w-4 h-4 rounded-full border-2 border-gray-300 shrink-0" />
-                          }
-                          <div>
-                            <p className={`text-sm font-bold text-gray-900 flex items-center gap-1.5`}>
-                              {h.name}
-                              {isSuggestedEdit && h.id === (formData as any)._original_herd_id && (
-                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">Activo</span>
-                              )}
-                            </p>
-                            <p className="text-[10px] text-gray-400">{Number(h.total_ev).toFixed(0)} EV · {h.animal_count || '—'} cabezas</p>
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-
-
-                
-
-
-
-              </div>
-
-              {/* ② POTRERO DESTINO */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-gray-700 tracking-widest uppercase">Selecciona el Potrero</label>
-                  {/* Si hay un potrero pre-seleccionado (desde el dibujo), ofrecer link para cambiarlo */}
-                  {formData.paddock_id && (
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, paddock_id: '' })}
-                      className="text-[9px] font-bold text-gray-400 hover:text-blue-600 underline decoration-dotted transition-colors"
-                    >
-                      Cambiar potrero
-                    </button>
-                  )}
-                </div>
-                {/* Si ya hay un potrero seleccionado (ej: desde dibujo), mostrar solo ese en un chip compacto */}
-                {formData.paddock_id ? (() => {
-                  const selectedPaddock = paddocks.find(p => p.id === formData.paddock_id)
-                  if (!selectedPaddock) return null
-                  const pMsHa = Number(selectedPaddock.dry_matter_kg_ha) || 0
-                  const pAreaHa = Number(selectedPaddock.area_ha) || 0
-                  const pUsableMs = pMsHa > 0 ? Math.max(0, (pMsHa - targetRemnant) * pAreaHa) : 0
-                  const pDah = totalPlanEV > 0 && dailyAllocationKg > 0 && pUsableMs > 0
-                    ? Math.max(0, Math.floor(pUsableMs / (totalPlanEV * dailyAllocationKg)))
-                    : null
-                  const qualityScore = selectedPaddock.technical_data?.quality_score ?? selectedPaddock.technical_data?.relative_quality ?? null
-                  const forageQualitySel = selectedPaddock.technical_data?.forage_quality ?? null
-                  return (
-                    <div className="flex items-center justify-between px-3 py-2.5 rounded-xl border-2 border-green-600 bg-white shadow-sm">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center shrink-0">
-                          <Check className="w-2.5 h-2.5 text-white" />
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-bold text-gray-900">{selectedPaddock.name}</p>
-                            {qualityScore != null && (
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg border bg-white ${
-                                qualityScore >= 7 ? 'text-green-700 border-green-200'
-                                : qualityScore >= 4 ? 'text-amber-600 border-amber-200'
-                                : 'text-red-600 border-red-200'
-                              }`}>#{qualityScore}/10</span>
-                            )}
-                            {forageQualitySel != null && (
-                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-lg border bg-amber-50 text-amber-700 border-amber-200">
-                                {'★'.repeat(forageQualitySel)}{'☆'.repeat(5 - forageQualitySel)}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-gray-400">
-                            {pAreaHa.toFixed(1)} ha
-                            {pMsHa > 0 && ` · ${pMsHa.toLocaleString('es')} kg MS/ha`}
-                            {pDah !== null && ` · ${pDah}d DAH`}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })() : (
-                  // Sin potrero seleccionado: mostrar la lista completa
-                  <div className="grid grid-cols-1 gap-1.5">
-                  {paddocks.map(p => {
-                    const isSelected = formData.paddock_id === p.id
-                    const pMsHa = Number(p.dry_matter_kg_ha) || 0
-                    const pAreaHa = Number(p.area_ha) || 0
-                    // Per-paddock holistic metrics for the modal paddock list
-                    const pUsableMs = pMsHa > 0 ? Math.max(0, (pMsHa - targetRemnant) * pAreaHa) : 0
-                    const pDah = totalPlanEV > 0 && dailyAllocationKg > 0 && pUsableMs > 0
-                      ? Math.max(0, Math.floor(pUsableMs / (totalPlanEV * dailyAllocationKg)))
-                      : null
-                    // yield coef vs module average
-                    const modAvg = paddocks.filter((px: any) => Number(px.dry_matter_kg_ha) > 0).length > 0
-                      ? paddocks.filter((px: any) => Number(px.dry_matter_kg_ha) > 0).reduce((s: number, px: any) => s + Number(px.dry_matter_kg_ha), 0)
-                        / paddocks.filter((px: any) => Number(px.dry_matter_kg_ha) > 0).length
-                      : 0
-                    const pCoef = modAvg > 0 && pMsHa > 0 ? pMsHa / modAvg : null
-                    // % USO: sum of planned days in active plans for this paddock / DAH
-                    const paddockActiveDays = plans
-                      .filter(pl => pl.paddock_id === p.id && pl.status !== 'COMPLETED')
-                      .reduce((s, pl) => {
-                        if (!pl.entry_date || !pl.exit_date) return s
-                        return s + Math.max(0, Math.round((new Date(pl.exit_date).getTime() - new Date(pl.entry_date).getTime()) / 86400000))
-                      }, 0)
-                    const pUsagePct = pDah !== null && pDah > 0
-                      ? Math.round((paddockActiveDays / pDah) * 100)
-                      : null
-                    const qualityScore = p.technical_data?.quality_score ?? p.technical_data?.relative_quality ?? null
-                    const forageQuality = p.technical_data?.forage_quality ?? null
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, paddock_id: p.id })}
-                        className={`flex items-start justify-between px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
-                          isSelected ? 'border-green-600 bg-white shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-start gap-2.5">
-                          {isSelected
-                            ? <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center shrink-0 mt-0.5"><Check className="w-2.5 h-2.5 text-white" /></div>
-                            : <div className="w-4 h-4 rounded-full border-2 border-gray-300 shrink-0 mt-0.5" />
-                          }
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-bold text-gray-900">{p.name}</p>
-                              {qualityScore != null && (
-                                  <span title={HOLISTIC_TOOLTIPS.quality} className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg border bg-white cursor-help ${
-                                    qualityScore >= 7 ? 'text-green-700 border-green-200'
-                                    : qualityScore >= 4 ? 'text-amber-600 border-amber-200'
-                                    : 'text-red-600 border-red-200'
-                                  }`}>#{qualityScore}/10</span>
-                              )}
-                              {forageQuality != null && (
-                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-lg border bg-amber-50 text-amber-700 border-amber-200">
-                                  {'★'.repeat(forageQuality)}{'☆'.repeat(5 - forageQuality)}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-gray-400">{pAreaHa.toFixed(1)} ha · {pMsHa > 0 ? `${pMsHa.toLocaleString('es')} kg MS/ha` : 'Sin datos MS'}</p>
-                            {/* Holistic metrics row */}
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {pDah !== null && (
-                                  <span title={HOLISTIC_TOOLTIPS.estimatedDah} className="text-[9px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">{pDah}d DAH</span>
-                              )}
-                              {pCoef !== null && (
-                                  <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
-                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
-                                      pCoef >= 1.05 ? 'text-green-700 bg-green-50 border-green-100'
-                                      : pCoef >= 0.95 ? 'text-gray-600 bg-gray-50 border-gray-200'
-                                      : 'text-amber-700 bg-amber-50 border-amber-100'
-                                    }`}>×{pCoef.toFixed(2)}</span>
-                                  </HoverTooltip>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        {/* MS / ha - right side instead of usage ring */}
-                        <div className="flex flex-col items-center gap-0.5 shrink-0 ml-2">
-                          <span className="text-[10px] font-black text-gray-700">
-                            {pMsHa > 0 ? `${pMsHa.toLocaleString('es')}` : '—'}
-                            {pMsHa > 0 && <span className="text-[9px] font-normal text-gray-400 ml-0.5">kg/ha</span>}
-                          </span>
-                        </div>
-                      </button>
-                    )
-                  })}
-                  </div>
-                )}
-              </div>
-
-              {/* ③ SUGERENCIA HOLÍSTICA — aparece cuando hay potrero + rebaños */}
-              {formData.paddock_id && totalPlanEV > 0 && suggestion.days > 0 && (() => {
-                const sugDays = suggestion.days
-                return (
-                  <div className="rounded-2xl bg-green-50 border border-green-200 overflow-hidden text-gray-900 shadow-sm">
-                    <div className="p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Lightbulb className="w-4 h-4 text-green-700" />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Motor holístico</p>
-                        {selectedPaddock && totalPlanEV > 0 && (() => {
-                          const ca = totalPlanEV / Math.max(0.1, Number(selectedPaddock.area_ha || 1))
-                          const caColor = ca < 3 ? '#16a34a' : ca < 5 ? '#d97706' : '#dc2626'
-                          return (
-                            <span className="ml-auto text-[9px] font-black px-2 py-0.5 rounded-full border" style={{ backgroundColor: `${caColor}18`, borderColor: caColor, color: caColor }}>
-                              {ca.toFixed(1)} EV/ha
-                            </span>
-                          )
-                        })()}
-                      </div>
-
-                      <div className="mb-4 bg-white/70 rounded-xl p-3 border border-green-100 space-y-3">
-                        <p className="text-[9px] font-black text-green-700 uppercase tracking-widest">Variables del cálculo</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          {/* Asign. Diaria */}
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-gray-600 flex items-center gap-1 whitespace-nowrap">
-                              Asign. Diaria 
-                              <HoverTooltip text="Kilogramos de Materia Seca por Equivalente Vaca al día.">
-                                <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
-                              </HoverTooltip>
-                            </label>
-                            <input
-                              type="number" step={0.5} min={6} max={25}
-                              value={rawDailyAlloc}
-                              onChange={e => {
-                                setRawDailyAlloc(e.target.value)
-                                const n = parseFloat(e.target.value)
-                                if (!isNaN(n) && n > 0) setDailyAllocationKg(n)
-                              }}
-                              onBlur={() => {
-                                const n = parseFloat(rawDailyAlloc)
-                                if (isNaN(n) || n <= 0) { setRawDailyAlloc(String(dailyAllocationKg)) }
-                              }}
-                              className="w-full bg-white border border-green-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-1 focus:ring-green-500 outline-none"
-                            />
-                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded inline-flex ${
-                              dailyAllocationKg <= 11 ? 'bg-red-50 text-red-600'
-                              : dailyAllocationKg <= 13 ? 'bg-green-100 text-green-700'
-                              : 'bg-blue-50 text-blue-600'
-                            }`}>
-                              {dailyAllocationKg <= 11 ? 'Déficit' : dailyAllocationKg <= 13 ? 'Normal' : 'Abundante'}
-                            </span>
-                          </div>
-
-                          {/* Remanente con toggle kg / % */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[10px] font-bold text-gray-600 whitespace-nowrap">
-                                Remanente {remnantMode === 'kg' ? '(kg)' : '(%)'}
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => setRemnantMode(m => m === 'kg' ? 'pct' : 'kg')}
-                                className="text-[9px] font-black px-1.5 py-0.5 rounded-md border border-green-200 text-green-700 bg-white hover:bg-green-50 transition-colors"
-                              >
-                                {remnantMode === 'kg' ? 'A %' : 'A kg'}
-                              </button>
-                            </div>
-                            {remnantMode === 'kg' ? (
-                              <input
-                                type="number" step={50} min={0}
-                                value={rawTargetRemnant}
-                                onChange={e => {
-                                  setRawTargetRemnant(e.target.value)
-                                  const n = parseFloat(e.target.value)
-                                  if (!isNaN(n) && n >= 0) setTargetRemnant(n)
-                                }}
-                                onBlur={() => {
-                                  const n = parseFloat(rawTargetRemnant)
-                                  if (isNaN(n) || n < 0) setRawTargetRemnant(String(targetRemnant))
-                                }}
-                                className="w-full bg-white border border-green-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-1 focus:ring-green-500 outline-none"
-                              />
-                            ) : (
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="number" step={5} min={0} max={80}
-                                  value={rawRemnantPct}
-                                  onChange={e => {
-                                    setRawRemnantPct(e.target.value)
-                                    const n = parseFloat(e.target.value)
-                                    if (!isNaN(n) && n >= 0 && n <= 80) {
-                                      setRemnantPct(n)
-                                      const ms = Number(selectedPaddock?.dry_matter_kg_ha) || 0
-                                      if (ms > 0) setTargetRemnant(ms * n / 100)
-                                    }
-                                  }}
-                                  onBlur={() => {
-                                    const n = parseFloat(rawRemnantPct)
-                                    if (isNaN(n) || n < 0) setRawRemnantPct(String(remnantPct))
-                                  }}
-                                  className="w-full bg-white border border-green-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-1 focus:ring-green-500 outline-none"
-                                />
-                                <span className="text-[10px] font-bold text-gray-400 shrink-0">%</span>
-                              </div>
-                            )}
-                            {remnantMode === 'pct' && selectedPaddock?.dry_matter_kg_ha && (
-                              <p className="text-[9px] text-gray-400 font-medium">
-                                = {Math.round((Number(selectedPaddock.dry_matter_kg_ha) * remnantPct) / 100)} kg/ha
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Reserva de sequía con toggle kg / % */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1">
-                                <label className="text-[10px] font-bold text-gray-600 whitespace-nowrap">
-                                  Reserva {droughtMode === 'kg' ? '(kg)' : '(%)'}
-                                </label>
-                                <HoverTooltip text="Porción de forraje que se guarda sin tocar para cubrir posibles extensiones de la temporada de no crecimiento.">
-                                  <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
-                                </HoverTooltip>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setDroughtMode(m => m === 'kg' ? 'pct' : 'kg')}
-                                className="text-[9px] font-black px-1.5 py-0.5 rounded-md border border-green-200 text-green-700 bg-white hover:bg-green-50 transition-colors"
-                              >
-                                {droughtMode === 'kg' ? 'A %' : 'A kg'}
-                              </button>
-                            </div>
-                            {droughtMode === 'kg' ? (
-                              <input
-                                type="number" step={50} min={0}
-                                value={rawDroughtKg}
-                                onChange={e => {
-                                  setRawDroughtKg(e.target.value)
-                                  const n = parseFloat(e.target.value)
-                                  if (!isNaN(n) && n >= 0) setDroughtKg(n)
-                                }}
-                                onBlur={() => {
-                                  const n = parseFloat(rawDroughtKg)
-                                  if (isNaN(n) || n < 0) setRawDroughtKg(String(droughtKg))
-                                }}
-                                className="w-full bg-white border border-green-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-1 focus:ring-green-500 outline-none"
-                              />
-                            ) : (
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="number" step={5} min={0} max={80}
-                                  value={rawDroughtPct}
-                                  onChange={e => {
-                                    setRawDroughtPct(e.target.value)
-                                    const n = parseFloat(e.target.value)
-                                    if (!isNaN(n) && n >= 0 && n <= 80) {
-                                      setDroughtPct(n)
-                                      const ms = Number(selectedPaddock?.dry_matter_kg_ha) || 0
-                                      if (ms > 0) setDroughtKg(ms * n / 100)
-                                    }
-                                  }}
-                                  onBlur={() => {
-                                    const n = parseFloat(rawDroughtPct)
-                                    if (isNaN(n) || n < 0) setRawDroughtPct(String(droughtPct))
-                                  }}
-                                  className="w-full bg-white border border-green-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-1 focus:ring-green-500 outline-none"
-                                />
-                                <span className="text-[10px] font-bold text-gray-400 shrink-0">%</span>
-                              </div>
-                            )}
-                            {droughtMode === 'pct' && selectedPaddock?.dry_matter_kg_ha && (
-                              <p className="text-[9px] text-gray-400 font-medium">
-                                = {Math.round((Number(selectedPaddock.dry_matter_kg_ha) * droughtPct) / 100)} kg/ha
-                              </p>
-                            )}
-                          </div>
-
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 mb-3">
-                        <div className="bg-white border border-green-100 shadow-sm rounded-xl p-2.5 text-center flex flex-col items-center justify-center">
-                          <p className="text-[9px] font-bold text-green-700 uppercase tracking-wider mb-0.5">Estadía</p>
-                          <p className="text-2xl font-black text-gray-900 leading-none">{sugDays}<span className="text-xs ml-0.5 text-green-700">d</span></p>
-                          <p className="text-[9px] text-gray-400 mt-1">{suggestion.exactDays.toFixed(2)} días exactos</p>
-                        </div>
-                        <div className="bg-white border border-green-100 shadow-sm rounded-xl p-2.5 text-center flex flex-col items-center justify-center">
-                          <p className="text-[9px] font-bold text-green-700 uppercase tracking-wider mb-0.5">Descanso</p>
-                          <p className="text-2xl font-black text-gray-900 leading-none">{suggestion.recovery}<span className="text-xs ml-0.5 text-green-700">d</span></p>
-                        </div>
-                        <div className="bg-white border border-green-100 shadow-sm rounded-xl p-2.5 text-center flex flex-col items-center justify-center">
-                          <p className="text-[9px] font-bold text-green-700 uppercase tracking-wider mb-0.5">MS útil</p>
-                          <p className="text-base font-black text-gray-900 leading-none mt-1">{Math.round(suggestion.usableMsTotal).toLocaleString('es')}<span className="text-[9px] font-normal ml-0.5 text-gray-400">kg</span></p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={!formData.entry_date}
-                        onClick={() => {
-                          if (!formData.entry_date) return
-                          setFormData(prev => ({
-                            ...prev,
-                            exit_date: addDays(prev.entry_date, sugDays),
-                            planned_recovery_days: suggestion.recovery
-                          }))
-                        }}
-                        className="w-full py-2 bg-white text-green-700 rounded-xl text-xs font-black hover:bg-green-700 transition-all hover:text-white border border-green-200 disabled:opacity-40 flex items-center justify-center gap-1"
-                      >
-                        <Check className="w-3 h-3" /> Aplicar sugerencia al plan
-                      </button>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* ④ PLAN: Fechas planificadas */}
-              <div className="rounded-2xl border-2 border-gray-200 bg-gray-50/50 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-100/60 border-b border-gray-200">
-                  <div className="w-4 h-4 border-2 border-blue-500 rounded-sm" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(59,130,246,0.35) 2px, rgba(59,130,246,0.35) 4px)' }} />
-                  {(() => {
-                    const d1 = formData.entry_date ? new Date(formData.entry_date).getTime() : 0;
-                    const d2 = formData.exit_date ? new Date(formData.exit_date).getTime() : 0;
-                    const diff = (d1 && d2 && d2 > d1) ? Math.round((d2 - d1) / 86400000) : 0;
-                    return (
-                      <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
-                        Plan {diff > 0 ? `· ${diff} días de pastoreo` : 'de días de pastoreo'}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <div className="p-4 space-y-3">
-                  {/* Si el plan está fijado, mostrar las fechas originales bloqueadas */}
-                  {(formData as any).is_locked && (
-                    <div className="bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 mb-2 flex items-center justify-between opacity-80 shadow-sm">
-                      <div className="flex items-center gap-2 text-gray-500">
-                        <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
-                          🔒 Plan Original
-                        </span>
-                      </div>
-                      <div className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                        <span className="bg-gray-100 px-2 py-1 rounded-md">{(formData as any)._original_entry_date}</span>
-                        <span className="text-gray-400">→</span>
-                        <span className="bg-gray-100 px-2 py-1 rounded-md">{(formData as any)._original_exit_date}</span>
-                      </div>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-700 tracking-widest uppercase">
-                        {(formData as any).is_locked ? 'Entrada ajustada' : 'Entrada plan'}
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.entry_date}
-                        onChange={e => setFormData({ ...formData, entry_date: e.target.value })}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-700 tracking-widest uppercase flex items-center gap-1">
-                        {(formData as any).is_locked ? 'Salida ajustada' : 'Salida plan'}
-                        {formData.exit_date && formData.entry_date && (() => {
-                          const plannedDays = daysBetween(formData.entry_date, formData.exit_date)
-                          const isOver = suggestion.exactDays > 0 && plannedDays > suggestion.exactDays
-                          return (
-                            <span className={`normal-case font-black ml-1 text-xs px-1.5 py-0.5 rounded-full ${
-                              isOver
-                                ? 'bg-red-100 text-red-700'
-                                : plannedDays > 14
-                                ? 'bg-gray-100 text-gray-600'
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {plannedDays}d{isOver ? ' ⚠' : ''}
-                            </span>
-                          )
-                        })()}
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.exit_date}
-                        onChange={e => setFormData({ ...formData, exit_date: e.target.value })}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                      />
-                    </div>
-                  </div>
-                  {/* ⚠ ALERTA DE SOBREPASTOREO: días planificados > capacidad holística */}
-                  {(() => {
-                    if (!formData.entry_date || !formData.exit_date || suggestion.exactDays <= 0) return null
-                    const plannedDays = daysBetween(formData.entry_date, formData.exit_date)
-                    if (plannedDays <= suggestion.exactDays) return null
-                    const excessDays = plannedDays - Math.floor(suggestion.exactDays)
-                    const dailyDemandKg = totalPlanEV * dailyAllocationKg
-                    const excessKgMs = Math.round(excessDays * dailyDemandKg)
-                    return (
-                      <div className="mt-2 flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-3.5 py-3">
-                        <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-black text-red-700 uppercase tracking-widest">⚠ Riesgo de sobrepastoreo</p>
-                          <p className="text-[11px] text-red-600 font-semibold mt-0.5 leading-relaxed">
-                            Planificaste <span className="font-black">{plannedDays} días</span> pero el motor holístico calcula que este potrero solo puede sostener{' '}
-                            <span className="font-black">{suggestion.exactDays.toFixed(1)} días</span> con el remanente objetivo de{' '}
-                            <span className="font-black">{targetRemnant} kg/ha</span>.{' '}
-                            El exceso implica consumir {excessKgMs.toLocaleString('es')} kg MS por encima del remanente, dañando la pastura.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!formData.entry_date) return
-                              setFormData(prev => ({
-                                ...prev,
-                                exit_date: addDays(prev.entry_date, suggestion.days),
-                              }))
-                            }}
-                            className="mt-1.5 text-[10px] font-black text-red-700 underline decoration-dotted hover:no-underline"
-                          >
-                            Ajustar a {suggestion.days} días (recomendado)
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })()}
-                  <div className="flex items-center gap-3 pt-1">
-                    <label className="text-[10px] font-black text-gray-700 tracking-widest uppercase whitespace-nowrap">Descanso del potrero</label>
-                    <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-xl px-3 py-2 flex-1">
-                      <input
-                        type="number" min={1} max={365}
-                        value={formData.planned_recovery_days}
-                        onChange={e => setFormData({ ...formData, planned_recovery_days: Number(e.target.value) })}
-                        className="w-14 text-sm font-black text-blue-700 bg-transparent outline-none"
-                      />
-                      <span className="text-xs text-gray-400 font-bold">días</span>
-                      {suggestion.recovery > 0 && formData.planned_recovery_days !== suggestion.recovery && (
-                        <button
-                          type="button"
-                          onClick={() => setFormData(p => ({ ...p, planned_recovery_days: suggestion.recovery }))}
-                          className="ml-auto text-[9px] text-gray-600 font-black hover:underline"
-                        >
-                          Usar sugerido ({suggestion.recovery}d)
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              {/* Observaciones — se guarda en historial */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Observaciones</label>
-                <textarea
-                  value={(formData as any).notes || ''}
-                  onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Notas del cambio (se guardarán en el historial)..."
-                  rows={2}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300"
-                />
-              </div>
-
-            </div>
-
-            {/* ─── MODAL FOOTER ─── */}
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-3 bg-gray-50/60 shrink-0">
-              {formData.id && (
-                <button type="button" onClick={handleDeletePlan} disabled={saving}
-                  className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all" title="Eliminar planificación">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-              <button type="button" onClick={() => setIsModalOpen(false)}
-                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 font-bold text-sm transition-all">
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formData.paddock_id || formData.herd_ids.length === 0 || !formData.entry_date || !formData.exit_date}
-                className="flex-1 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 font-black text-sm shadow-lg shadow-green-200 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
-              >
-                {saving
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
-                  : <><Check className="w-4 h-4" /> {formData.id ? 'Guardar cambios' : 'Crear planificación'}</>
-                }
-              </button>
-            </div>
-
-          </div>
-        </div>
+      {/* ─── MODAL: Vista unificada ─────────────────────────── */}
+      {isModalOpen && formData.id && (
+        <PlanBlockModal
+          plan={plans.find(p => p.id === formData.id) || formData}
+          paddocks={paddocks}
+          herds={herds}
+          onClose={() => setIsModalOpen(false)}
+          onSaved={(updatedPlan) => {
+            fetchPlans()
+            setIsModalOpen(false)
+          }}
+        />
       )}
-
       {/* ── Modal: Crear Evento desde el Gantt ────────────────────────── */}
       {showNewEventModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
@@ -4808,12 +4152,12 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       )}
 
 
-      {/* ── Season Plan Modal — SOLO para Planificación Sugerida ───────── */}
-      {showSeasonPlan && activeGanttTab === 'suggested' && (
-        <SeasonPlanModal
+      {/* ── Season Plan Modal (Sugerido y Manual) ───────── */}
+      <SeasonPlanModal
+        className={showSeasonPlan ? '' : 'hidden'}
           paddocks={paddocks}
           herds={herds}
-          isSuggestedMode={true}
+          isSuggestedMode={activeGanttTab === 'suggested'}
           bioMilestones={bioMilestones}
           onClose={() => setShowSeasonPlan(false)}
           onSaved={(seasonPlan) => {
@@ -4824,16 +4168,25 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               return exists ? prev.map(sp => sp.id === seasonPlan.id ? seasonPlan : sp) : [seasonPlan, ...prev]
             })
             // NO filtrar por activeSeasonPlanId — todos los planes conviven en el mismo Gantt
-            setActiveSeasonPlanId(null)
+            setActiveSeasonPlanId(seasonPlan.id)
             setGanttWindow(seasonPlan.start_date || new Date().toISOString().split('T')[0])
-            setActiveGanttTab('suggested')
+            setActiveGanttTab(activeGanttTab)
             setViewMode('gantt')
-            // Generar los bloques del ciclo para este plan
-            handleGeneratePlanCycle(seasonPlan)
+            
+            if (activeGanttTab === 'suggested') {
+              // Generar los bloques del ciclo para este plan sugerido
+              handleGeneratePlanCycle(seasonPlan)
+            } else {
+              // En modo manual, activamos el trazado con los rodeos seleccionados
+              const hIds = seasonPlan.herd_ids || []
+              if (hIds.length > 0) {
+                setDrawingHerdIds(hIds)
+                setDrawingMode(true)
+                setQuickConfirm(null)
+              }
+            }
           }}
         />
-      )}
-
       {/* ── Excel Importer Modal — temporalmente deshabilitado (TODO: reimplementar flujo completo)
       {showExcelImporter && (
         <ExcelImporter
@@ -4868,6 +4221,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         </div>
       )}
     </div>
+
     </>
   )
 }

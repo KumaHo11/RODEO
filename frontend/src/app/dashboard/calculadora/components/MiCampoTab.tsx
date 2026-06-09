@@ -164,8 +164,10 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
       const racPot = msAprovechable / input.dailyRationKgEv
       const diasSugeridosRodeoTotal = globalDemand > 0 ? (msAprovechable / globalDemand) : 0
       const N = paddocks.length || 1
-      const avgArea = totalArea / N
-      const coef = avgArea > 0 ? area / avgArea : 1
+      // Coeficiente Agronómico: Oferta Total (Área x MS) vs Oferta Promedio
+      const totalOfertaGlobal = paddocks.reduce((sum, pk) => sum + ((Number(pk.area_ha) || 0) * (Number(pk.dry_matter_kg_ha) || input.msKgHa)), 0)
+      const avgOferta = totalOfertaGlobal / N
+      const coef = avgOferta > 0 ? ofertaTotal / avgOferta : 1
 
       // Fórmulas de Leyes Universales del Pastoreo
       const tpMinimo = minRecoveryDays / (N > 1 ? N - 1 : 1)
