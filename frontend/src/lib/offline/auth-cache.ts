@@ -7,7 +7,7 @@
  * en la cookie __session para que el middleware Edge no redirija al login.
  */
 
-import { metaGet, metaSet } from './db'
+import { metaGet, metaSet, dbClear } from './db'
 
 const META_KEY_TOKEN   = 'auth_token'
 const META_KEY_EXP     = 'auth_token_exp'
@@ -74,7 +74,20 @@ export async function clearAuthCache(): Promise<void> {
     metaSet(META_KEY_TOKEN, null),
     metaSet(META_KEY_EXP, null),
     metaSet(META_KEY_PROFILE, null),
+    dbClear('paddocks'),
+    dbClear('herds'),
+    dbClear('farm_events'),
+    dbClear('field_notes'),
+    dbClear('tasks'),
+    dbClear('organizations'),
+    dbClear('grazing_plans'),
+    dbClear('outbox'),
   ])
+  try {
+    localStorage.removeItem('rodeo_cached_profile')
+    localStorage.removeItem('rodeo_cached_paddocks')
+    localStorage.removeItem('rodeo_cached_org')
+  } catch { /* ignore */ }
 }
 
 // ── Decodificar JWT para obtener exp ─────────────────────────────────────────

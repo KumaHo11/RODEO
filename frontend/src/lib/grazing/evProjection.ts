@@ -561,6 +561,7 @@ const GROWTH_RATE_KG_MONTH: Record<string, number> = {
   TERNERAS:    20,
   NOVILLITOS:  18,
   VAQUILLONAS: 15,
+  VACAS:       5,
 }
 
 interface Herd {
@@ -678,6 +679,7 @@ export function calcularEvParaMes(
   monthStartDate: string,
   headCountOverride: number,
   paritionSeason: ParitionSeason = 'primavera',
+  referenceDate?: string
 ): number {
   if (headCountOverride === 0) return 0
 
@@ -696,8 +698,8 @@ export function calcularEvParaMes(
   const evPerHead = baseHeadCount > 0 ? baseHerdEv / baseHeadCount : 0
   if (evPerHead === 0) return 0
 
-  // ── Offset de meses desde HOY hasta monthStartDate ────────────────────────
-  const today = new Date()
+  // ── Offset de meses desde la referencia hasta monthStartDate ────────────────────────
+  const today = referenceDate ? new Date(referenceDate) : new Date()
   const todayYear = today.getFullYear()
   const todayMonth = today.getMonth()       // 0-based
   const parts = monthStartDate.split('-')
@@ -745,12 +747,13 @@ export function calcularPesoParaMes(
     avg_weight_kg?: number | string | null
     categoria?: string | null
   },
-  monthStartDate: string
+  monthStartDate: string,
+  referenceDate?: string
 ): number {
   const categoria = ((herd.categoria as string) ?? 'VACAS').toUpperCase()
   const baseWeight = Number(herd.avg_weight_kg) || 450
 
-  const today = new Date()
+  const today = referenceDate ? new Date(referenceDate) : new Date()
   const todayYear = today.getFullYear()
   const todayMonth = today.getMonth()
   const parts = monthStartDate.split('-')

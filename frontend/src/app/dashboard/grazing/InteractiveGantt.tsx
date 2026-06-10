@@ -399,7 +399,7 @@ function InteractiveGantt({
         ...paddocks.filter((p: any) => !paddockOrder.includes(p.id)),
       ]
     : paddocks
-  const ROW_H = 96
+  const ROW_H = 110
   const LABEL_W = 220
   const HEADER_H = 48
   const containerRef = useRef<HTMLDivElement>(null)
@@ -1072,7 +1072,7 @@ function InteractiveGantt({
                 >
                   {paddock.is_active !== false ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
                 </button>
-                <div className="min-w-0 flex-1 flex flex-col justify-center gap-1">
+                <div className="min-w-0 flex-1 flex flex-col justify-center gap-1.5 py-1">
                   {/* Row 1: Nombre + badge calidad */}
                   <div className="flex items-center justify-between gap-1">
                     <button
@@ -1137,18 +1137,39 @@ function InteractiveGantt({
                               </span>
                             </HoverTooltip>
                         )}
-                        {/* Min / Max / Occupation Days from active season plan */}
+                        {/* Min / Max / Occupation Days */}
                         {(() => {
-                           if (!activeSeasonPlan) return null;
-                           const activeSupply = activeSeasonPlan.supply_snapshot?.by_paddock?.find((d: any) => d.id === paddock.id);
-                           if (!activeSupply) return null;
-                           const isClosed = activeSeasonPlan.season_type === 'cerrado';
+                           const stdDivisor = Math.max(1, paddocks.filter((p: any) => p.is_active !== false).length - 1)
+                           const pYield = yieldCoef || 1
+                           const stdMin = Math.round(pYield * (50 / stdDivisor))
+                           const stdMax = Math.round(pYield * (100 / stdDivisor))
+                           const stdAvg = Math.round((stdMin + stdMax) / 2)
+
+                           const activeSupply = activeSeasonPlan?.supply_snapshot?.by_paddock?.find((d: any) => d.id === paddock.id);
+                           const isClosed = activeSeasonPlan?.season_type === 'cerrado';
+
+                           let displayMin = stdMin
+                           let displayMax = stdMax
+                           let displayAvg = stdAvg
+                           let isFixed = false
+
+                           if (activeSupply) {
+                             if (isClosed) {
+                               displayMin = activeSupply.min_days || 0
+                               isFixed = true
+                             } else {
+                               displayMin = activeSupply.min_days || 0
+                               displayMax = activeSupply.max_days || 0
+                               displayAvg = Math.round((displayMin + displayMax) / 2)
+                             }
+                           }
+
                            return (
-                             <HoverTooltip text={isClosed ? "Días permitidos en base a la oferta forrajera" : "Rango sugerido de pastoreo (Mínimo y Máximo)"}>
+                             <HoverTooltip text={isFixed ? "Días permitidos en base a la oferta forrajera" : "Rango sugerido de pastoreo (Mínimo, Promedio y Máximo)"}>
                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">
-                                 {isClosed 
-                                   ? `Días de pastoreo: ${activeSupply.min_days || 0}d` 
-                                   : `Mín: ${activeSupply.min_days || 0}d • Máx: ${activeSupply.max_days || 0}d`
+                                 {isFixed 
+                                   ? `Días de pastoreo: ${displayMin}d` 
+                                   : `Mín: ${displayMin}d • Prom: ${displayAvg}d • Máx: ${displayMax}d`
                                  }
                                </span>
                              </HoverTooltip>
@@ -1813,10 +1834,10 @@ function InteractiveGantt({
                               </div>
                             )}
                             <div className="flex w-full">
-                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-[2] text-center truncate">Núm.</span>
-                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-center truncate">Peso</span>
-                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-center truncate">%EV</span>
-                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-center truncate">Total EV</span>
+                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-[2] text-left pl-1 truncate">Núm.</span>
+                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-left truncate">Peso</span>
+                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-left truncate">%EV</span>
+                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-left truncate">Total EV</span>
                             </div>
                           </div>
                           )
@@ -1879,14 +1900,15 @@ function InteractiveGantt({
                             const currentHeadCount = Number(herd.head_count) || 0
                             const headCount = herdActiveThisMonth ? getDynamicHeadcount(herd.id, currentHeadCount, m.startDate) : 0
                             const pesoBase = Number(herd.avg_weight_kg) || 0
-                            const peso = herdActiveThisMonth ? Math.round(calcularPesoParaMes(herd, m.startDate)) : pesoBase
+                            const referenceDate = activeSeasonPlan?.start_date || MONTHS_FOOTER[0]?.startDate
+                            const peso = herdActiveThisMonth ? Math.round(calcularPesoParaMes(herd, m.startDate, referenceDate)) : pesoBase
                             const gainedWeight = peso - pesoBase
                             const catKey = herd.categoria as string
                             // ── EV correcto para la tabla: total_ev de DB + crecimiento relativo ──
                             // calcularEvParaMes usa total_ev como ancla (no PHYSIO_EV_BASE)
                             // y aplica multiplicadores relativos de peso y fenología para meses futuros.
                             const ev = herdActiveThisMonth && headCount > 0
-                              ? calcularEvParaMes(herd, m.startDate, headCount)
+                              ? calcularEvParaMes(herd, m.startDate, headCount, 'primavera', referenceDate)
                               : 0
                             const evPerHead = headCount > 0 && ev > 0
                               ? ev / headCount
@@ -1905,7 +1927,7 @@ function InteractiveGantt({
                                     type="number"
                                     defaultValue={headCount || ''}
                                     min={0}
-                                    className="text-[8px] font-black text-gray-700 flex-[2] text-center w-full bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-sky-400 focus:outline-none rounded-none transition-colors"
+                                    className="text-[8px] font-black text-gray-700 flex-[2] text-left pl-1 w-0 bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-sky-400 focus:outline-none rounded-none transition-colors"
                                     title="Editar cabezas"
                                     onBlur={async (e) => {
                                       const newVal = parseInt(e.target.value, 10)
@@ -1953,20 +1975,30 @@ function InteractiveGantt({
                                     onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
                                   />
                                 ) : (
-                                  <span className="text-[8px] font-black text-gray-300 flex-[2] text-center w-full truncate">—</span>
+                                  <span className="text-[8px] font-black text-gray-300 flex-[2] text-left pl-1 w-0 truncate">—</span>
                                 )}
-                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate relative group cursor-default">
+                                {/* Peso */}
+                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-left w-0 truncate relative group cursor-default">
                                   {herdActiveThisMonth ? (
                                     <>
-                                      {peso > 0 ? peso : `~${CATEGORIA_PESO_DEFAULT[catKey as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450}`}
-                                      {gainedWeight > 0 && <span className="text-green-600 ml-0.5 inline-block" title={`Aumento proyectado: +${gainedWeight} kg`}>↑</span>}
+                                      {peso > 0 ? peso : `~${450}`}
+                                      {gainedWeight > 0 && (
+                                        <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                          Crecimiento proyectado: +{gainedWeight} kg
+                                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                                        </div>
+                                      )}
                                     </>
                                   ) : '—'}
                                 </span>
-                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-center truncate">
+                                {/* % EV */}
+                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-left w-0 truncate">
                                   {herdActiveThisMonth && headCount > 0 && ev > 0 ? (ev / headCount).toFixed(2) : '—'}
                                 </span>
-                                <span className="text-[8px] font-black text-green-700 flex-1 text-center truncate">{herdActiveThisMonth && ev > 0 ? ev.toFixed(0) : '—'}</span>
+                                {/* Total EV */}
+                                <span className="text-[8px] font-black text-green-700 flex-1 text-left w-0 truncate">
+                                  {herdActiveThisMonth && ev > 0 ? ev.toFixed(0) : '—'}
+                                </span>
                               </div>
                             )
                           })}
@@ -1991,9 +2023,10 @@ function InteractiveGantt({
                             const herdExit = h.exit_date || '2100-01-01'
                             if (herdEntry <= m.endDate && herdExit >= m.startDate) {
                               const hc = getDynamicHeadcount(h.id, Number(h.head_count) || 0, m.startDate)
+                              const referenceDate = activeSeasonPlan?.start_date || MONTHS_FOOTER[0]?.startDate
                               // ── Total row: mismo motor correcto que las filas individuales ──
                               const evHerd = hc > 0
-                                ? calcularEvParaMes(h, m.startDate, hc)
+                                ? calcularEvParaMes(h, m.startDate, hc, 'primavera', referenceDate)
                                 : 0
 
                               totalCabMes += hc
@@ -2008,10 +2041,10 @@ function InteractiveGantt({
                             >
                               {totalCabMes > 0 ? (
                                 <>
-                                  <span className="text-[8px] font-black text-gray-800 flex-[2] text-center truncate">{totalCabMes}</span>
-                                  <span className="text-[8px] font-bold text-gray-400 flex-1 text-center truncate">—</span>
-                                  <span className="text-[8px] font-bold text-gray-400 flex-1 text-center truncate">—</span>
-                                  <span className="text-[8px] font-black text-green-700 flex-1 text-center truncate">{totalEvMes.toFixed(0)}</span>
+                                  <span className="text-[8px] font-black text-gray-800 flex-[2] text-left pl-1 truncate">{totalCabMes}</span>
+                                  <span className="text-[8px] font-bold text-gray-400 flex-1 text-left truncate">—</span>
+                                  <span className="text-[8px] font-bold text-gray-400 flex-1 text-left truncate">—</span>
+                                  <span className="text-[8px] font-black text-green-700 flex-1 text-left truncate">{totalEvMes.toFixed(0)}</span>
                                 </>
                               ) : (
                                 <span className="text-[8px] text-gray-200 w-full text-center truncate">—</span>
@@ -2313,10 +2346,10 @@ function InteractiveGantt({
                   <tr>
                     {MONTHS_FOOTER.map(m => (
                       <React.Fragment key={m.key}>
-                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-center bg-gray-50 border-t border-gray-200">Núm</th>
-                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-center bg-gray-50 border-t border-gray-200">Peso</th>
-                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-center bg-gray-50 border-t border-gray-200">%EV</th>
-                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-green-700 uppercase text-center border-r border-gray-200 bg-gray-50 border-t border-gray-200">EV</th>
+                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-left bg-gray-50 border-t border-gray-200">Núm</th>
+                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-left bg-gray-50 border-t border-gray-200">Peso</th>
+                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-left bg-gray-50 border-t border-gray-200">%EV</th>
+                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-green-700 uppercase text-left border-r border-gray-200 bg-gray-50 border-t border-gray-200">EV</th>
                       </React.Fragment>
                     ))}
                   </tr>
@@ -2351,21 +2384,22 @@ function InteractiveGantt({
                           // ── Proyección de EV y Peso ──
                           const headCount = getDynamicHeadcount(herd.id, currentHeadCount, m.startDate)
                           const catU = herd.categoria?.toUpperCase() || 'VACAS'
-                          const pesoDinamico = Math.round(calcularPesoParaMes(herd, m.startDate))
+                          const referenceDate = activeSeasonPlan?.start_date || MONTHS_FOOTER[0]?.startDate
+                          const pesoDinamico = Math.round(calcularPesoParaMes(herd, m.startDate, referenceDate))
                           const gainedWeight = pesoDinamico - peso
                           const pesoForCalc = pesoDinamico > 0 ? pesoDinamico
                             : (CATEGORIA_PESO_DEFAULT[catU as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450)
-                          const ev = headCount > 0 ? calcularEvParaMes(herd, m.startDate, headCount) : 0
+                          const ev = headCount > 0 ? calcularEvParaMes(herd, m.startDate, headCount, 'primavera', referenceDate) : 0
                           const evPerH = headCount > 0 && ev > 0 ? ev / headCount : (EV_BASE[catU] ?? 1.0)
                           const eqPct = ev > 0 && headCount > 0 ? evPerH.toFixed(2) : '—'
                           return (
                             <React.Fragment key={m.key}>
-                              <td className="py-1 px-1 text-center">
+                              <td className="py-1 px-1 text-left">
                                 <input
                                   key={`ampliar-${herd.id}-${m.key}-${headCount}`}
                                   type="number" min={0}
                                   defaultValue={headCount || ''}
-                                  className="w-12 text-[11px] font-black text-gray-800 text-center bg-transparent border-b border-transparent hover:border-gray-300 focus:border-green-500 focus:outline-none rounded-none transition-colors"
+                                  className="w-12 text-[11px] font-black text-gray-800 text-left bg-transparent border-b border-transparent hover:border-gray-300 focus:border-green-500 focus:outline-none rounded-none transition-colors"
                                   onBlur={async (e) => {
                                     const newVal = parseInt(e.target.value, 10)
                                     if (isNaN(newVal) || newVal === headCount) return
@@ -2417,12 +2451,12 @@ function InteractiveGantt({
                                   onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                                 />
                               </td>
-                              <td className="py-3 px-1 text-xs text-gray-500 font-bold text-center relative group cursor-default">
+                              <td className="py-3 px-1 text-xs text-gray-500 font-bold text-left relative group cursor-default">
                                 {pesoForCalc > 0 ? pesoForCalc : '—'}
                                 {gainedWeight > 0 && <span className="text-green-600 ml-0.5 inline-block" title={`Aumento proyectado: +${gainedWeight} kg`}>↑</span>}
                               </td>
-                              <td className="py-3 px-1 text-xs text-gray-500 font-bold text-center">{eqPct}</td>
-                              <td className="py-3 px-1 text-xs font-black text-green-700 text-center border-r border-gray-200">{ev > 0 ? ev.toFixed(0) : '—'}</td>
+                              <td className="py-3 px-1 text-xs text-gray-500 font-bold text-left">{eqPct}</td>
+                              <td className="py-3 px-1 text-xs font-black text-green-700 text-left border-r border-gray-200">{ev > 0 ? ev.toFixed(0) : '—'}</td>
                             </React.Fragment>
                           )
                         })}
@@ -2440,18 +2474,18 @@ function InteractiveGantt({
                         const hExit = h.exit_date || '2100-01-01'
                         if (hEntry <= m.endDate && hExit >= m.startDate) {
                           const hc = getDynamicHeadcount(h.id, Number(h.head_count) || 0, m.startDate)
-                          const hEv = Number(h.total_ev) || 0
-                          const hHc = Math.max(Number(h.head_count) || 1, 1)
+                          const referenceDate = activeSeasonPlan?.start_date || MONTHS_FOOTER[0]?.startDate
+                          const evHerd = hc > 0 ? calcularEvParaMes(h, m.startDate, hc, 'primavera', referenceDate) : 0
                           totalCab += hc
-                          totalEv += hc * (hEv / hHc)
+                          totalEv += evHerd
                         }
                       })
                       return (
                         <React.Fragment key={m.key}>
-                          <td className="py-2.5 px-1 text-xs font-black text-gray-800 text-center bg-gray-100">{totalCab || '—'}</td>
-                          <td className="py-2.5 px-1 text-center bg-gray-100 text-gray-300 text-xs">—</td>
-                          <td className="py-2.5 px-1 text-center bg-gray-100 text-gray-300 text-xs">—</td>
-                          <td className="py-2.5 px-1 text-xs font-black text-green-700 text-center border-r border-gray-200 bg-gray-100">{totalEv > 0 ? totalEv.toFixed(0) : '—'}</td>
+                          <td className="py-2.5 px-1 text-xs font-black text-gray-800 text-left bg-gray-100">{totalCab || '—'}</td>
+                          <td className="py-2.5 px-1 text-left bg-gray-100 text-gray-300 text-xs">—</td>
+                          <td className="py-2.5 px-1 text-left bg-gray-100 text-gray-300 text-xs">—</td>
+                          <td className="py-2.5 px-1 text-xs font-black text-green-700 text-left border-r border-gray-200 bg-gray-100">{totalEv > 0 ? totalEv.toFixed(0) : '—'}</td>
                         </React.Fragment>
                       )
                     })}

@@ -62,6 +62,7 @@ interface Props {
   planningDefaults?: { dailyAllocationKg: number; targetRemnantKgHa: number }
   /** Called when KML is parsed — features are shown on the map interactively */
   onKmlFeaturesLoaded?: (features: ParsedKmlFeature[]) => void
+  activeGrazingPlans?: any[]
 }
 
 // Badges de estado — semántica estricta
@@ -117,7 +118,7 @@ export default function PaddockSidePanel({
   ndviData, ndviLoading, avgNdvi, herds = [], totalEV = 0,
   onSetupField, onManualPaddockCreate, onDeletePaddock, onDeleteField, onDataRefresh,
   onFieldImageUploaded, onAssignPolygon, onEditPolygon, defaultEditPaddockId, returnTo, planningDefaults,
-  onKmlFeaturesLoaded,
+  onKmlFeaturesLoaded, activeGrazingPlans = [],
 }: Props) {
   const [search, setSearch]     = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -427,7 +428,8 @@ export default function PaddockSidePanel({
                 const realGrowthRate = climateSnap ? Number(climateSnap.grass_growth_rate) : (paddock.dry_matter_kg_ha ? Number(paddock.dry_matter_kg_ha) * 0.012 : undefined)
                 // Derive GRAZING status from herds currently assigned to this paddock
                 const hasActiveHerd = herds.some((h: any) => h.current_paddock_id === paddock.id)
-                const isGrazing = hasActiveHerd || paddock.current_status === 'GRAZING'
+                const activePlanForPaddock = activeGrazingPlans.find((ap: any) => ap.paddock_id === paddock.id)
+                const isGrazing = hasActiveHerd || paddock.current_status === 'GRAZING' || !!activePlanForPaddock
 
                 return (
                   <div
@@ -462,6 +464,11 @@ export default function PaddockSidePanel({
                           <span className="text-[10px] font-bold text-gray-500 tabular-nums">
                             {Number(paddock.area_ha || 0).toFixed(1)} ha
                           </span>
+                          {activePlanForPaddock && (
+                            <span className="text-[10px] font-bold text-orange-700 bg-orange-100 border border-orange-200 px-1.5 py-0.5 rounded-full flex items-center gap-1 leading-none">
+                              Pastando: {activePlanForPaddock.herd_name} ({activePlanForPaddock.head_count})
+                            </span>
+                          )}
                         </div>
                       </div>
                       {/* Toggle ON/OFF con tooltip visible */}

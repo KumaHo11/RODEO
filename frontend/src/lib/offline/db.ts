@@ -132,7 +132,7 @@ function getDB(): Promise<IDBPDatabase<RodeoDBSchema>> {
 
 // ── Generic helpers ───────────────────────────────────────────────────────────
 
-type StoreNames = 'paddocks' | 'herds' | 'farm_events' | 'field_notes' | 'tasks' | 'organizations' | 'grazing_plans'
+type StoreNames = 'paddocks' | 'herds' | 'farm_events' | 'field_notes' | 'tasks' | 'organizations' | 'grazing_plans' | 'outbox'
 
 /** Devuelve todos los registros de un store como array de `data` */
 export async function dbGetAll(store: StoreNames): Promise<any[]> {

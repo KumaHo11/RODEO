@@ -64,6 +64,15 @@ interface SeasonPlan {
   no_growth_to: string
   drought_reserve_days: number
   daily_allocation_kg: number
+  target_remnant_kg_ha?: number
+  specific_remnants?: Record<string, number>
+  recovery_days?: {
+    min?: number
+    max?: number
+    spring_summer?: number
+    autumn?: number
+    winter?: number
+  }
   cell_name?: string | null
   notes: string
   status: 'draft' | 'active' | 'closed'
@@ -231,9 +240,10 @@ export default function SeasonPlanModal({
   const [noGrowthTo, setNoGrowthTo] = useState(existingPlan?.no_growth_to ?? '')
   const [notes, setNotes] = useState(existingPlan?.notes ?? '')
 
-  // Días de recuperación del pasto (solo para temporada abierta/ambos)
-  const [recoveryMin, setRecoveryMin] = useState<number>(existingPlan?.recovery_days?.min ?? 50)
-  const [recoveryMax, setRecoveryMax] = useState<number>(existingPlan?.recovery_days?.max ?? 100)
+  // Días de recuperación óptimos calculados por la curva de crecimiento
+  // del pasto (solo para temporada abierta/ambos)
+  const [recoveryMin, setRecoveryMin] = useState<number>((existingPlan as any)?.recovery_days?.min ?? 50)
+  const [recoveryMax, setRecoveryMax] = useState<number>((existingPlan as any)?.recovery_days?.max ?? 100)
 
   // ── Paso 2: El Rodeo ────────────────────────────────────────────────────────
   const [selectedHerdIds, setSelectedHerdIds] = useState<string[]>(() => herds.map(h => h.id))

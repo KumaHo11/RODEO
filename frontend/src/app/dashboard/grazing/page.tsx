@@ -3978,7 +3978,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           herds={herds}
           onClose={() => setIsModalOpen(false)}
           onSaved={(updatedPlan) => {
-            fetchPlans()
+            loadData()
             setIsModalOpen(false)
           }}
         />
@@ -4168,7 +4168,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               return exists ? prev.map(sp => sp.id === seasonPlan.id ? seasonPlan : sp) : [seasonPlan, ...prev]
             })
             // NO filtrar por activeSeasonPlanId — todos los planes conviven en el mismo Gantt
-            setActiveSeasonPlanId(seasonPlan.id)
+            setActiveSeasonPlanId(seasonPlan.id || null)
             setGanttWindow(seasonPlan.start_date || new Date().toISOString().split('T')[0])
             setActiveGanttTab(activeGanttTab)
             setViewMode('gantt')
@@ -4178,7 +4178,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               handleGeneratePlanCycle(seasonPlan)
             } else {
               // En modo manual, activamos el trazado con los rodeos seleccionados
-              const hIds = seasonPlan.herd_ids || []
+              const hIds = (seasonPlan as any).herd_ids || []
               if (hIds.length > 0) {
                 setDrawingHerdIds(hIds)
                 setDrawingMode(true)
