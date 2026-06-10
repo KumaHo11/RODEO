@@ -478,6 +478,8 @@ function InteractiveGantt({
     'bcs', 'condicion_corporal', 'body_condition',
     'mortandad', 'compra', 'venta',
     'stock_inicial', 'ajuste', 'ajuste_entrada', 'ajuste_salida',
+    'paricion', 'destete', 'tacto', 'servicio', 'pesaje',
+    'inseminacion', 'tratamiento', 'castracion', 'suplementacion', 'observacion'
   ])
 
   const unifiedEvents = useMemo(() => {
@@ -918,7 +920,7 @@ function InteractiveGantt({
     <div
       ref={containerRef}
       data-gantt-scroll=""
-      className="select-none overflow-x-auto overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-sm"
+      className="select-none overflow-x-auto overscroll-x-none overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-sm"
       style={{ cursor: isDrawingMode ? 'crosshair' : 'default', maxHeight: 'calc(100vh - 220px)' }}
       onClick={() => { setSelectedEvent(null); setPopupPos(null) }}
     >
@@ -1691,7 +1693,7 @@ function InteractiveGantt({
                               originalDays={baseDuration}
                               adjustedDays={adjustedDuration}
                               alertLevel={Math.abs(deltaClimate) >= 3 ? 'critical' : 'warning'}
-                              stressType={aAdj > 1.15 ? 'cold' : 'heat'} // Heurística simple para mostrar íconos
+                              stressType={'auto'}
                               alertMessage={`Multiplicador de demanda: ×${aAdj.toFixed(2)}`}
                               dailyDemand={ghostDailyDemand}
                               aAdj={aAdj}
@@ -1869,21 +1871,17 @@ function InteractiveGantt({
                           return (
                           <div
                             key={m.key}
-                            className={`border-r border-gray-300 flex flex-col items-center justify-center px-0.5 overflow-hidden shrink-0 gap-0.5 ${hasClimateAlert ? 'bg-orange-50' : ''}`}
+                            className={`border-r border-gray-300 flex flex-col items-center justify-center px-0.5 overflow-visible shrink-0 gap-0.5 ${hasClimateAlert ? 'bg-orange-50' : ''}`}
                             style={{ width: `${m.widthPct}%`, minWidth: 60 }}
                           >
                             {hasClimateAlert && (
-                              <div className="relative group/altadem w-full flex justify-center">
-                                <span className="text-[7px] font-black px-1 rounded cursor-help text-orange-700 bg-orange-100">
+                              <div className="relative w-full flex justify-center">
+                                <span 
+                                  className="text-[7px] font-black px-1 rounded cursor-help text-orange-700 bg-orange-100"
+                                  title={`Consumo acelerado por clima:\nEl frío o estrés ambiental eleva el requerimiento de los animales (o el desperdicio por pisoteo). El rodeo consume hoy una ración efectiva de ${racionAjustada} kg en lugar de los ${racionUsuario} kg planificados, agotando el stock antes de tiempo.`}
+                                >
                                   ⚠ Alta demanda
                                 </span>
-                                {/* Tooltip compacto CSS — aparece arriba del badge */}
-                                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 w-52 bg-gray-900 text-white text-[10px] leading-relaxed font-normal rounded-lg px-3 py-2.5 shadow-xl opacity-0 group-hover/altadem:opacity-100 transition-opacity duration-150">
-                                  <p className="font-semibold text-[10px] mb-1 text-orange-300">Consumo acelerado por clima</p>
-                                  <p>El frío o estrés ambiental eleva el requerimiento de los animales (o el desperdicio por pisoteo). El rodeo consume hoy una ración efectiva de {racionAjustada} kg en lugar de los {racionUsuario} kg planificados, agotando el stock antes de tiempo.</p>
-                                  {/* Flecha apuntando hacia abajo */}
-                                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
-                                </div>
                               </div>
                             )}
                             <div className="flex w-full">
@@ -2381,7 +2379,7 @@ function InteractiveGantt({
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            <div className="overflow-x-auto overflow-y-auto p-0 m-6 rounded-2xl border border-gray-200">
+            <div className="overflow-x-auto overscroll-x-none overflow-y-auto p-0 m-6 rounded-2xl border border-gray-200">
               <table className="w-full text-left border-collapse min-w-[1200px]">
                 <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-20">
                   <tr>

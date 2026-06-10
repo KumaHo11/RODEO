@@ -183,12 +183,33 @@ export async function POST(req: NextRequest) {
       )
       const event = eventResult.rows[0]
 
-      // Insert M2M links
+      // Insert M2M links and update historial_potrero
       for (const paddockId of paddocks.map(p => p.id)) {
         await client.query(
           'INSERT INTO weather_event_paddocks (weather_event_id, paddock_id) VALUES ($1, $2)',
           [event.id, paddockId]
         )
+
+        if (body.type === 'RAIN') {
+          await client.query(`
+            INSERT INTO historial_potrero (
+              org_id, paddock_id, fecha, precipitacion_usuario_mm, lluvia_fuente
+            ) VALUES ($1, $2, $3, $4, 'user')
+            ON CONFLICT (paddock_id, fecha) DO UPDATE SET
+              precipitacion_usuario_mm = EXCLUDED.precipitacion_usuario_mm,
+              lluvia_fuente = 'user',
+              updated_at = NOW()
+          `, [auth.orgId, paddockId, body.date, body.value])
+        } else if (body.type === 'FROST') {
+          await client.query(`
+            INSERT INTO historial_potrero (
+              org_id, paddock_id, fecha, temperatura_c
+            ) VALUES ($1, $2, $3, $4)
+            ON CONFLICT (paddock_id, fecha) DO UPDATE SET
+              temperatura_c = EXCLUDED.temperatura_c,
+              updated_at = NOW()
+          `, [auth.orgId, paddockId, body.date, body.value])
+        }
       }
 
       await client.query('COMMIT')

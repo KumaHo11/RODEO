@@ -1008,9 +1008,30 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     )
   }, [farmEvents, formData.entry_date, formData.exit_date])
 
+  const CACHE_KEY = 'rodeo_grazing_data_cache'
+
   const loadData = useCallback(async () => {
     if (!user) return
-    setLoading(true)
+    
+    let isCached = false
+    try {
+      const cachedStr = localStorage.getItem(CACHE_KEY)
+      if (cachedStr) {
+        const cached = JSON.parse(cachedStr)
+        if (cached.paddocks) setPaddocks(cached.paddocks)
+        if (cached.herds) setHerds(cached.herds)
+        if (cached.plans) setPlans(cached.plans)
+        if (cached.farmEvents) setFarmEvents(cached.farmEvents)
+        if (cached.movements) setMovements(cached.movements)
+        if (cached.seasonPlans) setSeasonPlans(cached.seasonPlans)
+        if (cached.weatherEvents) setWeatherEvents(cached.weatherEvents)
+        isCached = true
+        setLoading(false)
+      }
+    } catch (err) {}
+
+    if (!isCached) setLoading(true)
+
     try {
       const [paddocksRes, herdsRes, plansRes, eventsRes, movementsRes, mercadoRes, orgRes, spRes, wEvRes, wDataRes] = await Promise.all([
         apiFetch('/api/paddocks').catch(() => null),
@@ -1035,11 +1056,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         spRes?.ok       ? spRes.json()       : Promise.resolve({ plans: [] }),
         wEvRes?.ok      ? wEvRes.json()      : Promise.resolve({ events: [] }),
       ])
-      setPaddocks(paddocksResJson.paddocks ?? [])
-      setHerds(herdsResJson.herds ?? [])
-      setPlans(plansResJson.plans ?? [])
-      setFarmEvents(eventsResJson.events ?? [])
-      setMovements(movementsResJson.movements ?? [])
+      
+      const pData = paddocksResJson.paddocks ?? []
+      const hData = herdsResJson.herds ?? []
+      const plData = plansResJson.plans ?? []
+      const feData = eventsResJson.events ?? []
+      const mData = movementsResJson.movements ?? []
+      
+      setPaddocks(pData)
+      setHerds(hData)
+      setPlans(plData)
+      setFarmEvents(feData)
+      setMovements(mData)
       setMercado(mercadoRes?.ok ? (await mercadoRes.json()) : null)
 
       if (orgResJson.organization) {
@@ -1052,14 +1080,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         setRawTargetRemnant(String(newRemnant))
       }
 
+      let spData = []
       if (spResJson) {
-        setSeasonPlans(spResJson.plans ?? spResJson ?? [])
+        spData = spResJson.plans ?? spResJson ?? []
+        setSeasonPlans(spData)
       }
 
+      let wEventsData = []
       if (wEvResJson) {
-        setWeatherEvents(wEvResJson.events || [])
+        wEventsData = wEvResJson.events || []
+        setWeatherEvents(wEventsData)
         const fromDb: Record<string, number> = {}
-        ;(wEvResJson.events || []).forEach((ev: any) => {
+        ;(wEventsData).forEach((ev: any) => {
           if (ev.type === 'RAIN') {
             const key = (ev.date as string).slice(0, 7)
             fromDb[key] = (fromDb[key] || 0) + Number(ev.value)
@@ -1069,13 +1101,20 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         setRainfallData(prev => ({ ...prev, ...fromDb }))
       }
 
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          paddocks: pData, herds: hData, plans: plData, farmEvents: feData,
+          movements: mData, seasonPlans: spData, weatherEvents: wEventsData
+        }))
+      } catch (err) {}
+
       if (wDataRes) {
         setWeather(wDataRes)
       }
     } catch (err) {
       console.error('Grazing loadData error:', err)
     } finally {
-      setLoading(false)
+      if (!isCached) setLoading(false)
     }
   }, [user])
 
@@ -1476,33 +1515,41 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     [plans, search, filterStatus, viewMode, activeGanttTab, historyTab, activeSeasonPlanId]
   )
 
-  let dynamicWindowDays = (PERIODS[ganttPeriod] ?? 365) + 215
+  let dynamicWindowDays = (PERIODS[ganttPeriod] ?? 365) + (ganttPeriod === 'anual' ? 215 : 0)
 
   const activeSeasonPlan = seasonPlans.find(sp => sp.id === activeSeasonPlanId)
   if (viewMode === 'gantt' && activeSeasonPlan?.start_date && activeSeasonPlan?.end_date) {
     const s = new Date(activeSeasonPlan.start_date + 'T00:00:00').getTime()
     const e = new Date(activeSeasonPlan.end_date + 'T00:00:00').getTime()
     const diff = Math.ceil((e - s) / 86400000)
-    if (diff > 0) dynamicWindowDays = Math.max(dynamicWindowDays, diff + 215)
+    if (diff > 0) {
+      if (ganttPeriod === 'cerrada' || ganttPeriod === 'abierta') {
+        dynamicWindowDays = diff // Exact season duration, no extension
+      } else {
+        dynamicWindowDays = Math.max(dynamicWindowDays, diff + (ganttPeriod === 'anual' ? 215 : 0))
+      }
+    }
   }
   
   if (viewMode === 'gantt' && typeof filteredPlans !== 'undefined' && filteredPlans.length > 0) {
-    const startObj = new Date(ganttWindow + 'T00:00:00')
-    let maxDate = startObj.getTime() + dynamicWindowDays * 24 * 60 * 60 * 1000
+    if (ganttPeriod !== 'cerrada' && ganttPeriod !== 'abierta') {
+      const startObj = new Date(ganttWindow + 'T00:00:00')
+      let maxDate = startObj.getTime() + dynamicWindowDays * 24 * 60 * 60 * 1000
 
-    filteredPlans.forEach((p: any) => {
-      const exitStr = p.exit_date || p.actual_exit_date || p.entry_date
-      if (exitStr) {
-        const exitObj = new Date(exitStr + 'T00:00:00')
-        if (exitObj.getTime() > maxDate) {
-          maxDate = exitObj.getTime()
+      filteredPlans.forEach((p: any) => {
+        const exitStr = p.exit_date || p.actual_exit_date || p.entry_date
+        if (exitStr) {
+          const exitObj = new Date(exitStr + 'T00:00:00')
+          if (exitObj.getTime() > maxDate) {
+            maxDate = exitObj.getTime()
+          }
         }
-      }
-    })
+      })
 
-    const diffDays = Math.ceil((maxDate - startObj.getTime()) / (24 * 60 * 60 * 1000))
-    if (diffDays > dynamicWindowDays) {
-      dynamicWindowDays = Math.min(diffDays + 215, 2190) // Max 6 years to allow 2027+ comfortably
+      const diffDays = Math.ceil((maxDate - startObj.getTime()) / (24 * 60 * 60 * 1000))
+      if (diffDays > dynamicWindowDays) {
+        dynamicWindowDays = Math.min(diffDays + (ganttPeriod === 'anual' ? 215 : 0), 2190) // Max 6 years to allow 2027+ comfortably
+      }
     }
   }
 
@@ -1933,7 +1980,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   return (
     <>
       <ConfirmModal />
-      <div className="space-y-5 pb-10">
+      <div className="space-y-5 pb-10 overscroll-x-none">
         <OnboardingTour
           tourId="tour-planificador-v1"
           steps={[

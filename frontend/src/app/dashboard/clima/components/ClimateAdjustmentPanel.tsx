@@ -224,7 +224,7 @@ function PaddockWeatherForm({
 // ─── Paddock card ─────────────────────────────────────────────────────────────
 
 function PaddockCard({
-  result, paddockSnapshots, current, onSaveWeatherEvent, onRecalculate, viewMode = 'list'
+  result, paddockSnapshots, current, onSaveWeatherEvent, onRecalculate, viewMode = 'list', events = []
 }: {
   result: PaddockResult
   paddockSnapshots: Snapshot[]
@@ -232,6 +232,7 @@ function PaddockCard({
   onSaveWeatherEvent?: (p: CreateWeatherEventPayload) => Promise<boolean>
   onRecalculate?: (id: string, mm?: number) => Promise<void>
   viewMode?: 'list' | 'grid'
+  events?: any[]
 }) {
   const [expanded, setExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<'evolucion' | 'historico'>('evolucion')
@@ -451,29 +452,57 @@ function PaddockCard({
           />
         </>
             ) : (
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                {sortedSnaps.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic text-center py-4">No hay mediciones históricas registradas.</p>
-                ) : (
-                  sortedSnaps.slice().reverse().map((snap, i) => (
-                    <div key={i} className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                      <div>
-                        <p className="text-xs font-black text-gray-900">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
-                        <p className="text-[10px] text-gray-400">Multiplicador clima: {Number(snap.climate_multiplier).toFixed(2)}x</p>
-                      </div>
-                      <div className="flex items-center gap-4 text-right">
-                        <div>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">NDVI</p>
-                          <p className="text-xs font-bold text-emerald-700">{Number(snap.ndvi).toFixed(3)}</p>
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+                {events.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Eventos Climáticos</p>
+                    <div className="space-y-2">
+                      {events.map((ev, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
+                          <div>
+                            <p className="text-xs font-black text-gray-900">{new Date(ev.date).toLocaleDateString('es-AR')}</p>
+                            <p className={`text-[10px] font-bold ${ev.type === 'RAIN' ? 'text-blue-600' : 'text-sky-600'}`}>
+                              {ev.type === 'RAIN' ? 'Lluvia' : 'Helada'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-black text-gray-900">
+                              {ev.value} {ev.type === 'RAIN' ? 'mm' : '°C'}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Crecim.</p>
-                          <p className="text-xs font-bold text-gray-900">{Number(snap.grass_growth_rate).toFixed(1)} kg</p>
-                        </div>
-                      </div>
+                      ))}
                     </div>
-                  ))
+                  </div>
                 )}
+                
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Evolución NDVI y Crecimiento</p>
+                  <div className="space-y-2">
+                    {sortedSnaps.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic text-center py-4">No hay mediciones históricas registradas.</p>
+                    ) : (
+                      sortedSnaps.slice().reverse().map((snap, i) => (
+                        <div key={i} className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                          <div>
+                            <p className="text-xs font-black text-gray-900">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
+                            <p className="text-[10px] text-gray-400">Multiplicador clima: {Number(snap.climate_multiplier).toFixed(2)}x</p>
+                          </div>
+                          <div className="flex items-center gap-4 text-right">
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">NDVI</p>
+                              <p className="text-xs font-bold text-emerald-700">{Number(snap.ndvi).toFixed(3)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Crecim.</p>
+                              <p className="text-xs font-bold text-gray-900">{Number(snap.grass_growth_rate).toFixed(1)} kg</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -489,10 +518,12 @@ export function ClimateAdjustmentPanel({
   showGlobalSummary = false,
   onSaveWeatherEvent,
   orgName,
+  events = [],
 }: {
   showGlobalSummary?: boolean
   onSaveWeatherEvent?: (p: CreateWeatherEventPayload) => Promise<boolean>
   orgName?: string | null
+  events?: any[]
 }) {
   const { hasFeature } = usePlan()
   const hasAccess = hasFeature('climate_adjustment')
@@ -672,6 +703,7 @@ export function ClimateAdjustmentPanel({
                 onSaveWeatherEvent={onSaveWeatherEvent}
                 onRecalculate={calculateForPaddock}
                 viewMode={viewMode}
+                events={events.filter((e: any) => e.paddock_ids && e.paddock_ids.includes(paddock.id))}
               />
           )
         })}

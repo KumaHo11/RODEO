@@ -185,7 +185,7 @@ function useSpeech(onResult: (t: string) => void, onStart?: () => void) {
 export default function HerdModal({ herd, allHerds = [], isTemporary = false, onClose, onSaved }: Props) {
   const { hasFeature } = usePlan()
   const canVoice     = hasFeature('voice_bitacora')
-  const isEditing = !!herd?.id
+  const isEditing = !!(liveHerd?.id || herd?.id)
 
   const [tab, setTab] = useState<'operativo' | 'actividades' | 'registros' | 'historial'>('operativo')
 
@@ -368,47 +368,47 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       estadio_gestacion: physioPanel.estadioGestacion || null,
       custom_racion_kg: physioPanel.customRacionKgDia ?? null,
     }
+    
     try {
-      if (await isOffline() && isEditing) {
+      let res: Response
+      let finalId = targetId
+
+      if (await isOffline()) {
         const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        const tempId = targetId || `temp-${Date.now()}`
+        finalId = tempId
         addToOfflineQueue({
-          type: 'herd_update',
-          data: { herd_id: herd.id, ...payload },
-          timestamp: Date.now(),
+          type: targetId ? 'herd_update' : 'herd_create',
+          data: { ...payload, herd_id: targetId, local_id: tempId },
+          timestamp: Date.now()
         } as any)
-        setSaving(false)
-        setOfflineSaved(true)
-        onSaved()
-        return
+      } else {
+        if (!targetId) {
+          res = await apiFetch('/api/herds', { method: 'POST', body: JSON.stringify(payload) })
+        } else {
+          res = await apiFetch(`/api/herds/${targetId}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        }
+
+        if (!res.ok) {
+          let msg = `Error ${res.status}`
+          try { const j = await res.json(); msg = j.error ?? msg } catch {}
+          throw new Error(msg)
+        }
+        
+        if (!targetId) {
+          try {
+            const json = await res.json()
+            if (json.id) finalId = json.id
+          } catch(e) {}
+        }
       }
 
-      let res: Response
-      if (isEditing) {
-        res = await apiFetch(`/api/herds/${herd.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-      } else {
-        if (await isOffline()) {
-           setSaveError('No podés crear nuevos rodeos sin conexión.')
-           return
-        }
-        res = await apiFetch('/api/herds', { method: 'POST', body: JSON.stringify(payload) })
-      }
-      if (!res.ok) {
-        let msg = `Error ${res.status}`
-        try { const j = await res.json(); msg = j.error ?? msg } catch {}
-        setSaveError(msg); return
-      }
-      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save', category: 'herds', is_editing: isEditing }))
+      setLiveHerd(prev => ({ ...(prev || herd || {}), ...payload, id: finalId } as HerdData))
+      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save', category: 'herds', is_editing: !!targetId }))
       import('sonner').then(({ toast }) => toast.success('Cambios guardados'))
-      onSaved();
+      onSaved()
     } catch (e: any) {
-      // Si fue error de red (iOS puede estar offline aunque onLine=true)
-      const isNetErr = e instanceof TypeError || e?.message?.includes('fetch')
-      if (isNetErr && isEditing) {
-        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
-        addToOfflineQueue({ type: 'herd_update', data: { herd_id: herd.id, ...payload }, timestamp: Date.now() } as any)
-        setSaving(false); setOfflineSaved(true); onSaved(); return
-      }
-      setSaveError('Error de red: ' + e.message)
+      setSaveError(e.message)
     } finally {
       setSaving(false)
     }
@@ -517,13 +517,13 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
   // ── Parición Wizard: handler completo ───────────────────────────────────────
   const handleParicion = async () => {
-    if (!herd?.id || !paricionMadres) return
+    if (!targetId || !paricionMadres) return
     if (paricionDestino === 'new' && !paricionNombreNuevo.trim()) return
     if (paricionDestino === 'existing' && !paricionHerdDestinoId) return
 
     setActSaving(true); setActError(null)
     const n = Number(paricionMadres)
-    const currentCount = liveHerd?.head_count ?? herd.head_count ?? 0
+    const currentCount = liveHerd?.head_count ?? herd?.head_count ?? 0
     const newCount = Math.max(0, currentCount - n)
     const newEV = parseFloat((newCount * (PHYSIO_EV_BASE['VACA_PRENADA'] ?? 1.2)).toFixed(2))
     const destinoEV = parseFloat((n * (PHYSIO_EV_BASE['VACA_CON_TERNERO'] ?? 1.35)).toFixed(2))
@@ -539,13 +539,13 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       // Determinar el grupo_manejo_id del lote:
       // Si el rodeo original ya tiene uno, lo reutilizamos;
       // si no, creamos uno nuevo vía /api/herds/group para que sean del mismo lote.
-      let grupoId: string = herd.grupo_manejo_id ?? ''
-      const grupoNombre = herd.grupo_manejo_nombre || herd.name
+      let grupoId: string = herd?.grupo_manejo_id ?? ''
+      const grupoNombre = herd?.grupo_manejo_nombre || herd?.name
       if (!grupoId) {
         const grpRes = await apiFetch('/api/herds/group', {
           method: 'PATCH',
           body: JSON.stringify({
-            herd_ids: [herd.id],
+            herd_ids: [targetId],
             grupo_manejo_nombre: grupoNombre,
             action: 'group',
           }),
@@ -557,7 +557,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       }
 
       // 1. Descontar madres paridas del rodeo original (sigue siendo VACA_PRENADA)
-      const patchRes = await apiFetch(`/api/herds/${herd.id}`, {
+      const patchRes = await apiFetch(`/api/herds/${targetId}`, {
         method: 'PATCH',
         body: JSON.stringify({ head_count: newCount, total_ev: newEV }),
       })
@@ -569,11 +569,11 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           method: 'POST',
           body: JSON.stringify({
             name: paricionNombreNuevo.trim(),
-            species: herd.species || 'vacas',
-            categoria: herd.categoria || 'VACAS',
-            breed: herd.breed || null,
+            species: herd?.species || 'vacas',
+            categoria: herd?.categoria || 'VACAS',
+            breed: herd?.breed || null,
             head_count: criasVivas,
-            avg_weight_kg: herd.avg_weight_kg ?? null,
+            avg_weight_kg: herd?.avg_weight_kg ?? null,
             physiological_category: 'VACA_CON_TERNERO',
             total_ev: destinoEVActual,
             admission_date: paricionFecha && paricionFecha.length === 10 ? paricionFecha : null,
@@ -601,11 +601,11 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             method: 'POST',
             body: JSON.stringify({
               name: paricionVacasVaciasNombre.trim(),
-              species: herd.species || 'vacas',
-              categoria: herd.categoria || 'VACAS',
-              breed: herd.breed || null,
+              species: herd?.species || 'vacas',
+              categoria: herd?.categoria || 'VACAS',
+              breed: herd?.breed || null,
               head_count: bajasNacer,
-              avg_weight_kg: herd.avg_weight_kg ?? null,
+              avg_weight_kg: herd?.avg_weight_kg ?? null,
               physiological_category: 'VACA_VACIA',
               total_ev: vaciaEV,
               admission_date: paricionFecha && paricionFecha.length === 10 ? paricionFecha : null,
@@ -626,10 +626,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       await apiFetch('/api/farm-events', {
         method: 'POST',
         body: JSON.stringify({
-          title: `Parición: ${n} madres · ${herd.name}`,
+          title: `Parición: ${n} madres · ${herd?.name}`,
           event_type: 'paricion',
           event_date: paricionFecha,
-          herd_id: herd.id, herd_ids: [herd.id],
+          herd_id: targetId, herd_ids: [targetId],
           description: [
             `${n} madres paridas. Crías vivas: ${criasVivas}.`,
             bajasNacer > 0 ? `Bajas al nacer: ${bajasNacer} (→ Vaca vacía).` : null,
@@ -670,14 +670,14 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   }
 
   const handleActivity = async () => {
-    if (!actId || !actCount || !herd?.id) return
+    if (!actId || !actCount || !targetId) return
 
     // ── Destete en rodeo de vacas → lanzar Wizard asistido ──────────────────
     if (
       actId === 'destete' &&
-      (herd.physiological_category === 'VACA_CON_TERNERO' ||
-       herd.categoria === 'VACAS' ||
-       !herd.physiological_category)   // legacy: si no tiene categoría fisiológica y es destete, usar wizard
+      (liveHerd?.physiological_category === 'VACA_CON_TERNERO' ||
+       liveHerd?.categoria === 'VACAS' ||
+       !liveHerd?.physiological_category)   // legacy: si no tiene categoría fisiológica y es destete, usar wizard
     ) {
       setWeaningWizardOpen(true)
       return
@@ -688,8 +688,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     const isAdd = ACTIVITY_ADDS.has(actId)
 
     try {
-      const currentCount = herd.head_count || 0
-      const currentWeight = Number(herd.avg_weight_kg || weight || 400)
+      const currentCount = liveHerd?.head_count ?? 0
+      const currentWeight = Number(liveHerd?.avg_weight_kg ?? weight ?? 400)
       const newCount = isAdd ? currentCount + n : Math.max(currentCount - n, 0)
 
       // For additions (paricion/compra): recalculate weighted-average weight and add EV for new animals
@@ -701,7 +701,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         const totalKg = currentCount * currentWeight + n * newAnimalsWeight
         newWeight = newCount > 0 ? Math.round(totalKg / newCount) : newAnimalsWeight
         // EV = existing EV + EV of new animals at their weight
-        const existingEV = Number(herd.total_ev) || calculateBaseEV(catKey, currentWeight, currentCount)
+        const existingEV = Number(liveHerd?.total_ev) || calculateBaseEV(catKey, currentWeight, currentCount)
         const newAnimalsEV = calculateBaseEV(catKey, newAnimalsWeight, n)
         newEV = parseFloat((existingEV + newAnimalsEV).toFixed(2))
       } else {
@@ -711,67 +711,67 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       const patchPayload: Record<string, any> = { head_count: newCount, total_ev: newEV }
       if (isAdd && actWeight !== '' && Number(actWeight) > 0) patchPayload.avg_weight_kg = newWeight
 
-      if (await isOffline()) {
-        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
-        addToOfflineQueue({
-          type: 'herd_update',
-          data: { herd_id: herd.id, ...patchPayload },
-          timestamp: Date.now()
-        } as any)
-        
-        const evTitle = `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${herd.name}${
-          isAdd && actWeight !== '' ? ` · ${Number(actWeight)} kg/cab` : ''
-        }`
-        const evDesc = [
-          actNote || null,
-          isAdd && actWeight !== '' ? `Peso ingresado: ${Number(actWeight)} kg/cab · Peso promedio nuevo: ${newWeight} kg` : null,
-          `EV resultante: ${newEV.toFixed(0)}`,
-        ].filter(Boolean).join(' · ')
-        
-        addToOfflineQueue({
-          type: 'farm_event',
-          data: {
-            title: evTitle, event_type: actId, event_date: actDate,
-            herd_id: herd.id, herd_ids: [herd.id], description: evDesc || null, status: 'completado'
-          },
-          timestamp: Date.now() + 1
-        } as any)
+        if (await isOffline()) {
+          const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+          addToOfflineQueue({
+            type: 'herd_update',
+            data: { herd_id: targetId, ...patchPayload },
+            timestamp: Date.now()
+          } as any)
+          
+          const evTitle = `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${liveHerd?.name || herd?.name}${
+            isAdd && actWeight !== '' ? ` · ${Number(actWeight)} kg/cab` : ''
+          }`
+          const evDesc = [
+            actNote || null,
+            isAdd && actWeight !== '' ? `Peso ingresado: ${Number(actWeight)} kg/cab · Peso promedio nuevo: ${newWeight} kg` : null,
+            `EV resultante: ${newEV.toFixed(0)}`,
+          ].filter(Boolean).join(' · ')
+          
+          addToOfflineQueue({
+            type: 'farm_event',
+            data: {
+              title: evTitle, event_type: actId, event_date: actDate,
+              herd_id: targetId, herd_ids: [targetId], description: evDesc || null, status: 'completado'
+            },
+            timestamp: Date.now() + 1
+          } as any)
 
         setAgendaEvents(prev => [{
           id: `temp-${Date.now()}`,
           title: evTitle, event_type: actId, event_date: actDate,
-          herd_id: herd.id, herd_ids: [herd.id], description: evDesc || null, status: 'completado',
+          herd_id: targetId, herd_ids: [targetId], description: evDesc || null, status: 'completado',
         }, ...prev])
 
         import('sonner').then(({ toast }) => toast.success('Actividad guardada offline. Se sincronizará al conectar.'))
-      } else {
-        const patchRes = await apiFetch(`/api/herds/${herd.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(patchPayload),
-        })
-        if (!patchRes.ok) throw new Error('No se pudo actualizar el stock')
+        } else {
+          const patchRes = await apiFetch(`/api/herds/${targetId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(patchPayload),
+          })
+          if (!patchRes.ok) throw new Error('No se pudo actualizar el stock')
 
-        const evTitle = `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${herd.name}${
-          isAdd && actWeight !== '' ? ` · ${Number(actWeight)} kg/cab` : ''
-        }`
-        const evDesc = [
-          actNote || null,
-          isAdd && actWeight !== '' ? `Peso ingresado: ${Number(actWeight)} kg/cab · Peso promedio nuevo: ${newWeight} kg` : null,
-          `EV resultante: ${newEV.toFixed(0)}`,
-        ].filter(Boolean).join(' · ')
+          const evTitle = `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${liveHerd?.name || herd?.name}${
+            isAdd && actWeight !== '' ? ` · ${Number(actWeight)} kg/cab` : ''
+          }`
+          const evDesc = [
+            actNote || null,
+            isAdd && actWeight !== '' ? `Peso ingresado: ${Number(actWeight)} kg/cab · Peso promedio nuevo: ${newWeight} kg` : null,
+            `EV resultante: ${newEV.toFixed(0)}`,
+          ].filter(Boolean).join(' · ')
 
-        const evRes = await apiFetch('/api/farm-events', {
-          method: 'POST',
-          body: JSON.stringify({
-            title: evTitle,
-            event_type: actId,
-            event_date: actDate,
-            herd_id: herd.id, herd_ids: [herd.id],
-            description: evDesc || null,
-            status: 'completado',
-            source: 'rodeo',
-          }),
-        })
+          const evRes = await apiFetch('/api/farm-events', {
+            method: 'POST',
+            body: JSON.stringify({
+              title: evTitle,
+              event_type: actId,
+              event_date: actDate,
+              herd_id: targetId, herd_ids: [targetId],
+              description: evDesc || null,
+              status: 'completado',
+              source: 'rodeo',
+            }),
+          })
 
         // Update historial local immediately
         if (evRes.ok) {
@@ -782,8 +782,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             title: evTitle,
             event_type: actId,
             event_date: actDate,
-            herd_id: herd.id,
-            herd_ids: [herd.id],
+            herd_id: targetId,
+            herd_ids: [targetId],
             description: evDesc || null,
             status: 'completado',
           }, ...prev])
@@ -3085,7 +3085,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                   )}
                   <span className={`flex items-center justify-center gap-2 ${saving ? 'invisible' : ''}`}>
                     <Check className="w-4 h-4" />
-                    {isEditing ? 'Actualizar rodeo' : 'Crear rodeo'}
+                    {isEditing ? 'Guardar rodeo' : 'Crear rodeo'}
                   </span>
                 </button>
               )}

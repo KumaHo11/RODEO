@@ -244,7 +244,7 @@ function TabResumen({ orgName }: { orgName: string | null }) {
 
 // ── Tab: Potreros ─────────────────────────────────────────────────────────────
 
-function TabPotreros({ onSaveWeatherEvent, orgName }: { onSaveWeatherEvent: any; orgName: string | null }) {
+function TabPotreros({ onSaveWeatherEvent, orgName, events = [] }: { onSaveWeatherEvent: any; orgName: string | null; events?: any[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
@@ -260,6 +260,7 @@ function TabPotreros({ onSaveWeatherEvent, orgName }: { onSaveWeatherEvent: any;
         showGlobalSummary
         orgName={orgName}
         onSaveWeatherEvent={onSaveWeatherEvent}
+        events={events}
       />
     </div>
   )
@@ -654,7 +655,7 @@ export default function ClimaPage() {
 
         {/* Tab content */}
         {activeTab === 'resumen' && <TabResumen orgName={orgName} />}
-        {activeTab === 'potreros' && <TabPotreros onSaveWeatherEvent={createEvent} orgName={orgName} />}
+        {activeTab === 'potreros' && <TabPotreros onSaveWeatherEvent={createEvent} orgName={orgName} events={events} />}
         {activeTab === 'rodeos' && <TabRodeos />}
         {activeTab === 'historial' && (
           <section aria-label="Historial de registros">

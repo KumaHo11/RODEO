@@ -93,7 +93,8 @@ const LEVEL_CONFIG = {
 function buildReason(
   stressType: string | undefined,
   originalDays: number,
-  adjustedDays: number
+  adjustedDays: number,
+  thi?: number | null
 ): { title: string; body: string; action: string; factors: { label: string; desc: string; icon: React.ReactNode }[] } {
   const delta = originalDays - adjustedDays
 
@@ -124,7 +125,12 @@ function buildReason(
     default: `Las condiciones ambientales elevan el requerimiento efectivo del rodeo. El plan estimaba ${originalDays} días — ahora son ${adjustedDays}.`,
   }
 
-  const key = stressType ?? 'default'
+  let key = stressType ?? 'default'
+  if (key === 'auto' && thi != null) {
+    if (thi >= 72) key = 'heat'
+    else if (thi < 60) key = 'cold' // Roughly < 15C
+    else key = 'default'
+  }
   const title   = stressTitles[key]   ?? stressTitles.default
   const body    = stressBodies[key]   ?? stressBodies.default
   const factors = factorsByStress[key] ?? factorsByStress.default
@@ -157,11 +163,15 @@ function ClimateAlertDrawer({
 
   const cfg    = LEVEL_CONFIG[alertLevel]
   const delta  = originalDays - adjustedDays
-  const reason = buildReason(stressType, originalDays, adjustedDays)
-  const StressIcon = STRESS_ICONS[stressType ?? 'default'] ?? STRESS_ICONS.default
+  const thi = current ? parseFloat((current.tempC + 0.36 * (current.tempC - (100 - current.humidityPct) / 5) + 41.5).toFixed(1)) : null
+  const reason = buildReason(stressType, originalDays, adjustedDays, thi)
+  let resolvedStress = stressType ?? 'default'
+  if (resolvedStress === 'auto' && thi != null) {
+    resolvedStress = thi >= 72 ? 'heat' : (thi < 60 ? 'cold' : 'default')
+  }
+  const StressIcon = STRESS_ICONS[resolvedStress as keyof typeof STRESS_ICONS] ?? STRESS_ICONS.default
 
   const extraDailyDemand = dailyDemand && aAdj ? dailyDemand * (aAdj - 1.0) : 0
-  const thi = current ? parseFloat((current.tempC + 0.36 * (current.tempC - (100 - current.humidityPct) / 5) + 41.5).toFixed(1)) : null
 
   const handleApply = async () => {
     if (!onApply) return
@@ -405,8 +415,15 @@ export default function GanttClimateAlert({
   if (delta <= 0) return null // Sin cambio → no mostrar
 
   const cfg    = LEVEL_CONFIG[alertLevel]
-  const reason = buildReason(stressType, originalDays, adjustedDays)
-  const StressIcon = STRESS_ICONS[stressType ?? 'default'] ?? STRESS_ICONS.default
+  const { current } = useWeather()
+  const thi = current ? parseFloat((current.tempC + 0.36 * (current.tempC - (100 - current.humidityPct) / 5) + 41.5).toFixed(1)) : null
+  const reason = buildReason(stressType, originalDays, adjustedDays, thi)
+  
+  let resolvedStress = stressType ?? 'default'
+  if (resolvedStress === 'auto' && thi != null) {
+    resolvedStress = thi >= 72 ? 'heat' : (thi < 60 ? 'cold' : 'default')
+  }
+  const StressIcon = STRESS_ICONS[resolvedStress as keyof typeof STRESS_ICONS] ?? STRESS_ICONS.default
 
   const handleDismiss = () => {
     setDismissed(true)

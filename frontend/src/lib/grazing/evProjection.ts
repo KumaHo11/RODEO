@@ -308,8 +308,8 @@ export function calculateDynamicHeadcount(
     )
     eventsBetween.forEach(e => {
       const q = Number(e.quantity || 0)
-      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count += q
-      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count -= q
+      if (['ajuste_salida'].includes(e.event_type)) count += q
+      if (['ajuste_entrada'].includes(e.event_type)) count -= q
     })
   } else if (dateStr > today) {
     // Futuro: aplicar movimientos programados desde hoy hasta dateStr
@@ -318,8 +318,8 @@ export function calculateDynamicHeadcount(
     )
     eventsBetween.forEach(e => {
       const q = Number(e.quantity || 0)
-      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count -= q
-      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count += q
+      if (['ajuste_salida'].includes(e.event_type)) count -= q
+      if (['ajuste_entrada'].includes(e.event_type)) count += q
     })
   }
 
