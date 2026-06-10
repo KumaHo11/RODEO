@@ -19,6 +19,7 @@ import { DashboardMetricsBar, DashboardMetricsData } from '@/design-system/molec
 import OnboardingTour from '@/components/OnboardingTour'
 import SeasonPlanModal from './SeasonPlanModal'
 import PlanBlockModal from './PlanBlockModal'
+import ContinuePlanModal from './ContinuePlanModal'
 import dynamic from 'next/dynamic'
 const ExcelImporter = dynamic(() => import('./ExcelImporter'), { ssr: false })
 import RawDataModal from './RawDataModal'
@@ -360,7 +361,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   }
   const [showBioMilestonesPanel, setShowBioMilestonesPanel] = useState(false)
   /** Muestra el selector de rodeos antes de activar el modo dibujo */
-  const [showHerdSelector, setShowHerdSelector] = useState(false)
+  const [showContinuePlanModal, setShowContinuePlanModal] = useState(false)
   /** Mini-popover de confirmación rápida post-dibujo */
   const [quickConfirm, setQuickConfirm] = useState<{
     paddockId: string
@@ -386,7 +387,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [showGanttModeDropdown, setShowGanttModeDropdown] = useState(false)
   // Ordered paddock IDs from the last generated suggested plan (for Gantt row sorting)
   const [suggestedPaddockOrder, setSuggestedPaddockOrder] = useState<string[]>([])
-  // Active season plan filter — null = show all plans (current/live mode)
   const [activeSeasonPlanId, setActiveSeasonPlanId] = useState<string | null>(null)
   const [showSeasonPlanSelector, setShowSeasonPlanSelector] = useState(false)
   const [seasonPlans, setSeasonPlans] = useState<any[]>([])
@@ -395,6 +395,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [ganttPeriod, setGanttPeriod] = useState<'trimestral' | 'semestral' | 'anual' | 'cerrada' | 'abierta'>('trimestral')
   const [seasonalFilters, setSeasonalFilters] = useState<string[]>(['abierta', 'cerrada'])
 
+  // Auto-set activeSeasonPlanId to show plan name by default
+  useEffect(() => {
+    if (viewMode === 'gantt' && !activeSeasonPlanId && seasonPlans.length > 0) {
+      if (activeGanttTab === 'manual') {
+        const recent = seasonPlans.find(sp => sp.source !== 'suggested' && sp.status !== 'COMPLETED')
+        if (recent) setActiveSeasonPlanId(recent.id)
+      } else {
+        const recent = seasonPlans.find(sp => sp.source === 'suggested' && sp.status !== 'COMPLETED')
+        if (recent) setActiveSeasonPlanId(recent.id)
+      }
+    }
+  }, [viewMode, activeGanttTab, activeSeasonPlanId, seasonPlans])
 
   const PERIODS: Record<string, number> = { trimestral: 84, semestral: 180, anual: 365, cerrada: 213, abierta: 212 }
   
@@ -1455,25 +1467,26 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       }
 
       // Isolate the view for a specific season plan when viewed from History
-      let matchSeasonPlan = true
-      if (viewMode === 'gantt' && activeSeasonPlanId) {
-        matchSeasonPlan = p.ai_analysis?.season_plan_id === activeSeasonPlanId || p.season_plan_id === activeSeasonPlanId
-      }
-
-      return matchSearch && matchStatus && matchTab && matchSeasonPlan
+      // ── MODO GANTT: NO FILTRAR POR SEASON PLAN PARA QUE SE VEAN TODOS LOS AÑOS ──
+      // Eliminamos el filtrado de matchSeasonPlan para que siempre se vean todas las temporadas.
+      // El activeSeasonPlanId ahora solo se usa para pre-cargar datos de planificación,
+      // y para mostrar el nombre del plan en curso.
+      return matchSearch && matchStatus && matchTab
     }),
     [plans, search, filterStatus, viewMode, activeGanttTab, historyTab, activeSeasonPlanId]
   )
 
-  let dynamicWindowDays = PERIODS[ganttPeriod] ?? 365
+  let dynamicWindowDays = (PERIODS[ganttPeriod] ?? 365) + 215
 
   const activeSeasonPlan = seasonPlans.find(sp => sp.id === activeSeasonPlanId)
   if (viewMode === 'gantt' && activeSeasonPlan?.start_date && activeSeasonPlan?.end_date) {
     const s = new Date(activeSeasonPlan.start_date + 'T00:00:00').getTime()
     const e = new Date(activeSeasonPlan.end_date + 'T00:00:00').getTime()
     const diff = Math.ceil((e - s) / 86400000)
-    if (diff > 0) dynamicWindowDays = diff + 14
-  } else if (viewMode === 'gantt' && typeof filteredPlans !== 'undefined' && filteredPlans.length > 0) {
+    if (diff > 0) dynamicWindowDays = Math.max(dynamicWindowDays, diff + 215)
+  }
+  
+  if (viewMode === 'gantt' && typeof filteredPlans !== 'undefined' && filteredPlans.length > 0) {
     const startObj = new Date(ganttWindow + 'T00:00:00')
     let maxDate = startObj.getTime() + dynamicWindowDays * 24 * 60 * 60 * 1000
 
@@ -1489,7 +1502,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
     const diffDays = Math.ceil((maxDate - startObj.getTime()) / (24 * 60 * 60 * 1000))
     if (diffDays > dynamicWindowDays) {
-      dynamicWindowDays = Math.min(diffDays + 14, 1095) // Max 3 years
+      dynamicWindowDays = Math.min(diffDays + 215, 2190) // Max 6 years to allow 2027+ comfortably
     }
   }
 
@@ -1772,6 +1785,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
   // ── Season Plan Modal state ────────────────────────────────────────────────
   const [showSeasonPlan, setShowSeasonPlan] = useState(false)
+  const [seasonPlanToEdit, setSeasonPlanToEdit] = useState<any>(null)
   const [showExcelImporter, setShowExcelImporter] = useState(false)
 
   // ── Paddock toggle (enable/disable) desde el Gantt ──
@@ -1969,9 +1983,12 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             </button>
             {/* Show the active plan name directly below the title, as requested */}
             {activeSeasonPlanId && viewMode === 'gantt' && (
-              <p className="text-sm font-bold text-gray-500 mt-2 px-2">
-                {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan Forrajero'}
-              </p>
+              <div className="mt-2 flex items-center gap-1.5 px-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Nombre del plan:</span>
+                <span className="text-sm font-bold text-gray-800 bg-gray-100/80 px-2 py-0.5 rounded-md">
+                  {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan Forrajero'}
+                </span>
+              </div>
             )}
 
             {showGanttModeDropdown && (
@@ -2069,8 +2086,15 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       try {
                         await apiFetch('/api/grazing-plans/bulk-delete?status=PLANNED&plan_type=suggested', { method: 'DELETE' })
                         setPlans(prev => prev.filter(p => !(p.status === 'PLANNED' && (p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested'))))
+                        setActiveSeasonPlanId(null)
                       } catch { /* continua aunque falle */ }
                       setSaving(false)
+                    } else {
+                      // Misma hoja: pre-cargar los datos del último plan sugerido
+                      const recentSuggested = seasonPlans.find(sp => sp.source === 'suggested' && sp.status !== 'COMPLETED')
+                      if (recentSuggested) {
+                        setSeasonPlanToEdit(recentSuggested)
+                      }
                     }
                   }
                   setShowSeasonPlan(true)
@@ -2078,20 +2102,24 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   // Manual Mode
                   const recentManualPlans = seasonPlans.filter(sp => sp.source !== 'suggested' && sp.status !== 'COMPLETED')
                   
-                  if (recentManualPlans.length > 0 && activeSeasonPlanId) {
+                  if (recentManualPlans.length > 0) {
+                    const planIdToContinue = activeSeasonPlanId || recentManualPlans[0].id
+                    const planName = seasonPlans.find(p => p.id === planIdToContinue)?.name || 'Plan Forrajero'
                     const isNew = await confirm({
                       title: '¿Continuar plan o empezar uno nuevo?',
-                      description: 'Si empezás uno nuevo, tu trabajo actual quedará guardado en el Historial y podrás retomarlo cuando quieras.',
+                      description: `Tenés un plan en curso: ${planName}. ¿Querés continuar agregando trazados a este plan o preferís empezar uno desde cero?`,
                       confirmLabel: 'Nuevo plan',
                       cancelLabel: 'Continuar actual',
                       variant: 'primary',
                     })
                     if (isNew) {
                       setActiveSeasonPlanId(null)
+                      setViewMode('gantt')
                       setShowSeasonPlan(true)
                     } else {
-                      // Ya tiene activeSeasonPlanId, simplemente nos aseguramos de estar en la vista Gantt para que pueda seguir dibujando.
+                      setActiveSeasonPlanId(planIdToContinue)
                       setViewMode('gantt')
+                      setShowContinuePlanModal(true)
                     }
                   } else {
                     setShowSeasonPlan(true)
@@ -2146,7 +2174,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             <p className="text-[9px] text-gray-400 font-medium">Arrastrá en el calendario para trazar · ESC para salir</p>
           </div>
           <button
-            onClick={() => setShowHerdSelector(true)}
+            onClick={() => setShowContinuePlanModal(true)}
             className="px-2.5 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-bold transition-colors whitespace-nowrap shrink-0"
           >
             Cambiar rodeos
@@ -3688,158 +3716,28 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         document.body
       )}
 
-      {/* ─── HERD SELECTOR PANEL ─────────────────────────────────────────── */}
-      {showHerdSelector && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-200">
-            {/* Header */}
-            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[9px] font-black uppercase tracking-[0.15em] text-green-600">Modo Dibujo</p>
-                  <h3 className="text-base font-black text-gray-950 mt-0.5">Seleccioná los rodeos</h3>
-                </div>
-                <button
-                  onClick={() => setShowHerdSelector(false)}
-                  className="w-7 h-7 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 text-xs font-bold transition-colors"
-                >×</button>
-              </div>
-              <p className="text-[11px] text-gray-500 mt-1">Estos rodeos se asignarán a cada bloque que traces.</p>
-            </div>
-
-            {/* Rodeos */}
-            <div className="px-6 py-4">
-              <div className="flex flex-wrap gap-2">
-                {herds.map((h: any) => {
-                  const sel = drawingHerdIds.includes(h.id)
-                  // Ración sugerida para este rodeo: EV × dailyAllocationKg
-                  const hEv = Number(h.total_ev || 0)
-                  const hRacionKg = hEv > 0 ? (hEv * dailyAllocationKg).toFixed(0) : null
-                  return (
-                    <button
-                      key={h.id}
-                      onClick={() => setDrawingHerdIds(prev =>
-                        sel ? prev.filter(id => id !== h.id) : [...prev, h.id]
-                      )}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-[12px] font-bold transition-all ${
-                        sel
-                          ? 'bg-green-600 border-green-600 text-white shadow-sm'
-                          : 'bg-white border-gray-200 text-gray-700 hover:border-green-300 hover:text-green-700'
-                      }`}
-                    >
-                      <span className={`w-2 h-2 rounded-full ${ sel ? 'bg-white' : 'bg-gray-300' }`} />
-                      <span>{h.name}</span>
-                      <span className="text-[10px] opacity-70">{hEv.toFixed(1)} EV</span>
-                      {sel && hRacionKg && (
-                        <span className="text-[9px] bg-white/20 rounded px-1 ml-0.5">{hRacionKg} kg/d</span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-              {herds.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">No hay rodeos configurados aún.</p>
-              )}
-            </div>
-
-            {/* Parámetros de planificación */}
-            <div className="px-6 pb-4 border-t border-gray-100 pt-4 space-y-3">
-              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Parámetros del plan</p>
-              <div className="grid grid-cols-2 gap-3">
-                {/* Ración diaria */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-600">Ración diaria</label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      step={0.5}
-                      min={6}
-                      max={25}
-                      value={rawDailyAlloc}
-                      onChange={e => {
-                        setRawDailyAlloc(e.target.value)
-                        const n = parseFloat(e.target.value)
-                        if (!isNaN(n) && n > 0) setDailyAllocationKg(n)
-                      }}
-                      onBlur={() => {
-                        const n = parseFloat(rawDailyAlloc)
-                        if (isNaN(n) || n <= 0) setRawDailyAlloc(String(dailyAllocationKg))
-                      }}
-                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-1 focus:ring-green-500 outline-none"
-                    />
-                    <span className="text-[9px] text-gray-400 whitespace-nowrap">kg MS/EV/d</span>
-                  </div>
-                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded inline-flex ${
-                    dailyAllocationKg <= 11 ? 'bg-red-50 text-red-600'
-                    : dailyAllocationKg <= 13 ? 'bg-green-100 text-green-700'
-                    : 'bg-blue-50 text-blue-600'
-                  }`}>
-                    {dailyAllocationKg <= 11 ? 'Déficit' : dailyAllocationKg <= 13 ? 'Normal' : 'Abundante'}
-                  </span>
-                </div>
-
-                {/* Remanente objetivo */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-600">Remanente objetivo</label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      step={50}
-                      min={0}
-                      value={rawTargetRemnant}
-                      onChange={e => {
-                        setRawTargetRemnant(e.target.value)
-                        const n = parseFloat(e.target.value)
-                        if (!isNaN(n) && n >= 0) setTargetRemnant(n)
-                      }}
-                      onBlur={() => {
-                        const n = parseFloat(rawTargetRemnant)
-                        if (isNaN(n) || n < 0) setRawTargetRemnant(String(targetRemnant))
-                      }}
-                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-1 focus:ring-green-500 outline-none"
-                    />
-                    <span className="text-[9px] text-gray-400 whitespace-nowrap">kg MS/ha</span>
-                  </div>
-                  <span className="text-[9px] text-gray-400">Pasto que queda al salir</span>
-                </div>
-              </div>
-
-              {/* Resumen: EV total seleccionado y ración total */}
-              {drawingHerdIds.length > 0 && (() => {
-                const selEV = herds
-                  .filter((h: any) => drawingHerdIds.includes(h.id))
-                  .reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
-                const totalRacionKg = (selEV * dailyAllocationKg).toFixed(0)
-                return (
-                  <div className="bg-green-50 border border-green-100 rounded-xl px-3 py-2 text-[10px] text-green-700 font-bold flex items-center justify-between">
-                    <span>EV total: <strong>{selEV.toFixed(1)}</strong></span>
-                    <span className="text-gray-300">·</span>
-                    <span>Consumo/día: <strong>{totalRacionKg} kg MS</strong></span>
-                  </div>
-                )
-              })()}
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 pb-6 flex items-center gap-3">
-              <button
-                onClick={() => setShowHerdSelector(false)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-              >Cancelar</button>
-              <button
-                onClick={() => {
-                  setShowHerdSelector(false)
-                  setDrawingMode(true)
-                }}
-                disabled={herds.length === 0 || drawingHerdIds.length === 0}
-                className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-black transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                ✏ Comenzar a trazar
-              </button>
-            </div>
-          </div>
-        </div>
-      , document.body)}
+      {/* ─── CONTINUE PLAN MODAL ─────────────────────────────────────────── */}
+      {showContinuePlanModal && typeof document !== 'undefined' && (() => {
+        const planToPass = activeSeasonPlanId ? seasonPlans.find(sp => sp.id === activeSeasonPlanId) : null
+        if (!planToPass) return null
+        return (
+          <ContinuePlanModal
+            plan={planToPass}
+            herds={herds}
+            initialHerdIds={drawingHerdIds}
+            initialDailyAllocationKg={dailyAllocationKg}
+            initialTargetRemnant={targetRemnant}
+            onClose={() => setShowContinuePlanModal(false)}
+            onContinue={(hIds, dAlloc, tRem) => {
+              setDrawingHerdIds(hIds)
+              setDailyAllocationKg(dAlloc)
+              setTargetRemnant(tRem)
+              setShowContinuePlanModal(false)
+              setDrawingMode(true)
+            }}
+          />
+        )
+      })()}
 
       {/* ─── ALERTA: Riesgo de Sobrepastoreo ─────────────────────────────── */}
       {overgrazingRisk && (
@@ -4157,11 +4055,16 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         className={showSeasonPlan ? '' : 'hidden'}
           paddocks={paddocks}
           herds={herds}
+          existingPlan={seasonPlanToEdit}
           isSuggestedMode={activeGanttTab === 'suggested'}
           bioMilestones={bioMilestones}
-          onClose={() => setShowSeasonPlan(false)}
+          onClose={() => {
+            setShowSeasonPlan(false)
+            setSeasonPlanToEdit(null)
+          }}
           onSaved={(seasonPlan) => {
             setShowSeasonPlan(false)
+            setSeasonPlanToEdit(null)
             setSeasonPlans(prev => {
               // Evitar duplicados si el plan ya existe
               const exists = prev.some(sp => sp.id === seasonPlan.id)

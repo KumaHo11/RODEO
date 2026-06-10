@@ -164,7 +164,11 @@ export default function MiCampoPage() {
       }
 
       // Construir indicadores de pastoreo activo para el mapa
-      const today = new Date().toISOString().split('T')[0]
+      // Asegurar que today sea en la zona horaria local, no UTC (para evitar que a la noche cambie de día)
+      const now = new Date()
+      const offset = now.getTimezoneOffset()
+      const localDate = new Date(now.getTime() - (offset * 60 * 1000))
+      const today = localDate.toISOString().split('T')[0]
       console.log('[mapa] all plans statuses:', plansData.map((p: any) => ({ id: p.id, status: p.status, paddock_id: p.paddock_id, entry: p.entry_date, exit: p.exit_date })))
       const activePlans = plansData
         .filter((p: any) => {

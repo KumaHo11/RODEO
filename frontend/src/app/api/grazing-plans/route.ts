@@ -7,7 +7,7 @@ import { requireAuth } from '@/lib/auth'
 import { query, mutate } from '@/lib/db'
 import { syncGrazingPlanToAgenda } from '@/lib/syncService'
 
-
+export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth(req)

@@ -428,7 +428,7 @@ export default function PaddockSidePanel({
                 const realGrowthRate = climateSnap ? Number(climateSnap.grass_growth_rate) : (paddock.dry_matter_kg_ha ? Number(paddock.dry_matter_kg_ha) * 0.012 : undefined)
                 // Derive GRAZING status from herds currently assigned to this paddock
                 const hasActiveHerd = herds.some((h: any) => h.current_paddock_id === paddock.id)
-                const activePlanForPaddock = activeGrazingPlans.find((ap: any) => ap.paddock_id === paddock.id)
+                const activePlanForPaddock = activeGrazingPlans.find((ap: any) => String(ap.paddock_id) === String(paddock.id))
                 const isGrazing = hasActiveHerd || paddock.current_status === 'GRAZING' || !!activePlanForPaddock
 
                 return (

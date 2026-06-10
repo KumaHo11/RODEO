@@ -219,14 +219,23 @@ function PlanModal({ plan, onClose, onSave }: {
                     <Toggle value={!!flag.flag_value} onChange={v => updateFlag(i, v)} size="sm" />
                   ) : (
                     <div className="flex items-center gap-2">
-                      {flag.flag_value === -1 && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">Ilimitado</span>}
-                      <input type="number" value={flag.flag_value}
-                        onChange={e => {
-                          const valStr = e.target.value;
-                          const parsed = parseFloat(valStr);
-                          updateFlag(i, isNaN(parsed) ? (valStr === '-' ? '-' : 0) : parsed);
-                        }}
-                        className="w-20 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-center text-gray-900 focus:outline-none focus:border-green-500" />
+                      <select 
+                        value={flag.flag_value === -1 ? '-1' : 'custom'}
+                        onChange={e => updateFlag(i, e.target.value === '-1' ? -1 : (flag.flag_value === -1 ? 0 : flag.flag_value))}
+                        className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:border-green-500 transition-colors cursor-pointer"
+                      >
+                        <option value="custom">Con límite</option>
+                        <option value="-1">Ilimitado</option>
+                      </select>
+                      {flag.flag_value !== -1 && (
+                        <input type="number" value={flag.flag_value}
+                          onChange={e => {
+                            const valStr = e.target.value;
+                            const parsed = parseFloat(valStr);
+                            updateFlag(i, isNaN(parsed) ? (valStr === '-' ? '-' : 0) : parsed);
+                          }}
+                          className="w-20 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-center text-gray-900 focus:outline-none focus:border-green-500" />
+                      )}
                     </div>
                   )}
                 </div>
@@ -295,16 +304,25 @@ function FlagRow({ flag, planId, onUpdate }: {
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          {flag.flag_value === -1 && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">Ilimitado</span>}
-          <input
-            type="number"
-            defaultValue={flag.flag_value}
-            onBlur={e => {
-              const v = parseFloat(e.target.value)
-              if (!isNaN(v) && v !== flag.flag_value) handleToggle(v)
-            }}
-            className="w-20 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-center text-gray-900 focus:outline-none focus:border-green-500"
-          />
+          <select 
+            value={flag.flag_value === -1 ? '-1' : 'custom'}
+            onChange={e => handleToggle(e.target.value === '-1' ? -1 : (flag.flag_value === -1 ? 0 : flag.flag_value))}
+            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:border-green-500 transition-colors cursor-pointer"
+          >
+            <option value="custom">Con límite</option>
+            <option value="-1">Ilimitado</option>
+          </select>
+          {flag.flag_value !== -1 && (
+            <input
+              type="number"
+              defaultValue={flag.flag_value}
+              onBlur={e => {
+                const v = parseFloat(e.target.value)
+                if (!isNaN(v) && v !== flag.flag_value) handleToggle(v)
+              }}
+              className="w-20 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-center text-gray-900 focus:outline-none focus:border-green-500"
+            />
+          )}
           {saving && <span className="w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />}
         </div>
       )}

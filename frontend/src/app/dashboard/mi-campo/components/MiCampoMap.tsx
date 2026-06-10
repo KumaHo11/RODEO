@@ -390,7 +390,7 @@ function MapController({
     if (activeGrazingPlans.length === 0) return
 
     activeGrazingPlans.forEach(plan => {
-      const paddock = paddocks.find(p => p.id === plan.paddock_id)
+      const paddock = paddocks.find(p => String(p.id) === String(plan.paddock_id))
       if (!paddock?.boundary) return
       let geojson = paddock.boundary
       if (typeof geojson === 'string') {

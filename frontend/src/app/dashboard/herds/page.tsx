@@ -743,9 +743,9 @@ export default function HerdsPage() {
               <Plus className="w-4 h-4 shrink-0" /> Nuevo rodeo
             </button>
           ) : (
-            <button onClick={() => toast.info(`Límite: Tu plan permite hasta ${maxHerds} rodeos.`)}
+            <button onClick={() => toast.info(`Límite: Tu plan permite hasta ${maxHerds === Infinity ? 'ilimitados' : maxHerds} rodeos.`)}
               className="flex items-center gap-2 bg-gray-100 text-gray-400 px-4 py-2.5 rounded-xl font-bold text-sm border border-gray-200 cursor-not-allowed whitespace-nowrap shrink-0">
-              <Lock className="w-3.5 h-3.5" /> {maxHerds}/{maxHerds}
+              <Lock className="w-3.5 h-3.5" /> {maxHerds === Infinity ? 'Ilimitado' : `${maxHerds}/${maxHerds}`}
             </button>
           )}
         </div>

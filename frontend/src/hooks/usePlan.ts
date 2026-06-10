@@ -131,18 +131,31 @@ export function usePlan() {
 
   // Límites numéricos del plan
   const getLimit = (key: 'max_paddocks' | 'max_herds' | 'max_team_members'): number => {
+    let limit = 5
     if (profile?.plan_feature_flags && Array.isArray(profile.plan_feature_flags)) {
       const flag = (profile.plan_feature_flags as any[]).find(f => f.flag_key === key)
-      if (flag) return Number(flag.flag_value)
+      if (flag) {
+        limit = Number(flag.flag_value)
+      } else {
+        const limits: Record<PlanType, Record<string, number>> = {
+          BROTE:        { max_paddocks: 5,    max_herds: 1, max_team_members: 1 },
+          PLANIFICADOR: { max_paddocks: 20,   max_herds: 3, max_team_members: 3 },
+          HOLISTICO:    { max_paddocks: 100,  max_herds: 10, max_team_members: 10 },
+          LATIFUNDIO:   { max_paddocks: 9999, max_herds: 9999, max_team_members: 9999 },
+        }
+        limit = limits[currentPlan][key] ?? 5
+      }
+    } else {
+      // Fallback por plan
+      const limits: Record<PlanType, Record<string, number>> = {
+        BROTE:        { max_paddocks: 5,    max_herds: 1, max_team_members: 1 },
+        PLANIFICADOR: { max_paddocks: 20,   max_herds: 3, max_team_members: 3 },
+        HOLISTICO:    { max_paddocks: 100,  max_herds: 10, max_team_members: 10 },
+        LATIFUNDIO:   { max_paddocks: 9999, max_herds: 9999, max_team_members: 9999 },
+      }
+      limit = limits[currentPlan][key] ?? 5
     }
-    // Fallback por plan
-    const limits: Record<PlanType, Record<string, number>> = {
-      BROTE:        { max_paddocks: 5,    max_herds: 1, max_team_members: 1 },
-      PLANIFICADOR: { max_paddocks: 20,   max_herds: 3, max_team_members: 3 },
-      HOLISTICO:    { max_paddocks: 100,  max_herds: 10, max_team_members: 10 },
-      LATIFUNDIO:   { max_paddocks: 9999, max_herds: 9999, max_team_members: 9999 },
-    }
-    return limits[currentPlan][key] ?? 5
+    return (limit === -1 || limit >= 9000) ? Infinity : limit
   }
 
   return {

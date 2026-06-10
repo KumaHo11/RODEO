@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Check, Loader2, Zap, HelpCircle } from 'lucide-react'
+import { apiFetch } from '@/lib/apiFetch'
 
 const LABEL = "text-sm font-black text-gray-950"
 
@@ -105,13 +106,8 @@ export default function PlanBlockModal({
         target_remnant_kg_ha: targetRemnant,
       }
       
-      const token = localStorage.getItem('access_token')
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/plans/${plan.id}`, {
+      const res = await apiFetch(`/api/grazing-plans/${plan.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify(payload)
       })
       
@@ -244,7 +240,7 @@ export default function PlanBlockModal({
             disabled={saving || selectedHerdIds.length === 0}
             className="w-full flex justify-center items-center gap-2 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-black transition-all disabled:opacity-50"
           >
-            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</> : 'Guardar potrero'}
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</> : 'Ajustar plan'}
           </button>
         </div>
       </div>

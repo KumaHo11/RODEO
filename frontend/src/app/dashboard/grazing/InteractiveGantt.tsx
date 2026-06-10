@@ -699,7 +699,24 @@ function InteractiveGantt({
     // Use scrollWidth for ppd to match block positioning (blocks use % of full inner width)
     const ppd = getActualPpd()
     const xRel = e.clientX - rect.left - LABEL_W + containerRef.current.scrollLeft
-    const dayIdx = Math.max(0, Math.min(windowDays - 1, Math.floor(xRel / ppd)))
+    let dayIdx = Math.max(0, Math.min(windowDays - 1, Math.floor(xRel / ppd)))
+
+    // --- Snapping logic: Snap to 'Siguiente' line if close ---
+    let maxDate = ''
+    const activePlanBlocks = plans.filter(p => p.status !== 'DELETED')
+    for (const p of activePlanBlocks) {
+      const exit = p.exit_date || p.estimated_exit_date || addDays(p.entry_date, p.planned_recovery_days || 14)
+      if (!maxDate || exit > maxDate) maxDate = exit
+    }
+    if (maxDate) {
+      const nextAvailableDate = addDays(maxDate, 1)
+      const nextDiff = daysBetween(windowStart, nextAvailableDate)
+      // Snap if within 7 days (about 1 week tolerance)
+      if (nextDiff >= 0 && Math.abs(dayIdx - nextDiff) <= 7) {
+        dayIdx = nextDiff
+      }
+    }
+    // ---------------------------------------------------------
 
     // Compute optimal days for this paddock using holistic engine
     const paddock = paddocks.find((p: any) => p.id === paddockId)
@@ -906,31 +923,7 @@ function InteractiveGantt({
       onClick={() => { setSelectedEvent(null); setPopupPos(null) }}
     >
       <div className="w-full relative" style={{ minWidth: Math.max(1000, windowDays * 6 + LABEL_W) }}>
-        {(() => {
-          if (!activeSeasonPlan) return null
-          const planBlocks = plans.filter(p => p.season_plan_id === activeSeasonPlan.id && p.status !== 'DELETED')
-          if (planBlocks.length === 0) return null
-          let maxExitStr = ''
-          for (const p of planBlocks) {
-            const exit = p.exit_date || p.estimated_exit_date || addDays(p.entry_date, 14)
-            if (!maxExitStr || exit > maxExitStr) maxExitStr = exit
-          }
-          if (!maxExitStr) return null
-          
-          const exitDiff = daysBetween(windowStart, maxExitStr)
-          if (exitDiff >= 0 && exitDiff <= windowDays) {
-            return (
-              <div
-                className="absolute top-0 bottom-0 z-20 pointer-events-none"
-                style={{ left: `calc(${LABEL_W}px + ${(exitDiff / windowDays) * 100} * (100% - ${LABEL_W}px) / 100)` }}
-              >
-                <div className="h-full w-px" style={{ borderLeft: '2px dashed rgba(168,85,247,0.7)' }} />
-                <div className="absolute top-[80px] -left-12 bg-purple-600 text-white text-[9px] font-bold px-2 py-1 rounded shadow-sm">Continúa acá</div>
-              </div>
-            )
-          }
-          return null
-        })()}
+        {/* LÍNEA GUÍA DE CONTINUIDAD REMOVIDA PARA USAR SOLO LA DE POTREROS */}
 
         {/* Header row */}
         <div className="flex flex-col border-b border-gray-200 bg-gray-50 sticky top-0 z-30">
@@ -1026,48 +1019,61 @@ function InteractiveGantt({
         </svg>
 
         {/* Paddock rows — sorted by suggestedPaddockOrder when in suggested mode */}
-        {orderedPaddocks.map((paddock, rowIdx) => {
-          const paddockPlans = plans.filter(p => p.paddock_id === paddock.id)
-          // Dot: green if enabled (is_active) AND has MS declared, gray if disabled or no MS
-          const hasMS = Number(paddock.dry_matter_kg_ha) > 0
-          const isEnabled = paddock.is_active !== false && hasMS
-          // Data from Datos de Campo slider (quality_score = 1-10)
-          const qualityScore = paddock.technical_data?.quality_score as number | undefined
-          const msHa = Number(paddock.dry_matter_kg_ha) || 0
-          const areaHa = Number(paddock.area_ha) || 0
+        {(() => {
+          let maxDate = ''
+          for (const p of plans) {
+            if (p.status === 'DELETED') continue
+            const exit = p.exit_date || addDays(p.entry_date, p.planned_recovery_days || 14)
+            if (exit > maxDate) maxDate = exit
+          }
+          const nextAvailableDate = maxDate ? addDays(maxDate, 1) : null
+          const nextDiff = nextAvailableDate ? daysBetween(windowStart, nextAvailableDate) : -1
+          const showNextLine = isDrawingMode && nextDiff >= 0 && nextDiff <= windowDays
 
-          // Quality color
-          const qColor = qualityScore
-            ? qualityScore >= 7 ? 'text-green-700' : qualityScore >= 4 ? 'text-amber-600' : 'text-red-600'
-            : 'text-gray-300'
-
-          // ── Métricas Holísticas ──────────────────────────
-          // DAH Estimado: (MS - remanente) × ha / (EV_total × kg/día)
-          const totalEV = herds.reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
-          const usableMs = calculateUsableForage(msHa, targetRemnant, areaHa)
-          const dailyDemand = totalEV * dailyAllocationKg
-          const estimatedDah = calculateGrazingDays(usableMs, dailyDemand) || null
-          // Yield Coefficient: MS potrero / promedio MS módulo
-          // moduleMsHaAvg se calcula una sola vez via useMemo — no inline aquí
-          const yieldCoef = moduleMsHaAvg > 0 && msHa > 0 ? (msHa / moduleMsHaAvg) : null
+          const activePaddocks = orderedPaddocks.filter(p => p.is_active !== false && Number(p.dry_matter_kg_ha) > 0)
+          const inactivePaddocks = orderedPaddocks.filter(p => !(p.is_active !== false && Number(p.dry_matter_kg_ha) > 0))
 
           return (
-            <div
-              key={paddock.id}
-              className={`flex border-b border-gray-100 ${!isEnabled ? 'bg-gray-100/60' : rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}
-              style={{ 
-                height: ROW_H,
-                backgroundImage: !isEnabled ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)' : undefined 
-              }}
-            >
-              {/* Label — datos del potrero */}
-              <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`px-3 py-2 flex items-center gap-2 border-r border-gray-100 shrink-0 sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${!isEnabled ? 'bg-gray-100' : rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}>
+            <>
+            {activePaddocks.map((paddock, rowIdx) => {
+              const paddockPlans = plans.filter(p => p.paddock_id === paddock.id && p.status !== 'DELETED')
+              // Dot: green if enabled (is_active) AND has MS declared, gray if disabled or no MS
+              const hasMS = true
+              const isEnabled = true
+              // Data from Datos de Campo slider (quality_score = 1-10)
+              const qualityScore = paddock.technical_data?.quality_score as number | undefined
+              const msHa = Number(paddock.dry_matter_kg_ha) || 0
+              const areaHa = Number(paddock.area_ha) || 0
+
+              // Quality color
+              const qColor = qualityScore
+                ? qualityScore >= 7 ? 'text-green-700' : qualityScore >= 4 ? 'text-amber-600' : 'text-red-600'
+                : 'text-gray-300'
+
+              // ── Métricas Holísticas ──────────────────────────
+              // DAH Estimado: (MS - remanente) × ha / (EV_total × kg/día)
+              const totalEV = herds.reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
+              const usableMs = calculateUsableForage(msHa, targetRemnant, areaHa)
+              const dailyDemand = totalEV * dailyAllocationKg
+              const estimatedDah = calculateGrazingDays(usableMs, dailyDemand) || null
+              // Yield Coefficient: MS potrero / promedio MS módulo
+              // moduleMsHaAvg se calcula una sola vez via useMemo — no inline aquí
+              const yieldCoef = moduleMsHaAvg > 0 && msHa > 0 ? (msHa / moduleMsHaAvg) : null
+
+              return (
+                <div
+                  key={paddock.id}
+                  className={`flex border-b border-gray-100 ${rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}
+                  style={{ height: ROW_H }}
+                >
+                  {/* Label — datos del potrero */}
+              <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`px-3 py-2 flex items-center gap-2 border-r border-gray-100 shrink-0 sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${!isEnabled ? 'bg-gray-100 h-full' : rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}>
                 {/* Paddock toggle — habilitar/deshabilitar directo en el Gantt */}
                 <button
                   onClick={() => onPaddockToggle?.(paddock.id, !isEnabled)}
                   title={isEnabled ? 'Inhabilitar potrero' : 'Habilitar potrero'}
-                  className={`shrink-0 self-start mt-2 transition-colors rounded ${
-                    isEnabled ? 'text-green-500 hover:text-red-400' : 'text-gray-300 hover:text-green-500'
+                  className={`shrink-0 transition-colors rounded ${
+                    isEnabled ? 'text-green-500 hover:text-red-400 self-start mt-2' : 'text-gray-300 hover:text-green-500'
                   }`}
                 >
                   {paddock.is_active !== false ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
@@ -1083,7 +1089,7 @@ function InteractiveGantt({
                     >
                       {paddock.name}
                     </button>
-                    {qualityScore != null && (
+                    {isEnabled && qualityScore != null && (
                       <div className="flex items-center gap-0.5 shrink-0">
                         <HoverTooltip text={HOLISTIC_TOOLTIPS.quality}>
                           <span className={`text-[10px] font-black min-w-[36px] text-center px-1.5 py-0.5 rounded-lg border bg-white shadow-sm cursor-help ${qColor}`}>
@@ -1099,7 +1105,7 @@ function InteractiveGantt({
                         </span>
                       </div>
                     )}
-                    {hasMS && estimatedDah === 0 && (
+                    {isEnabled && hasMS && estimatedDah === 0 && (
                       <div className="flex items-center gap-0.5 shrink-0" title="El forraje actual está por debajo del remanente objetivo. Riesgo de sobrepastoreo.">
                         <span className="flex items-center gap-0.5 text-[9px] font-black text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-md cursor-help">
                           <AlertTriangle className="w-2 h-2" />0 Días
@@ -1107,77 +1113,81 @@ function InteractiveGantt({
                       </div>
                     )}
                   </div>
-                  {/* Row 2: ha + MS/ha */}
-                  <div className="flex items-center gap-1.5">
-                    <HoverTooltip text="Superficie del potrero (hectáreas)">
-                      <span className="text-[11px] font-bold text-gray-700 cursor-help">{areaHa.toFixed(1)}<span className="font-normal text-gray-400 ml-0.5">ha</span></span>
-                    </HoverTooltip>
-                    {msHa > 0 && (
-                      <>
-                        <span className="w-0.5 h-0.5 rounded-full bg-gray-300" />
-                        <HoverTooltip text="Biomasa disponible (kg MS/ha)">
-                          <span className="text-[11px] font-bold text-gray-700 cursor-help">{msHa.toLocaleString('es')}<span className="font-normal text-gray-400 ml-0.5">kg/ha</span></span>
+                  {isEnabled && (
+                    <>
+                      {/* Row 2: ha + MS/ha */}
+                      <div className="flex items-center gap-1.5">
+                        <HoverTooltip text="Superficie del potrero (hectáreas)">
+                          <span className="text-[11px] font-bold text-gray-700 cursor-help">{areaHa.toFixed(1)}<span className="font-normal text-gray-400 ml-0.5">ha</span></span>
                         </HoverTooltip>
-                      </>
-                    )}
-                  </div>
-                  {/* Row 3: DAH + Coeficiente (Holistic Metrics) */}
-                  {(() => {
-                    return (
-                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                        {/* Yield Coefficient badge */}
-                        {yieldCoef !== null && (
-                            <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
-                              <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
-                                yieldCoef >= 1.05 ? 'text-green-700 bg-green-50 border-green-100'
-                                : yieldCoef >= 0.95 ? 'text-gray-600 bg-gray-50 border-gray-200'
-                                : 'text-amber-700 bg-amber-50 border-amber-100'
-                              }`}>
-                                ×{yieldCoef.toFixed(2)}
-                              </span>
+                        {msHa > 0 && (
+                          <>
+                            <span className="w-0.5 h-0.5 rounded-full bg-gray-300" />
+                            <HoverTooltip text="Biomasa disponible (kg MS/ha)">
+                              <span className="text-[11px] font-bold text-gray-700 cursor-help">{msHa.toLocaleString('es')}<span className="font-normal text-gray-400 ml-0.5">kg/ha</span></span>
                             </HoverTooltip>
+                          </>
                         )}
-                        {/* Min / Max / Occupation Days */}
-                        {(() => {
-                           const stdDivisor = Math.max(1, paddocks.filter((p: any) => p.is_active !== false).length - 1)
-                           const pYield = yieldCoef || 1
-                           const stdMin = Math.round(pYield * (50 / stdDivisor))
-                           const stdMax = Math.round(pYield * (100 / stdDivisor))
-                           const stdAvg = Math.round((stdMin + stdMax) / 2)
-
-                           const activeSupply = activeSeasonPlan?.supply_snapshot?.by_paddock?.find((d: any) => d.id === paddock.id);
-                           const isClosed = activeSeasonPlan?.season_type === 'cerrado';
-
-                           let displayMin = stdMin
-                           let displayMax = stdMax
-                           let displayAvg = stdAvg
-                           let isFixed = false
-
-                           if (activeSupply) {
-                             if (isClosed) {
-                               displayMin = activeSupply.min_days || 0
-                               isFixed = true
-                             } else {
-                               displayMin = activeSupply.min_days || 0
-                               displayMax = activeSupply.max_days || 0
-                               displayAvg = Math.round((displayMin + displayMax) / 2)
-                             }
-                           }
-
-                           return (
-                             <HoverTooltip text={isFixed ? "Días permitidos en base a la oferta forrajera" : "Rango sugerido de pastoreo (Mínimo, Promedio y Máximo)"}>
-                               <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">
-                                 {isFixed 
-                                   ? `Días de pastoreo: ${displayMin}d` 
-                                   : `Mín: ${displayMin}d • Prom: ${displayAvg}d • Máx: ${displayMax}d`
-                                 }
-                               </span>
-                             </HoverTooltip>
-                           )
-                        })()}
                       </div>
-                    )
-                  })()}
+                      {/* Row 3: DAH + Coeficiente (Holistic Metrics) */}
+                      {(() => {
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            {/* Yield Coefficient badge */}
+                            {yieldCoef !== null && (
+                                <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
+                                  <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
+                                    yieldCoef >= 1.05 ? 'text-green-700 bg-green-50 border-green-100'
+                                    : yieldCoef >= 0.95 ? 'text-gray-600 bg-gray-50 border-gray-200'
+                                    : 'text-amber-700 bg-amber-50 border-amber-100'
+                                  }`}>
+                                    ×{yieldCoef.toFixed(2)}
+                                  </span>
+                                </HoverTooltip>
+                            )}
+                            {/* Min / Max / Occupation Days */}
+                            {(() => {
+                               const stdDivisor = Math.max(1, paddocks.filter((p: any) => p.is_active !== false).length - 1)
+                               const pYield = yieldCoef || 1
+                               const stdMin = Math.round(pYield * (50 / stdDivisor))
+                               const stdMax = Math.round(pYield * (100 / stdDivisor))
+                               const stdAvg = Math.round((stdMin + stdMax) / 2)
+
+                               const activeSupply = activeSeasonPlan?.supply_snapshot?.by_paddock?.find((d: any) => d.id === paddock.id);
+                               const isClosed = activeSeasonPlan?.season_type === 'cerrado';
+
+                               let displayMin = stdMin
+                               let displayMax = stdMax
+                               let displayAvg = stdAvg
+                               let isFixed = false
+
+                               if (activeSupply) {
+                                 if (isClosed) {
+                                   displayMin = activeSupply.min_days || 0
+                                   isFixed = true
+                                 } else {
+                                   displayMin = activeSupply.min_days || 0
+                                   displayMax = activeSupply.max_days || 0
+                                   displayAvg = Math.round((displayMin + displayMax) / 2)
+                                 }
+                               }
+
+                               return (
+                                 <HoverTooltip text={isFixed ? "Días permitidos en base a la oferta forrajera" : "Rango sugerido de pastoreo (Mínimo, Promedio y Máximo)"}>
+                                   <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">
+                                     {isFixed 
+                                       ? `Días de pastoreo: ${displayMin}d` 
+                                       : `Mín: ${displayMin}d • Prom: ${displayAvg}d • Máx: ${displayMax}d`
+                                     }
+                                   </span>
+                                 </HoverTooltip>
+                               )
+                            })()}
+                          </div>
+                        )
+                      })()}
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1239,6 +1249,22 @@ function InteractiveGantt({
                     style={{ left: `${(m.day / windowDays) * 100}%`, width: `${(1 / windowDays) * 100}%` }}
                   />
                 ))}
+
+                {/* Next Available Day line */}
+                {showNextLine && (
+                  <div
+                    className="absolute top-0 bottom-0 z-[12] pointer-events-none flex flex-col items-center"
+                    style={{ left: `${(nextDiff / windowDays) * 100}%` }}
+                  >
+                    {rowIdx === 0 && (
+                      <div className="absolute top-1 px-1.5 py-0.5 bg-blue-50/80 text-blue-600 border border-blue-200/60 text-[8px] font-bold rounded shadow-sm whitespace-nowrap z-20 backdrop-blur-[2px]">
+                        Siguiente: {nextAvailableDate!.split('-').reverse().join('/')}
+                      </div>
+                    )}
+                    <div className="h-full w-px" style={{ borderLeft: '1.5px dashed rgba(59, 130, 246, 0.35)' }} />
+                  </div>
+                )}
+
                 {/* Today line — soft green dashed line */}
                 {(() => {
                   const todayDiff = daysBetween(windowStart, new Date().toISOString().split('T')[0])
@@ -1681,6 +1707,33 @@ function InteractiveGantt({
             </div>
           )
         })}
+
+        {/* ── Potreros Inhabilitados / Sin MS ── */}
+        {inactivePaddocks.length > 0 && (
+          <div className="bg-gray-50 border-t border-gray-100 p-4">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-300"></span>
+              Potreros Inhabilitados o Sin Disponibilidad ({inactivePaddocks.length})
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {inactivePaddocks.map(paddock => (
+                <div key={paddock.id} className="flex items-center gap-2 bg-white border border-gray-200 pl-2 pr-3 py-1.5 rounded-xl shadow-sm opacity-70 hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => onPaddockToggle?.(paddock.id, true)}
+                    title="Habilitar potrero"
+                    className="shrink-0 text-gray-300 hover:text-green-500 transition-colors"
+                  >
+                    <ToggleLeft className="w-5 h-5" />
+                  </button>
+                  <span className="text-xs font-bold text-gray-600 truncate max-w-[140px]">{paddock.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        </>
+        )
+        })()}
 
         {/* ── Totales del Sistema (fina, sobre la fila de clima) ── */}
         {(() => {
