@@ -18,7 +18,7 @@ import clsx from 'clsx'
 type Step = 'loading' | 'error' | 'set-password' | 'login' | 'accepting' | 'done'
 
 function JoinContent() {
-  const { user, isLoading, refreshProfile } = useAuth()
+  const { user, isLoading, refreshProfile, signOut } = useAuth()
   const searchParams = useSearchParams()
   const router = useRouter()
   const token = searchParams.get('token')
@@ -55,9 +55,15 @@ function JoinContent() {
 
       setInvitation(data.invitation)
 
-      // If already logged in → accept directly
+      // If already logged in → check email
       if (user) {
-        acceptInvitation(user, data.invitation)
+        if (user.email === data.invitation.email) {
+          acceptInvitation(user, data.invitation)
+        } else {
+          // Log out the wrong user so they can log in/register with the invited email
+          if (signOut) await signOut()
+          setStep('set-password')
+        }
       } else {
         // New user: ask them to create a password
         setStep('set-password')

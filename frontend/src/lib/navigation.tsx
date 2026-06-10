@@ -53,7 +53,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: 'Insights',      href: '/dashboard/insights',    icon: Lightbulb,  permissionKey: 'insights'     },
       { name: 'Carbono',       href: '/dashboard/carbono',     icon: Leaf,        permissionKey: 'carbono'      },
-      { name: 'Calculadora',   href: '/dashboard/calculadora', icon: Calculator,  permissionKey: null           },
+      { name: 'Calculadora',   href: '/dashboard/calculadora', icon: Calculator,  permissionKey: 'calculadora'  },
     ],
   },
 ]

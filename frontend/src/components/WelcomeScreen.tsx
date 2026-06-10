@@ -16,6 +16,8 @@ const MODULE_META: Record<string, { label: string; icon: React.ComponentType<any
   insights:     { label: 'Insights',         icon: BarChart2,    color: 'bg-cyan-100 text-cyan-700' },
   equipo:       { label: 'Equipo',           icon: Users,        color: 'bg-pink-100 text-pink-700' },
   tareas:       { label: 'Tareas',           icon: CheckSquare,  color: 'bg-orange-100 text-orange-700' },
+  carbono:      { label: 'Carbono',          icon: BarChart2,    color: 'bg-emerald-100 text-emerald-700' },
+  calculadora:  { label: 'Calculadora',      icon: ClipboardList, color: 'bg-blue-100 text-blue-700' },
 }
 
 interface WelcomeScreenProps {
@@ -61,7 +63,7 @@ export function WelcomeScreen({ orgName, onDismiss }: WelcomeScreenProps) {
 
   return (
     <div
-      className={`fixed inset-0 z-[200] flex items-center justify-center transition-all duration-700 ${
+      className={`fixed inset-0 z-[9999] flex items-center justify-center transition-all duration-700 ${
         mounted ? 'opacity-100' : 'opacity-0'
       }`}
       style={{ background: 'linear-gradient(135deg, #052e16 0%, #14532d 40%, #166534 100%)' }}

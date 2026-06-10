@@ -83,6 +83,8 @@ const MODULES = [
   { key: 'bitacora',     label: 'Bitácora',          desc: 'Notas de campo y registros' },
   { key: 'insights',     label: 'Insights',          desc: 'Análisis y reportes' },
   { key: 'tareas',       label: 'Tareas',            desc: 'Por hacer y asignaciones' },
+  { key: 'carbono',      label: 'Carbono',           desc: 'Huella y secuestro' },
+  { key: 'calculadora',  label: 'Calculadora',       desc: 'Cálculos forrajeros' },
   { key: 'equipo',       label: 'Equipo',            desc: 'Ver miembros (solo lectura)' },
 ]
 
@@ -138,6 +140,24 @@ export default function EquipoPage() {
   const [ownerName, setOwnerName] = useState('')
   const [loading, setLoading]     = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>('members')
+  const [menuConfig, setMenuConfig] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    fetch('/api/config/menu')
+      .then(res => res.json())
+      .then(data => {
+        if (data && !data.error) setMenuConfig(data)
+      })
+      .catch(err => console.error('Error fetching menu config:', err))
+  }, [])
+
+  const availableModules = MODULES.filter(mod => {
+    const configKey = mod.key === 'dashboard' ? 'menu_panel' : `menu_${mod.key}`
+    if (Object.keys(menuConfig).length > 0 && menuConfig[configKey] === false) {
+      return false
+    }
+    return true
+  })
 
   // Copy link
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
@@ -692,7 +712,7 @@ export default function EquipoPage() {
               <div>
                 <label className="block text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">Módulos habilitados</label>
                 <div className="space-y-1.5">
-                  {MODULES.map(mod => (
+                  {availableModules.map(mod => (
                     <div key={mod.key} className="flex items-center justify-between py-1.5 px-3 rounded-xl hover:bg-gray-50">
                       <div>
                         <p className="text-sm font-bold text-gray-700">{mod.label}</p>
@@ -838,7 +858,7 @@ export default function EquipoPage() {
                   <div>
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Módulos habilitados</p>
                     <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
-                      {MODULES.map(mod => (
+                      {availableModules.map(mod => (
                         <div key={mod.key} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-gray-800 leading-tight">{mod.label}</p>
@@ -929,7 +949,7 @@ export default function EquipoPage() {
                 <div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Permisos</p>
                   <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
-                    {MODULES.map(mod => (
+                    {availableModules.map(mod => (
                       <div key={mod.key} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-gray-800 leading-tight">{mod.label}</p>
