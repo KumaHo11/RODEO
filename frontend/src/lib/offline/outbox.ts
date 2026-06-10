@@ -13,6 +13,7 @@ import {
   outboxPush, outboxGetAll, outboxDelete, outboxUpdate, outboxCount,
   dbUpsert, dbDelete,
 } from './db'
+import { auth } from '@/lib/firebase/client'
 
 export interface OutboxOperation {
   type: string           // 'farm_event' | 'task' | 'field_note' | 'paddock_update' | ...
@@ -165,11 +166,14 @@ async function trySend(record: {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 10_000) // 10s timeout
 
+    const token = await auth.currentUser?.getIdToken()
+
     const res = await fetch(record.url, {
       method: record.method,
       headers: {
         ...record.headers,
         'X-Idempotency-Key': record.idempotency_key,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: record.method !== 'DELETE' ? record.body : undefined,
       signal: controller.signal,
