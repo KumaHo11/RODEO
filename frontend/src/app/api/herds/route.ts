@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
                 bcs_score, bcs_label, bcs_data, photo_url,
                 parent_herd_id, herd_notes, exit_date,
                 physiological_category, last_weigh_date, daily_gain_kg,
+                lactancia_range, estadio_gestacion, custom_racion_kg,
                 grupo_manejo_id, grupo_manejo_nombre,
                 created_at, updated_at
          FROM herds
@@ -89,6 +90,7 @@ export async function GET(req: NextRequest) {
                   bcs_score, bcs_label, bcs_data, photo_url,
                   parent_herd_id, herd_notes, exit_date,
                   physiological_category, last_weigh_date, daily_gain_kg,
+                  lactancia_range, estadio_gestacion, custom_racion_kg,
                   created_at, updated_at
            FROM herds
            WHERE org_id = $1
@@ -150,6 +152,8 @@ export async function POST(req: NextRequest) {
       is_temporary, notes,
       // Physiological fields (v8 migration)
       physiological_category, last_weigh_date, daily_gain_kg,
+      // EV Matrix fields (v9 migration)
+      lactancia_range, estadio_gestacion, custom_racion_kg,
       // Lote de Manejo fields (v10 migration)
       grupo_manejo_id, grupo_manejo_nombre,
     } = body
@@ -228,6 +232,28 @@ export async function POST(req: NextRequest) {
         )
       } catch (physErr: any) {
         console.warn('POST /api/herds physiological columns skipped (run v8 migration):', physErr.message)
+      }
+    }
+
+    // Step 3.5: UPDATE EV Matrix fields (v9)
+    if (id && (lactancia_range !== undefined || estadio_gestacion !== undefined || custom_racion_kg !== undefined)) {
+      try {
+        await mutate(
+          `UPDATE herds
+           SET lactancia_range = $1,
+               estadio_gestacion = $2,
+               custom_racion_kg = $3,
+               updated_at = NOW()
+           WHERE id = $4`,
+          [
+            lactancia_range ?? null,
+            estadio_gestacion ?? null,
+            custom_racion_kg ?? null,
+            id,
+          ]
+        )
+      } catch (evErr: any) {
+        console.warn('POST /api/herds EV Matrix columns skipped (run v9 migration):', evErr.message)
       }
     }
 
