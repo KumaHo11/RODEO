@@ -385,6 +385,42 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [showGanttModeDropdown, setShowGanttModeDropdown] = useState(false)
   // Ordered paddock IDs from the last generated suggested plan (for Gantt row sorting)
   const [suggestedPaddockOrder, setSuggestedPaddockOrder] = useState<string[]>([])
+  const [customPaddockOrder, setCustomPaddockOrder] = useState<string[]>([])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && user?.farm_id) {
+      const saved = localStorage.getItem(`rodeo_paddock_order_${user.farm_id}`)
+      if (saved) {
+        try {
+          setCustomPaddockOrder(JSON.parse(saved))
+        } catch (e) {}
+      }
+    }
+  }, [user?.farm_id])
+
+  const handlePaddockReorder = (paddockId: string, direction: 'up' | 'down') => {
+    setCustomPaddockOrder(prev => {
+      // Si prev está vacío, inicializarlo con el orden de la lista original
+      const currentOrder = prev.length > 0 ? [...prev] : paddocks.map((p: any) => p.id)
+      const idx = currentOrder.indexOf(paddockId)
+      if (idx === -1) return prev
+
+      if (direction === 'up' && idx > 0) {
+        const temp = currentOrder[idx - 1]
+        currentOrder[idx - 1] = currentOrder[idx]
+        currentOrder[idx] = temp
+      } else if (direction === 'down' && idx < currentOrder.length - 1) {
+        const temp = currentOrder[idx + 1]
+        currentOrder[idx + 1] = currentOrder[idx]
+        currentOrder[idx] = temp
+      }
+
+      if (typeof window !== 'undefined' && user?.farm_id) {
+        localStorage.setItem(`rodeo_paddock_order_${user.farm_id}`, JSON.stringify(currentOrder))
+      }
+      return currentOrder
+    })
+  }
   const [activeSeasonPlanId, setActiveSeasonPlanId] = useState<string | null>(null)
   const [showSeasonPlanSelector, setShowSeasonPlanSelector] = useState(false)
   const [seasonPlans, setSeasonPlans] = useState<any[]>([])
@@ -2218,7 +2254,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             <p className="text-[10px] text-gray-500 font-medium mt-0.5">Arrastrá en el calendario para crear pastoreos. <strong className="text-gray-700">Debés "Terminar Pastoreo" para poder editar otras planificaciones.</strong></p>
           </div>
           <button
-            onClick={() => setShowHerdSelector(true)}
+            onClick={() => setShowContinuePlanModal(true)}
             className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap shrink-0 border border-gray-200"
           >
             Cambiar rodeos
@@ -2581,7 +2617,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               setShowNewHerdUnifiedModal(true)
             }}
             onHerdClick={(herd) => setEditingGanttHerd(herd as HerdData)}
-            paddockOrder={activeGanttTab === 'suggested' ? suggestedPaddockOrder : []}
+            paddockOrder={activeGanttTab === 'suggested' ? suggestedPaddockOrder : customPaddockOrder}
+            onPaddockReorder={activeGanttTab === 'manual' ? handlePaddockReorder : undefined}
             seasonPlanColorMap={seasonPlanColorMap}
             seasonPlanNames={seasonPlanNames}
             ganttLayers={ganttLayers}

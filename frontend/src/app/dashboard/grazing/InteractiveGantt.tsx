@@ -8,11 +8,12 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { FeatureGate } from '@/components/FeatureGate'
 import {
-  Calendar, Plus, CheckCircle2, Clock, MapPin, Search, Filter,
+  Calendar, Lock, AlertTriangle, EyeOff, Droplets, Droplet, Sprout, ToggleLeft, ToggleRight, Loader2, Sparkles, AlertCircle, ChevronUp, ChevronDown,
+  Plus, CheckCircle2, Clock, MapPin, Search, Filter,
   AlignJustify, CalendarDays, Lightbulb, CloudRain, Sun, ChevronLeft, ChevronRight,
-  X, Check, Loader2, Droplets, AlertTriangle, Camera, Leaf, Users, Sparkles, HistoryIcon, Download,
-  Zap, TrendingUp, BarChart3, Target, ArrowDown, Share, Trash2, BookOpen, Upload, Lock, HelpCircle,
-  Eye, EyeOff, Layers, MessageSquare, ToggleLeft, ToggleRight, Send
+  X, Check, Camera, Leaf, Users, HistoryIcon, Download,
+  Zap, TrendingUp, BarChart3, Target, ArrowDown, Share, Trash2, BookOpen, Upload, HelpCircle,
+  Eye, Layers, MessageSquare, Send
 } from 'lucide-react'
 import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
 import { DashboardMetricsBar, DashboardMetricsData } from '@/design-system/molecules/DashboardMetricsBar'
@@ -324,7 +325,7 @@ function InteractiveGantt({
   targetRemnant, dailyAllocationKg, activeSeasonPlan,
   climateViewEnabled = false, paddockCAdj = {}, paddockAAdj = {},
   isDrawingMode = false, onDrawEnd, onHerdUpdate, onEditEvent, onDeleteEvent, onAddHerd, onHerdClick,
-  paddockOrder = [],
+  paddockOrder = [], onPaddockReorder,
   seasonPlanColorMap = {},
   seasonPlanNames = {},
   ganttLayers = { showOriginal: true, showPlanned: true, showReal: true, showEvents: true, showAgenda: true, showRemnant: true, showAnimals: true },
@@ -366,6 +367,7 @@ function InteractiveGantt({
   onHerdClick?: (herd: any) => void
   /** Optional ordered paddock IDs — when provided, rows are rendered in this sequence */
   paddockOrder?: string[]
+  onPaddockReorder?: (paddockId: string, direction: 'up' | 'down') => void
   /** Mapa season_plan_id → índice de nivel de púrpura (solo planificaciones sugeridas) */
   seasonPlanColorMap?: Record<string, number>
   /** Mapa season_plan_id → nombre del plan */
@@ -1080,9 +1082,19 @@ function InteractiveGantt({
                 >
                   {paddock.is_active !== false ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
                 </button>
-                <div className="min-w-0 flex-1 flex flex-col justify-center gap-1.5 py-1">
+                <div className="min-w-0 flex-1 flex flex-col justify-center gap-1.5 py-1 group/paddock">
                   {/* Row 1: Nombre + badge calidad */}
                   <div className="flex items-center justify-between gap-1">
+                    {onPaddockReorder && (
+                      <div className="flex flex-col gap-[2px] shrink-0 mr-1.5 opacity-0 group-hover/paddock:opacity-100 transition-opacity">
+                        <button type="button" onClick={() => onPaddockReorder(paddock.id, 'up')} className="text-gray-300 hover:text-green-600 hover:bg-green-50 rounded" title="Mover arriba">
+                          <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
+                        </button>
+                        <button type="button" onClick={() => onPaddockReorder(paddock.id, 'down')} className="text-gray-300 hover:text-green-600 hover:bg-green-50 rounded" title="Mover abajo">
+                          <ChevronDown className="w-3.5 h-3.5 stroke-[3]" />
+                        </button>
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={() => onPaddockClick?.(paddock.id)}
