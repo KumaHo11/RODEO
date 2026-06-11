@@ -190,24 +190,19 @@ ALTER TABLE herds ADD COLUMN IF NOT EXISTS photo_url TEXT;
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS age_years DECIMAL(5,2);
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS exit_date DATE;
 
--- v8: Campos fisiológicos para cálculo dinámico de EV
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS physiological_category VARCHAR(50);
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS last_weigh_date DATE;
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS daily_gain_kg DECIMAL(8,3);
 
--- v9: EV Matrix fields
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS lactancia_range VARCHAR(100);
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS estadio_gestacion VARCHAR(100);
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS custom_racion_kg DECIMAL(8,3);
 
--- v10: Lote de Manejo fields
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS grupo_manejo_id UUID;
 ALTER TABLE herds ADD COLUMN IF NOT EXISTS grupo_manejo_nombre VARCHAR(255);
 
--- farm_events: assigned_to for team member tasks
 ALTER TABLE farm_events ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES profiles(id) ON DELETE SET NULL;
 
--- grazing_plans: The Triple Track & Modals additions
 ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS actual_entry_date DATE;
 ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS actual_exit_date DATE;
 ALTER TABLE grazing_plans ADD COLUMN IF NOT EXISTS notes TEXT;
