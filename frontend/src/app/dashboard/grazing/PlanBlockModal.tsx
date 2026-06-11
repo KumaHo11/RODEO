@@ -207,7 +207,7 @@ export default function PlanBlockModal({
               <p className={LABEL}>Remanente objetivo</p>
               <p className="text-[10px] text-gray-400 mt-0.5">Biomasa mínima que dejás en {paddock?.name} al salir</p>
             </div>
-            <Stepper value={targetRemnant} onChange={setTargetRemnant} min={100} max={2000} step={50} unit="kg MS/ha" />
+            <Stepper value={targetRemnant} onChange={setTargetRemnant} min={0} max={2000} step={50} unit="kg MS/ha" />
           </div>
 
           {/* Motor holístico */}

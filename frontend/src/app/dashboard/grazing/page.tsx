@@ -65,10 +65,8 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
 // Season dict for southern hemisphere
 const getSeason = () => {
   const m = new Date().getMonth() + 1
-  if (m >= 12 || m <= 2) return { name: 'Verano', type: 'Temporada abierta', icon: '', color: 'bg-green-100 text-green-700' }
-  if (m >= 3 && m <= 5)  return { name: 'Otoño',   type: 'Temporada cerrada', icon: '', color: 'bg-amber-100 text-gray-700' }
-  if (m >= 6 && m <= 8)  return { name: 'Invierno',type: 'Temporada cerrada', icon: '', color: 'bg-blue-100 text-blue-700' }
-  return                         { name: 'Primavera',type: 'Temporada abierta', icon: '🌱', color: 'bg-lime-100 text-lime-700' }
+  if (m >= 4 && m < 10) return { name: 'Otoño/Invierno', type: 'Temporada cerrada', icon: '', color: 'bg-amber-100 text-gray-700' }
+  return { name: 'Primavera/Verano', type: 'Temporada abierta', icon: '🌱', color: 'bg-green-100 text-green-700' }
 }
 
 // Safe date string normalizer — handles null, undefined, JS Date objects, and ISO strings
@@ -408,7 +406,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     }
   }, [viewMode, activeGanttTab, activeSeasonPlanId, seasonPlans])
 
-  const PERIODS: Record<string, number> = { trimestral: 84, semestral: 180, anual: 365, cerrada: 213, abierta: 212 }
+  const PERIODS: Record<string, number> = { trimestral: 84, semestral: 180, anual: 365, cerrada: 214, abierta: 212 }
   
   const [ganttWindow, setGanttWindow] = useState(() => {
     const d = new Date()
@@ -1361,7 +1359,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               const sibExit      = sib.exit_date ? new Date(sib.exit_date + 'T00:00:00') : null
               const sibOrigDays  = sibExit ? Math.round((sibExit.getTime() - sibEntry.getTime()) / 86400000) : 7
 
-              // Shift entry by delta
+        // Shift entry by delta
               const newSibEntry = new Date(sibEntry)
               newSibEntry.setDate(newSibEntry.getDate() + deltaDays)
 
@@ -2201,36 +2199,35 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           </span>
         </div>
       )}
-      {/* Context bar was removed as per user request to simplify UI and avoid confusion with plan selection in Gantt mode */}
 
       {/* DRAWING MODE BANNER — barra sticky superior con rodeos seleccionados */}
       {drawingMode && activeGanttTab === 'manual' && (
-        <div className="sticky top-0 z-[100] flex items-center gap-3 bg-gray-900/95 backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-2xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-200 mb-3">
-          <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center animate-pulse shrink-0">
-            <span className="text-[10px] font-black text-white">✏</span>
+        <div className="sticky top-0 z-[100] flex items-center gap-3 bg-white/95 backdrop-blur-md text-gray-900 px-4 py-3 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-2 border-green-500 animate-in fade-in slide-in-from-top-2 duration-200 mb-3">
+          <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center animate-pulse shrink-0">
+            <span className="text-xs font-black text-green-700">✏</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-black">
-              Planificando
+            <p className="text-sm font-black text-gray-900">
+              Modo Pastoreo Activo
               {drawingHerdIds.length > 0 && (
-                <span className="ml-1.5 text-green-400">
+                <span className="ml-1.5 text-green-700 bg-green-50 px-1.5 py-0.5 rounded-md text-[11px] font-bold">
                   {herds.filter((h: any) => drawingHerdIds.includes(h.id)).map((h: any) => h.name).join(', ')}
                 </span>
               )}
             </p>
-            <p className="text-[9px] text-gray-400 font-medium">Arrastrá en el calendario para trazar · ESC para salir</p>
+            <p className="text-[10px] text-gray-500 font-medium mt-0.5">Arrastrá en el calendario para crear pastoreos. <strong className="text-gray-700">Debés "Terminar Pastoreo" para poder editar otras planificaciones.</strong></p>
           </div>
           <button
-            onClick={() => setShowContinuePlanModal(true)}
-            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-bold transition-colors whitespace-nowrap shrink-0"
+            onClick={() => setShowHerdSelector(true)}
+            className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap shrink-0 border border-gray-200"
           >
             Cambiar rodeos
           </button>
           <button
             onClick={() => { setDrawingMode(false); setQuickConfirm(null) }}
-            className="px-2.5 py-1 bg-green-600 hover:bg-green-500 rounded-lg text-[10px] font-black transition-colors whitespace-nowrap shrink-0"
+            className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-[11px] font-black transition-colors whitespace-nowrap shrink-0 shadow-sm"
           >
-            Terminar ✓
+            Terminar Pastoreo ✓
           </button>
         </div>
       )}
@@ -2299,7 +2296,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       ) : viewMode === 'gantt' ? (
         <div className="space-y-3">
           {/* Gantt period control — solo Anual + filtros de temporada */}
-          <div className="flex flex-wrap items-center gap-2 justify-start w-full">
+          <div className={`flex flex-wrap items-center gap-2 justify-start w-full transition-opacity duration-300 ${drawingMode ? 'opacity-40 pointer-events-none' : ''}`}>
             <div className="flex bg-gray-100 rounded-xl p-0.5 gap-0.5">
               {/* Anual = ambas temporadas activas */}
               <button
