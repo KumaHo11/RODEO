@@ -185,13 +185,14 @@ function useSpeech(onResult: (t: string) => void, onStart?: () => void) {
 export default function HerdModal({ herd, allHerds = [], isTemporary = false, onClose, onSaved }: Props) {
   const { hasFeature } = usePlan()
   const canVoice     = hasFeature('voice_bitacora')
-  const isEditing = !!(liveHerd?.id || herd?.id)
 
   const [tab, setTab] = useState<'operativo' | 'actividades' | 'registros' | 'historial'>('operativo')
 
   // liveHerd: copia local del herd que se actualiza optimistamente tras cada actividad.
   // Esto evita que el modal muestre datos obsoletos mientras el padre refetcha.
   const [liveHerd, setLiveHerd] = useState(herd)
+  const isEditing = !!(liveHerd?.id || herd?.id)
+  const targetId = liveHerd?.id || herd?.id
 
   // Sync liveHerd when the parent re-passes a fresh herd prop (after onSaved refetch)
   useEffect(() => { if (herd) setLiveHerd(herd) }, [herd])
@@ -1644,7 +1645,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             )}
             <div>
               <h3 className="text-xl font-black text-gray-950 tracking-tight">
-                {isEditing ? herd.name : 'Nuevo rodeo'}
+                {isEditing ? (liveHerd?.name || herd?.name || 'Rodeo') : 'Nuevo rodeo'}
               </h3>
               <p className="text-xs text-gray-500 font-medium mt-0.5">
                 {isEditing ? `${liveHerd?.head_count ?? herd?.head_count} CABEZAS · ${displayCat.toUpperCase()}` : 'Configurá los datos del rodeo'}

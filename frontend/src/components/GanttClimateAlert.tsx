@@ -41,7 +41,7 @@ export interface GanttClimateAlertProps {
   /** Causa principal (viene del motor de cálculo) */
   alertMessage?: string | null
   /** Tipo de estrés climático predominante */
-  stressType?: 'heat' | 'cold' | 'drought' | 'storm'
+  stressType?: 'heat' | 'cold' | 'drought' | 'storm' | 'auto'
   /** Callback al aplicar el cambio sugerido (puede ser null si no hay acción disponible) */
   onApply?: () => void | Promise<void>
   /** Callback al ignorar la alerta */
