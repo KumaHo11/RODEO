@@ -61,10 +61,8 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
 // Season dict for southern hemisphere
 const getSeason = () => {
   const m = new Date().getMonth() + 1
-  if (m >= 12 || m <= 2) return { name: 'Verano', type: 'Temporada abierta', icon: '', color: 'bg-green-100 text-green-700' }
-  if (m >= 3 && m <= 5)  return { name: 'Otoño',   type: 'Temporada cerrada', icon: '', color: 'bg-amber-100 text-gray-700' }
-  if (m >= 6 && m <= 8)  return { name: 'Invierno',type: 'Temporada cerrada', icon: '', color: 'bg-blue-100 text-blue-700' }
-  return                         { name: 'Primavera',type: 'Temporada abierta', icon: '🌱', color: 'bg-lime-100 text-lime-700' }
+  if (m >= 4 && m < 10) return { name: 'Otoño/Invierno', type: 'Temporada cerrada', icon: '', color: 'bg-amber-100 text-gray-700' }
+  return { name: 'Primavera/Verano', type: 'Temporada abierta', icon: '🌱', color: 'bg-green-100 text-green-700' }
 }
 
 // Safe date string normalizer — handles null, undefined, JS Date objects, and ISO strings

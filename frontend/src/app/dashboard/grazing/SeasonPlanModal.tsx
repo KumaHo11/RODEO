@@ -806,7 +806,7 @@ export default function SeasonPlanModal({
                 </div>
 
                 {remnantMode === 'global' && (
-                  <Stepper value={targetRemnant} onChange={setTargetRemnant} min={100} max={2000} step={50} unit="kg MS/ha" />
+                  <Stepper value={targetRemnant} onChange={setTargetRemnant} min={0} max={2000} step={50} unit="kg MS/ha" />
                 )}
               </div>
 

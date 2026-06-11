@@ -68,8 +68,8 @@ export default function PlanBlockModal({
   const [selectedHerdIds, setSelectedHerdIds] = useState<string[]>(
     plan.herd_ids && plan.herd_ids.length > 0 ? plan.herd_ids : (plan.herd_id ? [plan.herd_id] : [])
   )
-  const [dailyAllocationKg, setDailyAllocationKg] = useState(Number(plan.daily_allocation_kg) || 12)
-  const [targetRemnant, setTargetRemnant] = useState(Number(plan.target_remnant_kg_ha) || 400)
+  const [dailyAllocationKg, setDailyAllocationKg] = useState(Number(plan.ai_analysis?.daily_allocation_kg || plan.daily_allocation_kg) || 12)
+  const [targetRemnant, setTargetRemnant] = useState(Number(plan.ai_analysis?.target_remnant_kg_ha || plan.target_remnant_kg_ha) || 400)
   
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -98,12 +98,20 @@ export default function PlanBlockModal({
     setSaving(true)
     setError(null)
     try {
+      const newExitDate = new Date(plan.entry_date + 'T00:00:00')
+      newExitDate.setDate(newExitDate.getDate() + (estimatedDah > 0 ? estimatedDah : 1))
+      const newExitStr = newExitDate.toISOString().split('T')[0]
+
       const payload = {
         herd_ids: selectedHerdIds,
         // Eliminamos herd_id singular para planes con múltiples rodeos
         herd_id: selectedHerdIds.length === 1 ? selectedHerdIds[0] : null,
-        daily_allocation_kg: dailyAllocationKg,
-        target_remnant_kg_ha: targetRemnant,
+        exit_date: newExitStr,
+        ai_analysis: {
+          ...(plan.ai_analysis || {}),
+          daily_allocation_kg: dailyAllocationKg,
+          target_remnant_kg_ha: targetRemnant,
+        }
       }
       
       const res = await apiFetch(`/api/grazing-plans/${plan.id}`, {

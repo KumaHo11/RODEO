@@ -1296,6 +1296,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         ai_analysis: {
           ...(formData.ai_analysis || {}),
           plan_source: formData.ai_analysis?.plan_source || 'manual',
+          daily_allocation_kg: dailyAllocationKg,
+          target_remnant_kg_ha: targetRemnant,
           // Registrar historial de ediciones con fecha + datos cambiados
           history: [
             ...((formData.ai_analysis?.history as any[]) || []),
