@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { queryOne, mutate } from '@/lib/db'
+import { adminAuth } from '@/lib/firebase/admin'
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,9 +34,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'La invitación expiró.' }, { status: 410 })
     }
 
-    // Normalize permissions
+    // Normalizar permisos
     const rawPerms = invitation.permissions
     const permsObj = typeof rawPerms === 'string' ? JSON.parse(rawPerms) : (rawPerms ?? {})
+
+    // Marcar email como verificado en Firebase para evitar que se bloquee en el login futuro
+    try {
+      await adminAuth.updateUser(firebaseUid, { emailVerified: true })
+    } catch (err) {
+      console.warn('[Invitations] No se pudo marcar el email como verificado:', err)
+    }
 
     // Actualizar perfil del usuario invitado
     await mutate(
