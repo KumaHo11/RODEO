@@ -1460,7 +1460,7 @@ function InteractiveGantt({
                       opacity: number = 1, zIndex: number = 20, extraTitle: string = '', showLock: boolean = false,
                       innerLabel: string = '', innerLabelColor: string = '#4c1d95'
                     ) => {
-                      const isManualResizable = isGrabbable && !isCompleted && !hasRealEntry && !isSuggested
+                      const isManualResizable = !isDrawingMode && isGrabbable && !isCompleted && !hasRealEntry && !isSuggested
                       return (
                       <div
                         key={key}
@@ -1490,8 +1490,11 @@ function InteractiveGantt({
                           gap: 3,
                         }}
                         className="transition-all hover:brightness-90 relative group/block"
-                        onMouseDown={e => isGrabbable && !isCompleted && !hasRealEntry && handleMouseDown(e, plan)}
-                        onClick={(e) => { e.stopPropagation(); onBlockClick(plan, e) }}
+                        onMouseDown={e => !isDrawingMode && isGrabbable && !isCompleted && !hasRealEntry && handleMouseDown(e, plan)}
+                        onClick={(e) => { 
+                          e.stopPropagation()
+                          if (!isDrawingMode) onBlockClick(plan, e) 
+                        }}
                         title={`${extraTitle} — ${herdLabel} · ${isCompleted ? ' ✔ Completado' : ''}`}
                       >
                         {showLock && <Lock className="w-3 h-3 text-gray-800 opacity-70 shrink-0" />}

@@ -578,7 +578,7 @@ export default function SeasonPlanModal({
         method: 'PATCH',
         body: JSON.stringify({ default_daily_allocation_kg: dailyAllocationKg, default_target_remnant_kg_ha: targetRemnant }),
       }).catch(() => {})
-      const fullPlan = { ...payload, ...data } as SeasonPlan
+      const fullPlan = { ...payload, ...data, id: existingPlan?.id || data.id } as SeasonPlan
       import('@/lib/analytics').then(({ event }) => event({ action: 'plan_wizard_complete', category: 'planner', mode: isSuggestedMode ? 'sugerido' : 'manual', season_days: seasonDays, herds_count: selectedHerdIds.length }))
       onSaved(fullPlan)
       onClose()
