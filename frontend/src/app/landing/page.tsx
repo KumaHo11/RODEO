@@ -914,18 +914,12 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-10 mb-12">
             <div>
-              <div className="text-xl font-black italic text-white tracking-tighter mb-3">RODEO</div>
+              <div className="mb-4">
+                <RodeoLogo variant="light" size="md" showTagline={false} />
+              </div>
               <p className="text-sm leading-relaxed text-gray-400">
                 Plataforma de gestión ganadera con IA y pastoreo holístico para el productor latinoamericano.
               </p>
-              <div className="flex gap-2 mt-5">
-                {['Instagram', 'LinkedIn', 'YouTube'].map(s => (
-                  <a key={s} href="#"
-                    className="text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors font-medium text-gray-300 hover:text-white">
-                    {s}
-                  </a>
-                ))}
-              </div>
             </div>
 
             {[
@@ -947,8 +941,6 @@ export default function LandingPage() {
                 { label: 'Centro de ayuda',     href: '/soporte/centro-de-ayuda' },
                 { label: 'Contacto',            href: '/soporte/contacto' },
                 { label: 'Estado del servicio', href: '/soporte/estado-del-servicio' },
-                { label: 'Términos de uso',     href: '/soporte/terminos-de-uso' },
-                { label: 'Privacidad',          href: '/soporte/privacidad' },
               ]},
             ].map((col, i) => (
               <div key={i}>
