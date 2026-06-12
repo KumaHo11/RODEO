@@ -514,26 +514,31 @@ export default function RegisterPage() {
       {/* Terms Modal */}
       <AnimatePresence>
         {showTermsModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div 
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 sm:p-6 md:p-8 backdrop-blur-sm"
+            onClick={() => setShowTermsModal(false)}
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
             >
-              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white z-10">
-                <h2 className="text-lg font-black text-gray-900">Términos y Condiciones</h2>
-                <button onClick={() => setShowTermsModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                  Cerrar
+              <div className="p-6 md:p-8 border-b border-gray-100 flex justify-between items-center bg-white z-10">
+                <h2 className="text-xl md:text-2xl font-bold text-gray-900">Términos y Condiciones</h2>
+                <button onClick={() => setShowTermsModal(false)} className="text-gray-500 font-semibold hover:text-gray-900 transition-colors flex items-center gap-1">
+                  <span>Cerrar</span>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="p-6 overflow-y-auto flex-1 prose prose-sm text-gray-600"
+              <div className="p-6 md:p-10 overflow-y-auto flex-1 prose prose-gray max-w-none text-gray-600 prose-headings:font-semibold prose-headings:text-gray-800 prose-p:leading-relaxed"
                    dangerouslySetInnerHTML={{ __html: activeTerms?.content || 'Cargando términos y condiciones...' }}
               />
-              <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 z-10">
+              <div className="p-4 md:p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 z-10">
                 <button
                   onClick={() => setShowTermsModal(false)}
-                  className="px-4 py-2.5 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+                  className="px-4 py-2.5 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-200 transition-colors"
                 >
                   Cancelar
                 </button>

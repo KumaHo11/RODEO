@@ -71,22 +71,22 @@ export default function TermsGate({ children }: { children: React.ReactNode }) {
       
       <AnimatePresence>
         {needsAcceptance && activeTerms && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6 md:p-8">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden relative"
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden relative"
             >
-              <div className="p-6 border-b border-gray-100 flex flex-col gap-1 bg-white z-10 shrink-0">
-                <h2 className="text-xl font-black text-gray-900">Actualización de Términos y Condiciones</h2>
+              <div className="p-6 md:p-8 border-b border-gray-100 flex flex-col gap-1 bg-white z-10 shrink-0">
+                <h2 className="text-xl md:text-2xl font-bold text-gray-900">Actualización de Términos y Condiciones</h2>
                 <p className="text-sm text-gray-500 font-medium">
                   Hemos actualizado nuestros Términos y Condiciones. Debes aceptarlos para continuar usando Rodeo.
                 </p>
               </div>
               
               <div 
-                className="p-6 overflow-y-auto flex-1 prose prose-sm text-gray-600 prose-headings:font-black prose-a:text-green-600 focus:outline-none"
+                className="p-6 md:p-10 overflow-y-auto flex-1 prose prose-gray max-w-none text-gray-600 prose-headings:font-semibold prose-headings:text-gray-800 prose-p:leading-relaxed prose-a:text-green-600 focus:outline-none"
                 dangerouslySetInnerHTML={{ __html: activeTerms.content }}
               />
 
