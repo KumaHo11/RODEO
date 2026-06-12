@@ -914,8 +914,8 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-10 mb-12">
             <div>
-              <div className="mb-4">
-                <RodeoLogo variant="light" size="md" showTagline={false} />
+              <div className="mb-6">
+                <img src="/LogoHeaderBlanco.svg" alt="Rodeo" className="h-6 w-auto" />
               </div>
               <p className="text-sm leading-relaxed text-gray-400">
                 Plataforma de gestión ganadera con IA y pastoreo holístico para el productor latinoamericano.
