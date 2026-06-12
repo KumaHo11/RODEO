@@ -14,7 +14,7 @@ import { sendEmail } from '@/lib/email'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { idToken, firstName, lastName, phone, country, countryCode } = body
+    const { idToken, firstName, lastName, phone, country, countryCode, termsVersionId } = body
 
     if (!idToken) {
       return NextResponse.json({ error: 'ID Token requerido' }, { status: 400 })
@@ -69,13 +69,25 @@ export async function POST(req: NextRequest) {
     )
     const orgId = orgResult.rows[0]?.id
 
-    await mutate(
+    const profileResult = await mutate(
       `INSERT INTO profiles
         (firebase_uid, email, first_name, last_name, phone, organization_id,
          role, onboarding_step, country_code)
-       VALUES ($1, $2, $3, $4, $5, $6, 'OWNER', 0, $7)`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'OWNER', 0, $7)
+       RETURNING id`,
       [uid, email, firstName, lastName, phone || null, orgId, countryCode || 'AR']
     )
+    const profileId = profileResult.rows[0]?.id
+
+    // 3.5. Registrar aceptación de Términos y Condiciones
+    if (termsVersionId && profileId) {
+      const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'unknown'
+      await mutate(
+        `INSERT INTO user_terms_acceptances (profile_id, version_id, ip_address)
+         VALUES ($1, $2, $3)`,
+        [profileId, termsVersionId, ipAddress]
+      )
+    }
 
     // 4. Generar link de verificación de email con Firebase Admin
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'

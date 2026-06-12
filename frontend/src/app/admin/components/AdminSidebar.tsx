@@ -27,6 +27,7 @@ const NAV_ITEMS = [
     items: [
       { href: '/admin/audit-logs', label: 'Auditoría'     },
       { href: '/admin/config',     label: 'Configuración' },
+      { href: '/admin/terms',      label: 'Términos'      },
     ],
   },
 ]

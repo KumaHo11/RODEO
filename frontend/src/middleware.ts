@@ -200,11 +200,14 @@ export async function middleware(request: NextRequest) {
 
   // 5. Rutas protegidas → verificar token
   const protectedRoutes = ['/dashboard', '/onboarding']
-  if (protectedRoutes.some(r => pathname.startsWith(r))) {
+  const isSoporteTerminos = pathname.startsWith('/soporte/terminos-de-uso')
+
+  if (protectedRoutes.some(r => pathname.startsWith(r)) || isSoporteTerminos) {
     const token = request.cookies.get('__session')?.value
 
     // Sin token en cookie → definitivamente no autenticado
     if (!token) {
+      if (isSoporteTerminos) return NextResponse.redirect(new URL('/', request.url))
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('next', pathname)
       return NextResponse.redirect(loginUrl)
@@ -214,6 +217,7 @@ export async function middleware(request: NextRequest) {
 
     // Token inválido (firma mala, expirado) → login
     if (!result) {
+      if (isSoporteTerminos) return NextResponse.redirect(new URL('/', request.url))
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('next', pathname)
       return NextResponse.redirect(loginUrl)
@@ -224,7 +228,7 @@ export async function middleware(request: NextRequest) {
     if ('networkError' in result) return response
 
     // Super Admin no debería estar en /dashboard
-    if (result.payload.system_role === 'SUPER_ADMIN') {
+    if (result.payload.system_role === 'SUPER_ADMIN' && !isSoporteTerminos) {
       return NextResponse.redirect(new URL('/admin/dashboard', request.url))
     }
 

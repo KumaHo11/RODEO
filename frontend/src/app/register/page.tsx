@@ -106,6 +106,9 @@ export default function RegisterPage() {
   const [serverError,      setServerError]      = useState<string | null>(null)
   const [showPassword,     setShowPassword]     = useState(false)
   const [showConfirm,      setShowConfirm]      = useState(false)
+  const [termsAccepted,    setTermsAccepted]    = useState(false)
+  const [activeTerms,      setActiveTerms]      = useState<any>(null)
+  const [showTermsModal,   setShowTermsModal]   = useState(false)
 
   // Per-field error state — only shown after the field is touched/blurred
   const [errors, setErrors] = useState<Record<string, string | null>>({})
@@ -126,6 +129,16 @@ export default function RegisterPage() {
         setCountries(sorted)
         const arg = sorted.find(c => c.cca2 === 'AR')
         if (arg) { setCountry(arg.name.common); setCountryCode('AR'); setDialCode(getDialCode('AR', arg.idd)) }
+      })
+      .catch(console.error)
+
+    // Fetch active Terms & Conditions
+    fetch('/api/terms/active')
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          setActiveTerms(res.data)
+        }
       })
       .catch(console.error)
   }, [])
@@ -173,6 +186,11 @@ export default function RegisterPage() {
     setErrors(newErrors)
     if (Object.values(newErrors).some(Boolean)) return
 
+    if (!termsAccepted) {
+      setServerError('Debes aceptar los Términos y Condiciones para continuar.')
+      return
+    }
+
     setLoading(true)
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
@@ -183,7 +201,10 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken, firstName, lastName, phone: fullPhone, country, countryCode }),
+        body: JSON.stringify({ 
+          idToken, firstName, lastName, phone: fullPhone, country, countryCode,
+          termsVersionId: activeTerms?.id
+        }),
       })
       const data = await res.json()
 
@@ -414,6 +435,28 @@ export default function RegisterPage() {
                 <FieldError msg={fieldError('confirmPassword')} />
               </div>
 
+              {/* Terms Checkbox */}
+              <div className="flex items-start gap-2 py-2">
+                <input
+                  type="checkbox"
+                  id="terms"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 cursor-pointer"
+                />
+                <label htmlFor="terms" className="text-xs text-gray-500 leading-tight">
+                  Acepto los{' '}
+                  <button 
+                    type="button"
+                    onClick={() => setShowTermsModal(true)}
+                    className="text-green-600 font-bold hover:underline"
+                  >
+                    Términos y Condiciones y la Política de Privacidad
+                  </button>{' '}
+                  de Rodeo.
+                </label>
+              </div>
+
               {/* Server-level error */}
               <AnimatePresence>
                 {serverError && (
@@ -452,6 +495,48 @@ export default function RegisterPage() {
           )}
         </div>
       </div>
+
+      {/* Terms Modal */}
+      <AnimatePresence>
+        {showTermsModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+            >
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white z-10">
+                <h2 className="text-lg font-black text-gray-900">Términos y Condiciones</h2>
+                <button onClick={() => setShowTermsModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                  Cerrar
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 prose prose-sm text-gray-600"
+                   dangerouslySetInnerHTML={{ __html: activeTerms?.content || 'Cargando términos y condiciones...' }}
+              />
+              <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 z-10">
+                <button
+                  onClick={() => setShowTermsModal(false)}
+                  className="px-4 py-2.5 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    setTermsAccepted(true)
+                    setShowTermsModal(false)
+                  }}
+                  className="bg-green-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-colors shadow-sm"
+                >
+                  Aceptar y cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   )
 }

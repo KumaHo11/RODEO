@@ -19,6 +19,7 @@ import RodeoLogo from '@/components/RodeoLogo'
 import { WelcomeScreen } from '@/components/WelcomeScreen'
 import { WeatherProvider } from '@/lib/context/WeatherContext'
 import { ClimateAnalyticsProvider } from '@/lib/context/ClimateAnalyticsContext'
+import TermsGate from '@/components/TermsGate'
 
 const NOTIF_ICONS: Record<string, React.ComponentType<any>> = {
   EVENTO:    CalendarDays,
@@ -709,13 +710,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* ── Page content ───────────────────────────────────────────────────── */}
         <main className="flex-1 overflow-y-auto flex flex-col min-h-0 focus:outline-none" tabIndex={-1}>
-          {isMiCampo ? (
-            <div className="flex-1 flex flex-col md:overflow-hidden md:h-full focus:outline-none">{children}</div>
-          ) : (
-            <div className="flex flex-col min-h-full px-3 sm:px-6 lg:px-8 py-4 pb-6 max-w-[1800px] w-full mx-auto focus:outline-none">
-              {children}
-            </div>
-          )}
+          <TermsGate>
+            {isMiCampo ? (
+              <div className="flex-1 flex flex-col md:overflow-hidden md:h-full focus:outline-none">{children}</div>
+            ) : (
+              <div className="flex flex-col min-h-full px-3 sm:px-6 lg:px-8 py-4 pb-6 max-w-[1800px] w-full mx-auto focus:outline-none">
+                {children}
+              </div>
+            )}
+          </TermsGate>
         </main>
 
 
