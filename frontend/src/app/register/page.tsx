@@ -123,24 +123,39 @@ export default function RegisterPage() {
   // ─── Country list ─────────────────────────────────────────────────────────
   useEffect(() => {
     fetch('https://restcountries.com/v3.1/all?fields=name,cca2,idd')
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error('Network response was not ok')
+        return r.json()
+      })
       .then((data: Country[]) => {
         const sorted = data.sort((a, b) => a.name.common.localeCompare(b.name.common))
         setCountries(sorted)
         const arg = sorted.find(c => c.cca2 === 'AR')
         if (arg) { setCountry(arg.name.common); setCountryCode('AR'); setDialCode(getDialCode('AR', arg.idd)) }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.warn('Countries API error, falling back to Argentina:', err)
+        const fallbackAR = { name: { common: 'Argentina' }, cca2: 'AR', idd: { root: '+5', suffixes: ['4'] } }
+        setCountries([fallbackAR as unknown as Country])
+        setCountry('Argentina')
+        setCountryCode('AR')
+        setDialCode('+54')
+      })
 
     // Fetch active Terms & Conditions
     fetch('/api/terms/active')
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error('Failed to fetch terms')
+        return r.json()
+      })
       .then(res => {
         if (res.success) {
           setActiveTerms(res.data)
         }
       })
-      .catch(console.error)
+      .catch(err => {
+        console.warn('Could not fetch active terms:', err)
+      })
   }, [])
 
   const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
