@@ -90,14 +90,6 @@ jobs:
           NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY }}
           TITILER_URL: ${{ secrets.TITILER_URL }}
 
-      - name: 'Run Database Migrations'
-        run: |-
-          cd frontend
-          npm install prisma
-          npx prisma db push --skip-generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
-
       - name: 'Deploy to Cloud Run'
         run: |-
           gcloud run deploy ${{ env.SERVICE_NAME }} \
