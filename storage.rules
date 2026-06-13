@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Deny all access by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+    
+    // Only allow authenticated users to read and write their own folders
+    match /users/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Organizations folder: only users belonging to the org should access it
+    match /organizations/{orgId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null; 
+    }
+
+    // Public assets
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if false; 
+    }
+  }
+}
