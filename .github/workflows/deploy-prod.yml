@@ -110,6 +110,7 @@ jobs:
         run: |-
           # Inject hosting config into firebase.json to route all traffic to the Cloud Run service
           jq '. + {"hosting": {"public": "public", "rewrites": [{"source": "**", "run": {"serviceId": "${{ env.SERVICE_NAME }}", "region": "${{ env.REGION }}"}}]}}' firebase.json > firebase.tmp.json && mv firebase.tmp.json firebase.json
-          mkdir -p public && echo "Cargando Rodeo..." > public/index.html
+          mkdir -p public && touch public/.gitkeep
           npm install -g firebase-tools
-          firebase deploy --only firestore:rules,storage,hosting --project ${{ env.PROJECT_ID }} --token ${{ secrets.FIREBASE_TOKEN_PROD }}
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_key.json
+          firebase deploy --only firestore:rules,storage,hosting --project ${{ env.PROJECT_ID }}
