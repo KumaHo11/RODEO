@@ -6,11 +6,11 @@ on:
       - main
 
 env:
-  PROJECT_ID: rodeo-app-prod
+  PROJECT_ID: rodeo-app-prod-v1
   REGION: southamerica-east1
   SERVICE_NAME: rodeo-prod
   REGISTRY: southamerica-east1-docker.pkg.dev
-  IMAGE: southamerica-east1-docker.pkg.dev/rodeo-app-prod/rodeo-images/rodeo-frontend:${{ github.sha }}
+  IMAGE: southamerica-east1-docker.pkg.dev/rodeo-app-prod-v1/rodeo-images/rodeo-frontend:${{ github.sha }}
   PROD_URL: https://rodeoagtech.com
 
 jobs:
