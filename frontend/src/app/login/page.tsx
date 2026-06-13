@@ -29,12 +29,15 @@ function LoginContent() {
   const isDisabled   = searchParams.get('disabled') === '1'
 
   useEffect(() => {
+    if (searchParams.get('error') === 'not_found') {
+      setError('El usuario o contraseña son incorrectos.')
+    }
     // Solo redirigir si ya hay sesión activa al montar (refresh de página, sesión persistida)
     // No interferir si el loading manual del handleLogin está activo
     if (!isLoading && !loading && user && user.emailVerified) {
       redirectAfterAuth()
     }
-  }, [user, isLoading, loading, profile])
+  }, [user, isLoading, loading, profile, searchParams])
 
   async function redirectAfterAuth() {
     try {

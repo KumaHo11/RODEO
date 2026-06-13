@@ -103,6 +103,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
+      // Usuario no existe en la DB (ej. cuenta de staging logueando en producción)
+      if (res.status === 404) {
+        await firebaseSignOut(auth)
+        document.cookie = '__session=; path=/; max-age=0'
+        window.location.href = '/login?error=not_found'
+        return
+      }
+
       // Fallback al caché si la API falló por cualquier motivo
       try {
         const cached = localStorage.getItem('rodeo_cached_profile')
