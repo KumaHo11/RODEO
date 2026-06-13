@@ -5,5 +5,17 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": "public",
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "rodeo-staging",
+          "region": "southamerica-east1"
+        }
+      }
+    ]
   }
 }
