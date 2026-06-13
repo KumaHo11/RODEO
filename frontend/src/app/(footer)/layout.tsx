@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
-import RodeoLogo from '@/components/RodeoLogo'
+
 
 const footerLinks = {
   Producto: [
@@ -44,7 +44,7 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/landing" className="flex items-center gap-3">
-            <RodeoLogo variant="light" size="md" showTagline={false} />
+            <img src="/LogoHeaderVerde.svg" alt="Rodeo" className="h-7 w-auto" />
           </Link>
 
           <div className="hidden lg:flex items-center gap-8">
