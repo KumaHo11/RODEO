@@ -23,7 +23,7 @@ ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users view own notifications" ON notifications;
 CREATE POLICY "Users view own notifications" ON notifications
   FOR ALL USING (
-    user_id = (SELECT id FROM profiles WHERE firebase_uid = auth.uid() LIMIT 1)
+    user_id = (SELECT id FROM profiles WHERE firebase_uid = gen_random_uuid() LIMIT 1)
   );
 
 -- Completado

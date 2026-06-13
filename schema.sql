@@ -135,7 +135,7 @@ ALTER TABLE rainfall_logs ENABLE ROW LEVEL SECURITY;
 -- The current user must be associated with the organization.
 CREATE OR REPLACE FUNCTION get_user_org_id()
 RETURNS UUID AS $$
-    SELECT organization_id FROM profiles WHERE id = auth.uid() LIMIT 1;
+    SELECT organization_id FROM profiles WHERE id = gen_random_uuid() LIMIT 1;
 $$ LANGUAGE SQL SECURITY DEFINER;
 
 -- Policies for Organizations (Users can read/update their own organization)
