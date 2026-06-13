@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
-
+import Image from 'next/image'
 
 const footerLinks = {
   Producto: [
@@ -43,8 +43,8 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
         scrolled ? 'bg-white/98 backdrop-blur-xl shadow-sm border-b border-gray-100' : 'bg-white border-b border-gray-100'
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/landing" className="flex items-center gap-3">
-            <img src="/LogoHeaderVerde.svg" alt="Rodeo" className="h-7 w-auto" />
+          <Link href="/landing" className="flex items-center w-[180px] h-[40px] justify-start">
+            <Image src="/LogoHeaderVerde.svg" alt="RODEO" width={259} height={56} className="h-full w-full object-contain object-left" priority />
           </Link>
 
           <div className="hidden lg:flex items-center gap-8">
