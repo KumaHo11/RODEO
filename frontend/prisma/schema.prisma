@@ -29,7 +29,7 @@ model SubscriptionPlan {
 
 model Organization {
   id                 String            @id @default(uuid()) @db.Uuid
-  ownerId            String            @map("owner_id") @db.Uuid
+  ownerId            String?           @map("owner_id") @db.Uuid
   name               String            @db.VarChar(255)
   totalAreaHa        Decimal?          @map("total_area_ha") @db.Decimal(10, 2)
   regionId           String?           @map("region_id") @db.VarChar(50)
@@ -207,7 +207,7 @@ model WeatherEventPaddock {
 model Payment {
   id                 String            @id @default(uuid()) @db.Uuid
   orgId              String            @map("org_id") @db.Uuid
-  ownerId            String            @map("owner_id") @db.Uuid
+  ownerId            String?           @map("owner_id") @db.Uuid
   provider           String            @db.VarChar(20)
   providerCustomerId String?           @map("provider_customer_id") @db.VarChar(255)
   providerSubId      String?           @map("provider_sub_id") @db.VarChar(255)
