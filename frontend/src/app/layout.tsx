@@ -79,7 +79,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} overflow-x-hidden`}>
         <AuthProvider>
           <OfflineManager>
             {children}

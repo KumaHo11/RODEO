@@ -342,10 +342,15 @@ export default function LandingPage() {
 
         {menuOpen && (
           <div className="lg:hidden bg-white border-t border-gray-100 px-6 py-4 space-y-1">
-            {['Producto', 'Precios', 'Testimonios'].map(item => (
-              <a key={item} href={`#${item.toLowerCase()}`} onClick={() => setMenuOpen(false)}
+            {[
+              { label: 'Producto', href: '#producto' },
+              { label: 'Precios', href: '#precios' },
+              { label: 'Cómo Funciona', href: '#como-funciona' },
+              { label: 'Testimonios', href: '#testimonios' },
+            ].map(item => (
+              <a key={item.label} href={item.href} onClick={() => setMenuOpen(false)}
                 className="block text-sm font-medium text-gray-700 py-2.5 border-b border-gray-50 last:border-0">
-                {item}
+                {item.label}
               </a>
             ))}
             <div className="pt-3 flex flex-col gap-2">

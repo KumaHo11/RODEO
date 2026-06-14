@@ -255,7 +255,7 @@ export default function RegisterPage() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row bg-white font-sans text-gray-900">
+    <div className="flex min-h-[100dvh] flex-col lg:flex-row bg-white font-sans text-gray-900">
 
       {/* Visual Side */}
       <div className="hidden lg:flex lg:w-1/2 bg-green-700 items-center justify-center overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)] relative">

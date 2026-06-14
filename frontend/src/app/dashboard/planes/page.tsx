@@ -288,7 +288,7 @@ export default function PlanesPage() {
       }
 
       // Sin pasarela configurada — contactar
-      toast.info('Para contratar este plan contactá a soporte: soporte@rodeoagtech.com')
+      toast.info('Para contratar este plan contactá a soporte: josorio@rodeoagtech.com')
     } catch {
       toast.error('No se pudo iniciar el proceso de pago. Intentá de nuevo.')
     } finally {
@@ -373,7 +373,7 @@ export default function PlanesPage() {
       <p className="text-center text-xs text-gray-400 mt-10 font-medium px-4">
         Los precios se expresan en USD por Equivalente Vaca (EV) por mes.
         Podés cancelar o cambiar de plan en cualquier momento.
-        Para consultas: <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="text-green-600 font-bold">{process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}</a>
+        Para consultas: <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}`} className="text-green-600 font-bold">{process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}</a>
       </p>
 
       <Modal

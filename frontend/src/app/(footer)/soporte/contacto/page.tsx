@@ -172,7 +172,7 @@ export default function Contacto() {
                     <p className="text-red-600 text-sm bg-red-50 border border-red-100 rounded-xl px-4 py-3">
                       Hubo un error al enviar el mensaje. Por favor intentá nuevamente o
                       escribinos directamente a{' '}
-                      <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="font-bold underline">{process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}</a>.
+                      <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}`} className="font-bold underline">{process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}</a>.
                     </p>
                   )}
 
@@ -208,8 +208,8 @@ export default function Contacto() {
                     <div>
                       <div className="font-bold text-gray-900 mb-1">Soporte por correo</div>
                       <p className="text-sm text-gray-500 mb-2">Para consultas técnicas y de producto. Respondemos en menos de 24 horas hábiles.</p>
-                      <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}`} className="text-sm font-bold text-green-600 hover:text-green-700">
-                        {process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'soporte@rodeoagtech.com'}
+                      <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}`} className="text-sm font-bold text-green-600 hover:text-green-700">
+                        {process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}
                       </a>
                     </div>
                   </div>
