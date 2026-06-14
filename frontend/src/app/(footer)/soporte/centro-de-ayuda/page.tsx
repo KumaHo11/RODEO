@@ -157,9 +157,9 @@ export default function CentroDeAyuda() {
                 Escribir al soporte
                 <ArrowRight className="w-4 h-4" />
               </Link>
-              <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}`}
+              <a href="mailto:josorio@rodeoagtech.com"
                 className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/15 text-white font-medium px-6 py-3 rounded-xl text-sm transition-all">
-                {process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}
+                soporte@rodeoagtech.com
               </a>
             </div>
           </div>

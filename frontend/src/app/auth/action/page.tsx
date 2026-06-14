@@ -60,7 +60,7 @@ function ActionContent() {
         if (err.code === 'auth/invalid-action-code' || err.code === 'auth/expired-action-code') {
           setMessage('El enlace de verificación ya fue usado o expiró. Registrate nuevamente para recibir un nuevo correo.')
         } else if (err.code === 'auth/user-disabled') {
-          setMessage('Tu cuenta fue deshabilitada. Contactá a soporte en josorio@rodeoagtech.com.')
+          setMessage('Tu cuenta fue deshabilitada. Contactá a soporte en soporte@rodeoagtech.com.')
         } else {
           setMessage('Ocurrió un error al verificar tu cuenta. Intentá nuevamente o contactá a soporte.')
         }
@@ -161,8 +161,8 @@ function ActionContent() {
 
               <p className="text-center text-xs text-gray-400">
                 ¿Necesitás ayuda?{' '}
-                <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}`} className="text-green-600 font-bold hover:underline">
-                  {process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'josorio@rodeoagtech.com'}
+                <a href="mailto:josorio@rodeoagtech.com" className="text-green-600 font-bold hover:underline">
+                  soporte@rodeoagtech.com
                 </a>
               </p>
             </motion.div>

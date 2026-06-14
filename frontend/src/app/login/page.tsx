@@ -119,7 +119,7 @@ function LoginContent() {
       } else if (code === 'auth/too-many-requests') {
         setError('Demasiados intentos fallidos. Intenta más tarde.')
       } else if (code === 'auth/user-disabled') {
-        setError('Tu cuenta fue suspendida. Contactá a soporte en josorio@rodeoagtech.com')
+        setError('Tu cuenta fue suspendida. Contactá a soporte en soporte@rodeoagtech.com')
       } else if (code === 'auth/network-request-failed') {
         setError('No hay conexión a internet. Para iniciar sesión por primera vez o si cerraste sesión, necesitás conectividad. Si ya habías iniciado sesión, verificá tu conexión e intentá recargar la página.')
       } else {
