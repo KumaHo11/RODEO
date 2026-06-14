@@ -98,6 +98,15 @@ function LoginContent() {
         event({ action: 'login', category: 'auth', method: 'email' })
       })
 
+      // Set cookie BEFORE redirecting to prevent middleware bounce
+      try {
+        const token = await refreshedUser.getIdToken(true)
+        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
+        document.cookie = `__session=${token}; path=/; max-age=3600; SameSite=Lax${isHttps ? '; Secure' : ''}`
+      } catch (e) {
+        console.error('Error setting session cookie:', e)
+      }
+
       // Email verificado: redirigir activamente sin esperar al useEffect
       // Esto evita el deadlock si fetchProfile del AuthProvider tarda o falla
       if (nextPath && nextPath !== '/login') {
