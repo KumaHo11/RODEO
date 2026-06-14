@@ -242,7 +242,7 @@ export default function RegisterPage() {
         event({ action: 'sign_up_error', category: 'auth', error_type: err.code || 'unknown' })
       })
       if (err.code === 'auth/email-already-in-use') {
-        setServerError('Este correo ya está registrado. Por favor, inicia sesión.')
+        setServerError('Este correo ya está registrado en Rodeo. Por favor, inicia sesión para acceder o sincronizar tu perfil.')
       } else if (err.code === 'auth/weak-password') {
         setServerError('La contraseña debe tener al menos 6 caracteres.')
       } else {
