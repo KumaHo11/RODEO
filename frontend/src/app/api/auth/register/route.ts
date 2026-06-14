@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
 
     const orgResult = await mutate(
       `INSERT INTO organizations
-         (name, subscription_plan_id, plan_status, trial_ends_at)
-       VALUES ($1, $2, $3, $4)
+         (id, name, subscription_plan_id, plan_status, trial_ends_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4)
        RETURNING id`,
       [
         `${firstName || 'Mi'} Ranch`,
@@ -70,9 +70,9 @@ export async function POST(req: NextRequest) {
 
     const profileResult = await mutate(
       `INSERT INTO profiles
-        (firebase_uid, email, first_name, last_name, phone, organization_id,
+        (id, firebase_uid, email, first_name, last_name, phone, organization_id,
          role, onboarding_step, country_code)
-       VALUES ($1, $2, $3, $4, $5, $6, 'OWNER', 0, $7)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'OWNER', 0, $7)
        RETURNING id`,
       [uid, email, firstName, lastName, phone || null, orgId, countryCode || 'AR']
     )
@@ -87,8 +87,8 @@ export async function POST(req: NextRequest) {
     if (termsVersionId && profileId) {
       const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'unknown'
       await mutate(
-        `INSERT INTO user_terms_acceptances (profile_id, version_id, ip_address)
-         VALUES ($1, $2, $3)`,
+        `INSERT INTO user_terms_acceptances (id, profile_id, version_id, ip_address)
+         VALUES (gen_random_uuid(), $1, $2, $3)`,
         [profileId, termsVersionId, ipAddress]
       )
     }
