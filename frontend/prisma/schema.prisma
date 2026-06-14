@@ -46,6 +46,9 @@ model Organization {
   regionId           String?           @map("region_id") @db.VarChar(50)
   droughtPlanBuffer  Int?              @default(20) @map("drought_plan_buffer")
   subscriptionPlanId String?           @map("subscription_plan_id") @db.Uuid
+  planStatus         String?           @default("active") @map("plan_status") @db.VarChar(50)
+  trialEndsAt        DateTime?         @map("trial_ends_at") @db.Timestamptz
+  stripeCustomerId   String?           @map("stripe_customer_id") @db.VarChar(255)
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
   subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
@@ -65,10 +68,18 @@ model Profile {
   id                   String                 @id @db.Uuid
   organizationId       String?                @map("organization_id") @db.Uuid
   firebaseUid          String?                @unique @map("firebase_uid")
+  email                String?                @db.VarChar(255)
   role                 String?                @db.VarChar(50)
   isActive             Boolean?               @default(true) @map("is_active")
   firstName            String?                @map("first_name") @db.VarChar(255)
   lastName             String?                @map("last_name") @db.VarChar(255)
+  phone                String?                @db.VarChar(50)
+  avatarUrl            String?                @map("avatar_url") @db.Text
+  teamRole             String?                @map("team_role") @db.VarChar(50)
+  permissions          Json?
+  notificationPreferences Json?               @map("notification_preferences")
+  isFirstLogin         Boolean?               @default(true) @map("is_first_login")
+  systemRole           String?                @map("system_role") @db.VarChar(50)
   onboardingStep       Int?                   @default(0) @map("onboarding_step")
   completedTours       String[]               @default([]) @map("completed_tours")
   countryCode          String?                @map("country_code") @db.VarChar(2)
