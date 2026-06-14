@@ -390,3 +390,113 @@ model SystemFeatureFlag {
 
   @@map("system_feature_flags")
 }
+
+// ── Configuración del sistema (menú, integraciones, etc.) ────────────────────
+model SystemConfig {
+  key       String   @id @db.Text
+  value     String   @default("") @db.Text
+  label     String   @default("") @db.Text
+  category  String   @default("general") @db.Text
+  isSecret  Boolean  @default(false) @map("is_secret")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
+
+// ── Logs de auditoría ────────────────────────────────────────────────────────
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  actorEmail String?  @map("actor_email") @db.Text
+  action     String   @db.Text
+  entityType String?  @map("entity_type") @db.Text
+  entityId   String?  @map("entity_id") @db.Text
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  ipAddress  String?  @map("ip_address") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
+
+// ── Notas de campo (APP + WhatsApp) ─────────────────────────────────────────
+model FieldNote {
+  id             String   @id @default(uuid()) @db.Uuid
+  orgId          String   @map("org_id") @db.Uuid
+  createdBy      String?  @map("created_by") @db.Uuid
+  paddockId      String?  @map("paddock_id") @db.Uuid
+  tags           String[] @db.Text
+  category       String?  @db.Text
+  title          String?  @db.Text
+  content        String?  @db.Text
+  lat            Float?
+  lng            Float?
+  photoUrl       String?  @map("photo_url") @db.Text
+  photoUrls      String[] @map("photo_urls") @db.Text
+  audioUrl       String?  @map("audio_url") @db.Text
+  analysisResult Json?    @map("analysis_result")
+  source         String   @default("APP") @db.Text
+  status         String   @default("APPROVED") @db.Text
+  whatsappFrom   String?  @map("whatsapp_from") @db.Text
+  rawMessage     String?  @map("raw_message") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("field_notes")
+}
+
+// ── Notificaciones in-app ────────────────────────────────────────────────────
+model Notification {
+  id         String   @id @default(uuid()) @db.Uuid
+  orgId      String?  @map("org_id") @db.Uuid
+  profileId  String?  @map("profile_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  type       String   @default("INFO") @db.Text
+  title      String   @db.Text
+  message    String?  @db.Text
+  body       String?  @db.Text
+  data       Json?
+  entityType String?  @map("entity_type") @db.Text
+  entityId   String?  @map("entity_id") @db.Uuid
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+// ── Invitaciones de equipo ───────────────────────────────────────────────────
+model Invitation {
+  id          String    @id @default(uuid()) @db.Uuid
+  orgId       String    @map("org_id") @db.Uuid
+  invitedBy   String?   @map("invited_by") @db.Uuid
+  email       String    @db.Text
+  role        String    @default("MEMBER") @db.Text
+  teamRole    String?   @map("team_role") @db.Text
+  permissions Json?
+  status      String    @default("PENDING") @db.Text
+  token       String?   @unique @db.Text
+  expiresAt   DateTime? @map("expires_at")
+  acceptedAt  DateTime? @map("accepted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("invitations")
+}
+
+// ── Entradas de plan de pastoreo ─────────────────────────────────────────────
+model GrazingPlanEntry {
+  id        String   @id @default(uuid()) @db.Uuid
+  planId    String   @map("plan_id") @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  entryDate DateTime? @map("entry_date") @db.Date
+  exitDate  DateTime? @map("exit_date") @db.Date
+  herdId    String?  @map("herd_id") @db.Uuid
+  herdIds   Json?    @map("herd_ids")
+  notes     String?  @db.Text
+  status    String   @default("PLANNED") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("grazing_plan_entries")
+}
