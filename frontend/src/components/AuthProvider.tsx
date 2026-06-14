@@ -65,7 +65,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     try {
-      const idToken = await firebaseUser.getIdToken()
+      // Forzar refresh del token para garantizar que el UID y claims son frescos.
+      // Crítico después de la verificación de email: el token cacheado puede
+      // no tener el claim email_verified=true, causando 401/404 en el backend.
+      const idToken = await firebaseUser.getIdToken(/* forceRefresh */ true)
 
       // Timeout de 10 s (reducido de 15) para evitar que isLoading quede bloqueado si la DB tarda
       const controller = new AbortController()
