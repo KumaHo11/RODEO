@@ -30,36 +30,50 @@ model SubscriptionPlan {
   mpPlanId      String?        @map("mp_plan_id") @db.VarChar(255)
   mpPreapprovalPlanId  String? @map("mp_preapproval_plan_id") @db.Text
   isActive      Boolean        @default(true) @map("is_active")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at")
-  organizations Organization[]
-  payments      Payment[]
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at")
+  organizations     Organization[]
+  payments          Payment[]
+  planFeatureFlags  PlanFeatureFlag[]
 
   @@map("subscriptions_plans")
 }
 
 model Organization {
-  id                 String            @id @default(uuid()) @db.Uuid
-  ownerId            String?           @map("owner_id") @db.Uuid
-  name               String            @db.VarChar(255)
-  totalAreaHa        Decimal?          @map("total_area_ha") @db.Decimal(10, 2)
-  regionId           String?           @map("region_id") @db.VarChar(50)
-  droughtPlanBuffer  Int?              @default(20) @map("drought_plan_buffer")
-  subscriptionPlanId String?           @map("subscription_plan_id") @db.Uuid
-  planStatus         String?           @default("active") @map("plan_status") @db.VarChar(50)
-  trialEndsAt        DateTime?         @map("trial_ends_at") @db.Timestamptz
-  stripeCustomerId   String?           @map("stripe_customer_id") @db.VarChar(255)
-  createdAt          DateTime          @default(now()) @map("created_at")
-  updatedAt          DateTime          @updatedAt @map("updated_at")
-  subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
-  profiles           Profile[]
-  paddocks           Paddock[]
-  herds              Herd[]
-  rainfallLogs       RainfallLog[]
-  weatherEvents      WeatherEvent[]
-  payments           Payment[]
-  farmEvents         FarmEvent[]
-  tasks              Task[]
+  id                       String            @id @default(uuid()) @db.Uuid
+  // owner_id es VARCHAR(255) en la DB (creado antes de la FK constraint)
+  ownerId                  String?           @map("owner_id") @db.VarChar(255)
+  name                     String            @db.VarChar(255)
+  totalAreaHa              Decimal?          @map("total_area_ha") @db.Decimal(10, 2)
+  totalArea                Decimal?          @map("total_area") @db.Decimal(10, 2)
+  regionId                 String?           @map("region_id") @db.VarChar(50)
+  droughtPlanBuffer        Int?              @default(20) @map("drought_plan_buffer")
+  subscriptionPlanId       String?           @map("subscription_plan_id") @db.Uuid
+  // plan_status es TEXT en la DB (sin cast)
+  planStatus               String?           @default("active") @map("plan_status") @db.Text
+  trialEndsAt              DateTime?         @map("trial_ends_at") @db.Timestamptz
+  planExpiresAt            DateTime?         @map("plan_expires_at") @db.Timestamptz
+  stripeCustomerId         String?           @map("stripe_customer_id") @db.Text
+  stripeSubscriptionId     String?           @map("stripe_subscription_id") @db.Text
+  mpSubscriptionId         String?           @map("mp_subscription_id") @db.Text
+  address                  String?           @db.Text
+  locationLabel            String?           @map("location_label") @db.Text
+  defaultDailyAllocationKg Decimal?          @default(12) @map("default_daily_allocation_kg") @db.Decimal(10, 2)
+  defaultTargetRemnantKgHa Decimal?          @default(600) @map("default_target_remnant_kg_ha") @db.Decimal(10, 2)
+  technicalData            Json?             @default("{}") @map("technical_data")
+  createdAt                DateTime          @default(now()) @map("created_at")
+  updatedAt                DateTime          @updatedAt @map("updated_at")
+  subscriptionPlan         SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+  profiles                 Profile[]
+  paddocks                 Paddock[]
+  herds                    Herd[]
+  rainfallLogs             RainfallLog[]
+  weatherEvents            WeatherEvent[]
+  payments                 Payment[]
+  farmEvents               FarmEvent[]
+  tasks                    Task[]
+  climateProjections       ClimateProjection[]
+  movements                Movement[]
 
   @@map("organizations")
 }
@@ -68,7 +82,7 @@ model Profile {
   id                   String                 @id @db.Uuid
   organizationId       String?                @map("organization_id") @db.Uuid
   firebaseUid          String?                @unique @map("firebase_uid")
-  email                String?                @db.VarChar(255)
+  email                String?                @unique @db.VarChar(255)
   role                 String?                @db.VarChar(50)
   isActive             Boolean?               @default(true) @map("is_active")
   firstName            String?                @map("first_name") @db.VarChar(255)
@@ -79,7 +93,8 @@ model Profile {
   permissions          Json?
   notificationPreferences Json?               @map("notification_preferences")
   isFirstLogin         Boolean?               @default(true) @map("is_first_login")
-  systemRole           String?                @map("system_role") @db.VarChar(50)
+  // system_role es TEXT en la DB (sin VarChar constraint)
+  systemRole           String?                @map("system_role") @db.Text
   onboardingStep       Int?                   @default(0) @map("onboarding_step")
   completedTours       String[]               @default([]) @map("completed_tours")
   countryCode          String?                @map("country_code") @db.VarChar(2)
@@ -311,4 +326,67 @@ model UserTermsAcceptance {
   version TermsAndConditionsVersion @relation(fields: [versionId], references: [id])
 
   @@map("user_terms_acceptances")
+}
+
+// ── Movimientos ganaderos ──────────────────────────────────────────────────────
+model Movement {
+  id            String       @id @default(uuid()) @db.Uuid
+  orgId         String       @map("org_id") @db.Uuid
+  entityType    String       @map("entity_type") @db.Text
+  entityId      String       @map("entity_id") @db.Uuid
+  entityName    String?      @map("entity_name") @db.Text
+  eventType     String       @map("event_type") @db.Text
+  quantity      Int?
+  weightKg      Decimal?     @map("weight_kg") @db.Decimal(10, 2)
+  bcsScore      Decimal?     @map("bcs_score") @db.Decimal(5, 2)
+  categoria     String?      @db.Text
+  breed         String?      @db.Text
+  admissionDate DateTime?    @map("admission_date") @db.Date
+  notes         String?      @db.Text
+  metadata      Json?        @default("{}")
+  createdBy     String?      @map("created_by") @db.Uuid
+  occurredAt    DateTime     @default(now()) @map("occurred_at") @db.Timestamptz
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("movements")
+}
+
+// ── Proyecciones climáticas ────────────────────────────────────────────────────
+model ClimateProjection {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  projectedAt    DateTime     @default(now()) @map("projected_at") @db.Timestamptz
+  series         Json
+  meta           Json?
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("climate_projections")
+}
+
+// ── Feature flags por plan ─────────────────────────────────────────────────────
+model PlanFeatureFlag {
+  id       String           @id @default(uuid()) @db.Uuid
+  planId   String           @map("plan_id") @db.Uuid
+  flagKey  String           @map("flag_key") @db.Text
+  flagValue Json            @map("flag_value")
+  label    String?          @db.Text
+  flagType String?          @default("boolean") @map("flag_type") @db.Text
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, flagKey])
+  @@map("plan_feature_flags")
+}
+
+// ── Feature flags globales del sistema ────────────────────────────────────────
+model SystemFeatureFlag {
+  id          String   @id @default(uuid()) @db.Uuid
+  flagKey     String   @unique @map("flag_key") @db.VarChar(80)
+  flagType    String   @default("boolean") @map("flag_type") @db.VarChar(20)
+  flagValue   Json     @default("true") @map("flag_value")
+  description String?  @db.Text
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("system_feature_flags")
 }
