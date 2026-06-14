@@ -114,7 +114,7 @@ export default function CompleteProfilePage() {
   }, [user, router, firstName, lastName])
 
   useEffect(() => {
-    fetch('https://restcountries.com/v3.1/all?fields=name,cca2,idd')
+    fetch('/api/countries')
       .then(async r => {
         if (!r.ok) throw new Error('Network response was not ok')
         return r.json()

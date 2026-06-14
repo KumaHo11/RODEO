@@ -122,7 +122,7 @@ export default function RegisterPage() {
 
   // ─── Country list ─────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch('https://restcountries.com/v3.1/all?fields=name,cca2,idd')
+    fetch('/api/countries')
       .then(async r => {
         if (!r.ok) throw new Error('Network response was not ok')
         return r.json()
@@ -134,7 +134,6 @@ export default function RegisterPage() {
         if (arg) { setCountry(arg.name.common); setCountryCode('AR'); setDialCode(getDialCode('AR', arg.idd)) }
       })
       .catch((err) => {
-        console.warn('Countries API error, falling back to Argentina:', err)
         const fallbackAR = { name: { common: 'Argentina' }, cca2: 'AR', idd: { root: '+5', suffixes: ['4'] } }
         setCountries([fallbackAR as unknown as Country])
         setCountry('Argentina')
@@ -273,8 +272,8 @@ export default function RegisterPage() {
       </div>
 
       {/* Form Side */}
-      <div className="flex-1 flex items-center justify-center p-8 lg:p-24 overflow-y-auto">
-        <div className="w-full max-w-sm">
+      <div className="flex-1 flex flex-col py-8 lg:py-24 px-8 overflow-y-auto">
+        <div className="w-full max-w-sm my-auto mx-auto shrink-0">
 
           <div className="mb-10">
             <h1 className="text-3xl font-black tracking-tight text-gray-950 mb-2">Crea tu cuenta</h1>
