@@ -40,7 +40,7 @@ jobs:
         run: |
           cd frontend
           npm ci
-          npx prisma db push --skip-generate --accept-data-loss
+          npx prisma db push --skip-generate
           node insert_terms_v3.js
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}

@@ -35,6 +35,21 @@ jobs:
         run: |-
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+      # 4. Setup Node y ejecutar migraciones de DB
+      - name: 'Setup Node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 'Run Database Migrations & Seeds'
+        run: |
+          cd frontend
+          npm ci
+          npx prisma db push --skip-generate
+          node insert_terms_v3.js
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
       # 4. Construir la imagen local de Docker
       - name: 'Build Docker Image'
         run: |-

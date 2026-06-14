@@ -96,36 +96,46 @@ export async function POST(req: NextRequest) {
     // 4. Generar link de verificación de email con Firebase Admin
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
-    // actionUrl points to our custom handler (/auth/action) so Firebase redirects
-    // to our branded page instead of the generic Firebase "email verified" screen.
-    let verifyUrl = `${appUrl}/login?verified=1`  // fallback if everything fails
+    // Intentamos Admin SDK primero (más confiable y genera OOB link real).
+    // Si falla (ej. credenciales no configuradas), usamos la REST API como fallback.
+    let verifyUrl = `${appUrl}/login?verified=1`  // fallback final si todo falla
 
     try {
-      // Use Firebase REST API to generate the OOB link using the idToken
-      // This bypasses the need for FIREBASE_ADMIN credentials
-      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-      if (apiKey && idToken) {
-        const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            requestType: 'VERIFY_EMAIL',
-            idToken: idToken,
-            continueUrl: `${appUrl}/login?verified=1`,
-            returnOobLink: true
+      // Intento 1: Firebase Admin SDK
+      verifyUrl = await adminAuth.generateEmailVerificationLink(email!, {
+        url: `${appUrl}/login?verified=1`,
+        handleCodeInApp: false,
+      })
+      console.log('[Register] Email verify link generated via Admin SDK')
+    } catch (adminErr: any) {
+      console.warn('[Register] Admin SDK failed, trying REST API:', adminErr.message)
+      // Intento 2: Firebase REST API (funciona aunque Admin SDK no tenga credenciales)
+      try {
+        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+        if (apiKey && idToken) {
+          const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              requestType: 'VERIFY_EMAIL',
+              idToken: idToken,
+              continueUrl: `${appUrl}/login?verified=1`,
+              returnOobLink: true
+            })
           })
-        })
-        const data = await res.json()
-        if (data.oobLink) {
-          verifyUrl = data.oobLink
+          const data = await res.json()
+          if (data.oobLink) {
+            verifyUrl = data.oobLink
+            console.log('[Register] Email verify link generated via REST API fallback')
+          } else {
+            console.warn('[Register] REST API did not return oobLink:', data)
+          }
         } else {
-          console.warn('[Register] Firebase REST API did not return oobLink:', data)
+          console.warn('[Register] Missing API key or idToken for REST fallback')
         }
-      } else {
-        console.warn('[Register] Missing NEXT_PUBLIC_FIREBASE_API_KEY or idToken for REST API')
+      } catch (restErr: any) {
+        console.warn('[Register] REST API also failed, using plain login URL:', restErr.message)
       }
-    } catch (err: any) {
-      console.warn('[Register] Could not generate Firebase verify link via REST:', err.message)
     }
 
     // 5. Enviar email de bienvenida + verificación via SendGrid
