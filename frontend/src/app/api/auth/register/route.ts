@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
 
     const orgResult = await mutate(
       `INSERT INTO organizations
-         (id, name, subscription_plan_id, plan_status, trial_ends_at)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4)
+         (id, name, subscription_plan_id, plan_status, trial_ends_at, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW())
        RETURNING id`,
       [
         `${firstName || 'Mi'} Ranch`,
@@ -71,8 +71,8 @@ export async function POST(req: NextRequest) {
     const profileResult = await mutate(
       `INSERT INTO profiles
         (id, firebase_uid, email, first_name, last_name, phone, organization_id,
-         role, onboarding_step, country_code)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'OWNER', 0, $7)
+         role, onboarding_step, country_code, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'OWNER', 0, $7, NOW())
        RETURNING id`,
       [uid, email, firstName, lastName, phone || null, orgId, countryCode || 'AR']
     )
