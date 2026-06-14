@@ -54,11 +54,10 @@ export async function POST(req: NextRequest) {
 
     const orgResult = await mutate(
       `INSERT INTO organizations
-         (owner_id, name, subscription_plan_id, plan_status, trial_ends_at)
-       VALUES ($1, $2, $3, $4, $5)
+         (name, subscription_plan_id, plan_status, trial_ends_at)
+       VALUES ($1, $2, $3, $4)
        RETURNING id`,
       [
-        uid,
         `${firstName || 'Mi'} Ranch`,
         planRow?.id ?? null,
         planRow ? 'trialing' : 'active',
@@ -78,6 +77,11 @@ export async function POST(req: NextRequest) {
       [uid, email, firstName, lastName, phone || null, orgId, countryCode || 'AR']
     )
     const profileId = profileResult.rows[0]?.id
+
+    // Update organization with the proper owner_id (profile_id is a UUID, firebase_uid is not)
+    if (orgId && profileId) {
+      await mutate(`UPDATE organizations SET owner_id = $1 WHERE id = $2`, [profileId, orgId])
+    }
 
     // 3.5. Registrar aceptación de Términos y Condiciones
     if (termsVersionId && profileId) {
