@@ -107,7 +107,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (res.status === 404) {
         // Redirigimos a la página para que completen el registro en esta base de datos
         // usando el token actual de Firebase que sí es válido.
-        if (window.location.pathname !== '/register') {
+        if (window.location.pathname !== '/register' && window.location.pathname !== '/complete-profile') {
           window.location.href = '/complete-profile'
         }
         return
