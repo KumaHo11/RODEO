@@ -19,9 +19,11 @@ export async function GET(req: NextRequest) {
     // Verificar token con Firebase public keys
     const decoded = await verifyFirebaseToken(token)
     if (!decoded) {
+      console.warn('[profile] Token inválido — verifyFirebaseToken retornó null')
       return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
     }
     const firebaseUid = decoded.uid
+    console.log('[profile] Buscando UID:', firebaseUid, 'email_token:', decoded.email)
 
     // Buscar perfil en Cloud SQL
     const profile = await queryOne(
@@ -38,6 +40,7 @@ export async function GET(req: NextRequest) {
     )
 
     if (!profile) {
+      console.warn('[profile] NOT FOUND para UID:', firebaseUid)
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
 
