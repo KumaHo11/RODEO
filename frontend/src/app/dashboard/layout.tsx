@@ -401,7 +401,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-gray-100">
             {sidebarOpen && (
               <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-                <Image src="/LogoHeaderVerde.svg" alt="RODEO" width={259} height={56} className="h-full w-full object-contain" priority />
+                <Image src="/LogoHeaderVerde_1.svg" alt="RODEO" width={259} height={56} className="h-full w-full object-contain" priority />
               </Link>
             )}
             <button
@@ -459,7 +459,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="absolute left-0 top-0 bottom-0 w-72 bg-white flex flex-col shadow-2xl">
             <div className="flex h-14 items-center justify-between px-4 border-b border-gray-100">
               <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-                <Image src="/LogoHeaderVerde.svg" alt="RODEO" width={259} height={56} className="h-full w-full object-contain" priority />
+                <Image src="/LogoHeaderVerde_1.svg" alt="RODEO" width={259} height={56} className="h-full w-full object-contain" priority />
               </Link>
               <button onClick={() => setMobileMenuOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500">
                 <X className="w-4 h-4" />
