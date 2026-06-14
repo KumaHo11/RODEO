@@ -29,12 +29,15 @@ function LoginContent() {
   const isDisabled   = searchParams.get('disabled') === '1'
 
   useEffect(() => {
+    if (searchParams.get('error') === 'not_found') {
+      setError('El usuario o contraseña son incorrectos.')
+    }
     // Solo redirigir si ya hay sesión activa al montar (refresh de página, sesión persistida)
     // No interferir si el loading manual del handleLogin está activo
     if (!isLoading && !loading && user && user.emailVerified) {
       redirectAfterAuth()
     }
-  }, [user, isLoading, loading, profile])
+  }, [user, isLoading, loading, profile, searchParams])
 
   async function redirectAfterAuth() {
     try {
@@ -59,7 +62,7 @@ function LoginContent() {
   }
 
   if (isLoading) return (
-    <div className="min-h-screen flex items-center justify-center bg-white flex-col gap-4">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-white flex-col gap-4">
       <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
       <p className="text-gray-400 font-bold tracking-widest text-[10px]">Verificando sesión...</p>
     </div>
@@ -126,7 +129,7 @@ function LoginContent() {
   }
 
   return (
-    <main className="flex min-h-screen bg-white">
+    <main className="flex min-h-[100dvh] bg-white">
       {/* Visual Side */}
       <div className="hidden lg:flex w-1/2 bg-green-700 items-center justify-center relative overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)]">
         <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
@@ -159,7 +162,7 @@ function LoginContent() {
               <span className="text-red-500 text-base leading-none mt-0.5">⛔</span>
               <div>
                 <p className="text-red-900 text-xs font-black mb-0.5">Cuenta suspendida</p>
-                <p className="text-red-700 text-xs">Tu acceso fue deshabilitado por un administrador. Contactá a soporte en <strong>soporte@rodeoagtech.com</strong></p>
+                <p className="text-red-700 text-xs">Tu acceso fue deshabilitado por un administrador. Contactá a soporte en <strong>josorio@rodeoagtech.com</strong></p>
               </div>
             </motion.div>
           )}
@@ -267,7 +270,7 @@ function LoginContent() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-white flex-col gap-4">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-white flex-col gap-4">
         <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
         <p className="text-gray-400 font-bold tracking-widest text-[10px]">Cargando...</p>
       </div>

@@ -41,15 +41,20 @@ export async function requireAuth(req: NextRequest): Promise<AuthContext | null>
     return cached.data
   }
 
-  const profile = await queryOne<{ id: string; organization_id: string }>(
-    'SELECT id, organization_id FROM profiles WHERE firebase_uid = $1',
+  const profile = await queryOne<{ id: string; organization_id: string; system_role: string }>(
+    'SELECT id, organization_id, system_role FROM profiles WHERE firebase_uid = $1',
     [uid]
   )
 
-  if (!profile?.organization_id) return null
+  if (!profile) return null
+
+  // Si no tiene org_id Y tampoco es super_admin, falla.
+  if (!profile.organization_id && profile.system_role !== 'SUPER_ADMIN' && profile.system_role !== 'SUPPORT_AGENT') {
+    return null
+  }
 
   const ctx: AuthContext = {
-    orgId: profile.organization_id,
+    orgId: profile.organization_id || 'system',
     uid,
     profileId: profile.id,
   }

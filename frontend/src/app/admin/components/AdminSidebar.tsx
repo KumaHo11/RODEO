@@ -43,7 +43,7 @@ export default function AdminSidebar() {
       <div className={`flex items-center px-4 h-16 border-b border-gray-100 ${collapsed ? 'justify-center' : ''}`}>
         {!collapsed ? (
           <Link href="/admin/dashboard" className="flex flex-col justify-center mt-1">
-            <Image src="/LogoHeaderVerde.svg" alt="RODEO" width={120} height={26} className="h-6 w-auto object-contain object-left mb-1" priority />
+            <Image src="/LogoHeaderVerde_1.svg" alt="RODEO" width={120} height={26} className="h-6 w-auto object-contain object-left mb-1" priority />
             <div className="text-[9px] text-green-700 font-bold tracking-widest leading-none ml-1">SUPER ADMIN</div>
           </Link>
         ) : (

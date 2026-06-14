@@ -37,21 +37,22 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-[100dvh] bg-white">
       {/* NAV */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled ? 'bg-white/98 backdrop-blur-xl shadow-sm border-b border-gray-100' : 'bg-white border-b border-gray-100'
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-            <Image src="/LogoHeaderVerde.svg" alt="RODEO" width={259} height={56} className="h-full w-full object-contain object-left" priority />
+            <Image src="/LogoHeaderVerde_1.svg" alt="RODEO" width={259} height={56} className="h-full w-full object-contain object-left" priority />
           </Link>
 
           <div className="hidden lg:flex items-center gap-8">
             {[
               { label: 'Producto', href: '/landing#producto' },
               { label: 'Precios',  href: '/landing#precios' },
-              { label: 'Blog',     href: '/blog' },
+              { label: 'Cómo Funciona', href: '/landing#como-funciona' },
+              { label: 'Testimonios', href: '/landing#testimonios' },
             ].map(item => (
               <Link key={item.label} href={item.href}
                 className="text-sm font-medium text-gray-600 hover:text-gray-950 transition-colors">
@@ -81,10 +82,15 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
 
         {menuOpen && (
           <div className="lg:hidden bg-white border-t border-gray-100 px-6 py-4 space-y-1">
-            {['Producto', 'Precios', 'Blog'].map(item => (
-              <Link key={item} href={`/landing#${item.toLowerCase()}`} onClick={() => setMenuOpen(false)}
+            {[
+              { label: 'Producto', href: '/landing#producto' },
+              { label: 'Precios',  href: '/landing#precios' },
+              { label: 'Cómo Funciona', href: '/landing#como-funciona' },
+              { label: 'Testimonios', href: '/landing#testimonios' },
+            ].map(item => (
+              <Link key={item.label} href={item.href} onClick={() => setMenuOpen(false)}
                 className="block text-sm font-medium text-gray-700 py-2.5 border-b border-gray-50 last:border-0">
-                {item}
+                {item.label}
               </Link>
             ))}
             <div className="pt-3 flex flex-col gap-2">
