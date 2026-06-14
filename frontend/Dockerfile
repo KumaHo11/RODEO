@@ -34,6 +34,10 @@ ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Regenerar el cliente de Prisma con el schema actualizado
+# CRÍTICO: sin esto, el Prisma client usa el schema viejo y falla en runtime
+RUN npx prisma generate
+
 RUN npm run build
 
 # ── Stage 3: Production runner ──────────────────────────────────────────────
