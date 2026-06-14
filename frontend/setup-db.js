@@ -3,8 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
 
-const STAGING_DB = "postgresql://neondb_owner:npg_1sZ9gQWIdMle@ep-blue-breeze-a8e52l1y-pooler.eastus2.azure.neon.tech/neondb?sslmode=require";
-const PROD_DB = "postgresql://postgres:RodeoDB2026Secure@34.95.227.181:5432/rodeo_main";
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error("Please set DATABASE_URL environment variable.");
+  process.exit(1);
+}
 
 async function executeSqlFiles(connectionString, files) {
   const client = new Client({ connectionString });
@@ -35,7 +39,7 @@ async function run() {
     console.log("Pushing Prisma schema to initialize DB...");
     execSync('npx prisma db push --skip-generate --accept-data-loss', { 
       cwd: '/Users/javi/RODEO/frontend', 
-      env: { ...process.env, DATABASE_URL: PROD_DB },
+      env: { ...process.env, DATABASE_URL: DATABASE_URL },
       stdio: 'inherit' 
     });
 
@@ -45,7 +49,7 @@ async function run() {
       'pricing_strategy_migration.sql'
     ];
 
-    await executeSqlFiles(PROD_DB, files);
+    await executeSqlFiles(DATABASE_URL, files);
 
     console.log("DB Populated successfully!");
     process.exit(0);
