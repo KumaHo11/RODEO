@@ -33,6 +33,7 @@ function ActionContent() {
 
   const mode     = searchParams.get('mode')
   const oobCode  = searchParams.get('oobCode')
+  const token    = searchParams.get('token')
   const verified = searchParams.get('verified') // ?verified=1 → Firebase ya verificó el email
 
   const [stage,   setStage]   = useState<Stage>('loading')
@@ -41,12 +42,49 @@ function ActionContent() {
   useEffect(() => {
     // Caso 1: Firebase verificó el email en su servidor y nos redirigió con ?verified=1
     // (handleCodeInApp: false — el email ya está marcado como verified en Firebase)
-    if (verified === '1' && !oobCode) {
+    if (verified === '1' && !oobCode && !token) {
       setStage('success')
       return
     }
 
-    // Caso 2: handleCodeInApp:true (legacy) — recibimos oobCode, verificamos acá
+    // Caso 2: Custom JWT Verification (bypasses Firebase Identity Platform restrictions)
+    if (mode === 'verifyCustom') {
+      if (!token) {
+        setStage('error')
+        setMessage('El enlace de verificación es inválido o está incompleto.')
+        return
+      }
+
+      fetch('/api/auth/verify-custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      })
+      .then(async (res) => {
+        const data = await res.json()
+        if (res.ok && data.success) {
+          const auth = getAuth(app)
+          try {
+            const currentUser = auth.currentUser
+            if (currentUser) await currentUser.reload()
+          } catch { /* ignore */ }
+          document.cookie = '__session=; path=/; max-age=0'
+          try { localStorage.removeItem('rodeo_cached_profile') } catch { /* ignore */ }
+          setStage('success')
+        } else {
+          throw new Error(data.error || 'Error verificando email')
+        }
+      })
+      .catch((err) => {
+        console.error('[auth/action] verify-custom error:', err)
+        setMessage('El enlace de verificación es inválido o ya expiró. Por favor, pedí un nuevo enlace.')
+        setStage('error')
+      })
+
+      return
+    }
+
+    // Caso 3: handleCodeInApp:true (legacy) — recibimos oobCode, verificamos acá
     if (mode !== 'verifyEmail') {
       setStage('unsupported')
       setMessage(`Acción desconocida: "${mode}". Intentá desde el enlace original.`)
@@ -90,7 +128,7 @@ function ActionContent() {
         }
         setStage('error')
       })
-  }, [mode, oobCode, verified])
+  }, [mode, oobCode, token, verified])
 
   return (
     <main className="flex min-h-screen bg-white">

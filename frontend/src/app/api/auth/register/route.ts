@@ -93,62 +93,22 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 4. Generar link de verificación de email con Firebase Admin
+    // 4. Generar link de verificación de email usando Custom JWT (Evita bloqueos de Identity Platform)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-
-    // Intentamos Admin SDK primero (más confiable y genera OOB link real).
-    // Si falla (ej. credenciales no configuradas), usamos la REST API como fallback.
-    let verifyUrl = `${appUrl}/login?verified=1`  // fallback final si todo falla
+    let verifyUrl = `${appUrl}/login?verified=1`
 
     try {
-      // Intento 1: Firebase Admin SDK
-      const adminLink = await adminAuth.generateEmailVerificationLink(email!, {
-        url: `${appUrl}/auth/action`,
-        handleCodeInApp: true,
-      })
-      const urlObj = new URL(adminLink)
-      const oobCode = urlObj.searchParams.get('oobCode')
-      if (oobCode) {
-        verifyUrl = `${appUrl}/auth/action?mode=verifyEmail&oobCode=${oobCode}`
-      } else {
-        verifyUrl = adminLink
-      }
-      console.log('[Register] Email verify link generated via Admin SDK')
-    } catch (adminErr: any) {
-      console.warn('[Register] Admin SDK failed, trying REST API:', adminErr.message)
-      // Intento 2: Firebase REST API (funciona aunque Admin SDK no tenga credenciales)
-      try {
-        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-        if (apiKey && idToken) {
-          const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              requestType: 'VERIFY_EMAIL',
-              idToken: idToken,
-              continueUrl: `${appUrl}/auth/action`,
-              returnOobLink: true
-            })
-          })
-          const data = await res.json()
-          if (data.oobLink) {
-            const urlObj = new URL(data.oobLink)
-            const oobCode = urlObj.searchParams.get('oobCode')
-            if (oobCode) {
-              verifyUrl = `${appUrl}/auth/action?mode=verifyEmail&oobCode=${oobCode}`
-            } else {
-              verifyUrl = data.oobLink
-            }
-            console.log('[Register] Email verify link generated via REST API fallback')
-          } else {
-            console.warn('[Register] REST API did not return oobLink:', data)
-          }
-        } else {
-          console.warn('[Register] Missing API key or idToken for REST fallback')
-        }
-      } catch (restErr: any) {
-        console.warn('[Register] REST API also failed, using plain login URL:', restErr.message)
-      }
+      const { SignJWT } = await import('jose')
+      const secret = new TextEncoder().encode(process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'default_secret')
+      const token = await new SignJWT({ uid, email })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setExpirationTime('24h')
+        .sign(secret)
+
+      verifyUrl = `${appUrl}/auth/action?mode=verifyCustom&token=${token}`
+      console.log('[Register] Email verify link generated via Custom JWT')
+    } catch (tokenErr: any) {
+      console.warn('[Register] Failed to generate custom JWT:', tokenErr.message)
     }
 
     // 5. Enviar email de bienvenida + verificación via SendGrid

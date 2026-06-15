@@ -32,46 +32,17 @@ export async function POST(req: NextRequest) {
     let verifyUrl = `${appUrl}/login?verified=1`
 
     try {
-      const adminLink = await adminAuth.generateEmailVerificationLink(email, {
-        url: `${appUrl}/auth/action`,
-        handleCodeInApp: true,
-      })
-      const urlObj = new URL(adminLink)
-      const oobCode = urlObj.searchParams.get('oobCode')
-      if (oobCode) {
-        verifyUrl = `${appUrl}/auth/action?mode=verifyEmail&oobCode=${oobCode}`
-      } else {
-        verifyUrl = adminLink
-      }
-    } catch (adminErr: any) {
-      console.warn('[Resend] Admin SDK failed, trying REST API:', adminErr.message)
-      try {
-        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-        if (apiKey) {
-          const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              requestType: 'VERIFY_EMAIL',
-              idToken: token,
-              continueUrl: `${appUrl}/auth/action`,
-              returnOobLink: true
-            })
-          })
-          const data = await res.json()
-          if (data.oobLink) {
-            const urlObj = new URL(data.oobLink)
-            const oobCode = urlObj.searchParams.get('oobCode')
-            if (oobCode) {
-              verifyUrl = `${appUrl}/auth/action?mode=verifyEmail&oobCode=${oobCode}`
-            } else {
-              verifyUrl = data.oobLink
-            }
-          }
-        }
-      } catch (restErr: any) {
-        console.warn('[Resend] REST API also failed:', restErr.message)
-      }
+      const { SignJWT } = await import('jose')
+      const secret = new TextEncoder().encode(process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'default_secret')
+      const jwtToken = await new SignJWT({ uid, email })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setExpirationTime('24h')
+        .sign(secret)
+
+      verifyUrl = `${appUrl}/auth/action?mode=verifyCustom&token=${jwtToken}`
+      console.log('[Resend] Email verify link generated via Custom JWT')
+    } catch (tokenErr: any) {
+      console.warn('[Resend] Failed to generate custom JWT:', tokenErr.message)
     }
 
     try {
