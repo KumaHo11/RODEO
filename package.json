@@ -4,6 +4,7 @@
     "deploy:prod": "git checkout main && git pull origin main && git merge staging -m \"Pase a Produccion\" && git push origin main && git checkout staging"
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "pg": "^8.21.0"
   }
 }
