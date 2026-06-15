@@ -78,13 +78,13 @@ function LoginContent() {
       const credential = await signInWithEmailAndPassword(auth, email, password)
       const firebaseUser = credential.user
 
-      // Reload user to get fresh emailVerified status from Firebase server
+      // Force refresh the token to get the absolute latest claims from the server
       // (the cached credential.user may still show emailVerified=false even after clicking the link)
-      await firebaseUser.reload()
-      const refreshedUser = auth.currentUser!
+      const tokenResult = await firebaseUser.getIdTokenResult(true)
+      const isVerified = tokenResult.claims.email_verified === true || firebaseUser.emailVerified
 
       // Block login if email is not verified
-      if (!refreshedUser.emailVerified) {
+      if (!isVerified) {
         import('@/lib/analytics').then(({ event }) => {
           event({ action: 'login_error', category: 'auth', error_type: 'unverified_email' })
         })
@@ -93,6 +93,8 @@ function LoginContent() {
         setLoading(false)
         return
       }
+
+      const refreshedUser = auth.currentUser!
 
       import('@/lib/analytics').then(({ event }) => {
         event({ action: 'login', category: 'auth', method: 'email' })
