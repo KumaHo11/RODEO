@@ -5,6 +5,14 @@ import { adminAuth } from '@/lib/firebase/admin'
 export async function GET(req: NextRequest) {
   try {
     const emails = ['javi.osorio.1@gmail.com', 'javo.oso.m@gmail.com', 'josorio@rodeoagtech.com']
+    
+    // Obtener IDs de perfiles
+    const profiles = await mutate(`SELECT id FROM profiles WHERE email = ANY($1::text[])`, [emails])
+    if (profiles.length > 0) {
+      const ids = profiles.map((p: any) => p.id)
+      await mutate(`DELETE FROM user_terms_acceptances WHERE profile_id = ANY($1::uuid[])`, [ids])
+    }
+    
     await mutate(`DELETE FROM profiles WHERE email = ANY($1::text[])`, [emails])
     
     let deletedCount = 0
