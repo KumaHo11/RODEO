@@ -76,8 +76,6 @@ jobs:
             f'NEXT_PUBLIC_APP_URL: {q(prod_url)}',
             f'DATABASE_URL: {q(os.environ.get("DATABASE_URL",""))}',
             f'FIREBASE_ADMIN_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
-            f'FIREBASE_ADMIN_CREDENTIALS_BASE64: {q(os.environ.get("FIREBASE_ADMIN_CREDENTIALS_BASE64",""))}',
-            f'FIREBASE_ADMIN_IMPERSONATE_SA: {q(os.environ.get("FIREBASE_ADMIN_IMPERSONATE_SA",""))}',
             f'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: {q(os.environ.get("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",""))}',
             f'GCS_BUCKET_NAME: {q("rodeo-media-prod")}',
             f'GEMINI_API_KEY: {q(os.environ.get("GEMINI_API_KEY",""))}',
@@ -93,8 +91,6 @@ jobs:
           PROD_URL: ${{ env.PROD_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
           FIREBASE_ADMIN_PROJECT_ID: ${{ env.PROJECT_ID }}
-          FIREBASE_ADMIN_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_ADMIN_CREDENTIALS_BASE64_PROD }}
-          FIREBASE_ADMIN_IMPERSONATE_SA: ${{ secrets.FIREBASE_ADMIN_IMPERSONATE_SA_PROD }}
           NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_PROD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
