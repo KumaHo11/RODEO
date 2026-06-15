@@ -31,13 +31,22 @@ function ActionContent() {
   const searchParams = useSearchParams()
   const router       = useRouter()
 
-  const mode    = searchParams.get('mode')
-  const oobCode = searchParams.get('oobCode')
+  const mode     = searchParams.get('mode')
+  const oobCode  = searchParams.get('oobCode')
+  const verified = searchParams.get('verified') // ?verified=1 → Firebase ya verificó el email
 
   const [stage,   setStage]   = useState<Stage>('loading')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
+    // Caso 1: Firebase verificó el email en su servidor y nos redirigió con ?verified=1
+    // (handleCodeInApp: false — el email ya está marcado como verified en Firebase)
+    if (verified === '1' && !oobCode) {
+      setStage('success')
+      return
+    }
+
+    // Caso 2: handleCodeInApp:true (legacy) — recibimos oobCode, verificamos acá
     if (mode !== 'verifyEmail') {
       setStage('unsupported')
       setMessage(`Acción desconocida: "${mode}". Intentá desde el enlace original.`)
