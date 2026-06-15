@@ -4,7 +4,6 @@ import { useAuth } from '@/components/AuthProvider'
 import { auth } from '@/lib/firebase/client'
 import {
   signInWithEmailAndPassword,
-  sendEmailVerification
 } from 'firebase/auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, Suspense } from 'react'
@@ -144,8 +143,21 @@ function LoginContent() {
     setError(null)
     try {
       const credential = await signInWithEmailAndPassword(auth, unverifiedEmail, password)
-      await sendEmailVerification(credential.user)
+      const token = await credential.user.getIdToken()
+      
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
       await auth.signOut()
+      
+      if (!res.ok) {
+        throw new Error('Error desde el servidor')
+      }
+      
       setResendSuccess(true)
     } catch (err: any) {
       console.error(err)
