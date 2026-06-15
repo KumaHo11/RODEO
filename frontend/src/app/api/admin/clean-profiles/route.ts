@@ -16,17 +16,25 @@ export async function GET(req: NextRequest) {
     await mutate(`DELETE FROM profiles WHERE email = ANY($1::text[])`, [emails])
     
     let deletedCount = 0
+    let authErrors: any[] = []
     for (const email of emails) {
       try {
         const user = await adminAuth.getUserByEmail(email)
         await adminAuth.deleteUser(user.uid)
         deletedCount++
       } catch(e: any) {
-        if (e.code !== 'auth/user-not-found') console.error(e)
+        if (e.code !== 'auth/user-not-found') {
+          console.error('Firebase Auth error for', email, e)
+          authErrors.push({ email, error: String(e), code: e.code })
+        }
       }
     }
 
-    return NextResponse.json({ success: true, message: `Perfiles SQL borrados y ${deletedCount} usuarios eliminados de Firebase Auth.` })
+    return NextResponse.json({ 
+      success: true, 
+      message: `Perfiles SQL borrados y ${deletedCount} usuarios eliminados de Firebase Auth.`,
+      authErrors
+    })
   } catch(e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

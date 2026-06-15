@@ -4,6 +4,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { auth } from '@/lib/firebase/client'
 import {
   signInWithEmailAndPassword,
+  sendEmailVerification
 } from 'firebase/auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, Suspense } from 'react'
@@ -23,6 +24,8 @@ function LoginContent() {
   const [password, setPassword]         = useState('')
   const [errorMSG, setError]            = useState<string | null>(null)
   const [loading, setLoading]           = useState(false)
+  const [resendingEmail, setResendingEmail] = useState(false)
+  const [resendSuccess, setResendSuccess]   = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
   const justVerified = searchParams.get('verified') === '1'
@@ -118,24 +121,37 @@ function LoginContent() {
       } else {
         router.replace('/dashboard')
       }
-      // No llamar a setLoading(false) — el redirect lo resuelve
     } catch (err: any) {
       setLoading(false)
-      const code = err.code || ''
-      import('@/lib/analytics').then(({ event }) => {
-        event({ action: 'login_error', category: 'auth', error_type: code })
-      })
+      const code = err.code
       if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
         setError('Correo electrónico o contraseña incorrectos.')
       } else if (code === 'auth/too-many-requests') {
-        setError('Demasiados intentos fallidos. Intenta más tarde.')
+        setError('Demasiados intentos. Por favor, intenta más tarde.')
       } else if (code === 'auth/user-disabled') {
         setError('Tu cuenta fue suspendida. Contactá a soporte en soporte@rodeoagtech.com')
       } else if (code === 'auth/network-request-failed') {
         setError('No hay conexión a internet. Para iniciar sesión por primera vez o si cerraste sesión, necesitás conectividad. Si ya habías iniciado sesión, verificá tu conexión e intentá recargar la página.')
       } else {
-        setError('Error al iniciar sesión. Intenta nuevamente.')
+        setError('Ocurrió un error al iniciar sesión. Intenta de nuevo.')
       }
+    }
+  }
+
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return
+    setResendingEmail(true)
+    setError(null)
+    try {
+      const credential = await signInWithEmailAndPassword(auth, unverifiedEmail, password)
+      await sendEmailVerification(credential.user)
+      await auth.signOut()
+      setResendSuccess(true)
+    } catch (err: any) {
+      console.error(err)
+      setError('Ocurrió un error al reenviar el correo. Intenta de nuevo.')
+    } finally {
+      setResendingEmail(false)
     }
   }
 
@@ -234,11 +250,27 @@ function LoginContent() {
                 className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3"
               >
                 <Mail className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                <div>
+                <div className="flex-1">
                   <p className="text-amber-800 text-xs font-black mb-0.5">Email no verificado</p>
-                  <p className="text-amber-700 text-xs">
+                  <p className="text-amber-700 text-xs mb-3">
                     Revisá tu casilla <strong>{unverifiedEmail}</strong> y hacé clic en el link de verificación antes de ingresar.
                   </p>
+                  {resendSuccess ? (
+                    <div className="flex items-center gap-1.5 text-xs text-green-700 bg-green-100/50 px-2.5 py-1.5 rounded-lg border border-green-200 w-fit">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>¡Correo enviado!</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resendingEmail}
+                      className="text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      {resendingEmail && <Loader2 className="w-3 h-3 animate-spin" />}
+                      Reenviar correo
+                    </button>
+                  )}
                 </div>
               </motion.div>
             )}
