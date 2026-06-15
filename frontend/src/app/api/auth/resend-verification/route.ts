@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     // Buscar el nombre del usuario en la base de datos
     const profile = await queryOne(`SELECT first_name FROM profiles WHERE firebase_uid = $1`, [uid])
-    const firstName = profile?.first_name || 'Usuario'
+    const firstName = String(profile?.first_name || 'Usuario')
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     let verifyUrl = `${appUrl}/login?verified=1`
