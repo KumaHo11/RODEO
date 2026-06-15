@@ -102,15 +102,17 @@ export async function POST(req: NextRequest) {
 
     try {
       // Intento 1: Firebase Admin SDK
-      verifyUrl = await adminAuth.generateEmailVerificationLink(email!, {
-        // Firebase redirige a continueUrl DESPUÉS de verificar el email.
-        // Apuntamos a nuestra página /auth/action que llama applyActionCode
-        // y muestra el modal de éxito antes de ir al login.
+      const adminLink = await adminAuth.generateEmailVerificationLink(email!, {
         url: `${appUrl}/auth/action`,
-        // handleCodeInApp: true → Firebase incluye el oobCode en el redirect
-        // para que nuestra página llame applyActionCode y muestre el modal.
         handleCodeInApp: true,
       })
+      const urlObj = new URL(adminLink)
+      const oobCode = urlObj.searchParams.get('oobCode')
+      if (oobCode) {
+        verifyUrl = `${appUrl}/auth/action?mode=verifyEmail&oobCode=${oobCode}`
+      } else {
+        verifyUrl = adminLink
+      }
       console.log('[Register] Email verify link generated via Admin SDK')
     } catch (adminErr: any) {
       console.warn('[Register] Admin SDK failed, trying REST API:', adminErr.message)
@@ -130,7 +132,13 @@ export async function POST(req: NextRequest) {
           })
           const data = await res.json()
           if (data.oobLink) {
-            verifyUrl = data.oobLink
+            const urlObj = new URL(data.oobLink)
+            const oobCode = urlObj.searchParams.get('oobCode')
+            if (oobCode) {
+              verifyUrl = `${appUrl}/auth/action?mode=verifyEmail&oobCode=${oobCode}`
+            } else {
+              verifyUrl = data.oobLink
+            }
             console.log('[Register] Email verify link generated via REST API fallback')
           } else {
             console.warn('[Register] REST API did not return oobLink:', data)

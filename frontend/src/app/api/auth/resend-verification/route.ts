@@ -32,10 +32,17 @@ export async function POST(req: NextRequest) {
     let verifyUrl = `${appUrl}/login?verified=1`
 
     try {
-      verifyUrl = await adminAuth.generateEmailVerificationLink(email, {
+      const adminLink = await adminAuth.generateEmailVerificationLink(email, {
         url: `${appUrl}/auth/action`,
         handleCodeInApp: true,
       })
+      const urlObj = new URL(adminLink)
+      const oobCode = urlObj.searchParams.get('oobCode')
+      if (oobCode) {
+        verifyUrl = `${appUrl}/auth/action?mode=verifyEmail&oobCode=${oobCode}`
+      } else {
+        verifyUrl = adminLink
+      }
     } catch (adminErr: any) {
       console.warn('[Resend] Admin SDK failed, trying REST API:', adminErr.message)
       try {
@@ -52,7 +59,15 @@ export async function POST(req: NextRequest) {
             })
           })
           const data = await res.json()
-          if (data.oobLink) verifyUrl = data.oobLink
+          if (data.oobLink) {
+            const urlObj = new URL(data.oobLink)
+            const oobCode = urlObj.searchParams.get('oobCode')
+            if (oobCode) {
+              verifyUrl = `${appUrl}/auth/action?mode=verifyEmail&oobCode=${oobCode}`
+            } else {
+              verifyUrl = data.oobLink
+            }
+          }
         }
       } catch (restErr: any) {
         console.warn('[Resend] REST API also failed:', restErr.message)
