@@ -102,13 +102,14 @@ export async function POST(req: NextRequest) {
 
     try {
       // Intento 1: Firebase Admin SDK
-      // handleCodeInApp: false → Firebase verifica el email en su propio servidor
-      // (firebaseapp.com/__/auth/action) y redirige a continueUrl DESPUÉS de verificar.
-      // El email queda marcado como verified en Firebase antes del redirect.
-      // La continueUrl apunta a /auth/action?verified=1 para mostrar el modal de éxito.
       verifyUrl = await adminAuth.generateEmailVerificationLink(email!, {
-        url: `${appUrl}/auth/action?verified=1`,
-        handleCodeInApp: false,
+        // Firebase redirige a continueUrl DESPUÉS de verificar el email.
+        // Apuntamos a nuestra página /auth/action que llama applyActionCode
+        // y muestra el modal de éxito antes de ir al login.
+        url: `${appUrl}/auth/action`,
+        // handleCodeInApp: true → Firebase incluye el oobCode en el redirect
+        // para que nuestra página llame applyActionCode y muestre el modal.
+        handleCodeInApp: true,
       })
       console.log('[Register] Email verify link generated via Admin SDK')
     } catch (adminErr: any) {
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
               requestType: 'VERIFY_EMAIL',
               idToken: idToken,
-              continueUrl: `${appUrl}/auth/action?verified=1`,
+              continueUrl: `${appUrl}/auth/action`,
               returnOobLink: true
             })
           })
