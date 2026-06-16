@@ -111,14 +111,29 @@ function LoginContent() {
         console.error('Error setting session cookie:', e)
       }
 
-      // Email verificado: redirigir activamente sin esperar al useEffect
-      // Esto evita el deadlock si fetchProfile del AuthProvider tarda o falla
+      // Email verificado: obtener el perfil activamente antes de redirigir
+      // para eliminar la race condition con AuthProvider (profile puede ser null aún)
       if (nextPath && nextPath !== '/login') {
         router.replace(nextPath)
-      } else if (profile && (profile.onboarding_step ?? 0) < 4) {
-        router.replace('/onboarding')
       } else {
-        router.replace('/dashboard')
+        let targetProfile = profile
+        if (!targetProfile) {
+          try {
+            const freshToken = await refreshedUser.getIdToken(true)
+            const res = await fetch('/api/auth/profile', {
+              headers: { Authorization: `Bearer ${freshToken}` },
+            })
+            if (res.ok) {
+              const data = await res.json()
+              targetProfile = data.profile
+            }
+          } catch { /* fallback to dashboard */ }
+        }
+        if (targetProfile && (targetProfile.onboarding_step ?? 0) < 4) {
+          router.replace('/onboarding')
+        } else {
+          router.replace('/dashboard')
+        }
       }
     } catch (err: any) {
       setLoading(false)

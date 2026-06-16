@@ -29,15 +29,17 @@ echo "▶ Pushing image to Artifact Registry..."
 docker push "$PROD_IMAGE"
 
 # IMPORTANTE: Seguridad al máximo en producción.
-# Uso estricto de Google Secret Manager para inyectar variables sensibles.
+# Uso estricto de Google Secret Manager del proyecto de producción (rodeo-app-prod-v1).
+# Cada secret usa la ruta completa: projects/<project>/secrets/<name>:latest
 echo "▶ Deploying to Cloud Run usando Secret Manager..."
 gcloud run deploy rodeo-prod \
   --image "$PROD_IMAGE" \
   --region southamerica-east1 \
   --platform managed \
+  --project rodeo-app-prod-v1 \
   --allow-unauthenticated \
   --set-env-vars="NEXT_PUBLIC_APP_URL=${PROD_URL}" \
-  --update-secrets="DATABASE_URL=rodeo-db-url-prod:latest,RESEND_API_KEY=resend-api-key-prod:latest,FIREBASE_ADMIN_CREDENTIALS_BASE64=firebase-sa-key-prod:latest,GEMINI_API_KEY=gemini-api-key-prod:latest"
+  --update-secrets="DATABASE_URL=projects/rodeo-app-prod-v1/secrets/rodeo-db-url:latest,RESEND_API_KEY=projects/rodeo-app-prod-v1/secrets/resend-api-key:latest,FIREBASE_ADMIN_CREDENTIALS_BASE64=projects/rodeo-app-prod-v1/secrets/firebase-sa-key:latest,GEMINI_API_KEY=projects/rodeo-app-prod-v1/secrets/gemini-api-key:latest,EMAIL_VERIFY_JWT_SECRET=projects/rodeo-app-prod-v1/secrets/EMAIL_VERIFY_JWT_SECRET:latest"
 
 # ── Configurar Mapeo de Dominio Personalizado ──
 # gcloud beta run domain-mappings create --service rodeo-prod --domain rodeoagtech.com --region southamerica-east1

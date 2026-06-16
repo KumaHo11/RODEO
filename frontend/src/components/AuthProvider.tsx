@@ -126,11 +126,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           return
         }
         // Segundo intento también falló → ahora sí deslogueamos
+        // Redirigimos a /login (no a /register) para no reiniciar el flujo de un usuario que ya se registró
         console.error('[AuthProvider] Profile 404 after retry — signing out')
         await firebaseSignOut(auth)
         document.cookie = '__session=; path=/; max-age=0'
-        if (window.location.pathname !== '/register') {
-          window.location.href = '/register'
+        const currentPath = window.location.pathname
+        if (currentPath !== '/register' && currentPath !== '/login') {
+          window.location.href = '/login?error=not_found'
         }
         return
       }
