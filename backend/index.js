@@ -6,7 +6,7 @@ const admin = require('firebase-admin');
 const rateLimit = require('express-rate-limit');
 
 admin.initializeApp({
-  projectId: process.env.FIREBASE_PROJECT_ID || 'rodeo-app-fac50'
+  projectId: process.env.FIREBASE_PROJECT_ID
 });
 
 const app = express();
@@ -52,7 +52,7 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Validate required env vars at startup
-const REQUIRED_ENV = ['DATABASE_URL']
+const REQUIRED_ENV = ['DATABASE_URL', 'FIREBASE_PROJECT_ID']
 const missing = REQUIRED_ENV.filter(k => !process.env[k])
 if (missing.length > 0) {
   console.error(`[FATAL] Missing required env vars: ${missing.join(', ')}`)

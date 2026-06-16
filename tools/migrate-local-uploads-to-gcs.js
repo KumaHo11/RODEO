@@ -11,7 +11,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 
-const BUCKET_NAME = 'rodeo-media'
+const BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'rodeo-media'
 const UPLOADS_DIR = path.join(__dirname, '../frontend/public/uploads')
 const SA_KEY_FILE = '/tmp/rodeo-sa-new.json'
 const DB_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/rodeo'
@@ -19,7 +19,7 @@ const DB_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/rodeo'
 async function main() {
   // Init GCS
   const saKey = JSON.parse(fs.readFileSync(SA_KEY_FILE, 'utf8'))
-  const storage = new Storage({ credentials: saKey, projectId: 'rodeo-app-fac50' })
+  const storage = new Storage({ credentials: saKey, projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || 'rodeo-app-fac50' })
   const bucket = storage.bucket(BUCKET_NAME)
 
   // Init DB

@@ -57,7 +57,7 @@ jobs:
             --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_PROD }}" \
             --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID_PROD }}" \
             --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID_PROD }}" \
-            --build-arg NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY="${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY }}" \
+            --build-arg NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY="${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY_PROD }}" \
             --build-arg NEXT_PUBLIC_APP_URL="${{ env.PROD_URL }}" \
             -t ${{ env.IMAGE }} \
             .
@@ -78,13 +78,18 @@ jobs:
             f'DATABASE_URL: {q(os.environ.get("DATABASE_URL",""))}',
             f'FIREBASE_ADMIN_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
             f'FIREBASE_ADMIN_CREDENTIALS_BASE64: {q(os.environ.get("FIREBASE_ADMIN_CREDENTIALS_BASE64",""))}',
+            f'FIREBASE_ADMIN_IMPERSONATE_SA: {q(os.environ.get("FIREBASE_ADMIN_IMPERSONATE_SA",""))}',
+            f'FIREBASE_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
             f'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: {q(os.environ.get("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",""))}',
-            f'GCS_BUCKET_NAME: {q("rodeo-media-prod")}',
+            f'GCS_BUCKET_NAME: {q(os.environ.get("GCS_BUCKET_NAME",""))}',
             f'GEMINI_API_KEY: {q(os.environ.get("GEMINI_API_KEY",""))}',
             f'RESEND_API_KEY: {q(os.environ.get("RESEND_API_KEY",""))}',
             f'RESEND_FROM_EMAIL: {q(os.environ.get("RESEND_FROM_EMAIL",""))}',
             f'MERCADOPAGO_ACCESS_TOKEN: {q(os.environ.get("MERCADOPAGO_ACCESS_TOKEN",""))}',
+            f'NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: {q(os.environ.get("NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY",""))}',
             f'TITILER_URL: {q(os.environ.get("TITILER_URL",""))}',
+            f'EMAIL_VERIFY_JWT_SECRET: {q(os.environ.get("EMAIL_VERIFY_JWT_SECRET",""))}',
+            f'CONTACT_FORM_DESTINATION_EMAILS: {q(os.environ.get("CONTACT_FORM_DESTINATION_EMAILS",""))}',
           ]
           with open('/tmp/rodeo-prod-env.yaml','w') as f: f.write('\n'.join(lines))
           print('  ✓ /tmp/rodeo-prod-env.yaml generado')
@@ -94,14 +99,17 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
           FIREBASE_ADMIN_PROJECT_ID: ${{ env.PROJECT_ID }}
           FIREBASE_ADMIN_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_ADMIN_CREDENTIALS_BASE64_PROD }}
+          FIREBASE_ADMIN_IMPERSONATE_SA: ${{ secrets.FIREBASE_ADMIN_IMPERSONATE_SA_PROD }}
           NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_PROD }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
-          # Usando credenciales de Test/Staging para integraciones externas por ahora según indicaciones
-          MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
-          NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY }}
-          TITILER_URL: ${{ secrets.TITILER_URL }}
+          GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME_PROD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_PROD }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY_PROD }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL_PROD }}
+          MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN_PROD }}
+          NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY_PROD }}
+          TITILER_URL: ${{ secrets.TITILER_URL_PROD }}
+          EMAIL_VERIFY_JWT_SECRET: ${{ secrets.EMAIL_VERIFY_JWT_SECRET_PROD }}
+          CONTACT_FORM_DESTINATION_EMAILS: ${{ secrets.CONTACT_FORM_DESTINATION_EMAILS_PROD }}
 
       - name: 'Deploy to Cloud Run'
         run: |-

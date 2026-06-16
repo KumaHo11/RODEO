@@ -12,7 +12,8 @@ import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { getStorage } from 'firebase-admin/storage'
 import admin from '@/lib/firebase/admin'
 
-const BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'rodeo-media'
+const BUCKET_NAME = process.env.GCS_BUCKET_NAME
+if (!BUCKET_NAME) throw new Error('[Upload] GCS_BUCKET_NAME env var is required')
 
 export async function POST(req: NextRequest) {
   try {
