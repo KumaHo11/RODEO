@@ -63,7 +63,8 @@ ALTER TABLE herds
   ADD COLUMN IF NOT EXISTS estadio_gestacion    TEXT,
   ADD COLUMN IF NOT EXISTS custom_racion_kg     NUMERIC(8,2),
   ADD COLUMN IF NOT EXISTS grupo_manejo_id      UUID,
-  ADD COLUMN IF NOT EXISTS grupo_manejo_nombre  TEXT;
+  ADD COLUMN IF NOT EXISTS grupo_manejo_nombre  TEXT,
+  ADD COLUMN IF NOT EXISTS categoria            TEXT;
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- paddocks: agregar columnas faltantes
@@ -96,7 +97,8 @@ ALTER TABLE grazing_plans
   ADD COLUMN IF NOT EXISTS adjusted_exit_date   DATE,
   ADD COLUMN IF NOT EXISTS plan_type            TEXT         DEFAULT 'manual',
   ADD COLUMN IF NOT EXISTS source_origin        TEXT         DEFAULT 'human',
-  ADD COLUMN IF NOT EXISTS cycle_id             UUID;
+  ADD COLUMN IF NOT EXISTS cycle_id             UUID,
+  ADD COLUMN IF NOT EXISTS season_plan_id       UUID;
 
 -- Poblar org_id desde paddocks para registros existentes
 UPDATE grazing_plans gp
@@ -116,7 +118,10 @@ ALTER TABLE farm_events
   ADD COLUMN IF NOT EXISTS all_day        BOOLEAN   DEFAULT true,
   ADD COLUMN IF NOT EXISTS recurrence     TEXT,
   ADD COLUMN IF NOT EXISTS notes          TEXT,
-  ADD COLUMN IF NOT EXISTS metadata       JSONB;
+  ADD COLUMN IF NOT EXISTS metadata       JSONB,
+  ADD COLUMN IF NOT EXISTS photo_url      TEXT,
+  ADD COLUMN IF NOT EXISTS audio_url      TEXT,
+  ADD COLUMN IF NOT EXISTS assigned_to    UUID;
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- organizations: asegurar todas las columnas que usa el código

@@ -182,6 +182,8 @@ model Herd {
   customRacionKg         Decimal?      @map("custom_racion_kg") @db.Decimal(8, 2)
   grupoManejoId          String?       @map("grupo_manejo_id") @db.Uuid
   grupoManejoNombre      String?       @map("grupo_manejo_nombre") @db.Text
+  /// Categoría en español (usado por raw SQL en /api/herds)
+  categoria              String?       @db.Text
   version                Int           @default(1)
   createdAt              DateTime      @default(now()) @map("created_at")
   updatedAt              DateTime      @updatedAt @map("updated_at")
