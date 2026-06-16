@@ -6,13 +6,12 @@
 import { getStorage } from 'firebase-admin/storage'
 import adminFirebase from './admin'
 
-adminFirebase.getAdminApp()
-
 export async function uploadBufferToStorage(
   buffer: Buffer,
   destination: string,  // ej. 'bitacora-audio/wa-1234.ogg'
   contentType: string
 ): Promise<string> {
+  adminFirebase.getAdminApp()           // lazy init on first call
   const bucket = getStorage().bucket()
   const file   = bucket.file(destination)
 
