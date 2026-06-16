@@ -41,6 +41,7 @@ jobs:
           cd frontend
           npm ci
           npx prisma db push --skip-generate
+          node scripts/add_missing_columns.js "$DATABASE_URL"
           node insert_terms_v3.js
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
