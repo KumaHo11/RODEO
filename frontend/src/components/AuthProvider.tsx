@@ -110,7 +110,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (res.status === 404) {
         await firebaseSignOut(auth)
         document.cookie = '__session=; path=/; max-age=0'
-        window.location.href = '/register'
+        if (window.location.pathname !== '/register') {
+          window.location.href = '/register'
+        }
         return
       }
 
