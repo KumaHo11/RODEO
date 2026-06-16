@@ -37,12 +37,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, uid }, { status: 200 })
     }
 
-    // 2.5 Verificar si existe por email (Prevención de Error 500 de Base de Datos)
-    // Esto ocurre si borraste tu usuario en Firebase Console a mano pero 
-    // su perfil SQL siguió existiendo.
-    const existingEmail = await query(`SELECT id FROM profiles WHERE email = $1`, [email])
+    // 2.5 Si existe por email pero con UID diferente → el usuario fue borrado de Firebase
+    // y se re-registró. Actualizar el UID para mantener su perfil.
+    const existingEmail = await query(`SELECT id, firebase_uid FROM profiles WHERE email = $1`, [email])
     if (existingEmail.length > 0) {
-      return NextResponse.json({ error: 'El correo electrónico ya se encuentra registrado. Por favor inicia sesión.' }, { status: 400 })
+      const oldUid = existingEmail[0].firebase_uid
+      if (oldUid !== uid) {
+        await mutate(
+          `UPDATE profiles SET firebase_uid = $1, updated_at = NOW() WHERE email = $2`,
+          [uid, email]
+        )
+        console.log(`[Register] UID actualizado para ${email}: ${oldUid} → ${uid}`)
+      }
+      return NextResponse.json({ success: true, uid }, { status: 200 })
     }
 
     // 3. Crear organización con trial automático del plan Holístico
