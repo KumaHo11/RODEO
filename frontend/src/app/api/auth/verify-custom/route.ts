@@ -10,7 +10,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Token is required' }, { status: 400 })
     }
 
-    const secret = new TextEncoder().encode(process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'default_secret')
+    const jwtSecret = process.env.EMAIL_VERIFY_JWT_SECRET
+    if (!jwtSecret) {
+      console.error('[verify-custom] EMAIL_VERIFY_JWT_SECRET is not configured')
+      return NextResponse.json({ error: 'Error de configuración del servidor' }, { status: 500 })
+    }
+    const secret = new TextEncoder().encode(jwtSecret)
     
     let payload;
     try {

@@ -106,7 +106,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
-      // Usuario no existe en la DB (ej. cuenta de staging logueando en producción o viceversa)
+      // Usuario autenticado en Firebase pero sin perfil en la base de datos de este ambiente.
+      // Puede ocurrir si el perfil fue eliminado manualmente o si la cuenta es nueva y
+      // el registro no completó correctamente. Se cierra la sesión y se redirige al registro.
       if (res.status === 404) {
         await firebaseSignOut(auth)
         document.cookie = '__session=; path=/; max-age=0'

@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
 
     try {
       const { SignJWT } = await import('jose')
-      const secret = new TextEncoder().encode(process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'default_secret')
+      const jwtSecret = process.env.EMAIL_VERIFY_JWT_SECRET
+      if (!jwtSecret) throw new Error('EMAIL_VERIFY_JWT_SECRET is not configured')
+      const secret = new TextEncoder().encode(jwtSecret)
       const jwtToken = await new SignJWT({ uid, email })
         .setProtectedHeader({ alg: 'HS256' })
         .setExpirationTime('24h')

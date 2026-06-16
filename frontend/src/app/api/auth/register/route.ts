@@ -99,7 +99,12 @@ export async function POST(req: NextRequest) {
 
     try {
       const { SignJWT } = await import('jose')
-      const secret = new TextEncoder().encode(process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'default_secret')
+      // EMAIL_VERIFY_JWT_SECRET is a private server-side secret, NOT the public Firebase API key.
+      // Generate with: node -e "require('crypto').randomBytes(48).toString('base64url')" and store
+      // as a Cloud Run secret (never in NEXT_PUBLIC_* variables).
+      const jwtSecret = process.env.EMAIL_VERIFY_JWT_SECRET
+      if (!jwtSecret) throw new Error('EMAIL_VERIFY_JWT_SECRET is not configured')
+      const secret = new TextEncoder().encode(jwtSecret)
       const token = await new SignJWT({ uid, email })
         .setProtectedHeader({ alg: 'HS256' })
         .setExpirationTime('24h')
