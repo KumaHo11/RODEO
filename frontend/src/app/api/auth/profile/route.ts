@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     console.log('[profile] Buscando UID:', firebaseUid, 'email_token:', decoded.email)
 
     // Buscar perfil en Cloud SQL
-    const profile = await queryOne(
+    let profile = await queryOne(
       `SELECT p.id, p.firebase_uid, p.email, p.first_name, p.last_name, p.avatar_url,
               p.organization_id, p.onboarding_step, p.team_role, p.permissions, p.notification_preferences,
               p.country_code, p.role, p.phone, p.is_first_login, p.is_active, p.system_role,
@@ -39,8 +39,37 @@ export async function GET(req: NextRequest) {
       [firebaseUid]
     )
 
+    if (!profile && decoded.email) {
+      // Fallback: buscar por email del token. Puede ocurrir tras migración de proyecto Firebase
+      // (el UID cambió pero el email se mantiene). Auto-corregimos el UID para futuros lookups.
+      console.warn('[profile] UID not found, trying email fallback:', decoded.email)
+      const profileByEmail = await queryOne(
+        `SELECT p.id, p.firebase_uid, p.email, p.first_name, p.last_name, p.avatar_url,
+                p.organization_id, p.onboarding_step, p.team_role, p.permissions, p.notification_preferences,
+                p.country_code, p.role, p.phone, p.is_first_login, p.is_active, p.system_role,
+                o.created_at as org_created_at, o.plan_status, o.trial_ends_at, o.stripe_customer_id,
+                sp.slug AS plan_slug, sp.name AS plan_name, sp.price as plan_price, sp.price_yearly as plan_price_yearly, sp.trial_days as plan_trial_days
+         FROM profiles p
+         LEFT JOIN organizations o ON p.organization_id = o.id
+         LEFT JOIN subscriptions_plans sp ON o.subscription_plan_id = sp.id
+         WHERE p.email = $1`,
+        [decoded.email]
+      )
+      if (profileByEmail) {
+        const oldUid = (profileByEmail as any).firebase_uid
+        console.log(`[profile] Email fallback found! Updating UID: ${oldUid} → ${firebaseUid}`)
+        await query(
+          `UPDATE profiles SET firebase_uid = $1, updated_at = NOW() WHERE email = $2`,
+          [firebaseUid, decoded.email]
+        )
+        // Usar el perfil encontrado con el UID corregido
+        ;(profileByEmail as any).firebase_uid = firebaseUid
+        profile = profileByEmail
+      }
+    }
+
     if (!profile) {
-      console.warn('[profile] NOT FOUND para UID:', firebaseUid)
+      console.warn('[profile] NOT FOUND para UID:', firebaseUid, 'ni email:', decoded.email)
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
 

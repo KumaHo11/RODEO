@@ -28,16 +28,17 @@ docker build --platform linux/amd64 \
 echo "▶ Pushing image to Artifact Registry..."
 docker push "$PREPROD_IMAGE"
 
-# IMPORTANTE: No hardcodear credenciales aquí en producción.
-# Deben inyectarse en Cloud Run usando Google Secret Manager.
+# IMPORTANTE: No hardcodear credenciales aquí.
+# Deben inyectarse en Cloud Run usando Google Secret Manager del proyecto staging (rodeo-app-fac50).
 echo "▶ Deploying to Cloud Run usando Secret Manager..."
 gcloud run deploy rodeo-preprod \
   --image "$PREPROD_IMAGE" \
   --region southamerica-east1 \
   --platform managed \
+  --project rodeo-app-fac50 \
   --allow-unauthenticated \
   --set-env-vars="NEXT_PUBLIC_APP_URL=${PREPROD_URL}" \
-  --update-secrets="DATABASE_URL=rodeo-db-url-preprod:latest,RESEND_API_KEY=resend-api-key-preprod:latest,FIREBASE_ADMIN_CREDENTIALS_BASE64=firebase-sa-key-preprod:latest,GEMINI_API_KEY=gemini-api-key-preprod:latest"
+  --update-secrets="DATABASE_URL=projects/rodeo-app-fac50/secrets/rodeo-db-url:latest,RESEND_API_KEY=projects/rodeo-app-fac50/secrets/resend-api-key:latest,FIREBASE_ADMIN_CREDENTIALS_BASE64=projects/rodeo-app-fac50/secrets/firebase-sa-key:latest,GEMINI_API_KEY=projects/rodeo-app-fac50/secrets/gemini-api-key:latest,EMAIL_VERIFY_JWT_SECRET=projects/rodeo-app-fac50/secrets/EMAIL_VERIFY_JWT_SECRET:latest"
 
 echo "✅ Deploy de Pre-Producción completado!"
 echo "   URL: ${PREPROD_URL}"
