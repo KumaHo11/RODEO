@@ -108,15 +108,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       // Usuario no existe en la DB (ej. cuenta de staging logueando en producción o viceversa)
       if (res.status === 404) {
-        // Redirigimos a la página para que completen el registro en esta base de datos
-        // usando el token actual de Firebase que sí es válido.
-        if (
-          window.location.pathname !== '/register' && 
-          window.location.pathname !== '/complete-profile' &&
-          firebaseUser.emailVerified
-        ) {
-          window.location.href = '/complete-profile'
-        }
+        await firebaseSignOut(auth)
+        document.cookie = '__session=; path=/; max-age=0'
+        window.location.href = '/register'
         return
       }
 

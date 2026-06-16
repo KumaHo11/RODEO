@@ -18,6 +18,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { applyActionCode, getAuth } from 'firebase/auth'
 import app from '@/lib/firebase/client'
 import RodeoLogo from '@/components/RodeoLogo'
@@ -135,8 +136,15 @@ function ActionContent() {
       {/* Visual side */}
       <div className="hidden lg:flex w-1/2 bg-green-700 items-center justify-center relative overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)]">
         <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
-        <div className="relative z-10">
-          <RodeoLogo variant="dark" size="xl" showTagline={true} />
+        <div className="relative z-10 w-[55%] flex items-center justify-center">
+          <Image 
+            src="/LogoLoginBlanco.svg" 
+            alt="RODEO Ganadería Regenerativa" 
+            width={800} 
+            height={800} 
+            className="w-full h-auto object-contain" 
+            priority 
+          />
         </div>
       </div>
 
