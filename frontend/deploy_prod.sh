@@ -10,7 +10,7 @@ if [ -f .env.prod ]; then
   export $(grep -v '^#' .env.prod | grep -v '^$' | xargs)
 fi
 
-PROD_IMAGE="southamerica-east1-docker.pkg.dev/rodeo-app-fac50/rodeo-prod/frontend:latest"
+PROD_IMAGE="southamerica-east1-docker.pkg.dev/${GCP_PROJECT_ID:-rodeo-app-prod-v1}/rodeo-prod/frontend:latest"
 PROD_URL="https://rodeoagtech.com"
 
 echo "▶ Building image con Firebase client keys..."

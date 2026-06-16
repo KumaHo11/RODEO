@@ -5,7 +5,7 @@ set -e
 # Deploys Backend (Internal), Parser (Internal), and Frontend (Public)
 
 REGION="southamerica-east1"
-PROJECT_ID="rodeo-app-fac50"
+PROJECT_ID="${GCP_PROJECT_ID:-rodeo-app-prod-v1}"
 PROD_DOMAIN="rodeoagtech.com"
 
 # 1. BUILD AND DEPLOY EXPRESS BACKEND (INTERNAL ONLY)
