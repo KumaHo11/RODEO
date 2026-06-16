@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
 }
 
 model SubscriptionPlan {
@@ -49,7 +51,6 @@ model Organization {
   regionId                 String?           @map("region_id") @db.VarChar(50)
   droughtPlanBuffer        Int?              @default(20) @map("drought_plan_buffer")
   subscriptionPlanId       String?           @map("subscription_plan_id") @db.Uuid
-  // plan_status es TEXT en la DB (sin cast)
   planStatus               String?           @default("active") @map("plan_status") @db.Text
   trialEndsAt              DateTime?         @map("trial_ends_at") @db.Timestamptz
   planExpiresAt            DateTime?         @map("plan_expires_at") @db.Timestamptz
@@ -61,6 +62,12 @@ model Organization {
   defaultDailyAllocationKg Decimal?          @default(12) @map("default_daily_allocation_kg") @db.Decimal(10, 2)
   defaultTargetRemnantKgHa Decimal?          @default(600) @map("default_target_remnant_kg_ha") @db.Decimal(10, 2)
   technicalData            Json?             @default("{}") @map("technical_data")
+  /// PostGIS: ubicación puntual del campo
+  location                 Unsupported("geometry(Point,4326)")? @map("location")
+  /// PostGIS: polígono de límites del campo
+  boundaries               Unsupported("geometry(MultiPolygon,4326)")? @map("boundaries")
+  /// Nombre del campo (seteado en onboarding)
+  fieldName                String?           @map("field_name") @db.Text
   createdAt                DateTime          @default(now()) @map("created_at")
   updatedAt                DateTime          @updatedAt @map("updated_at")
   subscriptionPlan         SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
@@ -111,20 +118,36 @@ model Profile {
 }
 
 model Paddock {
-  id                   String                 @id @default(uuid()) @db.Uuid
-  orgId                String                 @map("org_id") @db.Uuid
-  name                 String                 @db.VarChar(255)
-  areaHa               Decimal?               @map("area_ha") @db.Decimal(10, 2)
-  isGrazable           Boolean?               @default(true) @map("is_grazable")
-  currentStatus        String?                @default("RESTING") @map("current_status")
-  estimatedAdh         Decimal?               @default(0) @map("estimated_adh") @db.Decimal(10, 2)
-  version              Int                    @default(1)
-  createdAt            DateTime               @default(now()) @map("created_at")
-  updatedAt            DateTime               @updatedAt @map("updated_at")
-  organization         Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  grazingPlans         GrazingPlan[]
-  biologicalMonitoring BiologicalMonitoring[]
-  weatherEvents        WeatherEventPaddock[]
+  id                      String                 @id @default(uuid()) @db.Uuid
+  orgId                   String                 @map("org_id") @db.Uuid
+  name                    String                 @db.VarChar(255)
+  areaHa                  Decimal?               @map("area_ha") @db.Decimal(10, 2)
+  isGrazable              Boolean?               @default(true) @map("is_grazable")
+  currentStatus           String?                @default("RESTING") @map("current_status")
+  estimatedAdh            Decimal?               @default(0) @map("estimated_adh") @db.Decimal(10, 2)
+  /// Potrero activo/inactivo
+  isActive                Boolean?               @default(true) @map("is_active")
+  /// Materia seca estimada en kg/ha
+  dryMatterKgHa           Decimal?               @map("dry_matter_kg_ha") @db.Decimal(10, 2)
+  /// Índice NDVI actual
+  currentNdvi             Decimal?               @map("current_ndvi") @db.Decimal(6, 4)
+  /// Materia seca previa (para comparación)
+  previousDryMatterKgHa   Decimal?               @map("previous_dry_matter_kg_ha") @db.Decimal(10, 2)
+  /// Fecha del NDVI previo
+  previousNdviDate        DateTime?              @map("previous_ndvi_date") @db.Date
+  /// Datos técnicos adicionales (JSON libre)
+  technicalData           Json?                  @default("{}") @map("technical_data")
+  /// PostGIS: ubicación puntual del potrero
+  location                Unsupported("geometry(Point,4326)")? @map("location")
+  /// PostGIS: polígono del potrero
+  geom                    Unsupported("geometry(MultiPolygon,4326)")? @map("geom")
+  version                 Int                    @default(1)
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+  organization            Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  grazingPlans            GrazingPlan[]
+  biologicalMonitoring    BiologicalMonitoring[]
+  weatherEvents           WeatherEventPaddock[]
 
   @@map("paddocks")
 }
@@ -139,25 +162,40 @@ model Herd {
   headCount              Int           @default(0) @map("head_count")
   avgWeightKg            Decimal?      @map("avg_weight_kg") @db.Decimal(10, 2)
   totalEv                Decimal?      @map("total_ev") @db.Decimal(10, 2)
-  /// Estado fisiológico/biológico del rodeo (governs dynamic EV calculation)
-  /// Values: VACA_CON_TERNERO | VACA_PRENADA | VACA_VACIA | TERNERO | RECRIA_NOVILLO
+  /// Estado fisiológico/biológico del rodeo
   physiologicalCategory  String?       @map("physiological_category") @db.VarChar(50)
-  /// Fecha del último pesaje real registrado (base para proyección GDP)
   lastWeighDate          DateTime?     @map("last_weigh_date") @db.Date
-  /// Ganancia Diaria de Peso en kg/día (para proyección de crecimiento)
-  /// Obligatorio para TERNERO y RECRIA_NOVILLO; opcional para vacas (variación peso corporal)
   dailyGainKg            Decimal?      @map("daily_gain_kg") @db.Decimal(8, 3)
+  /// Columnas extendidas de manejo ganadero
+  ageYears               Int?          @map("age_years")
+  ageMonths              Int?          @map("age_months")
+  admissionDate          DateTime?     @map("admission_date") @db.Date
+  bcsScore               Decimal?      @map("bcs_score") @db.Decimal(3, 1)
+  bcsLabel               String?       @map("bcs_label") @db.Text
+  bcsData                Json?         @map("bcs_data")
+  photoUrl               String?       @map("photo_url") @db.Text
+  parentHerdId           String?       @map("parent_herd_id") @db.Uuid
+  herdNotes              String?       @map("herd_notes") @db.Text
+  exitDate               DateTime?     @map("exit_date") @db.Date
+  lactanciaRange         String?       @map("lactancia_range") @db.Text
+  estadioGestacion       String?       @map("estadio_gestacion") @db.Text
+  customRacionKg         Decimal?      @map("custom_racion_kg") @db.Decimal(8, 2)
+  grupoManejoId          String?       @map("grupo_manejo_id") @db.Uuid
+  grupoManejoNombre      String?       @map("grupo_manejo_nombre") @db.Text
   version                Int           @default(1)
   createdAt              DateTime      @default(now()) @map("created_at")
   updatedAt              DateTime      @updatedAt @map("updated_at")
   organization           Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   grazingPlans           GrazingPlan[]
+  parentHerd             Herd?         @relation("HerdHierarchy", fields: [parentHerdId], references: [id])
+  childHerds             Herd[]        @relation("HerdHierarchy")
 
   @@map("herds")
 }
 
 model GrazingPlan {
   id                  String    @id @default(uuid()) @db.Uuid
+  orgId               String?   @map("org_id") @db.Uuid
   paddockId           String    @map("paddock_id") @db.Uuid
   herdId              String    @map("herd_id") @db.Uuid
   herdIds             Json?     @map("herd_ids")
@@ -165,6 +203,8 @@ model GrazingPlan {
   exitDate            DateTime? @map("exit_date") @db.Date
   actualEntryDate     DateTime? @map("actual_entry_date") @db.Date
   actualExitDate      DateTime? @map("actual_exit_date") @db.Date
+  adjustedEntryDate   DateTime? @map("adjusted_entry_date") @db.Date
+  adjustedExitDate    DateTime? @map("adjusted_exit_date") @db.Date
   plannedRecoveryDays Int?      @map("planned_recovery_days")
   status              String?   @default("PLANNED")
   actualAdhConsumed   Decimal?  @default(0) @map("actual_adh_consumed") @db.Decimal(10, 2)
@@ -173,6 +213,13 @@ model GrazingPlan {
   exitNotes           String?   @map("exit_notes") @db.Text
   exitDryMatterKgHa   Decimal?  @map("exit_dry_matter_kg_ha") @db.Decimal(10, 2)
   aiAnalysis          Json?     @map("ai_analysis")
+  /// Columnas extendidas para planes estacionales
+  isLocked            Boolean?  @default(false) @map("is_locked")
+  closingStock        Json?     @map("closing_stock")
+  planType            String?   @default("manual") @map("plan_type") @db.Text
+  sourceOrigin        String?   @default("human") @map("source_origin") @db.Text
+  cycleId             String?   @map("cycle_id") @db.Uuid
+  seasonPlanId        String?   @map("season_plan_id") @db.Uuid
   version             Int       @default(1)
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
@@ -278,6 +325,15 @@ model FarmEvent {
   relatedHerdId    String?      @map("related_herd_id") @db.Uuid
   relatedPaddockId String?      @map("related_paddock_id") @db.Uuid
   impacts          Json?
+  /// Columnas extendidas de eventos
+  category         String?      @db.Text
+  allDay           Boolean?     @default(true) @map("all_day")
+  recurrence       String?      @db.Text
+  eventNotes       String?      @map("notes") @db.Text
+  metadata         Json?
+  photoUrl         String?      @map("photo_url") @db.Text
+  audioUrl         String?      @map("audio_url") @db.Text
+  assignedTo       String?      @map("assigned_to") @db.Uuid
   version          Int          @default(1)
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
@@ -290,8 +346,14 @@ model Task {
   id           String       @id @default(uuid()) @db.Uuid
   orgId        String       @map("org_id") @db.Uuid
   assigneeId   String?      @map("assignee_id") @db.Uuid
+  /// assigned_to es el nombre que usa el código (duplica assignee_id por migración histórica)
+  assignedTo   String?      @map("assigned_to") @db.Uuid
+  createdBy    String?      @map("created_by") @db.Uuid
   title        String       @db.VarChar(255)
   description  String?      @db.Text
+  taskType     String?      @default("GENERAL") @map("task_type") @db.Text
+  paddockId    String?      @map("paddock_id") @db.Uuid
+  priority     String?      @default("MEDIA") @map("priority") @db.Text
   status       String       @default("pending") @db.VarChar(50)
   dueDate      DateTime?    @map("due_date")
   createdAt    DateTime     @default(now()) @map("created_at")
