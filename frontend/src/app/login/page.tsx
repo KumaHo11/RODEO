@@ -32,7 +32,7 @@ function LoginContent() {
 
   useEffect(() => {
     if (searchParams.get('error') === 'not_found') {
-      setError('El usuario o contraseña son incorrectos.')
+      setError('No se encontró tu perfil. Si acabás de registrarte, intentá iniciar sesión con tu email y contraseña.')
     }
     // Solo redirigir si ya hay sesión activa al montar (refresh de página, sesión persistida)
     // No interferir si el loading manual del handleLogin está activo

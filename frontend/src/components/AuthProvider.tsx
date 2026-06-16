@@ -107,9 +107,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       // Usuario autenticado en Firebase pero sin perfil en la base de datos de este ambiente.
-      // Puede ocurrir por problemas transitorios de DB o si el registro no completó correctamente.
-      // Reintentamos una vez con un token fresco antes de desloguear.
+      // En /register, esto es esperado: el perfil se está creando y el signOut vendrá desde la
+      // página de registro. No debemos interferir con redirecciones aquí.
       if (res.status === 404) {
+        const currentPath = window.location.pathname
+        if (currentPath === '/register') {
+          console.warn('[AuthProvider] Profile 404 on /register — skipping (registration handles its own flow)')
+          setProfile(null)
+          return
+        }
+        // Reintentamos una vez con un token fresco antes de desloguear.
         console.warn('[AuthProvider] Profile 404 — retrying once after 1.5s...')
         await new Promise(r => setTimeout(r, 1500))
         const retryToken = await firebaseUser.getIdToken(true)
@@ -130,8 +137,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error('[AuthProvider] Profile 404 after retry — signing out')
         await firebaseSignOut(auth)
         document.cookie = '__session=; path=/; max-age=0'
-        const currentPath = window.location.pathname
-        if (currentPath !== '/register' && currentPath !== '/login') {
+        if (currentPath !== '/login') {
           window.location.href = '/login?error=not_found'
         }
         return
