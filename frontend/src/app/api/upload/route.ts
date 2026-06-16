@@ -12,11 +12,15 @@ import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { getStorage } from 'firebase-admin/storage'
 import admin from '@/lib/firebase/admin'
 
-const BUCKET_NAME = process.env.GCS_BUCKET_NAME
-if (!BUCKET_NAME) throw new Error('[Upload] GCS_BUCKET_NAME env var is required')
+function getBucketName(): string {
+  const name = process.env.GCS_BUCKET_NAME
+  if (!name) throw new Error('[Upload] GCS_BUCKET_NAME env var is required')
+  return name
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const BUCKET_NAME = getBucketName()
     const authHeader = req.headers.get('authorization') || ''
     const token = authHeader.replace('Bearer ', '').trim()
     if (!token) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
