@@ -5,8 +5,11 @@
  */
 const { Pool } = require('pg')
 
-const DATABASE_URL = process.env.DATABASE_URL || 
-  'postgresql://postgres:Rodeo2026%21Secure%23@35.247.199.183:5432/rodeo'
+const DATABASE_URL = process.env.DATABASE_URL
+if (!DATABASE_URL) {
+  console.error('❌ ERROR: DATABASE_URL no está definida. Ejecutar con: DATABASE_URL=... node migrate-db.js')
+  process.exit(1)
+}
 
 const pool = new Pool({
   connectionString: DATABASE_URL,

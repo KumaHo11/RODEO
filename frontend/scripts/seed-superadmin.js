@@ -9,7 +9,7 @@ const { Pool } = require('pg')
 
 const SUPER_ADMIN = {
   email: 'superadmin@rodeo.app',
-  password: 'Rodeo@Admin2026!',
+  password: process.env.SUPER_ADMIN_PASSWORD || (() => { console.error('❌ SUPER_ADMIN_PASSWORD no definida'); process.exit(1) })(),
   first_name: 'Super',
   last_name: 'Admin',
   system_role: 'SUPER_ADMIN',
@@ -146,7 +146,7 @@ async function main() {
     console.log('\n🎉 Seed completado!\n')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log(`  Email:     ${SUPER_ADMIN.email}`)
-    console.log(`  Password:  ${SUPER_ADMIN.password}`)
+    console.log(`  Password:  ********** (desde env var)`)
     console.log(`  Panel:     http://localhost:3000/admin/dashboard`)
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log('\n⚠️  Cambiá la contraseña después del primer login.\n')

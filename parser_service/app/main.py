@@ -98,7 +98,7 @@ async def get_financial_scenarios(req: FinancialScenarioRequest, user: dict = De
     Sugiere si suplementar o vender basado en precios del MAG.
     """
     try:
-        # En una app real, esto consultaría la DB de Supabase/Postgres
+        # En una app real, esto consultaría la DB de Postgres
         # Aquí implementamos la lógica central.
         result = calculate_financial_scenario(req.org_id, req.threshold_days)
         return result

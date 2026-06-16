@@ -27,7 +27,6 @@
     "canvas": "^3.2.2",
     "clsx": "^2.1.1",
     "firebase": "^12.11.0",
-    "firebase-admin": "^14.0.0",
     "framer-motion": "^12.38.0",
     "idb": "^8.0.3",
     "jose": "^6.2.2",
@@ -62,6 +61,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "firebase-admin": "^14.0.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

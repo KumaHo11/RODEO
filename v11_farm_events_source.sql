@@ -1,5 +1,5 @@
 -- Migration: Add 'source' column to farm_events to distinguish Agenda events from Rodeo activities
--- Run this in your PostgreSQL database (Supabase SQL editor or psql)
+-- Run this in your PostgreSQL database (psql or Cloud SQL)
 
 ALTER TABLE farm_events
   ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'agenda';

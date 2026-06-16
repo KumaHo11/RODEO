@@ -1,6 +1,6 @@
 /**
  * GCP Cloud SQL — PostgreSQL Client
- * Reemplaza: @supabase/supabase-js (capa de base de datos)
+ * Capa de base de datos (PostgreSQL directo)
  * Usa node-postgres (pg) directamente — sin ORM
  */
 import { Pool } from 'pg'

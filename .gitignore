@@ -16,3 +16,12 @@ server_logs.txt
 modal_code.tsx
 tmp/
 *.log
+
+# ── Security: Secrets & Credentials ──
+.env.*
+!.env.example
+*.pem
+*-sa-key.json
+serviceAccountKey*.json
+frontend/scratch/
+backend/.env

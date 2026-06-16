@@ -1,7 +1,7 @@
 /**
  * POST /api/auth/onboarding
  * Completa el setup inicial del campo
- * Reemplaza: onboarding/actions.ts (server action con Supabase)
+ * Reemplaza: onboarding/actions.ts (server action directo)
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'

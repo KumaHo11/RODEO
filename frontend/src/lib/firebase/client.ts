@@ -1,6 +1,6 @@
 /**
  * Firebase Auth — Browser Client
- * Reemplaza: @supabase/supabase-js (capa de autenticación)
+ * Capa de autenticación (Firebase Auth)
  */
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'

@@ -5,8 +5,12 @@
  */
 const { Client } = require('pg')
 
-const DB_URL = process.env.DATABASE_URL || 'postgresql://postgres:RodeoDB2026Secure@35.247.199.183:5432/rodeo?schema=public'
-const SUPERADMIN_EMAIL = 'superadmin@rodeoagtech.com'
+const DB_URL = process.env.DATABASE_URL
+if (!DB_URL) {
+  console.error('❌ ERROR: DATABASE_URL no está definida. Ejecutar con: DATABASE_URL=... node clean_db_keep_superadmin.js')
+  process.exit(1)
+}
+const SUPERADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || 'superadmin@rodeoagtech.com'
 
 async function run() {
   const client = new Client(DB_URL)
