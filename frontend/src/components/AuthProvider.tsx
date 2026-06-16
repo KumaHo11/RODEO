@@ -107,9 +107,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       // Usuario autenticado en Firebase pero sin perfil en la base de datos de este ambiente.
-      // Puede ocurrir si el perfil fue eliminado manualmente o si la cuenta es nueva y
-      // el registro no completó correctamente. Se cierra la sesión y se redirige al registro.
+      // Puede ocurrir por problemas transitorios de DB o si el registro no completó correctamente.
+      // Reintentamos una vez con un token fresco antes de desloguear.
       if (res.status === 404) {
+        console.warn('[AuthProvider] Profile 404 — retrying once after 1.5s...')
+        await new Promise(r => setTimeout(r, 1500))
+        const retryToken = await firebaseUser.getIdToken(true)
+        const retryRes = await fetch('/api/auth/profile', {
+          headers: { Authorization: `Bearer ${retryToken}` },
+        })
+        if (retryRes.ok) {
+          const data = await retryRes.json()
+          setProfile(data.profile)
+          try {
+            localStorage.setItem('rodeo_cached_profile', JSON.stringify(data.profile))
+            await cacheProfile(data.profile)
+          } catch { /* ignore */ }
+          return
+        }
+        // Segundo intento también falló → ahora sí deslogueamos
+        console.error('[AuthProvider] Profile 404 after retry — signing out')
         await firebaseSignOut(auth)
         document.cookie = '__session=; path=/; max-age=0'
         if (window.location.pathname !== '/register') {
