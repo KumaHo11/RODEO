@@ -63,6 +63,7 @@ function ActionContent() {
       })
       .then(async (res) => {
         const data = await res.json()
+        console.log('[auth/action] verify-custom response:', { status: res.status, data })
         if (res.ok && data.success) {
           const auth = getAuth(app)
           try {
@@ -78,7 +79,13 @@ function ActionContent() {
       })
       .catch((err) => {
         console.error('[auth/action] verify-custom error:', err)
-        setMessage('El enlace de verificación es inválido o ya expiró. Por favor, pedí un nuevo enlace.')
+        // Use the server's error message if available, otherwise show a generic one
+        const serverMessage = err?.message || ''
+        if (serverMessage && serverMessage !== 'Error verificando email') {
+          setMessage(serverMessage)
+        } else {
+          setMessage('El enlace de verificación es inválido o ya expiró. Por favor, pedí un nuevo enlace.')
+        }
         setStage('error')
       })
 
