@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { queryOne } from '@/lib/db'
+import { serviceQueryOne } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const activeVersion = await queryOne(
+    const activeVersion = await serviceQueryOne(
       `SELECT id, version_number, content, created_at 
        FROM terms_and_conditions_versions 
        WHERE is_active = true 

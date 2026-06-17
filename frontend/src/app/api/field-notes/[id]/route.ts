@@ -4,14 +4,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 
 async function getOrgId(req: NextRequest): Promise<string | null> {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string }>(
     'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -48,7 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const noteId = (await params).id
     vals.push(noteId, orgId)
 
-    await mutate(
+    await serviceMutate(
       `UPDATE field_notes SET ${setClauses.join(', ')} WHERE id = $${vals.length - 1} AND org_id = $${vals.length}`,
       vals
     )
@@ -65,7 +65,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const orgId = await getOrgId(req)
     if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    await mutate('DELETE FROM field_notes WHERE id = $1 AND org_id = $2', [(await params).id, orgId])
+    await serviceMutate('DELETE FROM field_notes WHERE id = $1 AND org_id = $2', [(await params).id, orgId])
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     console.error('DELETE /api/field-notes/[id]:', err)

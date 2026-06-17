@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { query } from '@/lib/db'
+import { serviceQuery } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         const planId = session.metadata?.plan_id
 
         if (orgId && planId) {
-          await query(
+          await serviceQuery(
             `UPDATE organizations
              SET subscription_plan_id = $1,
                  stripe_subscription_id = $2,
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (orgId) {
-          await query(
+          await serviceQuery(
             `UPDATE organizations
              SET plan_status = $1,
                  stripe_subscription_id = $2,
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
         const sub = event.data.object as Stripe.Subscription
         const customerId = sub.customer as string
 
-        await query(
+        await serviceQuery(
           `UPDATE organizations
            SET plan_status = 'canceled',
                updated_at = NOW()
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
         const invoice = event.data.object as Stripe.Invoice
         const customerId = invoice.customer as string
 
-        await query(
+        await serviceQuery(
           `UPDATE organizations SET plan_status = 'past_due', updated_at = NOW() WHERE stripe_customer_id = $1`,
           [customerId]
         )
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
         const invoice = event.data.object as Stripe.Invoice
         const customerId = invoice.customer as string
 
-        await query(
+        await serviceQuery(
           `UPDATE organizations SET plan_status = 'active', updated_at = NOW() WHERE stripe_customer_id = $1`,
           [customerId]
         )

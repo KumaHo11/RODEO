@@ -6,7 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 import {
   calculateClimateAdjustment,
   validateClimateAdjustmentAccess,
@@ -24,7 +24,7 @@ async function getAuth(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token).catch(() => null)
   if (!decoded) return null
-  const profile = await queryOne<{ id: string; organization_id: string }>(
+  const profile = await serviceQueryOne<{ id: string; organization_id: string }>(
     'SELECT id, organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   ).catch(() => null)
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch paddock
-    const paddock = await queryOne<{
+    const paddock = await serviceQueryOne<{
       id: string; name: string; area_ha: number
       dry_matter_kg_ha: number | null
       current_ndvi: number | null
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     // Active grazing plan — use broad status filter and date range
     const today = new Date().toISOString().split('T')[0]
-    const activePlans = await query<{
+    const activePlans = await serviceQuery<{
       herd_ids: string[] | null; entry_date: string
       exit_date: string | null; planned_recovery_days: number | null; status: string
     }>(`
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       : []
 
     if (herdIds.length > 0) {
-      const herds = await query<{ total_ev: number; head_count: number; avg_weight_kg: number | null }>(`
+      const herds = await serviceQuery<{ total_ev: number; head_count: number; avg_weight_kg: number | null }>(`
         SELECT total_ev, head_count, avg_weight_kg
         FROM herds WHERE id = ANY($1::uuid[]) AND org_id = $2
       `, [herdIds, auth.orgId]).catch(() => [] as any[])
@@ -119,14 +119,14 @@ export async function POST(req: NextRequest) {
 
     // If no herds in active plan, try to get any herd EV for this org as fallback
     if (totalEv <= 0) {
-      const anyHerd = await queryOne<{ total_ev: number }>(`
+      const anyHerd = await serviceQueryOne<{ total_ev: number }>(`
         SELECT COALESCE(SUM(total_ev), 0) AS total_ev FROM herds WHERE org_id = $1
       `, [auth.orgId]).catch(() => null)
       totalEv = Number(anyHerd?.total_ev) || 1
     }
 
     // Weather data (from cache or defaults)
-    const apiWeather = await queryOne<{
+    const apiWeather = await serviceQueryOne<{
       humidity: number | null; wind_speed: number | null
       precipitation_sum: number | null; drought_index: string | null
       forecast_mm_14d: number | null
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     `, [auth.orgId]).catch(() => null)
 
     // Manual rainfall events last 7d
-    const rainfallRow = await queryOne<{ total_mm: number }>(`
+    const rainfallRow = await serviceQueryOne<{ total_mm: number }>(`
       SELECT COALESCE(SUM(value), 0) AS total_mm
       FROM weather_events
       WHERE org_id = $1 AND type = 'RAIN' AND date >= CURRENT_DATE - INTERVAL '7 days'
@@ -232,7 +232,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Sin acceso', required: 'PLANIFICADOR' }, { status: 403 })
     }
 
-    const snapshots = await query<Record<string, unknown>>(`
+    const snapshots = await serviceQuery<Record<string, unknown>>(`
       SELECT
         ca.id, ca.paddock_id, ca.ndvi, ca.rainfall_7d_mm, ca.humidity_pct,
         ca.drought_index, ca.forage_ms_ha, ca.total_ev, ca.grass_growth_rate,
@@ -263,7 +263,7 @@ async function persistSnapshot(
   result: ReturnType<typeof calculateClimateAdjustment>
 ) {
   try {
-    await mutate(`
+    await serviceMutate(`
       INSERT INTO climate_adjustment_snapshots (
         org_id, paddock_id, ndvi, rainfall_7d_mm, humidity_pct,
         drought_index, forage_ms_ha, total_ev, grass_growth_rate,

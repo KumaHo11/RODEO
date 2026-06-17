@@ -7,7 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne } from '@/lib/db'
+import { serviceQueryOne } from '@/lib/db'
 
 // WMO Weather Code → condition + label (ES)
 const WMO_MAP: Record<number, { condition: string; label: string }> = {
@@ -51,7 +51,7 @@ async function getAuth(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string }>(
     'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
 
     if (isNaN(lat) || isNaN(lon)) {
       // Try location point first, then centroid of boundaries polygon
-      const org = await queryOne<{ location: unknown; boundaries_centroid: unknown; name: string; location_label: string | null }>(
+      const org = await serviceQueryOne<{ location: unknown; boundaries_centroid: unknown; name: string; location_label: string | null }>(
         `SELECT location, name, location_label,
          ST_AsGeoJSON(ST_Centroid(boundaries))::json AS boundaries_centroid
          FROM organizations WHERE id = $1`,

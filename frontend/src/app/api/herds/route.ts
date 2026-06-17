@@ -19,7 +19,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { query, mutate } from '@/lib/db'
+import { serviceQuery, serviceMutate } from '@/lib/db'
 
 // ── buildHierarchy — Groups flat herds into LoteData[] + ungrouped[] —————————
 
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
     // First: guaranteed core columns + v8 + v10 columns
     let herds: any[]
     try {
-      herds = await query(
+      herds = await serviceQuery(
         `SELECT id, org_id, name, species, breed, categoria, head_count,
                 avg_weight_kg, total_ev,
                 age_years, age_months, admission_date,
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
       )
     } catch {
       try {
-        herds = await query(
+        herds = await serviceQuery(
           `SELECT id, org_id, name, species, breed, categoria, head_count,
                   avg_weight_kg, total_ev,
                   age_years, age_months, admission_date,
@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
         )
       } catch {
         try {
-          herds = await query(
+          herds = await serviceQuery(
             `SELECT id, org_id, name, species, breed, categoria, head_count,
                     avg_weight_kg, total_ev,
                     age_years, age_months, admission_date,
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
           )
         } catch {
           // Final fallback: guaranteed-only columns
-          herds = await query(
+          herds = await serviceQuery(
             `SELECT id, org_id, name, species, breed, categoria, head_count,
                     avg_weight_kg, total_ev, created_at, updated_at
              FROM herds
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 1: INSERT with guaranteed columns only (always works)
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO herds
          (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
     // Step 2: UPDATE with new optional columns — silently skip if columns don't exist yet
     if (id && (age_months || age_years || admission_date || parent_herd_id || exit_date || is_temporary != null || notes)) {
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE herds
            SET age_months = $1, age_years = $2, admission_date = $3, parent_herd_id = $4, exit_date = $5,
                updated_at = NOW()
@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
       }
       // is_temporary and notes — separate update with fallback
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE herds SET is_temporary = $1, herd_notes = $2 WHERE id = $3`,
           [is_temporary ?? false, notes || null, id]
         )
@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
     // Step 3: UPDATE physiological fields (v8) — separate block, silently skip if not migrated
     if (id && (physiological_category !== undefined || last_weigh_date !== undefined || daily_gain_kg !== undefined)) {
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE herds
            SET physiological_category = $1,
                last_weigh_date = $2,
@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
     // Step 3.5: UPDATE EV Matrix fields (v9)
     if (id && (lactancia_range !== undefined || estadio_gestacion !== undefined || custom_racion_kg !== undefined)) {
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE herds
            SET lactancia_range = $1,
                estadio_gestacion = $2,
@@ -260,7 +260,7 @@ export async function POST(req: NextRequest) {
     // Step 4: UPDATE lote de manejo fields (v10) — silently skip if not migrated
     if (id && (grupo_manejo_id !== undefined || grupo_manejo_nombre !== undefined)) {
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE herds
            SET grupo_manejo_id = $1,
                grupo_manejo_nombre = $2,

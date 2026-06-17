@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { mutate } from '@/lib/db'
+import { serviceMutate } from '@/lib/db'
 
 
 export async function PATCH(
@@ -42,7 +42,7 @@ export async function PATCH(
 
     // Validate via paddock's org_id
     vals.push((await params).id, auth.orgId)
-    await mutate(
+    await serviceMutate(
       `UPDATE grazing_plans SET ${sets.join(', ')}
        WHERE id = $${i++}
          AND paddock_id IN (SELECT id FROM paddocks WHERE org_id = $${i})`,
@@ -64,7 +64,7 @@ export async function DELETE(
     const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    await mutate(
+    await serviceMutate(
       `DELETE FROM grazing_plans
        WHERE id = $1
          AND paddock_id IN (SELECT id FROM paddocks WHERE org_id = $2)`,

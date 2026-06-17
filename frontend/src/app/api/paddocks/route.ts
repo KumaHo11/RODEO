@@ -4,14 +4,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { query, mutate } from '@/lib/db'
+import { serviceQuery, serviceMutate } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const paddocks = await query(
+    const paddocks = await serviceQuery(
       `SELECT
          p.id, p.org_id, p.name, p.area_ha, p.current_status, p.is_grazable,
          p.is_active,
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     let result
     if (geomJson) {
-      result = await mutate(
+      result = await serviceMutate(
         `INSERT INTO paddocks (org_id, name, area_ha, current_status, geom, technical_data, dry_matter_kg_ha)
          VALUES ($1, $2, $3, $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), $6::jsonb, $7)
          RETURNING id`,
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
         ]
       )
     } else {
-      result = await mutate(
+      result = await serviceMutate(
         `INSERT INTO paddocks (org_id, name, area_ha, current_status, technical_data, dry_matter_kg_ha)
          VALUES ($1, $2, $3, $4, $5::jsonb, $6)
          RETURNING id`,
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
 
     // Log initial dry matter in biological_monitoring if provided
     if (dry_matter_kg_ha !== undefined && dry_matter_kg_ha !== null && id) {
-      await mutate(
+      await serviceMutate(
         `INSERT INTO biological_monitoring (paddock_id, dry_matter_estimate_kg, recorded_at)
          VALUES ($1, $2, NOW())`,
         [id, dry_matter_kg_ha]

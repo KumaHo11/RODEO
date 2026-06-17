@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { query } from '@/lib/db'
+import { serviceQuery } from '@/lib/db'
 
 export const revalidate = 60 // Cache for 60 seconds
 
 export async function GET() {
   try {
-    const configs = await query<{ key: string; value: string }>(
+    const configs = await serviceQuery<{ key: string; value: string }>(
       `SELECT key, value FROM system_config WHERE category = 'menu'`
     )
     

@@ -7,7 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query } from '@/lib/db'
+import { serviceQueryOne, serviceQuery } from '@/lib/db'
 import type { WeatherInsights, PaddockRainfallStat, PaddockFrostStat, BlindPaddock } from '@/lib/types/weather'
 
 const BLIND_DAYS_THRESHOLD = 90
@@ -17,7 +17,7 @@ async function getAuth(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string }>(
     'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     const { orgId } = auth
 
     // ── 1. Rain: total mm per paddock ─────────────────────────────────────────
-    const rainRows = await query<{ paddock_id: string; paddock_name: string; total_mm: string; event_count: string }>(`
+    const rainRows = await serviceQuery<{ paddock_id: string; paddock_name: string; total_mm: string; event_count: string }>(`
       SELECT
         p.id    AS paddock_id,
         p.name  AS paddock_name,
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     }))
 
     // ── 2. Frost: count of events + min temp per paddock ──────────────────────
-    const frostRows = await query<{ paddock_id: string; paddock_name: string; frost_count: string; min_temp: string }>(`
+    const frostRows = await serviceQuery<{ paddock_id: string; paddock_name: string; frost_count: string; min_temp: string }>(`
       SELECT
         p.id    AS paddock_id,
         p.name  AS paddock_name,
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
     }))
 
     // ── 3. Blind paddocks — no events in last N days ──────────────────────────
-    const allPaddocks = await query<{ id: string; name: string; last_event: string | null }>(`
+    const allPaddocks = await serviceQuery<{ id: string; name: string; last_event: string | null }>(`
       SELECT
         p.id,
         p.name,

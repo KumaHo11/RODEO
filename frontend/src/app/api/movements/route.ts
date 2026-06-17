@@ -25,7 +25,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +34,7 @@ async function getAuth(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string; id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; id: string }>(
     'SELECT organization_id, id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -46,7 +46,7 @@ async function getAuth(req: NextRequest) {
 
 async function ensureTable() {
   try {
-    await mutate(`
+    await serviceMutate(`
       CREATE TABLE IF NOT EXISTS movements (
         id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id        UUID NOT NULL,
@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
     if (entityId)   { conditions.push(`entity_id = $${idx++}`);   vals.push(entityId) }
     if (entityType) { conditions.push(`entity_type = $${idx++}`); vals.push(entityType) }
 
-    const rows = await query(
+    const rows = await serviceQuery(
       `SELECT * FROM movements WHERE ${conditions.join(' AND ')}
        ORDER BY occurred_at DESC LIMIT $${idx}`,
       [...vals, limit]
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'entity_type, entity_id y event_type requeridos' }, { status: 400 })
     }
 
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO movements
          (org_id, entity_type, entity_id, entity_name, event_type,
           quantity, weight_kg, bcs_score, categoria, breed,

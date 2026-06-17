@@ -15,7 +15,7 @@ import { createHmac } from 'crypto'
 import { downloadWhatsAppMedia, sendWhatsAppText } from '@/lib/whatsapp'
 import { transcribeAudio } from '@/lib/speechToText'
 import { uploadBufferToStorage } from '@/lib/firebase/storage-admin'
-import { mutate, queryOne } from '@/lib/db'
+import { serviceMutate, serviceQueryOne } from '@/lib/db'
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN!
 const APP_SECRET   = process.env.WHATSAPP_APP_SECRET!   // usado para validar firma
@@ -70,7 +70,7 @@ async function processMessage(msg: any, value: any) {
   const msgType = msg.type as 'text' | 'audio' | 'image' | 'document'
 
   // 2. Lookup teléfono → profile + org
-  const link = await queryOne<{ profile_id: string; org_id: string }>(
+  const link = await serviceQueryOne<{ profile_id: string; org_id: string }>(
     `SELECT profile_id, org_id FROM whatsapp_links WHERE phone = $1`,
     [phone]
   )
@@ -84,7 +84,7 @@ async function processMessage(msg: any, value: any) {
   }
 
   // 3. Deduplicación
-  const existing = await queryOne<{ id: string }>(
+  const existing = await serviceQueryOne<{ id: string }>(
     `SELECT id FROM field_notes WHERE whatsapp_msg_id = $1`,
     [msgId]
   )
@@ -120,7 +120,7 @@ async function processMessage(msg: any, value: any) {
   }
 
   // 5. Insertar en field_notes con PENDING_REVIEW
-  await mutate(
+  await serviceMutate(
     `INSERT INTO field_notes
        (org_id, created_by, paddock_id, tags, category, title, content,
         audio_url, photo_url, audio_duration_secs,

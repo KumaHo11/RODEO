@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { mutate, queryOne } from '@/lib/db'
+import { serviceMutate, serviceQueryOne } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Obtener profile ID
-    const profile = await queryOne<{ id: string }>(
+    const profile = await serviceQueryOne<{ id: string }>(
       `SELECT id FROM profiles WHERE firebase_uid = $1 LIMIT 1`, 
       [decoded.uid]
     )
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'unknown'
 
-    await mutate(
+    await serviceMutate(
       `INSERT INTO user_terms_acceptances (profile_id, version_id, ip_address)
        VALUES ($1, $2, $3)`,
       [profile.id, versionId, ipAddress]

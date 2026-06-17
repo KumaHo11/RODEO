@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne } from '@/lib/db'
+import { serviceQuery, serviceQueryOne } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Obtener los tours actuales para hacer push
-    const profile = await queryOne(
+    const profile = await serviceQueryOne(
       `SELECT completed_tours FROM profiles WHERE firebase_uid = $1`,
       [decoded.uid]
     )
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       // Pasamos el array de strings. Node-postgres maneja los arrays si están mapeados correctamente,
       // pero para asegurarnos podemos construir el array en postgresql usando ANY o pasarlo.
       // O más fácil: usar array_append si es nativo, pero al pasarlo como $1 ya funciona.
-      await query(
+      await serviceQuery(
         `UPDATE profiles SET completed_tours = $1 WHERE firebase_uid = $2`,
         [completedTours, decoded.uid]
       )

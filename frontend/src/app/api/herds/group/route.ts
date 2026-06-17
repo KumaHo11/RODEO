@@ -9,7 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { mutate } from '@/lib/db'
+import { serviceMutate } from '@/lib/db'
 import { randomUUID } from 'crypto'
 
 export async function PATCH(req: NextRequest) {
@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest) {
 
     if (action === 'ungroup') {
       // Remove from group
-      await mutate(
+      await serviceMutate(
         `UPDATE herds
          SET grupo_manejo_id = NULL,
              grupo_manejo_nombre = NULL,
@@ -46,7 +46,7 @@ export async function PATCH(req: NextRequest) {
     const grupoId = providedGroupId || randomUUID()
     const nombre  = grupo_manejo_nombre || 'Lote sin nombre'
 
-    await mutate(
+    await serviceMutate(
       `UPDATE herds
        SET grupo_manejo_id = $1,
            grupo_manejo_nombre = $2,

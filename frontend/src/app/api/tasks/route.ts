@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 
 async function getOrgId(req: NextRequest) {
@@ -12,7 +12,7 @@ async function getOrgId(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string; id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; id: string }>(
     'SELECT organization_id, id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     sql += ' ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC'
     if (limit) { sql += ` LIMIT $${i++}`; vals.push(parseInt(limit)) }
 
-    const tasks = await query(sql, vals)
+    const tasks = await serviceQuery(sql, vals)
 
     return NextResponse.json({ tasks })
   } catch (err: any) {
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     if (!title) return NextResponse.json({ error: 'Título requerido' }, { status: 400 })
 
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO tasks
          (org_id, created_by, title, description, task_type, paddock_id,
           assigned_to, due_date, priority, status)
@@ -96,14 +96,14 @@ export async function POST(req: NextRequest) {
     if (assigned_to && taskId) {
       ;(async () => {
         try {
-          const assignee = await queryOne<any>(
+          const assignee = await serviceQueryOne<any>(
             'SELECT id, email, first_name, last_name FROM profiles WHERE id = $1',
             [assigned_to]
           )
           if (!assignee) return
 
           // In-app notification
-          await mutate(
+          await serviceMutate(
             `INSERT INTO notifications
                (org_id, profile_id, user_id, type, title, message, body, entity_id, entity_type)
              VALUES ($1, $2, $2, 'TAREA', $3, $4, $4, $5, 'task')`,
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
 
           // Email notification (fire-and-forget — no await at outer level)
           if (assignee.email) {
-            const creator = await queryOne<any>(
+            const creator = await serviceQueryOne<any>(
               'SELECT first_name, last_name FROM profiles WHERE id = $1',
               [auth.profileId]
             )

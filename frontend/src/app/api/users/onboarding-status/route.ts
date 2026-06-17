@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne } from '@/lib/db'
+import { serviceQueryOne } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Buscar el campo completed_tours en el perfil
-    const profile = await queryOne(
+    const profile = await serviceQueryOne(
       `SELECT completed_tours FROM profiles WHERE firebase_uid = $1`,
       [decoded.uid]
     )

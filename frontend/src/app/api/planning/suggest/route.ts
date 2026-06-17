@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { queryOne, query } from '@/lib/db'
+import { serviceQueryOne, serviceQuery } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Obtener EV del rebaño
-    const herd = await queryOne<{ total_ev: number }>('SELECT total_ev FROM herds WHERE id = $1 AND org_id = $2', [herd_id, auth.orgId])
+    const herd = await serviceQueryOne<{ total_ev: number }>('SELECT total_ev FROM herds WHERE id = $1 AND org_id = $2', [herd_id, auth.orgId])
     if (!herd) return NextResponse.json({ error: 'Rebaño no encontrado' }, { status: 404 })
     const totalEV = Number(herd.total_ev) || 1
 
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       FROM paddocks p
       WHERE p.org_id = $1 AND p.is_grazable = true AND p.current_status = 'RESTING' AND p.dry_matter_kg_ha IS NOT NULL AND p.dry_matter_kg_ha > 0
     `
-    const candidatesResult = await query<any>(candidateQuery, [auth.orgId])
+    const candidatesResult = await serviceQuery<any>(candidateQuery, [auth.orgId])
     let candidates = candidatesResult
 
     // Variable PostGIS de distancia entre potreros se puede emular pidiendo distancias relativas al start_paddock_id
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     let currentCentroid: { lng: number, lat: number } | null = null
     if (start_paddock_id) {
        const initialCoordsQuery = `SELECT ST_X(ST_Centroid(geom)) as lng, ST_Y(ST_Centroid(geom)) as lat FROM paddocks WHERE id = $1`
-       const res = await queryOne<{lng: number, lat: number}>(initialCoordsQuery, [start_paddock_id])
+       const res = await serviceQueryOne<{lng: number, lat: number}>(initialCoordsQuery, [start_paddock_id])
        if (res) currentCentroid = res
     }
 

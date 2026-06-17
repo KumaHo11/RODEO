@@ -4,14 +4,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 
 async function getOwnerOrgId(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string; role: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; role: string }>(
     'SELECT organization_id, role FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!auth) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
     // Verify member belongs to this org
-    const member = await queryOne<{ id: string; organization_id: string; role: string }>(
+    const member = await serviceQueryOne<{ id: string; organization_id: string; role: string }>(
       'SELECT id, organization_id, role FROM profiles WHERE id = $1',
       [id]
     )
@@ -66,7 +66,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     vals.push(id)
-    await mutate(
+    await serviceMutate(
       `UPDATE profiles SET ${setClauses.join(', ')} WHERE id = $${i}`,
       vals
     )
@@ -84,7 +84,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const auth = await getOwnerOrgId(req)
     if (!auth) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
-    const member = await queryOne<{ id: string; organization_id: string; role: string }>(
+    const member = await serviceQueryOne<{ id: string; organization_id: string; role: string }>(
       'SELECT id, organization_id, role FROM profiles WHERE id = $1',
       [id]
     )
@@ -95,7 +95,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'No se puede eliminar al propietario' }, { status: 403 })
     }
 
-    await mutate(
+    await serviceMutate(
       `UPDATE profiles
        SET organization_id = NULL, team_role = NULL, permissions = NULL,
            onboarding_step = 0, updated_at = NOW()

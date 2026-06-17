@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne } from '@/lib/db'
+import { serviceQueryOne } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     if (!decoded?.uid) return NextResponse.json({ needsAcceptance: false })
 
     // 1. Get active terms
-    const activeVersion = await queryOne<{ id: string, content: string, version_number: string }>(
+    const activeVersion = await serviceQueryOne<{ id: string, content: string, version_number: string }>(
       `SELECT id, content, version_number FROM terms_and_conditions_versions WHERE is_active = true LIMIT 1`
     )
 
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Get profile ID
-    const profile = await queryOne<{ id: string }>(
+    const profile = await serviceQueryOne<{ id: string }>(
       `SELECT id FROM profiles WHERE firebase_uid = $1 LIMIT 1`,
       [decoded.uid]
     )
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 3. Check if accepted
-    const acceptance = await queryOne(
+    const acceptance = await serviceQueryOne(
       `SELECT id FROM user_terms_acceptances WHERE profile_id = $1 AND version_id = $2 LIMIT 1`,
       [profile.id, activeVersion.id]
     )

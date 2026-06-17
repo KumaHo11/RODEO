@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne } from '@/lib/db'
+import { serviceQuery, serviceQueryOne } from '@/lib/db'
 
 const getStripe = () => {
   const key = process.env.STRIPE_SECRET_KEY
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   const { planId, billingPeriod = 'monthly', successUrl, cancelUrl } = await req.json()
 
   // Obtener el plan
-  const plan = await queryOne<{
+  const plan = await serviceQueryOne<{
     id: string; name: string; stripe_price_id_monthly: string; stripe_price_id_yearly: string
   }>(
     `SELECT id, name, stripe_price_id_monthly, stripe_price_id_yearly FROM subscriptions_plans WHERE id = $1 AND is_active = true`,
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Obtener o crear Stripe Customer
-  const profile = await queryOne<{ organization_id: string; email: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; email: string }>(
     `SELECT organization_id, email FROM profiles WHERE firebase_uid = $1`,
     [decoded.uid]
   )
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No tenés una organización activa' }, { status: 400 })
   }
 
-  const org = await queryOne<{ id: string; name: string; stripe_customer_id: string }>(
+  const org = await serviceQueryOne<{ id: string; name: string; stripe_customer_id: string }>(
     `SELECT id, name, stripe_customer_id FROM organizations WHERE id = $1`,
     [profile.organization_id]
   )
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       })
       customerId = customer.id
 
-      await query(
+      await serviceQuery(
         `UPDATE organizations SET stripe_customer_id = $1, updated_at = NOW() WHERE id = $2`,
         [customerId, org.id]
       )

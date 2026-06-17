@@ -4,14 +4,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 
 async function getOrgId(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string; id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; id: string }>(
     'SELECT organization_id, id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 
     sql += ` ORDER BY fn.created_at DESC LIMIT 200`
 
-    const rows = await query(sql, vals)
+    const rows = await serviceQuery(sql, vals)
     return NextResponse.json({ notes: rows })
   } catch (err: any) {
     console.error('GET /api/field-notes error:', err)
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     const category = Array.isArray(tags) && tags.length > 0 ? tags[0] : 'GENERAL'
 
-    const { rows } = await mutate(
+    const { rows } = await serviceMutate(
       `INSERT INTO field_notes
          (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, photo_urls, audio_url, analysis_result)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)

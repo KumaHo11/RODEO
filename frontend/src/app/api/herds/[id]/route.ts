@@ -8,7 +8,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 import { checkHerdUpdateImpact } from '@/lib/syncService'
 
 async function getOrgId(req: NextRequest) {
@@ -16,7 +16,7 @@ async function getOrgId(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string }>(
     'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -56,7 +56,7 @@ export async function PATCH(
     if (sets.length > 1) {
       // At least one core field is being updated
       vals.push(herdId, auth.orgId)
-      await mutate(
+      await serviceMutate(
         `UPDATE herds SET ${sets.join(', ')} WHERE id = $${idx} AND org_id = $${idx + 1}`,
         vals
       )
@@ -97,7 +97,7 @@ export async function PATCH(
     if (optSets.length > 0) {
       optVals.push(herdId, auth.orgId)
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE herds SET ${optSets.join(', ')}, updated_at = NOW()
            WHERE id = $${optIdx} AND org_id = $${optIdx + 1}`,
           optVals
@@ -130,7 +130,7 @@ export async function DELETE(
     const auth = await getOrgId(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    await mutate(
+    await serviceMutate(
       'DELETE FROM herds WHERE id = $1 AND org_id = $2',
       [(await params).id, auth.orgId]
     )

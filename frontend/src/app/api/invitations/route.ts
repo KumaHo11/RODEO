@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 import crypto from 'crypto'
 
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (!token) return NextResponse.json({ error: 'Token requerido' }, { status: 400 })
 
   try {
-    const invitation = await queryOne<any>(
+    const invitation = await serviceQueryOne<any>(
       `SELECT ti.*, o.name as org_name
        FROM team_invitations ti
        LEFT JOIN organizations o ON o.id = ti.org_id
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     const decoded = await verifyFirebaseToken(firebaseToken)
     if (!decoded) return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
 
-    const profile = await queryOne<{ organization_id: string; id: string }>(
+    const profile = await serviceQueryOne<{ organization_id: string; id: string }>(
       'SELECT organization_id, id FROM profiles WHERE firebase_uid = $1',
       [decoded.uid]
     )
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO team_invitations
          (org_id, email, role, team_role, permissions, token, status, expires_at, invited_by, first_name, last_name)
        VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10)
@@ -80,10 +80,10 @@ export async function POST(req: NextRequest) {
 
     // Send invitation email via SendGrid
     try {
-      const org = await queryOne<{ name: string }>(
+      const org = await serviceQueryOne<{ name: string }>(
         'SELECT name FROM organizations WHERE id = $1', [profile.organization_id]
       )
-      const inviter = await queryOne<{ first_name: string; last_name: string; email: string }>(
+      const inviter = await serviceQueryOne<{ first_name: string; last_name: string; email: string }>(
         'SELECT first_name, last_name, email FROM profiles WHERE id = $1', [profile.id]
       )
       const inviterName = inviter

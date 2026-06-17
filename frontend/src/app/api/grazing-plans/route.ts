@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { query, mutate } from '@/lib/db'
+import { serviceQuery, serviceMutate } from '@/lib/db'
 import { syncGrazingPlanToAgenda } from '@/lib/syncService'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const plans = await query(
+    const plans = await serviceQuery(
       `SELECT
          gp.id, gp.org_id, gp.paddock_id, gp.herd_id, gp.herd_ids,
          TO_CHAR(gp.entry_date, 'YYYY-MM-DD') AS entry_date,
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
     }
 
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO grazing_plans
          (paddock_id, herd_id, herd_ids, org_id, entry_date, exit_date,
           actual_entry_date, actual_exit_date,

@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne } from '@/lib/db'
+import { serviceQuery, serviceQueryOne } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   const { planId } = await req.json()
 
-  const plan = await queryOne<{
+  const plan = await serviceQueryOne<{
     id: string; name: string; price: number; mp_preapproval_plan_id: string
   }>(
     `SELECT id, name, price, mp_preapproval_plan_id FROM subscriptions_plans WHERE id = $1 AND is_active = true`,
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Plan sin ID de MercadoPago configurado' }, { status: 400 })
   }
 
-  const profile = await queryOne<{ organization_id: string; email: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; email: string }>(
     `SELECT organization_id, email FROM profiles WHERE firebase_uid = $1`,
     [decoded.uid]
   )
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No tenés una organización activa' }, { status: 400 })
   }
 
-  const org = await queryOne<{ id: string; name: string }>(
+  const org = await serviceQueryOne<{ id: string; name: string }>(
     `SELECT id, name FROM organizations WHERE id = $1`,
     [profile.organization_id]
   )

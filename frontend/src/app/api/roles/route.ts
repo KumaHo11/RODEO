@@ -4,14 +4,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 
 async function getAuth(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  return queryOne<{ id: string; organization_id: string; role: string }>(
+  return serviceQueryOne<{ id: string; organization_id: string; role: string }>(
     'SELECT id, organization_id, role FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const profile = await getAuth(req)
     if (!profile?.organization_id) return NextResponse.json({ roles: [] })
 
-    const roles = await query(
+    const roles = await serviceQuery(
       `SELECT id, name, label, description, permissions, created_at
        FROM custom_roles
        WHERE org_id = $1
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     // Generate a safe name from label
     const name = label.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '')
 
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO custom_roles (org_id, name, label, description, permissions, created_by)
        VALUES ($1, $2, $3, $4, $5::jsonb, $6)
        ON CONFLICT (org_id, name) DO UPDATE SET

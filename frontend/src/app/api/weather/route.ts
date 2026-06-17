@@ -25,7 +25,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate, getDbPool } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate, getDbPool } from '@/lib/db'
 import type { CreateWeatherEventPayload } from '@/lib/types/weather'
 
 // ── Auth helper (same pattern as other routes) ────────────────────────────────
@@ -34,7 +34,7 @@ async function getAuth(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string; id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; id: string }>(
     'SELECT organization_id, id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -45,7 +45,7 @@ async function getAuth(req: NextRequest) {
 // ── Ensure tables exist ───────────────────────────────────────────────────────
 async function ensureTables() {
   try {
-    await mutate(`
+    await serviceMutate(`
       CREATE TABLE IF NOT EXISTS weather_events (
         id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id       UUID        NOT NULL,
@@ -58,7 +58,7 @@ async function ensureTables() {
         updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `, [])
-    await mutate(`
+    await serviceMutate(`
       CREATE TABLE IF NOT EXISTS weather_event_paddocks (
         weather_event_id UUID NOT NULL,
         paddock_id       UUID NOT NULL,
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     const where = conditions.join(' AND ')
 
     // Events with their paddock links in a single query using JSON aggregation
-    const events = await query<Record<string, unknown>>(`
+    const events = await serviceQuery<Record<string, unknown>>(`
       SELECT
         we.*,
         COALESCE(
@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
       LIMIT $${idx} OFFSET $${idx + 1}
     `, [...vals, limit, offset])
 
-    const totalRows = await queryOne<{ count: string }>(`
+    const totalRows = await serviceQueryOne<{ count: string }>(`
       SELECT COUNT(*) AS count FROM weather_events we WHERE ${where}
     `, vals)
 
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
 
     // Verify paddocks belong to this org
     const placeholders = body.paddockIds.map((_, i) => `$${i + 2}`).join(', ')
-    const paddocks = await query<{ id: string }>(
+    const paddocks = await serviceQuery<{ id: string }>(
       `SELECT id FROM paddocks WHERE id IN (${placeholders}) AND org_id = $1`,
       [auth.orgId, ...body.paddockIds]
     )
@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
       await client.query('COMMIT')
 
       // Fetch the full event with paddock details for the response
-      const fullEvents = await query<Record<string, unknown>>(`
+      const fullEvents = await serviceQuery<Record<string, unknown>>(`
         SELECT
           we.*,
           COALESCE(

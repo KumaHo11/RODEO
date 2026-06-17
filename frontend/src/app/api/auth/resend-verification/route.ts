@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { adminAuth } from '@/lib/firebase/admin'
 import { sendEmail } from '@/lib/email'
-import { queryOne } from '@/lib/db'
+import { serviceQueryOne } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Buscar el nombre del usuario en la base de datos
-    const profile = await queryOne(`SELECT first_name FROM profiles WHERE firebase_uid = $1`, [uid])
+    const profile = await serviceQueryOne(`SELECT first_name FROM profiles WHERE firebase_uid = $1`, [uid])
     const firstName = String(profile?.first_name || 'Usuario')
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 import { MercadoPagoConfig, PreApproval } from 'mercadopago'
 
 export async function POST(req: NextRequest) {
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Obtener detalles del plan de nuestra base de datos
-    const plan = await queryOne<{
+    const plan = await serviceQueryOne<{
       id: string
       name: string
       price: number
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     const mpResponse = await preApproval.create(subscriptionParams)
 
     // 4. Guardar en base de datos inicial (estado pending/authorized)
-    await mutate(
+    await serviceMutate(
       `INSERT INTO payments (
         org_id, owner_id, provider, provider_sub_id, plan_id, status, amount, currency
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,

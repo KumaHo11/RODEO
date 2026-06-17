@@ -9,14 +9,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 
 async function getAuth(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string; id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; id: string }>(
     'SELECT organization_id, id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -26,7 +26,7 @@ async function getAuth(req: NextRequest) {
 
 // Ensures the season_plans table exists (idempotent)
 async function ensureTable() {
-  await mutate(`
+  await serviceMutate(`
     CREATE TABLE IF NOT EXISTS season_plans (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       org_id          UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -55,7 +55,7 @@ async function ensureTable() {
   `)
 
   // Ensure grazing_plans has the season_plan_id column to allow cascade deletion when an imported file is removed
-  await mutate(`
+  await serviceMutate(`
     DO $$ 
     BEGIN 
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='grazing_plans' AND column_name='season_plan_id') THEN 
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const result = await mutate(
+        const result = await serviceMutate(
           `INSERT INTO season_plans (
             org_id, name, season_type, year,
             start_date, end_date, no_growth_from, no_growth_to,
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
               } else {
                 try {
                   const ha = m.area_ha ? Number(m.area_ha) : 1
-                  const pRes = await mutate(
+                  const pRes = await serviceMutate(
                     `INSERT INTO paddocks (org_id, name, area_ha, current_status) VALUES ($1, $2, $3, 'IDLE') RETURNING id`,
                     [auth.orgId, m.excel_paddock_name, ha]
                   )
@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
                 finalHerdId = newHerds.get(m.excel_herd_name)
               } else {
                 try {
-                  const hRes = await mutate(
+                  const hRes = await serviceMutate(
                     `INSERT INTO herds (org_id, name, total_ev, quantity) VALUES ($1, $2, 10, 1) RETURNING id`,
                     [auth.orgId, m.excel_herd_name]
                   )
@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
             // Para importar un bloque al Gantt, necesitamos obligatoriamente una fecha de entrada
             if (!m.entry_date) continue
 
-            await mutate(`
+            await serviceMutate(`
               INSERT INTO grazing_plans (
                 org_id, paddock_id, herd_id, herd_ids, entry_date, exit_date, actual_entry_date, actual_exit_date, status, notes, season_plan_id
               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'COMPLETED', 'Movimiento registrado importado de Excel', $9)

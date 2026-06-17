@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query } from '@/lib/db'
+import { serviceQueryOne, serviceQuery } from '@/lib/db'
 
 async function getOrgId(firebaseUid: string): Promise<string | null> {
-  const profile = await queryOne(
+  const profile = await serviceQueryOne(
     'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
     [firebaseUid]
   )
@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     const dbStatus = status ? (STATUS_UI_TO_DB[status] ?? status) : null
 
-    await query(
+    await serviceQuery(
       `UPDATE farm_events SET
          title       = COALESCE($1, title),
          event_type  = COALESCE($2, event_type),
@@ -58,7 +58,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Optional: update assigned_to if column exists
     if (assigned_to !== undefined) {
       try {
-        await query(
+        await serviceQuery(
           `UPDATE farm_events SET assigned_to = $1 WHERE id = $2 AND org_id = $3`,
           [assigned_to || null, (await params).id, orgId]
         )
@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Optional: update bulls fields if columns exist
     if (bulls_count !== undefined || bulls_weight !== undefined) {
       try {
-        await query(
+        await serviceQuery(
           `UPDATE farm_events SET bulls_count = $1, bulls_weight = $2 WHERE id = $3 AND org_id = $4`,
           [bulls_count ?? null, bulls_weight ?? null, (await params).id, orgId]
         )
@@ -94,7 +94,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const orgId = await getOrgId(decoded.uid)
     if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 403 })
 
-    await query('DELETE FROM farm_events WHERE id = $1 AND org_id = $2', [(await params).id, orgId])
+    await serviceQuery('DELETE FROM farm_events WHERE id = $1 AND org_id = $2', [(await params).id, orgId])
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     console.error('DELETE /api/farm-events/[id]:', err)

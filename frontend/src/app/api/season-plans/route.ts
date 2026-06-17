@@ -12,14 +12,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 
 async function getAuth(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string; id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; id: string }>(
     'SELECT organization_id, id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -29,7 +29,7 @@ async function getAuth(req: NextRequest) {
 
 // ─── Ensure table exists (runs on first request, idempotent) ────────────────
 async function ensureTable() {
-  await mutate(`
+  await serviceMutate(`
     CREATE TABLE IF NOT EXISTS season_plans (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       org_id          UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -59,7 +59,7 @@ async function ensureTable() {
     )
   `)
   // Index for fast historical queries
-  await mutate(`
+  await serviceMutate(`
     CREATE INDEX IF NOT EXISTS season_plans_org_year
       ON season_plans(org_id, year DESC)
   `)
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     if (source) { sql += ` AND sp.source = $${i++}`; params.push(source) }
     sql += ` ORDER BY sp.year DESC, sp.start_date DESC`
 
-    const plans = await query(sql, params)
+    const plans = await serviceQuery(sql, params)
     return NextResponse.json({ plans })
   } catch (err: any) {
     console.error('GET /api/season-plans error:', err)
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nombre y año son requeridos' }, { status: 400 })
     }
 
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO season_plans (
         org_id, name, season_type, year,
         start_date, end_date,

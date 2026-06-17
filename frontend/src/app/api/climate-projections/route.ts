@@ -8,14 +8,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query } from '@/lib/db'
+import { serviceQueryOne, serviceQuery } from '@/lib/db'
 
 async function getOrgId(req: NextRequest): Promise<string | null> {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string }>(
     'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Create table if it doesn't exist
-    await query(`
+    await serviceQuery(`
       CREATE TABLE IF NOT EXISTS climate_projections (
         id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         organization_id uuid NOT NULL,
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       )
     `, [])
 
-    const row = await queryOne<{ id: string }>(
+    const row = await serviceQueryOne<{ id: string }>(
       `INSERT INTO climate_projections (organization_id, series, meta)
        VALUES ($1, $2, $3)
        RETURNING id`,
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '30'), 90)
 
     // Ensure table exists before querying
-    await query(`
+    await serviceQuery(`
       CREATE TABLE IF NOT EXISTS climate_projections (
         id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         organization_id uuid NOT NULL,
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       )
     `, [])
 
-    const rows = await query<{
+    const rows = await serviceQuery<{
       id: string; projected_at: string; series: any; meta: any
     }>(
       `SELECT id, projected_at, series, meta

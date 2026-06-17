@@ -10,7 +10,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { mutate, query } from '@/lib/db'
+import { serviceMutate, serviceQuery } from '@/lib/db'
 import { randomUUID } from 'crypto'
 
 export async function POST(req: NextRequest) {
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     const cycleId = providedCycleId || randomUUID()
 
     // Verificar que todos los planes pertenecen a la organización del usuario
-    const owned = await query(
+    const owned = await serviceQuery(
       `SELECT gp.id
        FROM grazing_plans gp
        JOIN paddocks p ON p.id = gp.paddock_id
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Asignar cycle_id y marcar como HISTORY
-    await mutate(
+    await serviceMutate(
       `UPDATE grazing_plans
        SET
          cycle_id   = $1::uuid,
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
     const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const benchmarks = await query(
+    const benchmarks = await serviceQuery(
       `SELECT
          gp.cycle_id,
          gp.plan_type,

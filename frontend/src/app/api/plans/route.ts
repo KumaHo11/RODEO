@@ -3,7 +3,7 @@
  * Returns active plans with feature flags for the landing page.
  */
 import { NextResponse } from 'next/server'
-import { query } from '@/lib/db'
+import { serviceQuery } from '@/lib/db'
 
 export async function GET() {
   try {
@@ -23,7 +23,7 @@ export async function GET() {
       console.error('Error fetching dolarapi:', e)
     }
 
-    const plans = await query(`
+    const plans = await serviceQuery(`
       SELECT
         sp.id, sp.name, sp.slug, sp.description,
         sp.price, sp.price_yearly, sp.color,

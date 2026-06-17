@@ -4,14 +4,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 
 async function getOrgId(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string; id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; id: string }>(
     'SELECT organization_id, id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const [members, invitations] = await Promise.all([
-      query(
+      serviceQuery(
         `SELECT id, firebase_uid, email, first_name, last_name,
                 role, team_role, permissions, avatar_url, is_active, created_at
          FROM profiles
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
         [auth.orgId]
       ),
       // Return ALL statuses so UI can display Pending / Accepted / Revoked tabs
-      query(
+      serviceQuery(
         `SELECT ti.id, ti.email, ti.role, ti.team_role, ti.permissions,
                 ti.status, ti.token, ti.expires_at, ti.created_at, ti.invited_by,
                 p.first_name AS inviter_first_name, p.last_name AS inviter_last_name
@@ -61,7 +61,7 @@ export async function DELETE(req: NextRequest) {
     const { memberId } = await req.json()
     if (!memberId) return NextResponse.json({ error: 'memberId requerido' }, { status: 400 })
 
-    await mutate(
+    await serviceMutate(
       `UPDATE profiles SET organization_id = NULL, role = NULL, team_role = NULL
        WHERE id = $1 AND organization_id = $2`,
       [memberId, auth.orgId]

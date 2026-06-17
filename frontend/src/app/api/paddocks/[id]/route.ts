@@ -5,14 +5,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 
 async function getOrgId(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string }>(
     'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -28,7 +28,7 @@ export async function GET(
     const auth = await getOrgId(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const paddock = await queryOne(
+    const paddock = await serviceQueryOne(
       `SELECT id, name, area_ha, current_status, dry_matter_kg_ha, current_ndvi,
               is_active, estimated_adh, technical_data,
               ST_AsGeoJSON(geom)::json AS boundary
@@ -81,13 +81,13 @@ export async function PATCH(
     }
 
     vals.push((await params).id, auth.orgId)
-    await mutate(
+    await serviceMutate(
       `UPDATE paddocks SET ${sets.join(', ')} WHERE id = $${i++} AND org_id = $${i}`,
       vals
     )
 
     if (dry_matter_kg_ha !== undefined) {
-      await mutate(
+      await serviceMutate(
         `INSERT INTO biological_monitoring (paddock_id, dry_matter_estimate_kg, recorded_at) VALUES ($1, $2, NOW())`,
         [(await params).id, dry_matter_kg_ha]
       )
@@ -108,7 +108,7 @@ export async function DELETE(
     const auth = await getOrgId(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    await mutate(
+    await serviceMutate(
       'DELETE FROM paddocks WHERE id = $1 AND org_id = $2',
       [(await params).id, auth.orgId]
     )

@@ -4,11 +4,11 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 
 // Migración on-demand: agrega columnas si no existen (idempotente)
 async function ensurePlanningColumns() {
-  await mutate(`
+  await serviceMutate(`
     ALTER TABLE organizations
       ADD COLUMN IF NOT EXISTS default_daily_allocation_kg  NUMERIC(8,2)  DEFAULT 12,
       ADD COLUMN IF NOT EXISTS default_target_remnant_kg_ha NUMERIC(10,2) DEFAULT 600,
@@ -22,7 +22,7 @@ async function getOrgId(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string }>(
     'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
     await ensurePlanningColumns()
 
-    const org = await queryOne(
+    const org = await serviceQueryOne(
       `SELECT
          id, owner_id, name, total_area_ha, region_id, drought_plan_buffer,
          default_daily_allocation_kg, default_target_remnant_kg_ha,
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     vals.push(auth.orgId)
-    await mutate(`UPDATE organizations SET ${sets.join(', ')} WHERE id = $${i}`, vals)
+    await serviceMutate(`UPDATE organizations SET ${sets.join(', ')} WHERE id = $${i}`, vals)
 
     return NextResponse.json({ success: true })
   } catch (err: any) {

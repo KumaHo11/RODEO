@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     const idempotencyKey = req.headers.get('X-Idempotency-Key')
     if (idempotencyKey) {
       try {
-        const existing = await queryOne<{ id: string }>(
+        const existing = await serviceQueryOne<{ id: string }>(
           `SELECT id FROM farm_events
            WHERE org_id = $1 AND idempotency_key = $2
              AND created_at > NOW() - INTERVAL '24 hours'
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     const finalHerdIds = Array.isArray(herd_ids) ? JSON.stringify(herd_ids) : null
 
     // Step 1: guaranteed INSERT
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO farm_events
          (org_id, title, event_type, event_date, end_date, herd_id, herd_ids, paddock_id, description, status, photo_url, audio_url)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
     // Step 2: assigned_to (optional — silently skips if column doesn't exist yet)
     if (id && assigned_to) {
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE farm_events SET assigned_to = $1 WHERE id = $2`,
           [assigned_to, id]
         )
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     // Step 3: bulls_count / bulls_weight (optional — silently skips if columns don't exist)
     if (id && (bulls_count != null || bulls_weight != null)) {
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE farm_events SET bulls_count = $1, bulls_weight = $2 WHERE id = $3`,
           [bulls_count ?? null, bulls_weight ?? null, id]
         )
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
     // Step 4: source (optional — silently skips if column doesn't exist yet)
     if (id && source) {
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE farm_events SET source = $1 WHERE id = $2`,
           [source, id]
         )
@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
     // Step 5: idempotency_key (opcional — salta si la columna no existe)
     if (id && idempotencyKey) {
       try {
-        await mutate(
+        await serviceMutate(
           `UPDATE farm_events SET idempotency_key = $1 WHERE id = $2`,
           [idempotencyKey, id]
         )

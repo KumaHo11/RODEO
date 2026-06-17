@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { mutate } from '@/lib/db'
+import { serviceMutate } from '@/lib/db'
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -36,7 +36,7 @@ export async function DELETE(req: NextRequest) {
       planTypeClause = `AND plan_type = $${params.length}`
     }
 
-    const result = await mutate(
+    const result = await serviceMutate(
       `DELETE FROM grazing_plans
        WHERE paddock_id IN (SELECT id FROM paddocks WHERE org_id = $1)
          AND status IN (${placeholders})

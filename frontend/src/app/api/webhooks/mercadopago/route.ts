@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { MercadoPagoConfig, Payment, PreApproval } from 'mercadopago'
-import { mutate } from '@/lib/db'
+import { serviceMutate } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       if (paymentData.external_reference) {
         // Actualizar el estado en base de datos
         // Podemos buscar el payment por provider_payment_id o insertarlo si no existe
-        await mutate(
+        await serviceMutate(
           `UPDATE payments 
            SET status = $1, provider_payment_id = $2 
            WHERE org_id = $3 AND status = 'pending'`,
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       const preApprovalData = await preApprovalClient.get({ id: entityId })
       
       if (preApprovalData.external_reference) {
-        await mutate(
+        await serviceMutate(
           `UPDATE payments 
            SET status = $1 
            WHERE provider_sub_id = $2 AND org_id = $3`,

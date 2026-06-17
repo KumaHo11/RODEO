@@ -9,7 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne, mutate } from '@/lib/db'
+import { serviceQuery, serviceQueryOne, serviceMutate } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -20,7 +20,7 @@ async function getAuth(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token).catch(() => null)
   if (!decoded) return null
-  const profile = await queryOne<{ id: string; organization_id: string }>(
+  const profile = await serviceQueryOne<{ id: string; organization_id: string }>(
     'SELECT id, organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   ).catch(() => null)
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Verificar que el potrero pertenece a la org del usuario
-  const ownership = await queryOne<{ id: string }>(`
+  const ownership = await serviceQueryOne<{ id: string }>(`
     SELECT id FROM paddocks WHERE id = $1 AND org_id = $2
   `, [paddockId, auth.orgId])
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Potrero no encontrado' }, { status: 404 })
   }
 
-  const rows = await query<{
+  const rows = await serviceQuery<{
     id: string
     fecha: string
     ndvi: number | null
@@ -101,14 +101,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Verificar propiedad del potrero
-  const paddock = await queryOne<{ id: string }>(`
+  const paddock = await serviceQueryOne<{ id: string }>(`
     SELECT id FROM paddocks WHERE id = $1 AND org_id = $2
   `, [body.paddock_id, auth.orgId])
 
   if (!paddock) return NextResponse.json({ error: 'Potrero no encontrado' }, { status: 404 })
 
   // Upsert — solo actualiza los campos enviados en el body
-  const row = await mutate(`
+  const row = await serviceMutate(`
     INSERT INTO historial_potrero (
       org_id, paddock_id, fecha,
       ndvi, fuente_ndvi,
