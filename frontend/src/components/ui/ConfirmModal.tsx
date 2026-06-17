@@ -23,7 +23,7 @@ export type ConfirmOptions = {
   description?: string
   confirmLabel?: string
   cancelLabel?: string
-  variant?: 'danger' | 'warning' | 'info' | 'primary'
+  variant?: 'danger' | 'warning' | 'info' | 'primary' | 'success'
 }
 
 type ResolveCallback = (value: boolean) => void
@@ -72,10 +72,13 @@ export function useConfirm() {
     const isWarning = options.variant === 'warning'
     const isInfo = options.variant === 'info'
     const isPrimary = options.variant === 'primary'
+    const isSuccess = options.variant === 'success'
 
-    const iconBg = isPrimary ? 'bg-purple-100' : isInfo ? 'bg-blue-100' : isWarning ? 'bg-amber-100' : 'bg-red-100'
-    const iconColor = isPrimary ? 'text-purple-600' : isInfo ? 'text-blue-600' : isWarning ? 'text-amber-600' : 'text-red-600'
-    const btnClass = isPrimary
+    const iconBg = isSuccess ? 'bg-green-100' : isPrimary ? 'bg-purple-100' : isInfo ? 'bg-blue-100' : isWarning ? 'bg-amber-100' : 'bg-red-100'
+    const iconColor = isSuccess ? 'text-green-600' : isPrimary ? 'text-purple-600' : isInfo ? 'text-blue-600' : isWarning ? 'text-amber-600' : 'text-red-600'
+    const btnClass = isSuccess
+      ? 'bg-green-600 hover:bg-green-700'
+      : isPrimary
       ? 'bg-purple-600 hover:bg-purple-700'
       : isInfo
       ? 'bg-blue-600 hover:bg-blue-700'
@@ -96,7 +99,7 @@ export function useConfirm() {
           {/* Header */}
           <div className="px-6 pt-6 pb-4 flex items-start gap-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
-              {isPrimary ? (
+              {isPrimary || isSuccess ? (
                 <Plus className={`w-5 h-5 ${iconColor}`} />
               ) : isInfo ? (
                 <CheckCircle2 className={`w-5 h-5 ${iconColor}`} />

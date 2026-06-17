@@ -43,6 +43,7 @@ jobs:
           node scripts/pre_prisma_cleanup.js "$DATABASE_URL"
           npx prisma db push --skip-generate --accept-data-loss
           node scripts/add_missing_columns.js "$DATABASE_URL"
+          node scripts/disable_rls.js "$DATABASE_URL"
           node insert_terms_v3.js
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}

@@ -2188,21 +2188,24 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   if (recentManualPlans.length > 0) {
                     const planIdToContinue = activeSeasonPlanId || recentManualPlans[0].id
                     const planName = seasonPlans.find(p => p.id === planIdToContinue)?.name || 'Plan Forrajero'
-                    const isNew = await confirm({
+                    const continueCurrent = await confirm({
                       title: '¿Continuar plan o empezar uno nuevo?',
                       description: `Tenés un plan en curso: ${planName}. ¿Querés continuar agregando trazados a este plan o preferís empezar uno desde cero?`,
-                      confirmLabel: 'Nuevo plan',
-                      cancelLabel: 'Continuar actual',
-                      variant: 'primary',
+                      confirmLabel: 'Continuar actual',
+                      cancelLabel: 'Nueva hoja',
+                      variant: 'success',
                     })
-                    if (isNew) {
-                      setActiveSeasonPlanId(null)
-                      setViewMode('gantt')
-                      setShowSeasonPlan(true)
-                    } else {
+                    if (continueCurrent) {
+                      // Misma hoja: continuar con el plan existente (NO crear plan nuevo)
                       setActiveSeasonPlanId(planIdToContinue)
                       setViewMode('gantt')
                       setShowContinuePlanModal(true)
+                    } else {
+                      // Nueva hoja: abrir SeasonPlanModal para crear un plan nuevo
+                      setActiveSeasonPlanId(null)
+                      setSeasonPlanToEdit(null)
+                      setViewMode('gantt')
+                      setShowSeasonPlan(true)
                     }
                   } else {
                     setShowSeasonPlan(true)

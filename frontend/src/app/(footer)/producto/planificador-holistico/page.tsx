@@ -194,10 +194,10 @@ export default function PlanificadorHolistico() {
           </h2>
           <p className="text-gray-500 mb-8 leading-relaxed">
             El Planificador Holístico está disponible en los planes Planificador y Holístico.
-            Registrate gratis y explorá la herramienta sin límites durante los primeros 30 días.
+            Registrate gratis y explorá la herramienta sin límites durante los primeros 45 días.
           </p>
           <Link href="/register" className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-8 py-4 rounded-xl text-base transition-all shadow-lg shadow-green-600/30">
-            Probar 30 días gratis <ArrowRight className="w-4 h-4" />
+            Probar 45 días gratis <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </section>

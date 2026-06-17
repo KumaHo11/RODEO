@@ -468,20 +468,9 @@ function InteractiveGantt({
     return active.reduce((s: number, p: any) => s + Number(p.dry_matter_kg_ha), 0) / active.length
   }, [paddocks])
 
-  // ─── Tipos de movimiento que NO deben aparecer como líneas en el Gantt ───────
-  // Solo los eventos de Agenda (farm_events de tipo servicio, parición, etc.)
-  // deben mostrarse como marcadores visuales en el timeline.
-  // Los movements operacionales (mortandad, compra, venta, ajuste, bcs, etc.)
-  // se mantienen en unifiedEvents para los cálculos de EV dinámico, pero NO
-  // se renderizan como líneas verticales en el Gantt.
-  const EXCLUDED_GANTT_TYPES = new Set([
-    'bcs', 'condicion_corporal', 'body_condition',
-    'mortandad', 'compra', 'venta',
-    'stock_inicial', 'ajuste', 'ajuste_entrada', 'ajuste_salida',
-    'paricion', 'destete', 'tacto', 'servicio', 'pesaje',
-    'inseminacion', 'tratamiento', 'castracion', 'suplementacion', 'observacion'
-  ])
-
+  // ─── Eventos unificados (Agenda + Movements operacionales) ──────────────────
+  // Los movements se incluyen para los cálculos de EV dinámico (headcount),
+  // pero NO se renderizan como marcadores visuales en el Gantt.
   const unifiedEvents = useMemo(() => {
     const vEvents = (movements || []).map(m => {
       const qty = m.quantity || 0
@@ -523,9 +512,9 @@ function InteractiveGantt({
   }, [farmEvents, movements])
 
   // Eventos que se renderizan como líneas/puntos en el Gantt timeline.
-  // Solo Agenda (farm_events de tipo Agenda) — excluye todos los movements operacionales.
+  // Solo Agenda (farm_events) — excluye todos los movements operacionales.
   const ganttDisplayEvents = useMemo(() =>
-    unifiedEvents.filter(e => !EXCLUDED_GANTT_TYPES.has(e.event_type))
+    unifiedEvents.filter(e => !e.isMovement)
   , [unifiedEvents])
 
 
@@ -1682,20 +1671,15 @@ function InteractiveGantt({
                     return (
                       <React.Fragment key={plan.id}>
                         {renderBlocks}
-                        {/* ── Ajuste Climático: alert inline cuando el clima acorta días ── */}
+                        {/* ── Ajuste Climático: ícono pequeño al costado del bloque ── */}
                         {climateViewEnabled && isActiveNow && aAdj !== 1.0 && (
                           <div
                             style={{
                               position: 'absolute',
-                              // Posicionar al inicio del bloque pero nunca en x=0 
-                              // (que coincide con el sticky label del potrero)
-                              left: `max(4px, ${leftPct}%)`,
-                              // Dentro del bloque, no encima del nombre
+                              // Posicionar al costado derecho del bloque planificado
+                              left: `calc(${leftPct}% + ${widthPct}% + 3px)`,
                               top: TRACK2_TOP + 2,
-                              // zIndex inferior al del sticky label (z-20) para no pisarlo
                               zIndex: 15,
-                              maxWidth: '90%',
-                              // Asegurar que no sobresalga más allá del bloque
                               pointerEvents: 'auto',
                             }}
                             onClick={e => e.stopPropagation()}
@@ -1871,14 +1855,15 @@ function InteractiveGantt({
                         {MONTHS_FOOTER.map(m => {
                           // ── Alerta preventiva de demanda vs crecimiento forrajero ──
                           // ── Alerta de consumo acelerado por clima (A_adj > 1.0) ──
-                          // El stock de pasto es estático. La alerta se activa cuando el clima
-                          // (frío extremo o pisoteo por barro) eleva la demanda diaria del rodeo.
-                          const isCurrentOrFuture = m.key >= new Date().toISOString().substring(0, 7)
+                          // Solo se muestra en el MES ACTUAL — no aplicar el clima de hoy
+                          // a meses futuros (sería incorrecto mostrar alerta de frío en verano).
+                          const currentMonthKey = new Date().toISOString().substring(0, 7)
+                          const isCurrentMonth = m.key === currentMonthKey
                           const avgAAdj = climateViewEnabled && Object.keys(paddockAAdj).length > 0
                             ? Object.values(paddockAAdj).reduce((s, v) => s + v, 0) / Object.values(paddockAAdj).length
                             : 1.0
-                          // Solo mostrar en el mes actual o próximo, y solo si el ajuste animal supera el umbral (>5%)
-                          const hasClimateAlert = climateViewEnabled && isCurrentOrFuture && avgAAdj > 1.05
+                          // Solo mostrar en el mes actual, y solo si el ajuste animal supera el umbral (>5%)
+                          const hasClimateAlert = climateViewEnabled && isCurrentMonth && avgAAdj > 1.05
                           const racionUsuario = dailyAllocationKg
                           const racionAjustada = Math.round(racionUsuario * avgAAdj)
                           return (

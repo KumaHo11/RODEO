@@ -90,14 +90,13 @@ const LEVEL_CONFIG = {
 }
 
 // Génera el micro-copy del motivo con explicación completa de factores climáticos
+// NOTA: Solo informativo — NO sugiere cambio de días ni acción concreta.
 function buildReason(
   stressType: string | undefined,
   originalDays: number,
   adjustedDays: number,
   thi?: number | null
-): { title: string; body: string; action: string; factors: { label: string; desc: string; icon: React.ReactNode }[] } {
-  const delta = originalDays - adjustedDays
-
+): { title: string; body: string; factors: { label: string; desc: string; icon: React.ReactNode }[] } {
   // Factores climáticos detectados según el tipo de estrés dominante
   const factorsByStress: Record<string, { label: string; desc: string; icon: React.ReactNode }[]> = {
     heat: [
@@ -114,15 +113,15 @@ function buildReason(
   }
 
   const stressTitles: Record<string, string> = {
-    heat:    `Estadía reducida — consumo por calor`,
-    cold:    `Estadía reducida — frío y barro`,
-    default: `Estadía ajustada por aumento de demanda`,
+    heat:    `Alerta climática — estrés por calor`,
+    cold:    `Alerta climática — frío y barro`,
+    default: `Alerta climática — condiciones adversas`,
   }
 
   const stressBodies: Record<string, string> = {
-    heat:    `El estrés térmico eleva los requerimientos y el desperdicio por sombra. El plan estimaba ${originalDays} días — el aumento de demanda ajusta a ${adjustedDays} días útiles.`,
-    cold:    `El frío extremo y el barro incrementan el consumo por termorregulación y el desperdicio. En lugar de ${originalDays} días, rinde ${adjustedDays} días útiles.`,
-    default: `Las condiciones ambientales elevan el requerimiento efectivo del rodeo. El plan estimaba ${originalDays} días — ahora son ${adjustedDays}.`,
+    heat:    `El estrés térmico eleva los requerimientos del rodeo y aumenta el desperdicio por sombra. Puede ser necesario revisar el plan para ajustar la ración o la estadía.`,
+    cold:    `El frío extremo y el barro incrementan el consumo por termorregulación y el desperdicio por pisoteo. Puede ser necesario revisar el plan para ajustar la ración o la estadía.`,
+    default: `Las condiciones ambientales actuales elevan el requerimiento efectivo del rodeo. Puede ser necesario revisar el plan para ajustar la ración o la estadía.`,
   }
 
   let key = stressType ?? 'default'
@@ -139,7 +138,6 @@ function buildReason(
     title,
     body,
     factors,
-    action: `Sugerimos mover el rodeo ${delta} día${delta !== 1 ? 's' : ''} antes de lo planeado.`,
   }
 }
 
@@ -152,17 +150,13 @@ function ClimateAlertDrawer({
   alertLevel,
   alertMessage,
   stressType,
-  onApply,
   onClose,
   dailyDemand,
   aAdj,
 }: GanttClimateAlertProps & { onClose: () => void }) {
-  const [applying, setApplying] = useState(false)
-  const [applied, setApplied]   = useState(false)
   const { current } = useWeather()
 
   const cfg    = LEVEL_CONFIG[alertLevel]
-  const delta  = originalDays - adjustedDays
   const thi = current ? parseFloat((current.tempC + 0.36 * (current.tempC - (100 - current.humidityPct) / 5) + 41.5).toFixed(1)) : null
   const reason = buildReason(stressType, originalDays, adjustedDays, thi)
   let resolvedStress = stressType ?? 'default'
@@ -172,15 +166,6 @@ function ClimateAlertDrawer({
   const StressIcon = STRESS_ICONS[resolvedStress as keyof typeof STRESS_ICONS] ?? STRESS_ICONS.default
 
   const extraDailyDemand = dailyDemand && aAdj ? dailyDemand * (aAdj - 1.0) : 0
-
-  const handleApply = async () => {
-    if (!onApply) return
-    setApplying(true)
-    await onApply()
-    setApplied(true)
-    setApplying(false)
-    setTimeout(onClose, 800)
-  }
 
   return createPortal(
     <>
@@ -219,38 +204,6 @@ function ClimateAlertDrawer({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-
-          {/* Comparativa Plan Base vs Ajustado */}
-          <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                Comparativa de días
-              </p>
-            </div>
-            <div className="divide-y divide-gray-100">
-              <div className="px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-gray-300" />
-                  <span className="text-xs font-bold text-gray-500">Plan original</span>
-                </div>
-                <span className="text-sm font-black text-gray-700">{originalDays} días</span>
-              </div>
-              <div className={`px-4 py-3 flex items-center justify-between ${cfg.bg}`}>
-                <div className="flex items-center gap-2">
-                  <StressIcon className={`w-4 h-4 ${cfg.iconColor}`} />
-                  <span className={`text-xs font-bold ${cfg.textColor}`}>Plan ajustado por clima</span>
-                </div>
-                <span className={`text-sm font-black ${cfg.textColor}`}>{adjustedDays} días</span>
-              </div>
-              <div className="px-4 py-3 flex items-center justify-between bg-white">
-                <div className="flex items-center gap-2">
-                  <TrendingDown className="w-4 h-4 text-red-400" />
-                  <span className="text-xs font-bold text-gray-500">Diferencia</span>
-                </div>
-                <span className="text-sm font-black text-red-600">−{delta} día{delta !== 1 ? 's' : ''}</span>
-              </div>
-            </div>
-          </div>
 
           {/* Condiciones actuales */}
           {current && (
@@ -341,46 +294,24 @@ function ClimateAlertDrawer({
             </div>
           )}
 
-          {/* Sugerencia */}
-          {onApply && (
-            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3.5">
-              <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">
-                💡 Acción sugerida
-              </p>
-              <p className="text-sm text-emerald-800 leading-relaxed">{reason.action}</p>
-            </div>
-          )}
+          {/* Sugerencia informativa (sin indicar días concretos) */}
+          <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3.5">
+            <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1">
+              📋 Revisión sugerida
+            </p>
+            <p className="text-sm text-amber-800 leading-relaxed">
+              Te recomendamos revisar el plan actual para evaluar si es necesario ajustar la ración diaria o la estadía en función de las condiciones climáticas.
+            </p>
+          </div>
         </div>
 
-        {/* Footer — CTAs */}
-        <div className="px-5 py-4 border-t border-gray-100 bg-white shrink-0 space-y-2">
-          {onApply && !applied && (
-            <button
-              onClick={handleApply}
-              disabled={applying}
-              className={`w-full py-3 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 ${cfg.applyBtn}`}
-            >
-              {applying ? (
-                <span className="animate-pulse">Aplicando...</span>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  Aplicar este cambio
-                </>
-              )}
-            </button>
-          )}
-          {applied && (
-            <div className="w-full py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-black text-sm flex items-center justify-center gap-2">
-              <CheckCircle2 className="w-4 h-4" />
-              ✓ Cambio aplicado
-            </div>
-          )}
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-gray-100 bg-white shrink-0">
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl text-sm font-bold text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all"
+            className="w-full py-2.5 rounded-xl text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all border border-gray-200"
           >
-            Ignorar por ahora
+            Cerrar
           </button>
         </div>
       </div>
@@ -430,22 +361,21 @@ export default function GanttClimateAlert({
     onDismiss?.()
   }
 
-  // ── Compact: pill mínimo (para la fila del Gantt) ──────────────────────────
+  // ── Compact: ícono pequeño de alerta al costado del bloque ──────────────────
   if (compact) {
     return (
       <>
         <button
           onClick={() => setDrawerOpen(true)}
+          title="Ver impacto climático"
           className={`
-            flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black
-            transition-all hover:shadow-sm uppercase tracking-wide
+            flex items-center justify-center w-5 h-5 rounded-full border
+            transition-all hover:shadow-md hover:scale-110
             ${cfg.pillBg} ${cfg.textColor}
             ${cfg.pulse ? 'animate-pulse' : ''}
           `}
         >
           <StressIcon className="w-3 h-3" />
-          Ajuste Clima
-          <ChevronRight className="w-2.5 h-2.5" />
         </button>
 
         {drawerOpen && mounted && (
@@ -456,7 +386,6 @@ export default function GanttClimateAlert({
             alertLevel={alertLevel}
             alertMessage={alertMessage}
             stressType={stressType}
-            onApply={onApply}
             onDismiss={onDismiss}
             compact={compact}
             dailyDemand={props.dailyDemand}
@@ -521,7 +450,6 @@ export default function GanttClimateAlert({
           alertLevel={alertLevel}
           alertMessage={alertMessage}
           stressType={stressType}
-          onApply={onApply}
           onDismiss={onDismiss}
           compact={compact}
           dailyDemand={props.dailyDemand}
