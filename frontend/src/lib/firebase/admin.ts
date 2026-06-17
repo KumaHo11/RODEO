@@ -28,11 +28,20 @@ function getAdminApp(): App {
 
   // Opción 0: Service Account JSON completo en base64 (preferido en Cloud Run)
   if (credBase64) {
-    const saJson = JSON.parse(Buffer.from(credBase64, 'base64').toString('utf8'))
-    return initializeApp({
-      credential: cert(saJson),
-      storageBucket,
-    })
+    try {
+      const saJson = JSON.parse(Buffer.from(credBase64, 'base64').toString('utf8'))
+      console.log(`[Firebase Admin] Initializing with SA credentials (project_id from SA: ${saJson.project_id}, configured project_id: ${projectId})`)
+      if (saJson.project_id && saJson.project_id !== projectId) {
+        console.warn(`[Firebase Admin] ⚠ PROJECT MISMATCH: SA is for "${saJson.project_id}" but FIREBASE_ADMIN_PROJECT_ID is "${projectId}". Auth operations will use the SA's project.`)
+      }
+      return initializeApp({
+        credential: cert(saJson),
+        storageBucket,
+      })
+    } catch (parseErr: any) {
+      console.error('[Firebase Admin] Failed to parse FIREBASE_ADMIN_CREDENTIALS_BASE64:', parseErr.message)
+      throw parseErr
+    }
   }
 
   const hasServiceAccountKey =
@@ -41,6 +50,7 @@ function getAdminApp(): App {
 
   if (hasServiceAccountKey) {
     // Opción 1: Service account key explícita (producción / CI)
+    console.log(`[Firebase Admin] Initializing with explicit SA key (projectId: ${projectId}, clientEmail: ${clientEmail})`)
     return initializeApp({
       credential: cert({ projectId, clientEmail: clientEmail!, privateKey: privateKey! }),
       storageBucket,
@@ -51,6 +61,7 @@ function getAdminApp(): App {
   // Funciona con:
   //   - gcloud auth application-default login (desarrollo local)
   //   - Workload Identity / metadata server (Cloud Run, GKE)
+  console.log(`[Firebase Admin] Initializing with ADC (projectId: ${projectId}, saEmail: ${saEmail || 'none'})`)
   return initializeApp({
     credential: applicationDefault(),
     projectId,
