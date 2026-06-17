@@ -14,7 +14,34 @@ const MIGRATION_SECRET = process.env.MIGRATION_SECRET || 'rodeo-migration-2026'
 const MIGRATIONS = [
   `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
 
-  // Fix UUID defaults on ALL tables
+  // Fix updated_at / created_at columns missing DEFAULT NOW() on all tables
+  `DO $$ DECLARE
+    tbl TEXT;
+    tables TEXT[] := ARRAY[
+      'paddocks','herds','farm_events','tasks','movements','field_notes',
+      'grazing_plans','grazing_plan_entries','organizations','profiles',
+      'invitations','notifications','season_plans'
+    ];
+  BEGIN
+    FOREACH tbl IN ARRAY tables LOOP
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema=''public'' AND table_name=tbl AND column_name=''updated_at''
+          AND column_default IS NULL
+      ) THEN
+        EXECUTE format(''ALTER TABLE %I ALTER COLUMN updated_at SET DEFAULT NOW()'', tbl);
+      END IF;
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema=''public'' AND table_name=tbl AND column_name=''created_at''
+          AND column_default IS NULL
+      ) THEN
+        EXECUTE format(''ALTER TABLE %I ALTER COLUMN created_at SET DEFAULT NOW()'', tbl);
+      END IF;
+    END LOOP;
+  END $$`,
+
+  // UUID defaults
   `DO $$ DECLARE
     tbl TEXT;
     tables TEXT[] := ARRAY[
