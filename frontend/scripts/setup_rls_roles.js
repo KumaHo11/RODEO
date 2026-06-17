@@ -36,6 +36,19 @@ async function main() {
   try {
     console.log('[setup_rls] Starting RLS setup...')
 
+    // ── 0. Ensure current DB user (postgres) has BYPASSRLS ──────────
+    // On Cloud SQL, 'postgres' is NOT a true superuser (is_superuser=off).
+    // Without BYPASSRLS, the postgres user is ALSO subject to RLS policies,
+    // which breaks all queries. This is critical until Phase 2 when we
+    // switch DATABASE_URL to the rodeo_app role.
+    const { rows: [{ current_user: currentUser }] } = await client.query('SELECT current_user')
+    try {
+      await client.query(`ALTER ROLE "${currentUser}" BYPASSRLS`)
+      console.log(`  ✓ Granted BYPASSRLS to current user: ${currentUser}`)
+    } catch (err) {
+      console.warn(`  ⚠ Could not grant BYPASSRLS to ${currentUser}:`, err.message)
+    }
+
     // ── 1. Create roles if they don't exist ──────────────────────────
 
     // rodeo_app: regular queries, RLS applies
