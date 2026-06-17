@@ -15,6 +15,69 @@ if (!DB_URL) {
 
 const MIGRATIONS = `
 -- ──────────────────────────────────────────────────────────────────────────────
+-- CRÍTICO: Agregar gen_random_uuid() como DEFAULT en todas las tablas UUID
+-- Sin esto los INSERT sin id explícito fallan con "null value in column id"
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+DO $$ DECLARE
+  tbl TEXT;
+  tables TEXT[] := ARRAY[
+    'audit_logs','biological_monitoring','climate_projections','farm_events',
+    'field_notes','grazing_plan_entries','grazing_plans','herds','invitations',
+    'movements','notifications','organizations','paddocks','payments',
+    'plan_feature_flags','profiles','rainfall_logs','subscriptions_plans',
+    'system_feature_flags','tasks','terms_and_conditions_versions',
+    'user_terms_acceptances','weather_events'
+  ];
+BEGIN
+  FOREACH tbl IN ARRAY tables LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name=tbl
+        AND column_name='id' AND data_type='uuid'
+        AND column_default IS NULL
+    ) THEN
+      EXECUTE format('ALTER TABLE %I ALTER COLUMN id SET DEFAULT gen_random_uuid()', tbl);
+      RAISE NOTICE '✅ UUID default set on: %', tbl;
+    END IF;
+  END LOOP;
+END $$;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- farm_events: agregar columnas del código que pueden faltar en prod
+-- ──────────────────────────────────────────────────────────────────────────────
+ALTER TABLE farm_events
+  ADD COLUMN IF NOT EXISTS herd_id         UUID REFERENCES herds(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS herd_ids        JSONB,
+  ADD COLUMN IF NOT EXISTS paddock_id      UUID REFERENCES paddocks(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS description     TEXT,
+  ADD COLUMN IF NOT EXISTS status          TEXT DEFAULT 'SCHEDULED',
+  ADD COLUMN IF NOT EXISTS assigned_to     UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS bulls_count     INTEGER,
+  ADD COLUMN IF NOT EXISTS bulls_weight    NUMERIC(8,2),
+  ADD COLUMN IF NOT EXISTS source          TEXT DEFAULT 'agenda',
+  ADD COLUMN IF NOT EXISTS photo_url       TEXT,
+  ADD COLUMN IF NOT EXISTS audio_url       TEXT,
+  ADD COLUMN IF NOT EXISTS idempotency_key TEXT,
+  ADD COLUMN IF NOT EXISTS end_date        DATE;
+
+CREATE INDEX IF NOT EXISTS farm_events_org_id_idx ON farm_events(org_id);
+CREATE INDEX IF NOT EXISTS farm_events_idempotency_idx ON farm_events(org_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- notifications: columnas que el código necesita
+-- ──────────────────────────────────────────────────────────────────────────────
+ALTER TABLE notifications
+  ADD COLUMN IF NOT EXISTS profile_id  UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS user_id     UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS body        TEXT,
+  ADD COLUMN IF NOT EXISTS entity_id   UUID,
+  ADD COLUMN IF NOT EXISTS entity_type TEXT,
+  ADD COLUMN IF NOT EXISTS is_read     BOOLEAN DEFAULT false;
+
+
+-- ──────────────────────────────────────────────────────────────────────────────
 -- tasks: renombrar assignee_id → assigned_to + agregar columnas faltantes
 -- El código usa: assigned_to, task_type, paddock_id, priority, created_by
 -- ──────────────────────────────────────────────────────────────────────────────
