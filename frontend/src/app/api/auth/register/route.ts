@@ -61,8 +61,8 @@ export async function POST(req: NextRequest) {
 
     const orgResult = await serviceMutate(
       `INSERT INTO organizations
-         (id, name, subscription_plan_id, plan_status, trial_ends_at, updated_at)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW())
+         (id, name, subscription_plan_id, plan_status, trial_ends_at, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())
        RETURNING id`,
       [
         `${firstName || 'Mi'} Ranch`,
@@ -74,30 +74,46 @@ export async function POST(req: NextRequest) {
       ]
     )
     const orgId = orgResult.rows[0]?.id
+    if (!orgId) {
+      console.error('[Register] Failed to create organization for uid:', uid)
+      return NextResponse.json({ error: 'Error al crear la organización.' }, { status: 500 })
+    }
 
     const profileResult = await serviceMutate(
       `INSERT INTO profiles
         (id, firebase_uid, email, first_name, last_name, phone, organization_id,
-         role, onboarding_step, country_code, updated_at)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'OWNER', 0, $7, NOW())
+         role, onboarding_step, country_code, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'OWNER', 0, $7, NOW(), NOW())
        RETURNING id`,
-      [uid, email, firstName, lastName, phone || null, orgId, countryCode || 'AR']
+      [uid, email, firstName || '', lastName || '', phone || null, orgId, countryCode || 'AR']
     )
     const profileId = profileResult.rows[0]?.id
-
-    // Update organization with the proper owner_id (profile_id is a UUID, firebase_uid is not)
-    if (orgId && profileId) {
-      await serviceMutate(`UPDATE organizations SET owner_id = $1 WHERE id = $2`, [profileId, orgId])
+    if (!profileId) {
+      console.error('[Register] Failed to create profile for uid:', uid, 'orgId:', orgId)
+      return NextResponse.json({ error: 'Error al crear el perfil.' }, { status: 500 })
     }
 
-    // 3.5. Registrar aceptación de Términos y Condiciones
+    // Actualizar org con owner_id — no-fatal si la columna no existe aún
+    if (orgId && profileId) {
+      try {
+        await serviceMutate(`UPDATE organizations SET owner_id = $1 WHERE id = $2`, [profileId, orgId])
+      } catch (ownerErr: any) {
+        console.warn('[Register] Could not set owner_id (non-fatal):', ownerErr.message)
+      }
+    }
+
+    // 3.5. Registrar aceptación de Términos y Condiciones — no-fatal
     if (termsVersionId && profileId) {
-      const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'unknown'
-      await serviceMutate(
-        `INSERT INTO user_terms_acceptances (id, profile_id, version_id, ip_address)
-         VALUES (gen_random_uuid(), $1, $2, $3)`,
-        [profileId, termsVersionId, ipAddress]
-      )
+      try {
+        const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'unknown'
+        await serviceMutate(
+          `INSERT INTO user_terms_acceptances (id, profile_id, version_id, ip_address, created_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
+          [profileId, termsVersionId, ipAddress]
+        )
+      } catch (termsErr: any) {
+        console.warn('[Register] Terms acceptance failed (non-fatal):', termsErr.message)
+      }
     }
 
     // 4. Generar link de verificación de email usando Custom JWT (Evita bloqueos de Identity Platform)

@@ -106,17 +106,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
-      // Usuario autenticado en Firebase pero sin perfil en la base de datos de este ambiente.
-      // En /register, esto es esperado: el perfil se está creando y el signOut vendrá desde la
-      // página de registro. No debemos interferir con redirecciones aquí.
+      // Usuario autenticado en Firebase pero sin perfil en la base de datos.
+      // En /register esto es esperado — la página maneja su propio flujo.
       if (res.status === 404) {
         const currentPath = window.location.pathname
         if (currentPath === '/register') {
-          console.warn('[AuthProvider] Profile 404 on /register — skipping (registration handles its own flow)')
+          console.warn('[AuthProvider] Profile 404 on /register — skipping')
           setProfile(null)
           return
         }
-        // Reintentamos una vez con un token fresco antes de desloguear.
+
+        // Reintentamos una vez con un token fresco (race condition al crear el perfil)
         console.warn('[AuthProvider] Profile 404 — retrying once after 1.5s...')
         await new Promise(r => setTimeout(r, 1500))
         const retryToken = await firebaseUser.getIdToken(true)
@@ -132,13 +132,51 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           } catch { /* ignore */ }
           return
         }
-        // Segundo intento también falló → ahora sí deslogueamos
-        // Redirigimos a /login (no a /register) para no reiniciar el flujo de un usuario que ya se registró
-        console.error('[AuthProvider] Profile 404 after retry — signing out')
+
+        // El perfil no existe en la BD — intentar auto-crearlo con los datos del usuario Firebase
+        // Esto ocurre cuando /api/auth/register falló pero el usuario Firebase sí se creó.
+        console.warn('[AuthProvider] Profile still 404 — attempting auto-create via /api/auth/register')
+        try {
+          const freshToken = await firebaseUser.getIdToken(true)
+          const autoCreate = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              idToken: freshToken,
+              firstName: firebaseUser.displayName?.split(' ')[0] || '',
+              lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
+              phone: '',
+              countryCode: 'AR',
+            }),
+          })
+          if (autoCreate.ok) {
+            // Perfil creado — buscar el perfil recién creado
+            await new Promise(r => setTimeout(r, 500))
+            const freshToken2 = await firebaseUser.getIdToken(true)
+            const profileRes2 = await fetch('/api/auth/profile', {
+              headers: { Authorization: `Bearer ${freshToken2}` },
+            })
+            if (profileRes2.ok) {
+              const data = await profileRes2.json()
+              setProfile(data.profile)
+              try {
+                localStorage.setItem('rodeo_cached_profile', JSON.stringify(data.profile))
+                await cacheProfile(data.profile)
+              } catch { /* ignore */ }
+              console.log('[AuthProvider] Profile auto-created successfully')
+              return
+            }
+          }
+        } catch (autoErr: any) {
+          console.warn('[AuthProvider] Auto-create profile failed:', autoErr.message)
+        }
+
+        // Si todo falla → redirigir a registro para que el usuario complete el flujo
+        console.error('[AuthProvider] Profile 404 after auto-create attempt — redirecting to register')
         await firebaseSignOut(auth)
         document.cookie = '__session=; path=/; max-age=0'
-        if (currentPath !== '/login') {
-          window.location.href = '/login?error=not_found'
+        if (currentPath !== '/login' && currentPath !== '/register') {
+          window.location.href = '/register?error=profile_missing'
         }
         return
       }
