@@ -40,6 +40,7 @@ jobs:
         run: |
           cd frontend
           npm ci
+          node scripts/pre_prisma_cleanup.js "$DATABASE_URL"
           npx prisma db push --skip-generate --accept-data-loss
           node scripts/add_missing_columns.js "$DATABASE_URL"
           node insert_terms_v3.js
