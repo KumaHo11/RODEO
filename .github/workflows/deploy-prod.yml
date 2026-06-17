@@ -112,6 +112,15 @@ jobs:
           EMAIL_VERIFY_JWT_SECRET: ${{ secrets.EMAIL_VERIFY_JWT_SECRET_PROD }}
           CONTACT_FORM_DESTINATION_EMAILS: ${{ secrets.CONTACT_FORM_DESTINATION_EMAILS_PROD }}
 
+      - name: 'Clear legacy Cloud Run secret bindings'
+        run: |-
+          gcloud run services update ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --clear-secrets \
+            --clear-env-vars \
+            --quiet || true
+
       - name: 'Deploy to Cloud Run'
         run: |-
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -125,7 +134,6 @@ jobs:
             --cpu=1 \
             --min-instances=1 \
             --max-instances=10 \
-            --clear-secrets \
             --env-vars-file=/tmp/rodeo-prod-env.yaml \
             --quiet
 
