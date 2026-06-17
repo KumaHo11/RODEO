@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { mutate, query } from '@/lib/db'
+import { serviceMutate, serviceQuery } from '@/lib/db'
 
 export async function PATCH(req: NextRequest) {
   try {
@@ -20,14 +20,14 @@ export async function PATCH(req: NextRequest) {
     const { step, fieldName, location } = body
 
     // Update onboarding_step in profiles
-    await mutate(
+    await serviceMutate(
       `UPDATE profiles SET onboarding_step = $1, updated_at = NOW() WHERE firebase_uid = $2`,
       [step, uid]
     )
 
     // If step >= 1 and we have field data, persist it to organizations
     if (step >= 1 && (fieldName || location)) {
-      const profileRows = await query(
+      const profileRows = await serviceQuery(
         `SELECT organization_id FROM profiles WHERE firebase_uid = $1`,
         [uid]
       )
@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest) {
         // Always save the field name first (never blocked by geometry errors)
         if (fieldName) {
           try {
-            await mutate(
+            await serviceMutate(
               `UPDATE organizations SET name = $1, updated_at = NOW() WHERE id = $2`,
               [fieldName, orgId]
             )
@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest) {
         if (location) {
           try {
             const locGeom = { type: 'Point', coordinates: [location.lng, location.lat] }
-            await mutate(
+            await serviceMutate(
               `UPDATE organizations SET location = ST_SetSRID(ST_GeomFromGeoJSON($1), 4326), updated_at = NOW() WHERE id = $2`,
               [JSON.stringify(locGeom), orgId]
             )

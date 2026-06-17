@@ -43,7 +43,7 @@ jobs:
           node scripts/pre_prisma_cleanup.js "$DATABASE_URL"
           npx prisma db push --skip-generate --accept-data-loss
           node scripts/add_missing_columns.js "$DATABASE_URL"
-          node scripts/disable_rls.js "$DATABASE_URL"
+          node scripts/setup_rls_roles.js "$DATABASE_URL"
           node insert_terms_v3.js
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
@@ -78,6 +78,7 @@ jobs:
             f'NODE_ENV: production',
             f'NEXT_PUBLIC_APP_URL: {q(prod_url)}',
             f'DATABASE_URL: {q(os.environ.get("DATABASE_URL",""))}',
+            f'DATABASE_URL_SERVICE: {q(os.environ.get("DATABASE_URL_SERVICE",""))}',
             f'FIREBASE_ADMIN_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
             f'FIREBASE_ADMIN_CREDENTIALS_BASE64: {q(os.environ.get("FIREBASE_ADMIN_CREDENTIALS_BASE64",""))}',
             f'FIREBASE_ADMIN_IMPERSONATE_SA: {q(os.environ.get("FIREBASE_ADMIN_IMPERSONATE_SA",""))}',
@@ -99,6 +100,7 @@ jobs:
         env:
           PROD_URL: ${{ env.PROD_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+          DATABASE_URL_SERVICE: ${{ secrets.DATABASE_URL_SERVICE_PROD }}
           FIREBASE_ADMIN_PROJECT_ID: ${{ env.PROJECT_ID }}
           FIREBASE_ADMIN_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_ADMIN_CREDENTIALS_BASE64_PROD }}
           FIREBASE_ADMIN_IMPERSONATE_SA: ${{ secrets.FIREBASE_ADMIN_IMPERSONATE_SA_PROD }}

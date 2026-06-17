@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const { fieldName, totalArea, location, fieldBoundary, fieldBoundaryHa, herds, paddocks } = body
 
     // Obtener perfil + orgId
-    const profile = await queryOne<{ id: string; organization_id: string }>(
+    const profile = await serviceQueryOne<{ id: string; organization_id: string }>(
       `SELECT id, organization_id FROM profiles WHERE firebase_uid = $1`,
       [firebaseUid]
     )
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const fieldGeom = fieldBoundary?.geometry ?? fieldBoundary
     const areaHa = fieldBoundaryHa || totalArea
 
-    await mutate(
+    await serviceMutate(
       `UPDATE organizations SET
          name = $1,
          total_area_ha = $2,
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     if (paddocks?.length > 0) {
       for (const p of paddocks) {
         const geom = p.geojson?.geometry ?? p.geojson
-        await mutate(
+        await serviceMutate(
           `INSERT INTO paddocks (org_id, name, area_ha, geom)
            VALUES ($1, $2, $3, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326))`,
           [orgId, p.name, p.area_ha, JSON.stringify(geom)]
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     // 3. Insertar rodeos
     if (herds?.length > 0) {
       for (const h of herds) {
-        await mutate(
+        await serviceMutate(
           `INSERT INTO herds (org_id, name, species, breed, head_count, avg_weight_kg, total_ev)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [orgId, h.name, h.species, h.breed, h.headCount, h.avgWeight, h.totalEV]
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Marcar onboarding completo
-    await mutate(
+    await serviceMutate(
       `UPDATE profiles SET onboarding_step = 3, updated_at = NOW() WHERE firebase_uid = $1`,
       [firebaseUid]
     )

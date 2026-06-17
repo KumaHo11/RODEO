@@ -10,7 +10,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne } from '@/lib/db'
+import { serviceQuery, serviceQueryOne } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   if (!isSuperAdmin) {
     // Obtener org_id del perfil del usuario autenticado
-    const profile = await queryOne<{ organization_id: string }>(
+    const profile = await serviceQueryOne<{ organization_id: string }>(
       `SELECT organization_id FROM profiles WHERE firebase_uid = $1`,
       [decoded.uid]
     )
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 
   try {
     // Obtener plan de la organización y sus feature flags
-    const org = await queryOne<{
+    const org = await serviceQueryOne<{
       subscription_plan_id: string
       plan_status: string
       trial_ends_at: string | null
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
       if (now <= trialEnds) {
         // Trial vigente → usar flags del plan Holístico (acceso completo)
-        const proPlan = await queryOne<{ id: string; name: string; slug: string }>(
+        const proPlan = await serviceQueryOne<{ id: string; name: string; slug: string }>(
           `SELECT id, name, slug FROM subscriptions_plans WHERE slug = 'holistico' AND is_active = true LIMIT 1`
         )
         if (proPlan) {
@@ -72,11 +72,11 @@ export async function GET(req: NextRequest) {
         }
       } else {
         // ── Trial vencido sin pago → downgrade automático a Brote ─────────
-        const brotePlan = await queryOne<{ id: string; name: string; slug: string }>(
+        const brotePlan = await serviceQueryOne<{ id: string; name: string; slug: string }>(
           `SELECT id, name, slug FROM subscriptions_plans WHERE slug = 'brote' AND is_active = true LIMIT 1`
         )
         if (brotePlan) {
-          await query(
+          await serviceQuery(
             `UPDATE organizations
              SET subscription_plan_id = $1,
                  plan_status          = 'active',
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 
     if (!org?.subscription_plan_id) {
       // Sin plan → usar defaults del plan Brote
-      const brotePlan = await queryOne<{ id: string; name: string; slug: string }>(
+      const brotePlan = await serviceQueryOne<{ id: string; name: string; slug: string }>(
         `SELECT id, name, slug FROM subscriptions_plans WHERE slug = 'brote' AND is_active = true LIMIT 1`
       )
       if (brotePlan) {
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ flags: {}, planName: 'Sin plan', planSlug: null, planStatus: null })
     }
 
-    const plan = await queryOne<{ id: string; name: string; slug: string }>(
+    const plan = await serviceQueryOne<{ id: string; name: string; slug: string }>(
       `SELECT id, name, slug FROM subscriptions_plans WHERE id = $1`,
       [org.subscription_plan_id]
     )
@@ -123,7 +123,7 @@ async function resolveFlags(
   planStatus?: string | null,
   trialDaysLeft?: number
 ) {
-  const flags = await query<{ flag_key: string; flag_value: any; flag_type: string }>(
+  const flags = await serviceQuery<{ flag_key: string; flag_value: any; flag_type: string }>(
     `SELECT flag_key, flag_value, flag_type FROM plan_feature_flags WHERE plan_id = $1`,
     [planId]
   )

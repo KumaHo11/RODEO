@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 import { adminAuth } from '@/lib/firebase/admin'
 
 export async function POST(req: NextRequest) {
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     if (!invToken) return NextResponse.json({ error: 'Token requerido' }, { status: 400 })
 
     // Verificar invitación
-    const invitation = await queryOne<any>(
+    const invitation = await serviceQueryOne<any>(
       `SELECT ti.*, o.name AS org_name
        FROM team_invitations ti
        LEFT JOIN organizations o ON o.id = ti.org_id
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Actualizar perfil del usuario invitado
-    await mutate(
+    await serviceMutate(
       `UPDATE profiles SET
          organization_id = $1,
          team_role       = $2,
@@ -62,13 +62,13 @@ export async function POST(req: NextRequest) {
     )
 
     // Marcar invitación como aceptada
-    await mutate(
+    await serviceMutate(
       `UPDATE team_invitations SET status = 'ACCEPTED', updated_at = NOW() WHERE id = $1`,
       [invitation.id]
     )
 
     // Perfil del nuevo miembro (para el nombre en la notificación)
-    const newMemberProfile = await queryOne<any>(
+    const newMemberProfile = await serviceQueryOne<any>(
       `SELECT id, email, first_name, last_name FROM profiles WHERE firebase_uid = $1`,
       [firebaseUid]
     )
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
         .filter(Boolean).join(' ') || newMemberProfile.email || 'Un nuevo miembro'
 
       // ── 1. Notificación de bienvenida para el nuevo miembro ────────────────
-      await mutate(
+      await serviceMutate(
         `INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, entity_type)
          VALUES ($1, $2, $2, 'INVITACION', $3, $4, $4, 'invitation')`,
         [
@@ -90,12 +90,12 @@ export async function POST(req: NextRequest) {
       )
 
       // ── 2. Notificación al Owner ───────────────────────────────────────────
-      const owner = await queryOne<any>(
+      const owner = await serviceQueryOne<any>(
         `SELECT id FROM profiles WHERE organization_id = $1 AND role = 'OWNER' LIMIT 1`,
         [invitation.org_id]
       )
       if (owner) {
-        await mutate(
+        await serviceMutate(
           `INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, entity_type)
            VALUES ($1, $2, $2, 'INVITACION', $3, $4, $4, 'invitation')`,
           [

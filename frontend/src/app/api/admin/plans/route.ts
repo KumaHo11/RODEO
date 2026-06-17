@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne } from '@/lib/db'
+import { serviceQuery } from '@/lib/db'
 
 async function requireSuperAdmin(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
@@ -16,7 +16,7 @@ async function requireSuperAdmin(req: NextRequest) {
 }
 
 async function logAudit(actorUid: string, actorEmail: string, action: string, entityId: string, oldVal: any, newVal: any) {
-  await query(
+  await serviceQuery(
     `INSERT INTO audit_logs (actor_email, action, entity_type, entity_id, old_value, new_value)
      VALUES ($1, $2, 'plan', $3, $4, $5)`,
     [actorEmail, action, entityId, oldVal ? JSON.stringify(oldVal) : null, JSON.stringify(newVal)]
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
-    const plans = await query(`
+    const plans = await serviceQuery(`
       SELECT
         sp.*,
         (SELECT COUNT(*) FROM organizations o WHERE o.subscription_plan_id = sp.id)::int AS org_count,
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const [plan] = await query<{ id: string }>(
+    const [plan] = await serviceQuery<{ id: string }>(
       `INSERT INTO subscriptions_plans
          (name, slug, description, price, price_yearly, paddocks_limit, herds_limit,
           has_ai_analysis, color, is_popular, sort_order, trial_days, is_active)
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
 
     // Insert feature flags
     for (const flag of feature_flags) {
-      await query(
+      await serviceQuery(
         `INSERT INTO plan_feature_flags (plan_id, flag_key, flag_value, flag_type, label)
          VALUES ($1, $2, $3::jsonb, $4, $5)`,
         [plan.id, flag.flag_key, JSON.stringify(flag.flag_value), flag.flag_type || 'boolean', flag.label || null]

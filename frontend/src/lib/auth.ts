@@ -8,7 +8,7 @@
  */
 import { type NextRequest } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne } from '@/lib/db'
+import { serviceQueryOne } from '@/lib/db'
 
 export type AuthContext = {
   orgId: string
@@ -41,7 +41,7 @@ export async function requireAuth(req: NextRequest): Promise<AuthContext | null>
     return cached.data
   }
 
-  const profile = await queryOne<{ id: string; organization_id: string; system_role: string }>(
+  const profile = await serviceQueryOne<{ id: string; organization_id: string; system_role: string }>(
     'SELECT id, organization_id, system_role FROM profiles WHERE firebase_uid = $1',
     [uid]
   )

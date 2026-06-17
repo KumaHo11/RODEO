@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, mutate } from '@/lib/db'
+import { serviceQuery, serviceMutate } from '@/lib/db'
 
 async function requireSuperAdmin(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
-    const versions = await query(
+    const versions = await serviceQuery(
       `SELECT id, version_number, content, is_active, created_at 
        FROM terms_and_conditions_versions
        ORDER BY created_at DESC`
@@ -42,10 +42,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Desactivar todas las versiones actuales
-    await mutate(`UPDATE terms_and_conditions_versions SET is_active = false`)
+    await serviceMutate(`UPDATE terms_and_conditions_versions SET is_active = false`)
 
     // 2. Insertar nueva versión activa
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO terms_and_conditions_versions (version_number, content, is_active)
        VALUES ($1, $2, true)
        RETURNING id, version_number, is_active, created_at`,

@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne } from '@/lib/db'
+import { serviceQuery, serviceQueryOne } from '@/lib/db'
 import { adminAuth } from '@/lib/firebase/admin'
 
 async function requireSuperAdmin(req: NextRequest) {
@@ -13,7 +13,7 @@ async function requireSuperAdmin(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ system_role: string; email: string }>(
+  const profile = await serviceQueryOne<{ system_role: string; email: string }>(
     `SELECT system_role, email FROM profiles WHERE firebase_uid = $1`,
     [decoded.uid]
   )
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const adminUser = await requireSuperAdmin(req)
   if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const admins = await query(`
+  const admins = await serviceQuery(`
     SELECT id, email, first_name, last_name, is_active, created_at, system_role
     FROM profiles
     WHERE system_role IN ('SUPER_ADMIN', 'SUPPORT_AGENT')
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     await adminAuth.setCustomUserClaims(fbUser.uid, { system_role })
 
     // 3. Insertar perfil en la DB
-    await query(
+    await serviceQuery(
       `INSERT INTO profiles (firebase_uid, email, first_name, last_name, system_role, is_active, onboarding_step)
        VALUES ($1, $2, $3, $4, $5, true, 99)
        ON CONFLICT (firebase_uid) DO UPDATE
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     )
 
     // 4. Audit log
-    await query(
+    await serviceQuery(
       `INSERT INTO audit_logs (actor_email, action, entity_type, new_value)
        VALUES ($1, 'SUPER_ADMIN_CREATED', 'profile', $2)`,
       [adminUser.dbEmail, JSON.stringify({ email, system_role, first_name })]

@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne } from '@/lib/db'
+import { serviceQuery, serviceQueryOne } from '@/lib/db'
 
 async function requireSuperAdmin(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
-  const plan = await queryOne(`
+  const plan = await serviceQueryOne(`
     SELECT sp.*,
       COALESCE(
         JSON_AGG(JSON_BUILD_OBJECT(
@@ -50,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     feature_flags,
   } = body
 
-  const oldPlan = await queryOne(`SELECT * FROM subscriptions_plans WHERE id = $1`, [id])
+  const oldPlan = await serviceQueryOne(`SELECT * FROM subscriptions_plans WHERE id = $1`, [id])
   if (!oldPlan) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   try {
@@ -83,7 +83,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (trial_days !== undefined) {
       try {
         // Check column exists before including it
-        await queryOne(`SELECT trial_days FROM subscriptions_plans WHERE id = $1`, [id])
+        await serviceQueryOne(`SELECT trial_days FROM subscriptions_plans WHERE id = $1`, [id])
         add('trial_days', trial_days)
       } catch {
         // Column doesn't exist yet — skip silently until migration runs
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (fields.length > 0) {
       fields.push('updated_at = NOW()')
       values.push(id)
-      await query(
+      await serviceQuery(
         `UPDATE subscriptions_plans SET ${fields.join(', ')} WHERE id = $${idx}`,
         values
       )
@@ -104,7 +104,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       for (const flag of feature_flags) {
         if (flag.id) {
           // Update existing flag
-          await query(
+          await serviceQuery(
             `UPDATE plan_feature_flags
              SET flag_value = $1::jsonb, label = COALESCE($2, label), flag_type = COALESCE($3, flag_type)
              WHERE id = $4 AND plan_id = $5`,
@@ -112,7 +112,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           )
         } else if (flag.flag_key) {
           // Insert new flag
-          await query(
+          await serviceQuery(
             `INSERT INTO plan_feature_flags (plan_id, flag_key, flag_value, flag_type, label)
              VALUES ($1, $2, $3::jsonb, $4, $5)
              ON CONFLICT (plan_id, flag_key) DO UPDATE
@@ -124,7 +124,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // Audit
-    await query(
+    await serviceQuery(
       `INSERT INTO audit_logs (actor_email, action, entity_type, entity_id, old_value, new_value)
        VALUES ($1, 'PLAN_UPDATED', 'plan', $2, $3, $4)`,
       [admin.email || '', id, JSON.stringify(oldPlan), JSON.stringify(body)]
@@ -144,9 +144,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params
 
   // Soft delete (desactivar)
-  await query(`UPDATE subscriptions_plans SET is_active = false, updated_at = NOW() WHERE id = $1`, [id])
+  await serviceQuery(`UPDATE subscriptions_plans SET is_active = false, updated_at = NOW() WHERE id = $1`, [id])
 
-  await query(
+  await serviceQuery(
     `INSERT INTO audit_logs (actor_email, action, entity_type, entity_id)
      VALUES ($1, 'PLAN_DEACTIVATED', 'plan', $2)`,
     [admin.email || '', id]

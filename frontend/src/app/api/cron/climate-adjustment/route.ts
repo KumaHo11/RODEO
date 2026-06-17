@@ -16,7 +16,7 @@
  * Protegido con CRON_SECRET en el header Authorization.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { query, queryOne, mutate } from '@/lib/db'
+import { serviceQuery, serviceQueryOne, serviceMutate } from '@/lib/db'
 import {
   calculateClimateAdjustment,
   type ClimateAdjustmentInput,
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 
   try {
     // ── 1. Feature flag global: ¿está habilitado climate_adjustment? ──────────
-    const globalFlag = await queryOne<{ flag_value: unknown }>(`
+    const globalFlag = await serviceQueryOne<{ flag_value: unknown }>(`
       SELECT flag_value FROM system_feature_flags
       WHERE flag_key = 'climate_adjustment' LIMIT 1
     `, []).catch(() => null)
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 2. Obtener orgs elegibles ─────────────────────────────────────────────
-    const eligibleOrgs = await query<{
+    const eligibleOrgs = await serviceQuery<{
       org_id: string
       org_name: string
       owner_profile_id: string
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
         // 3a. Potreros ACTIVOS únicamente — solo donde el rodeo está pastoreando hoy.
         // Bug fix: excluir status='PLANNED' para evitar alertas en potreros sin ganado.
         // Un plan PLANNED significa que el rodeo aún no entró; solo ACTIVE confirma pastoreo real.
-        const activePaddocks = await query<{
+        const activePaddocks = await serviceQuery<{
           paddock_id: string
           paddock_name: string
           area_ha: number
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
         // 3b. Obtener EV de cada herd (batch)
         const allHerdIds = [...new Set(activePaddocks.flatMap(p => p.herd_ids || []))]
         const herdsData = allHerdIds.length > 0
-          ? await query<{ id: string; total_ev: number; head_count: number; avg_weight_kg: number | null }>(`
+          ? await serviceQuery<{ id: string; total_ev: number; head_count: number; avg_weight_kg: number | null }>(`
               SELECT id, total_ev, head_count, avg_weight_kg
               FROM herds WHERE id = ANY($1::uuid[]) AND org_id = $2
             `, [allHerdIds, org.org_id])
@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
         const herdMap = new Map(herdsData.map(h => [h.id, h]))
 
         // 3c. Clima de la org (API cache o valor por defecto)
-        const weatherCache = await queryOne<{
+        const weatherCache = await serviceQueryOne<{
           humidity: number | null
           wind_speed: number | null
           precipitation_sum: number | null
@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
         `, [org.org_id]).catch(() => null)
 
         // Lluvias declaradas últimos 7 días
-        const rainfall7dRow = await queryOne<{ total_mm: number }>(`
+        const rainfall7dRow = await serviceQueryOne<{ total_mm: number }>(`
           SELECT COALESCE(SUM(value), 0) AS total_mm
           FROM weather_events
           WHERE org_id = $1
@@ -205,7 +205,7 @@ export async function GET(req: NextRequest) {
               : undefined
 
             // Lluvia usuario de los últimos 7 días (prioridad sobre API)
-            const userRainRow = await queryOne<{ total_mm: number }>(`
+            const userRainRow = await serviceQueryOne<{ total_mm: number }>(`
               SELECT COALESCE(SUM(precipitacion_usuario_mm), 0) AS total_mm
               FROM historial_potrero
               WHERE paddock_id = $1
@@ -214,7 +214,7 @@ export async function GET(req: NextRequest) {
             `, [paddock.paddock_id]).catch(() => null)
 
             // NDVI previo desde historial_potrero
-            const prevNdviRow = await queryOne<{ ndvi: number; fecha: string }>(`
+            const prevNdviRow = await serviceQueryOne<{ ndvi: number; fecha: string }>(`
               SELECT ndvi, fecha::text FROM historial_potrero
               WHERE paddock_id = $1 AND ndvi IS NOT NULL AND fecha < CURRENT_DATE
               ORDER BY fecha DESC LIMIT 1
@@ -256,7 +256,7 @@ export async function GET(req: NextRequest) {
             const result = calculateClimateAdjustment(input, originalDays)
 
             // Persistir snapshot
-            await mutate(`
+            await serviceMutate(`
               INSERT INTO climate_adjustment_snapshots (
                 org_id, paddock_id, ndvi, rainfall_7d_mm, humidity_pct,
                 drought_index, forage_ms_ha, total_ev, grass_growth_rate,
@@ -278,7 +278,7 @@ export async function GET(req: NextRequest) {
             // Upsert en historial_potrero con datos del día
             const wb = result.waterBalance
             const flags = result.dataSourceFlags
-            await mutate(`
+            await serviceMutate(`
               INSERT INTO historial_potrero (
                 org_id, paddock_id, fecha,
                 ndvi, precipitacion_api_mm,

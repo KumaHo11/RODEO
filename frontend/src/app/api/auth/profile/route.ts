@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query } from '@/lib/db'
+import { serviceQueryOne, serviceQuery } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     console.log('[profile] Buscando UID:', firebaseUid, 'email_token:', decoded.email)
 
     // Buscar perfil en Cloud SQL
-    let profile = await queryOne(
+    let profile = await serviceQueryOne(
       `SELECT p.id, p.firebase_uid, p.email, p.first_name, p.last_name, p.avatar_url,
               p.organization_id, p.onboarding_step, p.team_role, p.permissions, p.notification_preferences,
               p.country_code, p.role, p.phone, p.is_first_login, p.is_active, p.system_role,
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       // Fallback: buscar por email del token. Puede ocurrir tras migración de proyecto Firebase
       // (el UID cambió pero el email se mantiene). Auto-corregimos el UID para futuros lookups.
       console.warn('[profile] UID not found, trying email fallback:', decoded.email)
-      const profileByEmail = await queryOne(
+      const profileByEmail = await serviceQueryOne(
         `SELECT p.id, p.firebase_uid, p.email, p.first_name, p.last_name, p.avatar_url,
                 p.organization_id, p.onboarding_step, p.team_role, p.permissions, p.notification_preferences,
                 p.country_code, p.role, p.phone, p.is_first_login, p.is_active, p.system_role,
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       if (profileByEmail) {
         const oldUid = (profileByEmail as any).firebase_uid
         console.log(`[profile] Email fallback found! Updating UID: ${oldUid} → ${firebaseUid}`)
-        await query(
+        await serviceQuery(
           `UPDATE profiles SET firebase_uid = $1, updated_at = NOW() WHERE email = $2`,
           [firebaseUid, decoded.email]
         )
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     // Cargar feature flags del plan de la organización
     let plan_feature_flags: any[] = []
     if ((profile as any).organization_id) {
-      plan_feature_flags = await query(
+      plan_feature_flags = await serviceQuery(
         `SELECT pff.flag_key, pff.flag_value, pff.flag_type, pff.label
          FROM plan_feature_flags pff
          JOIN subscriptions_plans sp ON pff.plan_id = sp.id
@@ -120,7 +120,7 @@ export async function PATCH(req: NextRequest) {
 
     const { first_name, last_name, phone, role, onboarding_step, is_first_login, avatar_url, notification_preferences } = await req.json()
 
-    await query(
+    await serviceQuery(
       `UPDATE profiles
        SET first_name               = COALESCE($1, first_name),
            last_name                = COALESCE($2, last_name),

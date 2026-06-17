@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { adminAuth } from '@/lib/firebase/admin'
-import { mutate, query } from '@/lib/db'
+import { serviceMutate, serviceQuery } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 
 export async function POST(req: NextRequest) {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const { uid, email } = decodedToken
 
     // 2. Verificar si ya existe un perfil (idempotente por UID)
-    const existing = await query(
+    const existing = await serviceQuery(
       `SELECT id FROM profiles WHERE firebase_uid = $1`,
       [uid]
     )
@@ -39,11 +39,11 @@ export async function POST(req: NextRequest) {
 
     // 2.5 Si existe por email pero con UID diferente → el usuario fue borrado de Firebase
     // y se re-registró. Actualizar el UID para mantener su perfil.
-    const existingEmail = await query(`SELECT id, firebase_uid FROM profiles WHERE email = $1`, [email])
+    const existingEmail = await serviceQuery(`SELECT id, firebase_uid FROM profiles WHERE email = $1`, [email])
     if (existingEmail.length > 0) {
       const oldUid = existingEmail[0].firebase_uid
       if (oldUid !== uid) {
-        await mutate(
+        await serviceMutate(
           `UPDATE profiles SET firebase_uid = $1, updated_at = NOW() WHERE email = $2`,
           [uid, email]
         )
@@ -54,12 +54,12 @@ export async function POST(req: NextRequest) {
 
     // 3. Crear organización con trial automático del plan Holístico
     // trial_days es configurable desde el admin — lo leemos de la BD
-    const trialPlan = await query<{ id: string; trial_days: number }>(
+    const trialPlan = await serviceQuery<{ id: string; trial_days: number }>(
       `SELECT id, trial_days FROM subscriptions_plans WHERE slug = 'holistico' AND is_active = true LIMIT 1`
     )
     const planRow = trialPlan[0]
 
-    const orgResult = await mutate(
+    const orgResult = await serviceMutate(
       `INSERT INTO organizations
          (id, name, subscription_plan_id, plan_status, trial_ends_at, updated_at)
        VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW())
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     )
     const orgId = orgResult.rows[0]?.id
 
-    const profileResult = await mutate(
+    const profileResult = await serviceMutate(
       `INSERT INTO profiles
         (id, firebase_uid, email, first_name, last_name, phone, organization_id,
          role, onboarding_step, country_code, updated_at)
@@ -87,13 +87,13 @@ export async function POST(req: NextRequest) {
 
     // Update organization with the proper owner_id (profile_id is a UUID, firebase_uid is not)
     if (orgId && profileId) {
-      await mutate(`UPDATE organizations SET owner_id = $1 WHERE id = $2`, [profileId, orgId])
+      await serviceMutate(`UPDATE organizations SET owner_id = $1 WHERE id = $2`, [profileId, orgId])
     }
 
     // 3.5. Registrar aceptación de Términos y Condiciones
     if (termsVersionId && profileId) {
       const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'unknown'
-      await mutate(
+      await serviceMutate(
         `INSERT INTO user_terms_acceptances (id, profile_id, version_id, ip_address)
          VALUES (gen_random_uuid(), $1, $2, $3)`,
         [profileId, termsVersionId, ipAddress]

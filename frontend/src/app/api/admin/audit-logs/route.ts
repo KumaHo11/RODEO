@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query } from '@/lib/db'
+import { serviceQuery } from '@/lib/db'
 
 async function requireSuperAdmin(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
   try {
-    const logs = await query(
+    const logs = await serviceQuery(
       `SELECT al.*, p.first_name || ' ' || p.last_name AS actor_name
        FROM audit_logs al
        LEFT JOIN profiles p ON p.id = al.actor_id
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       [...params, limit, offset]
     )
 
-    const [{ total }] = await query<{ total: string }>(
+    const [{ total }] = await serviceQuery<{ total: string }>(
       `SELECT COUNT(*)::text AS total FROM audit_logs al ${whereClause}`,
       params
     )

@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const { email } = await req.json()
 
     // If profile already exists, nothing to do
-    const existing = await queryOne<{ id: string }>(
+    const existing = await serviceQueryOne<{ id: string }>(
       'SELECT id FROM profiles WHERE firebase_uid = $1',
       [decoded.uid]
     )
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     // Create a minimal profile — NO organization, NO owner role.
     // The invitation accept flow will assign org + team_role + permissions.
-    await mutate(
+    await serviceMutate(
       `INSERT INTO profiles
          (firebase_uid, email, onboarding_step, created_at, updated_at)
        VALUES ($1, $2, -1, NOW(), NOW())

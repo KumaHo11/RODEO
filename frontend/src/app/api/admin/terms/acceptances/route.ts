@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query } from '@/lib/db'
+import { serviceQuery } from '@/lib/db'
 
 async function requireSuperAdmin(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 
     sql += ` ORDER BY u.accepted_at DESC LIMIT 500`
 
-    const acceptances = await query(sql, params)
+    const acceptances = await serviceQuery(sql, params)
     return NextResponse.json({ success: true, acceptances })
   } catch (err: any) {
     console.error('Error in GET /api/admin/terms/acceptances:', err)

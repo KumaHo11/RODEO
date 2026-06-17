@@ -11,7 +11,7 @@
  * Protegido con CRON_SECRET en el header Authorization.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db'
+import { serviceQuery, serviceMutate } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 
 const CRON_SECRET  = process.env.CRON_SECRET
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     const threeDaysAgoStr = fmtIso(threeDaysAgo)
 
     // ── Fetch plans for tomorrow, yesterday and 3 days ago ───────────────────
-    const plans = await query<{
+    const plans = await serviceQuery<{
       plan_id: string
       paddock_name: string
       herd_name: string
@@ -104,19 +104,17 @@ export async function GET(req: NextRequest) {
           body = `¿Moviste los animales? No olvides aplicar los cambios en el planificador.`
         }
 
-        // We use mutate directly to insert into notifications table
-        import('@/lib/db').then(({ mutate }) => {
-          mutate(`
-            INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, data)
-            VALUES ($1, $2, $2, 'ALERTA', $3, $4, $4, $5::jsonb)
-          `, [
-            plan.org_id,
-            plan.owner_profile_id,
-            title,
-            body,
-            JSON.stringify({ link: `/dashboard/grazing` })
-          ]).catch(e => console.error('Failed to insert notification', e))
-        })
+        // Insert in-app notification using service pool (no RLS)
+        await serviceMutate(`
+          INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, data)
+          VALUES ($1, $2, $2, 'ALERTA', $3, $4, $4, $5::jsonb)
+        `, [
+          plan.org_id,
+          plan.owner_profile_id,
+          title,
+          body,
+          JSON.stringify({ link: `/dashboard/grazing` })
+        ]).catch(e => console.error('Failed to insert notification', e))
       }
     }
 
@@ -193,7 +191,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Agenda events starting tomorrow ──────────────────────────────────────
-    const events = await query<{
+    const events = await serviceQuery<{
       id: string
       title: string
       org_id: string
@@ -207,18 +205,16 @@ export async function GET(req: NextRequest) {
 
     if (events && events.length > 0) {
       for (const ev of events) {
-        import('@/lib/db').then(({ mutate }) => {
-          mutate(`
-            INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, data)
-            VALUES ($1, $2, $2, 'EVENTO', $3, $4, $4, $5::jsonb)
-          `, [
-            ev.org_id,
-            ev.owner_profile_id,
-            `Tenés un evento que inicia mañana: ${ev.title}`,
-            `Acordate de revisar tu agenda.`,
-            JSON.stringify({ link: `/dashboard/agenda` })
-          ]).catch(e => console.error('Failed to insert event notification', e))
-        })
+        await serviceMutate(`
+          INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, data)
+          VALUES ($1, $2, $2, 'EVENTO', $3, $4, $4, $5::jsonb)
+        `, [
+          ev.org_id,
+          ev.owner_profile_id,
+          `Tenés un evento que inicia mañana: ${ev.title}`,
+          `Acordate de revisar tu agenda.`,
+          JSON.stringify({ link: `/dashboard/agenda` })
+        ]).catch(e => console.error('Failed to insert event notification', e))
       }
     }
 

@@ -7,14 +7,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 
 async function getAuth(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  return queryOne<{ organization_id: string; id: string; role: string; system_role: string }>(
+  return serviceQueryOne<{ organization_id: string; id: string; role: string; system_role: string }>(
     `SELECT organization_id, id, role, system_role
        FROM profiles WHERE firebase_uid = $1`,
     [decoded.uid]
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const auth = await getAuth(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const rows = await query(
+  const rows = await serviceQuery(
     `SELECT wl.id, wl.phone, wl.created_at,
             p.first_name, p.last_name, p.email, p.role AS profile_role
        FROM whatsapp_links wl
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   // Normalizar teléfono → E.164
   const normalized = phone.replace(/\s|-/g, '').replace(/^0/, '+54')
 
-  const { rows } = await mutate(
+  const { rows } = await serviceMutate(
     `INSERT INTO whatsapp_links (phone, profile_id, org_id)
      VALUES ($1, $2, $3)
      ON CONFLICT (phone) DO UPDATE SET profile_id = EXCLUDED.profile_id
@@ -70,7 +70,7 @@ export async function DELETE(req: NextRequest) {
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id requerido' }, { status: 400 })
 
-  await mutate(
+  await serviceMutate(
     `DELETE FROM whatsapp_links WHERE id = $1 AND org_id = $2`,
     [id, auth.organization_id]
   )

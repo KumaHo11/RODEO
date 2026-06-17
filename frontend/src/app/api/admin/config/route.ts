@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query } from '@/lib/db'
+import { serviceQuery } from '@/lib/db'
 
 async function requireSuperAdmin(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const showSecrets = req.nextUrl.searchParams.get('reveal') === '1'
 
   try {
-    const configs = await query<{
+    const configs = await serviceQuery<{
       key: string; value: string; label: string; category: string; is_secret: boolean; updated_at: string
     }>(`SELECT key, value, label, category, is_secret, updated_at FROM system_config ORDER BY category, key`)
 
@@ -59,7 +59,7 @@ export async function PATCH(req: NextRequest) {
   if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 })
 
   try {
-    await query(
+    await serviceQuery(
       `UPDATE system_config
        SET value = $1, updated_at = NOW()
        WHERE key = $2`,
@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest) {
     )
 
     // Audit log (sin guardar el valor para no exponer secrets)
-    await query(
+    await serviceQuery(
       `INSERT INTO audit_logs (actor_email, action, entity_type, entity_id, new_value)
        VALUES ($1, 'CONFIG_UPDATED', 'system_config', NULL, $2)`,
       [admin.email || '', JSON.stringify({ key, updated: true })]

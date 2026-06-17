@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne } from '@/lib/db'
+import { serviceQuery, serviceQueryOne } from '@/lib/db'
 
 async function requireSuperAdmin(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       recentActivity,
     ] = await Promise.all([
       // KPIs globales
-      queryOne(`
+      serviceQueryOne(`
         SELECT
           (SELECT COUNT(*)           FROM profiles      WHERE system_role IS NULL)::int AS total_users,
           (SELECT COUNT(*)           FROM profiles      WHERE is_active = true AND system_role IS NULL)::int AS active_users,
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       `),
 
       // Distribución de planes
-      query(`
+      serviceQuery(`
         SELECT
           sp.name,
           sp.slug,
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       `),
 
       // Registros por mes (últimos 6 meses)
-      query(`
+      serviceQuery(`
         SELECT
           TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
           COUNT(*)::int AS signups
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
       `),
 
       // Top 5 organizaciones por hectáreas
-      query(`
+      serviceQuery(`
         SELECT
           o.id,
           o.name,
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
       `),
 
       // Actividad reciente (últimas 10 acciones de audit)
-      query(`
+      serviceQuery(`
         SELECT
           al.id,
           al.action,

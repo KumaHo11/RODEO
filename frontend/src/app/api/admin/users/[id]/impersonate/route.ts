@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query, queryOne } from '@/lib/db'
+import { serviceQuery, serviceQueryOne } from '@/lib/db'
 import { adminAuth } from '@/lib/firebase/admin'
 
 async function requireSuperAdmin(req: NextRequest) {
@@ -15,7 +15,7 @@ async function requireSuperAdmin(req: NextRequest) {
   if (!decoded) return null
 
   // Verificar en DB que tiene system_role = SUPER_ADMIN (doble verificación)
-  const profile = await queryOne<{ system_role: string; email: string }>(
+  const profile = await serviceQueryOne<{ system_role: string; email: string }>(
     `SELECT system_role, email FROM profiles WHERE firebase_uid = $1`,
     [decoded.uid]
   )
@@ -35,7 +35,7 @@ export async function POST(
   const { reason } = await req.json()
 
   // Obtener el usuario target
-  const targetProfile = await queryOne<{ firebase_uid: string; email: string; is_active: boolean }>(
+  const targetProfile = await serviceQueryOne<{ firebase_uid: string; email: string; is_active: boolean }>(
     `SELECT firebase_uid, email, is_active FROM profiles WHERE id = $1`,
     [targetUserId]
   )
@@ -56,7 +56,7 @@ export async function POST(
     })
 
     // Registrar sesión de impersonación
-    const [session] = await query<{ id: string }>(
+    const [session] = await serviceQuery<{ id: string }>(
       `INSERT INTO impersonation_sessions (admin_id, admin_email, target_user_id, target_email, reason)
        SELECT ap.id, $1, tp.id, $2, $3
        FROM profiles ap, profiles tp
@@ -66,7 +66,7 @@ export async function POST(
     )
 
     // Audit log
-    await query(
+    await serviceQuery(
       `INSERT INTO audit_logs (actor_id, actor_email, action, entity_type, entity_id, new_value, ip_address)
        SELECT p.id, $1, 'USER_IMPERSONATED', 'profile', $2, $3, $4
        FROM profiles p WHERE p.firebase_uid = $5`,
@@ -104,7 +104,7 @@ export async function DELETE(
   const { id } = await params
   const { sessionId } = await req.json()
 
-  await query(
+  await serviceQuery(
     `UPDATE impersonation_sessions SET ended_at = NOW()
      WHERE id = $1 AND target_user_id = $2 AND ended_at IS NULL`,
     [sessionId, id]

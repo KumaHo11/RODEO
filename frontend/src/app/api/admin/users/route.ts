@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { query } from '@/lib/db'
+import { serviceQuery } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -109,8 +109,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const [users, countResult] = await Promise.all([
-      query(sql, params),
-      query(countSql, params.slice(0, params.length - 2)),
+      serviceQuery(sql, params),
+      serviceQuery(countSql, params.slice(0, params.length - 2)),
     ])
 
     return NextResponse.json({
@@ -135,11 +135,11 @@ export async function PATCH(req: NextRequest) {
   try {
     if (is_active !== undefined) {
       // 1. Update DB
-      await query(`UPDATE profiles SET is_active = $1, updated_at = NOW() WHERE id = $2`, [is_active, userId])
+      await serviceQuery(`UPDATE profiles SET is_active = $1, updated_at = NOW() WHERE id = $2`, [is_active, userId])
 
       // 2. Sync with Firebase Auth — disabling blocks the user's token immediately
       const { adminAuth } = await import('@/lib/firebase/admin')
-      const rows = await query<{ firebase_uid: string }>(
+      const rows = await serviceQuery<{ firebase_uid: string }>(
         `SELECT firebase_uid FROM profiles WHERE id = $1`,
         [userId]
       )
@@ -150,7 +150,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (plan_id) {
-      await query(
+      await serviceQuery(
         `UPDATE organizations SET subscription_plan_id = $1, updated_at = NOW()
          WHERE id = (SELECT organization_id FROM profiles WHERE id = $2)`,
         [plan_id, userId]
@@ -158,13 +158,13 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Audit log — actor_id must be a UUID, not a Firebase UID string
-    const adminProfile = await query<{ id: string }>(
+    const adminProfile = await serviceQuery<{ id: string }>(
       `SELECT id FROM profiles WHERE firebase_uid = $1 LIMIT 1`,
       [admin.uid]
     )
     const actorId = adminProfile[0]?.id ?? null
 
-    await query(
+    await serviceQuery(
       `INSERT INTO audit_logs (actor_id, actor_email, action, entity_type, entity_id, new_value)
        VALUES ($1, $2, 'USER_UPDATED', 'profile', $3, $4)`,
       [actorId, admin.email || '', userId, JSON.stringify({ is_active, plan_id })]
