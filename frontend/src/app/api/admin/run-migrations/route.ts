@@ -55,6 +55,37 @@ const MIGRATIONS = [
     ADD COLUMN IF NOT EXISTS idempotency_key TEXT,
     ADD COLUMN IF NOT EXISTS end_date        DATE`,
 
+  // Fix updated_at / created_at columns missing DEFAULT NOW() on all tables
+  `DO $$ DECLARE
+    tbl TEXT;
+    tables TEXT[] := ARRAY[
+      'paddocks','herds','farm_events','tasks','movements','field_notes',
+      'grazing_plans','grazing_plan_entries','organizations','profiles',
+      'invitations','notifications','season_plans','roles'
+    ];
+  BEGIN
+    FOREACH tbl IN ARRAY tables LOOP
+      -- updated_at DEFAULT NOW()
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name=tbl AND column_name='updated_at'
+          AND column_default IS NULL
+      ) THEN
+        EXECUTE format('ALTER TABLE %I ALTER COLUMN updated_at SET DEFAULT NOW()', tbl);
+        RAISE NOTICE 'updated_at DEFAULT NOW() set on: %', tbl;
+      END IF;
+      -- created_at DEFAULT NOW()
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name=tbl AND column_name='created_at'
+          AND column_default IS NULL
+      ) THEN
+        EXECUTE format('ALTER TABLE %I ALTER COLUMN created_at SET DEFAULT NOW()', tbl);
+        RAISE NOTICE 'created_at DEFAULT NOW() set on: %', tbl;
+      END IF;
+    END LOOP;
+  END $$`,
+
   // notifications missing columns
   `ALTER TABLE notifications
     ADD COLUMN IF NOT EXISTS profile_id  UUID REFERENCES profiles(id) ON DELETE CASCADE,
