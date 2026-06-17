@@ -125,6 +125,7 @@ jobs:
             --cpu=1 \
             --min-instances=1 \
             --max-instances=10 \
+            --clear-secrets \
             --env-vars-file=/tmp/rodeo-prod-env.yaml \
             --quiet
 
