@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { queryOne, query, mutate } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +13,7 @@ async function getOrgId(req: NextRequest) {
   if (!token) return null
   const decoded = await verifyFirebaseToken(token)
   if (!decoded) return null
-  const profile = await queryOne<{ organization_id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string }>(
     'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
     [decoded.uid]
   )
@@ -35,60 +35,29 @@ export async function GET(req: NextRequest) {
     const auth = await getOrgId(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    // Try with all optional columns; fallback gracefully
-    let events: any[]
-    try {
-      events = await query(
-        `SELECT id, org_id, title, event_type,
-                TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
-                TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
-                herd_id, herd_ids, paddock_id, description, status,
-                assigned_to, bulls_count, bulls_weight, source, created_at, photo_url, audio_url
-         FROM farm_events
-         WHERE org_id = $1
-         ORDER BY created_at DESC`,
-        [auth.orgId]
-      )
-    } catch {
-      try {
-        events = await query(
-          `SELECT id, org_id, title, event_type,
-                  TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
-                  TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
-                  herd_id, herd_ids, paddock_id, description, status,
-                  assigned_to, bulls_count, bulls_weight, created_at, photo_url, audio_url
-           FROM farm_events
-           WHERE org_id = $1
-           ORDER BY created_at DESC`,
-          [auth.orgId]
-        )
-      } catch {
-        try {
-          events = await query(
-            `SELECT id, org_id, title, event_type,
-                    TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
-                    TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
-                    herd_id, herd_ids, paddock_id, description, status,
-                    assigned_to, created_at, photo_url, audio_url
-             FROM farm_events
-             WHERE org_id = $1
-             ORDER BY created_at DESC`,
-            [auth.orgId]
-          )
-        } catch {
-          events = await query(
-            `SELECT id, org_id, title, event_type,
-                    TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date,
-                    TO_CHAR(end_date,   'YYYY-MM-DD') AS end_date,
-                    herd_id, herd_ids, paddock_id, description, status, created_at, photo_url, audio_url
-             FROM farm_events
-             WHERE org_id = $1
-             ORDER BY created_at DESC`,
-            [auth.orgId]
-          )
-        }
-      }
-    }
+    // Detect which optional columns exist to build a safe SELECT
+    const colRows = await serviceQuery<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'farm_events'
+         AND column_name = ANY($1)`,
+      [['source', 'bulls_count', 'bulls_weight', 'herd_ids', 'photo_url', 'audio_url']]
+    )
+    const existingCols = new Set(colRows.map(r => r.column_name))
+    const optionals = ['source','bulls_count','bulls_weight','herd_ids','photo_url','audio_url']
+      .filter(c => existingCols.has(c))
+    const selectCols = [
+      'id', 'org_id', 'title', 'event_type',
+      `TO_CHAR(event_date, 'YYYY-MM-DD') AS event_date`,
+      `TO_CHAR(end_date, 'YYYY-MM-DD') AS end_date`,
+      'herd_id', 'paddock_id', 'description', 'status',
+      'assigned_to', 'created_at',
+      ...optionals,
+    ].join(', ')
+
+    const events = await serviceQuery(
+      `SELECT ${selectCols} FROM farm_events WHERE org_id = $1 ORDER BY created_at DESC`,
+      [auth.orgId]
+    )
 
     const normalized = (events as any[]).map(e => ({
       ...e,
