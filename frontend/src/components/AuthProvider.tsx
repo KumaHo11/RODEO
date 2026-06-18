@@ -238,6 +238,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsubscribe()
   }, [fetchProfile])
 
+  // Initialize Google Analytics User ID
+  useEffect(() => {
+    if (user && process.env.NEXT_PUBLIC_GA_ID) {
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('config', process.env.NEXT_PUBLIC_GA_ID, {
+          user_id: user.uid,
+        })
+      }
+    }
+  }, [user])
+
   const signOut = async () => {
     await firebaseSignOut(auth)
     document.cookie = '__session=; path=/; max-age=0'
