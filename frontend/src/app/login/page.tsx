@@ -120,8 +120,9 @@ function LoginContent() {
         if (!targetProfile) {
           try {
             const freshToken = await refreshedUser.getIdToken(true)
-            const res = await fetch('/api/auth/profile', {
+            const res = await fetch('/api/auth/profile?t=' + Date.now(), {
               headers: { Authorization: `Bearer ${freshToken}` },
+              cache: 'no-store'
             })
             if (res.ok) {
               const data = await res.json()
