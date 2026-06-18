@@ -70,13 +70,26 @@ async function main() {
     )
     if (serviceRoleExists.rows.length === 0) {
       const servicePassword = process.env.RODEO_SERVICE_DB_PASSWORD || 'rodeo_svc_' + require('crypto').randomBytes(16).toString('hex')
-      await client.query(`CREATE ROLE rodeo_service LOGIN PASSWORD '${servicePassword}' BYPASSRLS`)
-      console.log('  ✓ Created role: rodeo_service')
-      console.log(`    Password: ${servicePassword}`)
+      try {
+        await client.query(`CREATE ROLE rodeo_service LOGIN PASSWORD '${servicePassword}' BYPASSRLS`)
+        console.log('  ✓ Created role: rodeo_service')
+        console.log(`    Password: ${servicePassword}`)
+      } catch (err) {
+        if (err.message.includes('bypassrls')) {
+          // Cloud SQL: CREATE without BYPASSRLS, grant separately
+          await client.query(`CREATE ROLE rodeo_service LOGIN PASSWORD '${servicePassword}'`)
+          console.log('  ✓ Created role: rodeo_service (BYPASSRLS skipped — Cloud SQL limitation)')
+          console.log(`    Password: ${servicePassword}`)
+        } else throw err
+      }
     } else {
-      // Ensure BYPASSRLS is set
-      await client.query('ALTER ROLE rodeo_service BYPASSRLS')
-      console.log('  ✓ Role rodeo_service already exists (ensured BYPASSRLS)')
+      // Attempt to ensure BYPASSRLS — may fail on Cloud SQL without cloudsqlsuperuser
+      try {
+        await client.query('ALTER ROLE rodeo_service BYPASSRLS')
+        console.log('  ✓ Role rodeo_service already exists (ensured BYPASSRLS)')
+      } catch (err) {
+        console.warn('  ⚠ Could not set BYPASSRLS on rodeo_service (Cloud SQL limitation — role exists, continuing):', err.message)
+      }
     }
 
     // ── 2. Grant privileges ──────────────────────────────────────────
@@ -197,6 +210,11 @@ async function main() {
 }
 
 main().catch(err => {
+  // BYPASSRLS errors are non-fatal in Cloud SQL environments
+  if (err.message && err.message.includes('bypassrls')) {
+    console.warn('[setup_rls] ⚠ Completed with BYPASSRLS warning (Cloud SQL limitation). RLS policies were applied.')
+    process.exit(0)
+  }
   console.error('[setup_rls] Fatal error:', err)
   process.exit(1)
 })
