@@ -73,9 +73,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Marcar onboarding completo
+    // 4. Marcar onboarding completo (step 4 = fully done, required by dashboard guard)
     await serviceMutate(
-      `UPDATE profiles SET onboarding_step = 3, updated_at = NOW() WHERE firebase_uid = $1`,
+      `UPDATE profiles SET onboarding_step = 4, updated_at = NOW() WHERE firebase_uid = $1`,
       [firebaseUid]
     )
 

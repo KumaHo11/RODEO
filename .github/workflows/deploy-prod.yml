@@ -40,9 +40,7 @@ jobs:
         run: |
           cd frontend
           npm ci
-          node scripts/pre_prisma_cleanup.js "$DATABASE_URL"
-          npx prisma db push --skip-generate --accept-data-loss
-          node scripts/add_missing_columns.js "$DATABASE_URL"
+          node scripts/full_schema_migration.js "$DATABASE_URL"
           node scripts/setup_rls_roles.js "$DATABASE_URL"
           node insert_terms_v3.js
         env:
@@ -80,7 +78,7 @@ jobs:
             f'DATABASE_URL: {q(os.environ.get("DATABASE_URL",""))}',
             f'DATABASE_URL_SERVICE: {q(os.environ.get("DATABASE_URL_SERVICE",""))}',
             f'FIREBASE_ADMIN_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
-            f'FIREBASE_ADMIN_CREDENTIALS_BASE64: {q(os.environ.get("FIREBASE_ADMIN_CREDENTIALS_BASE64",""))}',
+            # FIREBASE_ADMIN_CREDENTIALS_BASE64 se monta via Secret Manager (ver --set-secrets abajo)
             f'FIREBASE_ADMIN_IMPERSONATE_SA: {q(os.environ.get("FIREBASE_ADMIN_IMPERSONATE_SA",""))}',
             f'FIREBASE_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
             f'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: {q(os.environ.get("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",""))}',
@@ -138,6 +136,7 @@ jobs:
             --min-instances=1 \
             --max-instances=10 \
             --env-vars-file=/tmp/rodeo-prod-env.yaml \
+            --set-secrets=FIREBASE_ADMIN_CREDENTIALS_BASE64=FIREBASE_ADMIN_CREDENTIALS_BASE64:latest \
             --quiet
 
       - name: 'Deploy to Firebase (Rules & Hosting)'
