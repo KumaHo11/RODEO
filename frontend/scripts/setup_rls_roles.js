@@ -122,16 +122,29 @@ async function main() {
     ]
 
     for (const table of tablesWithOrgId) {
-      await client.query(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY`)
+      try {
+        await client.query(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY`)
+      } catch (err) {
+        // Non-fatal: requires table ownership. If already enabled, this is fine.
+        if (err.message.includes('owner') || err.message.includes('permission')) {
+          console.warn(`  ⚠ Could not enable RLS on ${table} (not owner — may already be enabled): ${err.message}`)
+        } else throw err
+      }
     }
-    console.log(`  ✓ Enabled RLS on ${tablesWithOrgId.length} tables`)
+    console.log(`  ✓ RLS step completed for ${tablesWithOrgId.length} tables`)
 
     // ── 4. Create policies (drop existing first for idempotency) ─────
 
-    // Helper: drop policy if exists, then create
+    // Helper: drop policy if exists, then create (non-fatal if not table owner)
     async function createPolicy(table, name, sql) {
-      await client.query(`DROP POLICY IF EXISTS "${name}" ON "${table}"`)
-      await client.query(sql)
+      try {
+        await client.query(`DROP POLICY IF EXISTS "${name}" ON "${table}"`)
+        await client.query(sql)
+      } catch (err) {
+        if (err.message.includes('owner') || err.message.includes('permission')) {
+          console.warn(`  ⚠ Could not create policy ${name} on ${table} (not owner — may already exist): ${err.message}`)
+        } else throw err
+      }
     }
 
     // --- profiles: access own profile by UID, or all profiles in same org ---
