@@ -1,6 +1,20 @@
-self.addEventListener('install', () => {
+self.addEventListener('install', (e) => {
   self.skipWaiting()
 })
-self.addEventListener('activate', () => {
-  // dummy sw to prevent 404
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          return caches.delete(cacheName);
+        })
+      );
+    }).then(() => {
+      return self.clients.claim();
+    })
+  );
 })
+
+// Unregister itself
+self.registration.unregister();

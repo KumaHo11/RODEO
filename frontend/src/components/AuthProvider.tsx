@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       let res: Response
       try {
-        res = await fetch('/api/auth/profile', {
+        res = await fetch('/api/auth/profile?t=' + Date.now(), {
           headers: { Authorization: `Bearer ${idToken}` },
           signal: controller.signal,
           cache: 'no-store'
@@ -121,7 +121,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.warn('[AuthProvider] Profile 404 — retrying once after 1.5s...')
         await new Promise(r => setTimeout(r, 1500))
         const retryToken = await firebaseUser.getIdToken(true)
-        const retryRes = await fetch('/api/auth/profile', {
+        const retryRes = await fetch('/api/auth/profile?t=' + Date.now(), {
           headers: { Authorization: `Bearer ${retryToken}` },
           cache: 'no-store'
         })
@@ -155,7 +155,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             // Perfil creado — buscar el perfil recién creado
             await new Promise(r => setTimeout(r, 500))
             const freshToken2 = await firebaseUser.getIdToken(true)
-            const profileRes2 = await fetch('/api/auth/profile', {
+            const profileRes2 = await fetch('/api/auth/profile?t=' + Date.now(), {
               headers: { Authorization: `Bearer ${freshToken2}` },
               cache: 'no-store'
             })
