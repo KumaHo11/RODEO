@@ -11,7 +11,7 @@
  * Las funciones serviceQuery/serviceMutate usan el pool de servicio (sin RLS).
  */
 import { Pool } from 'pg'
-import { headers } from 'next/headers'
+import { headers, cookies } from 'next/headers'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 
 const tokenCache = new Map<string, { uid: string, orgId: string | null, expiresAt: number }>()
@@ -20,7 +20,13 @@ const CACHE_TTL_MS = 5 * 60 * 1000
 async function getContextUid(): Promise<{ uid: string; orgId: string | null } | null> {
   try {
     const headersList = await headers()
-    const token = headersList.get('authorization')?.replace('Bearer ', '').trim()
+    let token = headersList.get('authorization')?.replace('Bearer ', '').trim()
+    
+    if (!token) {
+      const cookieStore = await cookies()
+      token = cookieStore.get('__session')?.value?.trim()
+    }
+
     if (!token) return null
 
     const cached = tokenCache.get(token)
