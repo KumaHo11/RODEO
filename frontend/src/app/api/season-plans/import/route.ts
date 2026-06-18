@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
                 try {
                   const ha = m.area_ha ? Number(m.area_ha) : 1
                   const pRes = await serviceMutate(
-                    `INSERT INTO paddocks (org_id, name, area_ha, current_status) VALUES ($1, $2, $3, 'IDLE') RETURNING id`,
+                    `INSERT INTO paddocks (org_id, name, area_ha, current_status, created_at, updated_at) VALUES ($1, $2, $3, 'IDLE', NOW(), NOW()) RETURNING id`,
                     [auth.orgId, m.excel_paddock_name, ha]
                   )
                   finalPaddockId = pRes.rows[0]?.id
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
               } else {
                 try {
                   const hRes = await serviceMutate(
-                    `INSERT INTO herds (org_id, name, total_ev, quantity) VALUES ($1, $2, 10, 1) RETURNING id`,
+                    `INSERT INTO herds (org_id, name, total_ev, head_count, created_at, updated_at) VALUES ($1, $2, 10, 1, NOW(), NOW()) RETURNING id`,
                     [auth.orgId, m.excel_herd_name]
                   )
                   finalHerdId = hRes.rows[0]?.id
