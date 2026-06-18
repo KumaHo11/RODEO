@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
       for (const p of paddocks) {
         const geom = p.geojson?.geometry ?? p.geojson
         await serviceMutate(
-          `INSERT INTO paddocks (org_id, name, area_ha, geom)
-           VALUES ($1, $2, $3, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326))`,
+          `INSERT INTO paddocks (org_id, name, area_ha, geom, created_at, updated_at)
+           VALUES ($1, $2, $3, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326), NOW(), NOW())`,
           [orgId, p.name, p.area_ha, JSON.stringify(geom)]
         )
       }
@@ -66,8 +66,8 @@ export async function POST(req: NextRequest) {
     if (herds?.length > 0) {
       for (const h of herds) {
         await serviceMutate(
-          `INSERT INTO herds (org_id, name, species, breed, head_count, avg_weight_kg, total_ev)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          `INSERT INTO herds (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
           [orgId, h.name, h.species, h.breed, h.headCount, h.avgWeight, h.totalEV]
         )
       }

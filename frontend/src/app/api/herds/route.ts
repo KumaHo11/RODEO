@@ -165,8 +165,8 @@ export async function POST(req: NextRequest) {
     // Step 1: INSERT with guaranteed columns only (always works)
     const result = await serviceMutate(
       `INSERT INTO herds
-         (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, NOW(), NOW())
        RETURNING id`,
       [
         auth.orgId,
