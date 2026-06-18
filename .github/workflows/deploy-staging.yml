@@ -45,11 +45,11 @@ jobs:
         run: |
           cd frontend
           npm ci
-          node scripts/full_schema_migration.js "$DATABASE_URL"
-          node scripts/setup_rls_roles.js "$DATABASE_URL"
+          node scripts/full_schema_migration.js "$MIGRATION_DATABASE_URL"
+          node scripts/setup_rls_roles.js "$MIGRATION_DATABASE_URL"
           node insert_terms_v3.js
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
 
       # 4. Construir la imagen local de Docker
       - name: 'Build Docker Image'
