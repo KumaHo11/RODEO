@@ -79,6 +79,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         res = await fetch('/api/auth/profile', {
           headers: { Authorization: `Bearer ${idToken}` },
           signal: controller.signal,
+          cache: 'no-store'
         })
       } finally {
         clearTimeout(timeoutId)
@@ -122,6 +123,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const retryToken = await firebaseUser.getIdToken(true)
         const retryRes = await fetch('/api/auth/profile', {
           headers: { Authorization: `Bearer ${retryToken}` },
+          cache: 'no-store'
         })
         if (retryRes.ok) {
           const data = await retryRes.json()
@@ -155,6 +157,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const freshToken2 = await firebaseUser.getIdToken(true)
             const profileRes2 = await fetch('/api/auth/profile', {
               headers: { Authorization: `Bearer ${freshToken2}` },
+              cache: 'no-store'
             })
             if (profileRes2.ok) {
               const data = await profileRes2.json()
