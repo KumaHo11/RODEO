@@ -67,8 +67,7 @@ function ActionContent() {
         if (res.ok && data.success) {
           const auth = getAuth(app)
           try {
-            const currentUser = auth.currentUser
-            if (currentUser) await currentUser.reload()
+            await auth.signOut()
           } catch { /* ignore */ }
           document.cookie = '__session=; path=/; max-age=0'
           try { localStorage.removeItem('rodeo_cached_profile') } catch { /* ignore */ }
@@ -108,18 +107,10 @@ function ActionContent() {
 
     applyActionCode(auth, oobCode)
       .then(async () => {
-        // CRÍTICO: Recargar el usuario actual para actualizar emailVerified en el SDK.
-        // Sin esto, el SDK cliente mantiene emailVerified=false en memoria aunque
-        // Firebase ya lo marcó como verified en el servidor.
         try {
-          const currentUser = auth.currentUser
-          if (currentUser) {
-            await currentUser.reload()
-          }
-        } catch {
-          // Si no hay sesión activa en este browser, está bien — el login fresco
-          // obtendrá el estado actualizado directamente de Firebase.
-        }
+          await auth.signOut()
+        } catch { /* ignore */ }
+        
         // Limpiar cookies de sesión obsoletas para forzar token fresco en el login
         document.cookie = '__session=; path=/; max-age=0'
         try { localStorage.removeItem('rodeo_cached_profile') } catch { /* ignore */ }
