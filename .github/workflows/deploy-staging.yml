@@ -49,7 +49,7 @@ jobs:
           node scripts/setup_rls_roles.js "$DATABASE_URL"
           node insert_terms_v3.js
         env:
-          DATABASE_URL: "postgresql://postgres:RodeoStaging2026!@34.95.223.44:5432/rodeo"
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       # 4. Construir la imagen local de Docker
       - name: 'Build Docker Image'
@@ -106,8 +106,8 @@ jobs:
           PYEOF
         env:
           STAGING_URL: ${{ env.STAGING_URL }}
-          DATABASE_URL: "postgresql://rodeo_app:rodeo_app_c094e3a6bb16f0e89b558834839cb220@34.95.223.44:5432/rodeo"
-          DATABASE_URL_SERVICE: "postgresql://rodeo_service:rodeo_svc_77d567d3113624e23f8babbc3899c41d@34.95.223.44:5432/rodeo"
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_SERVICE: ${{ secrets.DATABASE_URL_SERVICE }}
           FIREBASE_ADMIN_PROJECT_ID: ${{ env.PROJECT_ID }}
           FIREBASE_ADMIN_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_ADMIN_CREDENTIALS_BASE64 }}
           FIREBASE_ADMIN_IMPERSONATE_SA: ${{ secrets.FIREBASE_ADMIN_IMPERSONATE_SA }}
