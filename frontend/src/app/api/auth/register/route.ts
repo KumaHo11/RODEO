@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
       try {
         const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'unknown'
         await serviceMutate(
-          `INSERT INTO user_terms_acceptances (id, profile_id, version_id, ip_address, created_at)
+          `INSERT INTO user_terms_acceptances (id, profile_id, version_id, ip_address, accepted_at)
            VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
           [profileId, termsVersionId, ipAddress]
         )
