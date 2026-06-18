@@ -6,16 +6,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { serviceQueryOne, serviceMutate } from '@/lib/db'
 
-// Migración on-demand: agrega columnas si no existen (idempotente)
-async function ensurePlanningColumns() {
-  await serviceMutate(`
-    ALTER TABLE organizations
-      ADD COLUMN IF NOT EXISTS default_daily_allocation_kg  NUMERIC(8,2)  DEFAULT 12,
-      ADD COLUMN IF NOT EXISTS default_target_remnant_kg_ha NUMERIC(10,2) DEFAULT 600,
-      ADD COLUMN IF NOT EXISTS location_label               TEXT,
-      ADD COLUMN IF NOT EXISTS technical_data               JSONB         DEFAULT '{}'
-  `)
-}
+export const dynamic = 'force-dynamic'
+
+// Columns are managed by full_schema_migration.js
 
 async function getOrgId(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
@@ -34,8 +27,6 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await getOrgId(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-
-    await ensurePlanningColumns()
 
     const org = await serviceQueryOne(
       `SELECT
@@ -68,8 +59,6 @@ export async function PATCH(req: NextRequest) {
       default_daily_allocation_kg, default_target_remnant_kg_ha,
       location_label, technical_data
     } = body
-
-    await ensurePlanningColumns()
 
     const sets: string[] = ['updated_at = NOW()']
     const vals: any[] = []

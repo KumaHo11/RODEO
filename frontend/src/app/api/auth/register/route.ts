@@ -11,6 +11,8 @@ import { adminAuth } from '@/lib/firebase/admin'
 import { serviceMutate, serviceQuery } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
