@@ -47,7 +47,7 @@ jobs:
           npm ci
           node scripts/full_schema_migration.js "$MIGRATION_DATABASE_URL"
           node scripts/setup_rls_roles.js "$MIGRATION_DATABASE_URL"
-          node insert_terms_v3.js
+          DATABASE_URL="$MIGRATION_DATABASE_URL" node insert_terms_v3.js
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
 
