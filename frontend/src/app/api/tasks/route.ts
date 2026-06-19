@@ -77,8 +77,8 @@ export async function POST(req: NextRequest) {
     const result = await serviceMutate(
       `INSERT INTO tasks
          (org_id, created_by, title, description, task_type, paddock_id,
-          assigned_to, due_date, priority, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          assigned_to, due_date, priority, status, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, NOW(), NOW())
        RETURNING id`,
       [
         auth.orgId, auth.profileId || null,

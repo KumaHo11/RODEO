@@ -116,8 +116,8 @@ export async function POST(req: NextRequest) {
     // Step 1: guaranteed INSERT
     const result = await serviceMutate(
       `INSERT INTO farm_events
-         (org_id, title, event_type, event_date, end_date, herd_id, herd_ids, paddock_id, description, status, photo_url, audio_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         (org_id, title, event_type, event_date, end_date, herd_id, herd_ids, paddock_id, description, status, photo_url, audio_url, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NOW(), NOW())
        RETURNING id`,
       [
         auth.orgId, title, event_type, event_date,
