@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       planned_recovery_days, status, temporary_animals, notes,
       exit_notes, exit_dry_matter_kg_ha, org_id, ai_analysis,
       // Campos de track paralelo
-      plan_type, source_origin, cycle_id
+      plan_type, source_origin, cycle_id, season_plan_id
     } = body
 
     if (!paddock_id || !herd_id || !entry_date) {
@@ -78,8 +78,8 @@ export async function POST(req: NextRequest) {
           adjusted_entry_date, adjusted_exit_date, is_locked, closing_stock,
           planned_recovery_days, status, temporary_animals, notes,
           exit_notes, exit_dry_matter_kg_ha, ai_analysis,
-          plan_type, source_origin, cycle_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+          plan_type, source_origin, cycle_id, season_plan_id, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23, NOW(), NOW())
        RETURNING id`,
       [
         paddock_id, herd_id,
@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
         (plan_type === 'suggested' ? 'suggested' : 'manual'),
         (source_origin === 'algorithm' ? 'algorithm' : 'human'),
         cycle_id || null,
+        season_plan_id || null,
       ]
     )
 

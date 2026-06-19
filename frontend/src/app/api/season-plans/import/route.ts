@@ -196,8 +196,8 @@ export async function POST(req: NextRequest) {
 
             await serviceMutate(`
               INSERT INTO grazing_plans (
-                org_id, paddock_id, herd_id, herd_ids, entry_date, exit_date, actual_entry_date, actual_exit_date, status, notes, season_plan_id
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'COMPLETED', 'Movimiento registrado importado de Excel', $9)
+                org_id, paddock_id, herd_id, herd_ids, entry_date, exit_date, actual_entry_date, actual_exit_date, status, notes, season_plan_id, created_at, updated_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'COMPLETED', 'Movimiento registrado importado de Excel', $9, NOW(), NOW())
             `, [
               auth.orgId, finalPaddockId, finalHerdId, finalHerdId ? [finalHerdId] : [], 
               m.entry_date, m.exit_date, m.entry_date, m.exit_date, spId
