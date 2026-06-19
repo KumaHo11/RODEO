@@ -119,9 +119,13 @@ Si el audio es inaudible o no tiene voz: transcript "[Sin voz detectable]", cate
 
   } catch (err: any) {
     console.error('POST /api/transcribe-audio error:', err)
-    return NextResponse.json(
-      { error: 'Error al transcribir', detail: err.message },
-      { status: 500 }
-    )
+    // Devolvemos un fallback en lugar de 500 para no romper la bitácora si falla la transcripción
+    return NextResponse.json({
+      transcript: '[Sin voz detectable - Falló la IA]',
+      category: 'GENERAL',
+      paddock_hint: null,
+      tasks: [],
+      confidence: 0,
+    })
   }
 }
