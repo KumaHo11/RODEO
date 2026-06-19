@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { serviceQuery, serviceQueryOne } from '@/lib/db'
+import { serviceQuery, serviceQueryOne, serviceMutate } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   try {
