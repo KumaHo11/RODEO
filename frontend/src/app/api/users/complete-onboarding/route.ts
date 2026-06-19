@@ -20,30 +20,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing tourId parameter' }, { status: 400 })
     }
 
-    // Obtener los tours actuales para hacer push
-    const profile = await serviceQueryOne(
+    await serviceMutate(
+      `UPDATE profiles 
+       SET completed_tours = array_append(COALESCE(completed_tours, ARRAY[]::text[]), $1) 
+       WHERE firebase_uid = $2 
+       AND NOT ($1 = ANY(COALESCE(completed_tours, ARRAY[]::text[])))`,
+      [tourId, decoded.uid]
+    )
+
+    // Opcional: obtener los tours para retornar, aunque no es estrictamente necesario
+    const profile = await serviceQueryOne<{ completed_tours: string[] }>(
       `SELECT completed_tours FROM profiles WHERE firebase_uid = $1`,
       [decoded.uid]
     )
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
-    }
-
-    const completedTours: string[] = (profile.completed_tours as string[]) || []
-    
-    if (!completedTours.includes(tourId)) {
-      completedTours.push(tourId)
-      
-      // Actualizar en DB
-      // Pasamos el array de strings. Node-postgres maneja los arrays si están mapeados correctamente,
-      // pero para asegurarnos podemos construir el array en postgresql usando ANY o pasarlo.
-      // O más fácil: usar array_append si es nativo, pero al pasarlo como $1 ya funciona.
-      await serviceQuery(
-        `UPDATE profiles SET completed_tours = $1 WHERE firebase_uid = $2`,
-        [completedTours, decoded.uid]
-      )
-    }
+    const completedTours = profile?.completed_tours || [tourId]
 
     return NextResponse.json({ ok: true, completedTours })
   } catch (err: any) {

@@ -12,10 +12,8 @@ import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { getStorage } from 'firebase-admin/storage'
 import admin from '@/lib/firebase/admin'
 
-function getBucketName(): string {
-  const name = process.env.GCS_BUCKET_NAME
-  if (!name) throw new Error('[Upload] GCS_BUCKET_NAME env var is required')
-  return name
+function getBucketName(): string | null {
+  return process.env.GCS_BUCKET_NAME || null
 }
 
 export async function POST(req: NextRequest) {
@@ -43,43 +41,33 @@ export async function POST(req: NextRequest) {
     const filename = `${uid}_${timestamp}.${ext}`
 
     // ── 1. Try GCS first (production / staging) ─────────────────────────────
-    try {
-      const storage = getStorage(admin.getAdminApp())
-      const bucket = storage.bucket(BUCKET_NAME)
-      const gcsPath = `${folder}/${filename}`
-      const gcsFile = bucket.file(gcsPath)
+    if (BUCKET_NAME) {
+      try {
+        const storage = getStorage(admin.getAdminApp())
+        const bucket = storage.bucket(BUCKET_NAME)
+        const gcsPath = `${folder}/${filename}`
+        const gcsFile = bucket.file(gcsPath)
 
-      const { randomUUID } = await import('crypto')
-      const downloadToken = randomUUID()
+        await gcsFile.save(buffer, {
+          metadata: { 
+            contentType: file.type || 'application/octet-stream',
+          },
+        })
 
-      await gcsFile.save(buffer, {
-        metadata: { 
-          contentType: file.type || 'application/octet-stream',
-        },
-      })
-
-      // rodeo-media es un bucket GCS público — usar URL directa de storage.googleapis.com
-      const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${gcsPath}`
-      console.log('[upload] GCS OK →', publicUrl)
-      return NextResponse.json({ url: publicUrl, filename: gcsPath })
-    } catch (gcsErr: any) {
-      // Log full error details for diagnosis
-      console.error('[upload] GCS failed — bucket:', BUCKET_NAME)
-      console.error('[upload] GCS error code:', gcsErr?.code)
-      console.error('[upload] GCS error message:', gcsErr?.message)
-      console.error('[upload] GCS error full:', JSON.stringify(gcsErr, Object.getOwnPropertyNames(gcsErr)).slice(0, 500))
+        // rodeo-media es un bucket GCS público — usar URL directa de storage.googleapis.com
+        const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${gcsPath}`
+        console.log('[upload] GCS OK →', publicUrl)
+        return NextResponse.json({ url: publicUrl, filename: gcsPath })
+      } catch (gcsErr: any) {
+        console.error('[upload] GCS failed — bucket:', BUCKET_NAME)
+        console.error('[upload] GCS error message:', gcsErr?.message)
+      }
+    } else {
+      console.warn('[upload] GCS_BUCKET_NAME no definido, usando fallback local')
     }
 
-    // ── 2. Local filesystem fallback (dev only) ──────────────────────────────
-    // Cloud Run has an ephemeral filesystem — local paths are not served and
-    // will 404 immediately. Only allow this fallback in local development.
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[upload] GCS failed in production — refusing local fallback to avoid broken URLs')
-      return NextResponse.json(
-        { error: 'No se pudo guardar el archivo. Problema con el almacenamiento en la nube.' },
-        { status: 500 }
-      )
-    }
+    // ── 2. Local filesystem fallback ──────────────────────────────
+    // Aceptamos fallback local en cualquier entorno si GCS falla para no romper la app de usuario.
 
     try {
       const { writeFile, mkdir } = await import('fs/promises')

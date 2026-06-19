@@ -29,11 +29,18 @@ export async function POST(req: NextRequest) {
 
     const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'unknown'
 
-    await serviceMutate(
-      `INSERT INTO user_terms_acceptances (profile_id, version_id, ip_address)
-       VALUES ($1, $2, $3)`,
-      [profile.id, versionId, ipAddress]
+    const exists = await serviceQueryOne(
+      `SELECT id FROM user_terms_acceptances WHERE profile_id = $1 AND version_id = $2 LIMIT 1`,
+      [profile.id, versionId]
     )
+
+    if (!exists) {
+      await serviceMutate(
+        `INSERT INTO user_terms_acceptances (profile_id, version_id, ip_address)
+         VALUES ($1, $2, $3)`,
+        [profile.id, versionId, ipAddress]
+      )
+    }
 
     return NextResponse.json({ success: true })
   } catch (err: any) {
