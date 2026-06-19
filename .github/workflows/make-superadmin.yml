@@ -8,9 +8,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install pg
+      - run: npm install pg firebase-admin dotenv
         working-directory: frontend
-      - run: node scripts/set_superadmin_prod.js superadmin@rodeo.app
+      - run: node scripts/create_superadmin_full.js
         working-directory: frontend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+          FIREBASE_ADMIN_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_ADMIN_CREDENTIALS_BASE64_PROD }}
