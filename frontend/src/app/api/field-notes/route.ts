@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
 
     const { rows } = await serviceMutate(
       `INSERT INTO field_notes
-         (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, photo_urls, audio_url, analysis_result)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, photo_urls, audio_url, analysis_result, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, NOW(), NOW())
        RETURNING *`,
       [
         auth.orgId, auth.profileId,

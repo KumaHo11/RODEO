@@ -59,8 +59,8 @@ export async function POST(req: NextRequest) {
 
     const result = await serviceMutate(
       `INSERT INTO team_invitations
-         (org_id, email, role, team_role, permissions, token, status, expires_at, invited_by, first_name, last_name)
-       VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10)
+         (org_id, email, role, team_role, permissions, token, status, expires_at, invited_by, first_name, last_name, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, NOW(), NOW())
        ON CONFLICT (org_id, email) DO UPDATE SET
          token = EXCLUDED.token,
          role = EXCLUDED.role,
