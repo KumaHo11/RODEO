@@ -99,13 +99,33 @@ async function main() {
     for (const role of ['rodeo_app', 'rodeo_service']) {
       await client.query(`GRANT CONNECT ON DATABASE "${currentDb}" TO ${role}`)
       await client.query(`GRANT USAGE ON SCHEMA public TO ${role}`)
-      await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${role}`)
+      
+      // Get all tables
+      const { rows: tables } = await client.query(`
+        SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+      `);
+      
+      for (const { tablename } of tables) {
+        try {
+          await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "${tablename}" TO ${role}`)
+        } catch (e) {
+          console.warn(`  ⚠ Could not grant to ${tablename} for ${role}: ${e.message}`)
+        }
+      }
+      
       await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${role}`)
       await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${role}`)
       await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ${role}`)
     }
     // rodeo_service gets ALL privileges (including DDL for migrations)
-    await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO rodeo_service')
+    const { rows: tablesForSvc } = await client.query(`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`);
+    for (const { tablename } of tablesForSvc) {
+      try {
+        await client.query(`GRANT ALL PRIVILEGES ON TABLE "${tablename}" TO rodeo_service`)
+      } catch (e) {
+        console.warn(`  ⚠ Could not grant ALL to rodeo_service on ${tablename}: ${e.message}`)
+      }
+    }
     console.log('  ✓ Granted privileges to both roles')
 
     // ── 3. Enable RLS on tenant-scoped tables ────────────────────────
