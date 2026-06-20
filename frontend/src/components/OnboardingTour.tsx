@@ -1,8 +1,22 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Joyride, STATUS, Step, EventData, TooltipRenderProps } from 'react-joyride'
+import { Joyride, STATUS, EVENTS, Step, EventData, TooltipRenderProps } from 'react-joyride'
 import { auth } from '@/lib/firebase/client'
+
+const STORAGE_KEY = 'rodeo_completed_tours'
+function getCompletedTours(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+  } catch { return [] }
+}
+function markTourCompleted(tourId: string) {
+  const tours = getCompletedTours()
+  if (!tours.includes(tourId)) {
+    tours.push(tourId)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tours))
+  }
+}
 
 interface OnboardingTourProps {
   tourId: string
@@ -61,6 +75,12 @@ export default function OnboardingTour({ tourId, steps }: OnboardingTourProps) {
 
   useEffect(() => {
     async function checkStatus() {
+      // Check localStorage first
+      if (getCompletedTours().includes(tourId)) {
+        setHasChecked(true)
+        return
+      }
+
       // Esperar a que el usuario esté autenticado
       const user = auth.currentUser
       if (!user) return
@@ -97,13 +117,16 @@ export default function OnboardingTour({ tourId, steps }: OnboardingTourProps) {
   }, [tourId, hasChecked])
 
   const handleJoyrideCallback = async (data: EventData) => {
-    const { status } = data
+    const { status, type } = data
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED]
 
-    if (finishedStatuses.includes(status)) {
+    if (finishedStatuses.includes(status) || type === EVENTS.TOUR_END) {
       setRun(false)
 
-      // Marcar como completado en el backend
+      // Save to localStorage immediately (failsafe)
+      markTourCompleted(tourId)
+
+      // Also persist to backend
       try {
         const user = auth.currentUser
         if (!user) return

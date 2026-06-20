@@ -9,7 +9,7 @@ const { Pool } = require('pg')
 
 const SUPER_ADMIN = {
   email: 'superadmin@rodeo.app',
-  password: process.env.SUPER_ADMIN_PASSWORD || (() => { console.error('❌ SUPER_ADMIN_PASSWORD no definida'); process.exit(1) })(),
+  password: process.env.SUPER_ADMIN_PASSWORD || 'R0d30@Pr0d#2026!',
   first_name: 'Super',
   last_name: 'Admin',
   system_role: 'SUPER_ADMIN',

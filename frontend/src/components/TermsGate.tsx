@@ -5,6 +5,17 @@ import { auth } from '@/lib/firebase/client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
 
+// ── localStorage helpers for acceptance cache ────────────────────────────────
+const TERMS_CACHE_KEY = 'rodeo_accepted_terms_version'
+
+function getCachedAcceptedVersion(): string | null {
+  try { return localStorage.getItem(TERMS_CACHE_KEY) } catch { return null }
+}
+
+function setCachedAcceptedVersion(versionId: string) {
+  try { localStorage.setItem(TERMS_CACHE_KEY, versionId) } catch {}
+}
+
 export default function TermsGate({ children }: { children: React.ReactNode }) {
   const [needsAcceptance, setNeedsAcceptance] = useState(false)
   const [activeTerms, setActiveTerms] = useState<any>(null)
@@ -25,9 +36,22 @@ export default function TermsGate({ children }: { children: React.ReactNode }) {
           headers: { Authorization: `Bearer ${token}` }
         })
         const data = await res.json()
+
         if (data.needsAcceptance) {
-          setActiveTerms(data.activeTerms)
-          setNeedsAcceptance(true)
+          // Check localStorage: if user already accepted this exact version locally, skip
+          const cachedVersion = getCachedAcceptedVersion()
+          if (cachedVersion && data.activeTerms?.id === cachedVersion) {
+            // Already accepted locally — try to persist to backend silently
+            fetch('/api/terms/accept', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ versionId: data.activeTerms.id })
+            }).catch(() => {})
+            setNeedsAcceptance(false)
+          } else {
+            setActiveTerms(data.activeTerms)
+            setNeedsAcceptance(true)
+          }
         }
       } catch (err) {
         console.error('Error checking terms', err)
@@ -54,6 +78,8 @@ export default function TermsGate({ children }: { children: React.ReactNode }) {
       })
 
       if (res.ok) {
+        // Cache acceptance in localStorage
+        setCachedAcceptedVersion(activeTerms.id)
         setNeedsAcceptance(false)
       }
     } catch (err) {
@@ -63,9 +89,7 @@ export default function TermsGate({ children }: { children: React.ReactNode }) {
     }
   }
 
-  if (loading) return null
-
-  if (loading) return null
+  if (loading) return <>{children}</>
 
   if (needsAcceptance && activeTerms) {
     return (

@@ -24,17 +24,19 @@ export async function GET(req: NextRequest) {
     const auth = await getOrgId(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const [members, invitations] = await Promise.all([
-      serviceQuery(
-        `SELECT id, firebase_uid, email, first_name, last_name,
-                role, team_role, permissions, avatar_url, is_active, created_at
-         FROM profiles
-         WHERE organization_id = $1
-         ORDER BY created_at ASC`,
-        [auth.orgId]
-      ),
-      // Return ALL statuses so UI can display Pending / Accepted / Revoked tabs
-      serviceQuery(
+    const members = await serviceQuery(
+      `SELECT id, firebase_uid, email, first_name, last_name,
+              role, team_role, permissions, avatar_url, is_active, created_at
+       FROM profiles
+       WHERE organization_id = $1
+       ORDER BY created_at ASC`,
+      [auth.orgId]
+    )
+
+    // Return ALL statuses so UI can display Pending / Accepted / Revoked tabs
+    let invitations: any[] = []
+    try {
+      invitations = await serviceQuery(
         `SELECT ti.id, ti.email, ti.role, ti.team_role, ti.permissions,
                 ti.status, ti.token, ti.expires_at, ti.created_at, ti.invited_by,
                 p.first_name AS inviter_first_name, p.last_name AS inviter_last_name
@@ -44,7 +46,9 @@ export async function GET(req: NextRequest) {
          ORDER BY ti.created_at DESC`,
         [auth.orgId]
       )
-    ])
+    } catch (invErr: any) {
+      console.warn('[GET /api/team] team_invitations query failed (table may not exist):', invErr.message)
+    }
 
     return NextResponse.json({ members, invitations })
   } catch (err: any) {

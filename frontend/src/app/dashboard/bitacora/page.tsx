@@ -166,6 +166,9 @@ export default function BitacoraPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
 
+  // Ref to always access the latest saveNote without adding it to useEffect deps
+  const saveNoteRef = useRef<() => Promise<void>>(() => Promise.resolve())
+
   // Geo
   const [lat, setLat] = useState<number | null>(null)
   const [lng, setLng] = useState<number | null>(null)
@@ -346,16 +349,14 @@ export default function BitacoraPage() {
   // Audio: only fires when we have a blob AND we are NOT recording (just stopped)
   // It reads the blob directly; liveTranscript is always reset before recording starts
   useEffect(() => {
-    if (audioBlob && !isRecording) saveNote()
-     
-  }, [audioBlob])
+    if (audioBlob && !isRecording) saveNoteRef.current()
+  }, [audioBlob, isRecording])
 
   // Photo: only fires when photoFile changes AND there is no audioBlob pending
   // (audioBlob was cleared in handlePhotoChange so this is safe)
   useEffect(() => {
-    if (photoFile && !audioBlob) saveNote()
-     
-  }, [photoFile])
+    if (photoFile && !audioBlob) saveNoteRef.current()
+  }, [photoFile, audioBlob])
 
   // ── Save ────────────────────────────────────────────────────────────────────
   const saveNote = async () => {
@@ -488,6 +489,9 @@ export default function BitacoraPage() {
       setSaving(false)
     }
   }
+
+  // Keep the ref in sync with the latest saveNote closure
+  saveNoteRef.current = saveNote
 
   const flashSaved = () => { setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000) }
   const resetCapture = () => {
