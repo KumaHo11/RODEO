@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
       // audio_duration_secs — stored as comment until DB column is added
     } = body
 
-    const category = Array.isArray(tags) && tags.length > 0 ? tags[0] : 'GENERAL'
+    const normalizedTags: string[] = Array.isArray(tags) && tags.length > 0 ? tags : ['GENERAL']
+    const category = normalizedTags[0]
 
     const { rows } = await serviceMutate(
       `INSERT INTO field_notes
@@ -82,14 +83,14 @@ export async function POST(req: NextRequest) {
       [
         auth.orgId, auth.profileId,
         paddock_id || null,
-        JSON.stringify(tags || ['GENERAL']),
+        normalizedTags,              // ← native JS array → pg serializes as TEXT[] {GENERAL,...}
         category,
         title,
         content || null,
         lat || null,
         lng || null,
         photo_url || null,
-        JSON.stringify(photo_urls || []),
+        photo_urls || [],            // ← native JS array for photo_urls TEXT[] column
         audio_url || null,
         analysis_result ? JSON.stringify(analysis_result) : null,
       ]

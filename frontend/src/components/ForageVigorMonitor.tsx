@@ -95,6 +95,7 @@ export default function ForageVigorMonitor({ hasPlanAccess = true, className = '
   const [data, setData]       = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
+  const [noAccess, setNoAccess] = useState(false)
   const [trend, setTrend]     = useState<{ value: number; diff: number; direction: 'up'|'down'|'flat'; pct: number }>({ value: 0, diff: 0, direction: 'flat', pct: 0 })
   const [visible, setVisible] = useState<Set<SeriesKey>>(new Set(['Crecimiento','NDVI','RacionAjustada']))
 
@@ -107,17 +108,26 @@ export default function ForageVigorMonitor({ hasPlanAccess = true, className = '
 
   const load = useCallback(async () => {
     if (!user) return
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setNoAccess(false)
     try {
       let raw: SnapshotPoint[] = []
       try {
         const token = await user.getIdToken()
         const res = await fetch('/api/climate-adjustment', { headers: { Authorization: `Bearer ${token}` } })
+        if (res.status === 403) {
+          // Plan insuficiente — mostrar mensaje de acceso en lugar de "sin datos"
+          setNoAccess(true)
+          setData([])
+          setLoading(false)
+          return
+        }
         if (res.ok) raw = (await res.json()).snapshots ?? []
-      } catch { /* silencioso */ }
+        else setError(`Error al cargar datos (${res.status})`)
+      } catch (fetchErr) { /* silencioso — sin conexión */ }
 
       if (raw.length === 0 && user?.email === 'javi.osorio.1@gmail.com') raw = MOCK_SNAPSHOTS
       if (raw.length === 0) { setData([]); setLoading(false); return }
+
 
       // Agrupar por día
       const map = new Map<string, any>()
@@ -276,12 +286,19 @@ export default function ForageVigorMonitor({ hasPlanAccess = true, className = '
           </div>
         ) : error ? (
           <div className="flex items-center justify-center h-full text-red-500 text-sm font-medium bg-red-50 rounded-xl">{error}</div>
+        ) : noAccess ? (
+          <div className="flex flex-col items-center justify-center h-full gap-2 bg-amber-50 rounded-xl border border-amber-100 border-dashed px-4 text-center">
+            <Lock className="w-5 h-5 text-amber-400" />
+            <p className="text-sm font-bold text-amber-700">Plan insuficiente</p>
+            <p className="text-[10px] font-medium text-amber-500 uppercase tracking-widest">Disponible en Planificador o superior</p>
+          </div>
         ) : data.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-1.5 bg-gray-50 rounded-xl border border-gray-100 border-dashed">
             <p className="text-sm font-bold text-gray-500">Sin datos históricos</p>
             <p className="text-[10px] font-medium text-gray-400 uppercase tracking-widest">Ejecutá el cálculo desde Clima</p>
           </div>
         ) : (
+
           <ResponsiveContainer width="100%" height={200}>
             <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
