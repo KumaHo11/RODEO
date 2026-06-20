@@ -580,6 +580,7 @@ export default function BitacoraPage() {
             <Mic2 className="w-3.5 h-3.5" />
             Notas
           </Link>
+          {/* Bandeja WA — deshabilitado temporalmente
           <Link
             href="/dashboard/bitacora/bandeja"
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
@@ -588,9 +589,9 @@ export default function BitacoraPage() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            <MessageCircle className="w-3.5 h-3.5" />
             Bandeja WA
           </Link>
+          */}
         </div>
 
         <div className="flex items-center gap-2 mt-4 overflow-x-auto">
@@ -740,7 +741,7 @@ export default function BitacoraPage() {
 
       {/* Photo menu */}
       {showPhotoMenu && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm px-4"
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm px-4 overflow-hidden"
           onClick={() => setShowPhotoMenu(false)}>
           <div className="bg-white w-full max-w-sm rounded-t-3xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 duration-300 pb-10"
             onClick={e => e.stopPropagation()}>

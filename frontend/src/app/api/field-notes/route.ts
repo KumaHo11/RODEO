@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       [
         auth.orgId, auth.profileId,
         paddock_id || null,
-        JSON.stringify(tags || ['GENERAL']),
+        tags || ['GENERAL'],
         category,
         title,
         content || null,

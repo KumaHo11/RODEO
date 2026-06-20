@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const push = (expr: string, val: any) => { vals.push(val); setClauses.push(`${expr} = $${vals.length}`) }
 
     if ('paddock_id'      in body) push('paddock_id',      paddock_id ?? null)
-    if ('tags'            in body) push('tags',            tags ? JSON.stringify(tags) : null)
+    if ('tags'            in body) push('tags',            tags ?? null)
     if (category)                  push('category',        category)
     if ('title'           in body) push('title',           title ?? null)
     if ('content'         in body) push('content',         content ?? null)
