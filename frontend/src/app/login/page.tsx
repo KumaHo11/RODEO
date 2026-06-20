@@ -48,6 +48,19 @@ function LoginContent() {
         const token = await user.getIdToken(true)
         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
         document.cookie = `__session=${token}; path=/; max-age=3600; SameSite=Lax${isHttps ? '; Secure' : ''}`
+
+        // Check if terms acceptance is required BEFORE entering the dashboard
+        try {
+          const termsRes = await fetch('/api/terms/check', {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          const termsData = await termsRes.json()
+          if (termsData.needsAcceptance) {
+            const dest = nextPath && nextPath !== '/login' ? nextPath : '/dashboard'
+            router.replace(`/terms-accept?next=${encodeURIComponent(dest)}`)
+            return
+          }
+        } catch { /* if terms check fails, proceed normally */ }
       }
     } catch { /* ignore */ }
 
@@ -113,28 +126,43 @@ function LoginContent() {
 
       // Email verificado: obtener el perfil activamente antes de redirigir
       // para eliminar la race condition con AuthProvider (profile puede ser null aún)
+      let targetProfile = profile
+      if (!targetProfile) {
+        try {
+          const freshToken = await refreshedUser.getIdToken(true)
+          const res = await fetch('/api/auth/profile?t=' + Date.now(), {
+            headers: { Authorization: `Bearer ${freshToken}` },
+            cache: 'no-store'
+          })
+          if (res.ok) {
+            const data = await res.json()
+            targetProfile = data.profile
+          }
+        } catch { /* fallback to dashboard */ }
+      }
+
+      // Check terms BEFORE redirecting — only shown once per login
+      try {
+        const freshToken = await refreshedUser.getIdToken()
+        const termsRes = await fetch('/api/terms/check', {
+          headers: { Authorization: `Bearer ${freshToken}` }
+        })
+        const termsData = await termsRes.json()
+        if (termsData.needsAcceptance) {
+          const dest = nextPath && nextPath !== '/login'
+            ? nextPath
+            : (targetProfile && (targetProfile.onboarding_step ?? 0) < 4 ? '/onboarding' : '/dashboard')
+          router.replace(`/terms-accept?next=${encodeURIComponent(dest)}`)
+          return
+        }
+      } catch { /* if terms check fails, proceed normally */ }
+
       if (nextPath && nextPath !== '/login') {
         router.replace(nextPath)
+      } else if (targetProfile && (targetProfile.onboarding_step ?? 0) < 4) {
+        router.replace('/onboarding')
       } else {
-        let targetProfile = profile
-        if (!targetProfile) {
-          try {
-            const freshToken = await refreshedUser.getIdToken(true)
-            const res = await fetch('/api/auth/profile?t=' + Date.now(), {
-              headers: { Authorization: `Bearer ${freshToken}` },
-              cache: 'no-store'
-            })
-            if (res.ok) {
-              const data = await res.json()
-              targetProfile = data.profile
-            }
-          } catch { /* fallback to dashboard */ }
-        }
-        if (targetProfile && (targetProfile.onboarding_step ?? 0) < 4) {
-          router.replace('/onboarding')
-        } else {
-          router.replace('/dashboard')
-        }
+        router.replace('/dashboard')
       }
     } catch (err: any) {
       setLoading(false)

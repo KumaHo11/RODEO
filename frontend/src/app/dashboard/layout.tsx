@@ -19,7 +19,7 @@ import RodeoLogo from '@/components/RodeoLogo'
 import { WelcomeScreen } from '@/components/WelcomeScreen'
 import { WeatherProvider } from '@/lib/context/WeatherContext'
 import { ClimateAnalyticsProvider } from '@/lib/context/ClimateAnalyticsContext'
-import TermsGate from '@/components/TermsGate'
+
 
 const NOTIF_ICONS: Record<string, React.ComponentType<any>> = {
   EVENTO:    CalendarDays,
@@ -384,7 +384,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <WeatherProvider>
       <ClimateAnalyticsProvider>
-    <TermsGate>
     <div className="fixed inset-0 flex bg-gray-50 overflow-hidden">
 
       {/* ── Welcome overlay (first login of guests) ───────────────────────── */}
@@ -729,7 +728,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       </div>
     </div>
-    </TermsGate>
       </ClimateAnalyticsProvider>
     </WeatherProvider>
   )
