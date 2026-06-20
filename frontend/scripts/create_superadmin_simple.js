@@ -3,7 +3,6 @@
  * Uso: node --env-file=.env.local scripts/create_superadmin_simple.js
  */
 const { Pool } = require('pg')
-const admin = require('firebase-admin')
 
 const SUPER_ADMIN = {
   email: 'superadmin@rodeo.app',
@@ -19,7 +18,10 @@ async function main() {
   const b64 = process.env.FIREBASE_ADMIN_CREDENTIALS_BASE64
   if (!b64) { console.error('❌ FIREBASE_ADMIN_CREDENTIALS_BASE64 no encontrada'); process.exit(1) }
   const sa = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'))
-  if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(sa) })
+  const { initializeApp, getApps, cert } = require('firebase-admin/app')
+  const { getAuth } = require('firebase-admin/auth')
+  if (!getApps().length) initializeApp({ credential: cert(sa) })
+  const auth = getAuth()
 
   // Connect to DB
   const connStr = process.env.DATABASE_URL_SERVICE || process.env.DATABASE_URL
@@ -30,13 +32,13 @@ async function main() {
     // 1. Create or get Firebase Auth user
     let fbUser
     try {
-      fbUser = await admin.auth().getUserByEmail(SUPER_ADMIN.email)
+      fbUser = await auth.getUserByEmail(SUPER_ADMIN.email)
       console.log(`⚠️  Ya existe en Firebase Auth: ${fbUser.uid}`)
       // Update password in case it changed
-      await admin.auth().updateUser(fbUser.uid, { password: SUPER_ADMIN.password })
+      await auth.updateUser(fbUser.uid, { password: SUPER_ADMIN.password })
       console.log('   ✅ Password actualizado')
     } catch {
-      fbUser = await admin.auth().createUser({
+      fbUser = await auth.createUser({
         email: SUPER_ADMIN.email,
         password: SUPER_ADMIN.password,
         displayName: 'Super Admin',
@@ -46,7 +48,7 @@ async function main() {
     }
 
     // 2. Set custom claims
-    await admin.auth().setCustomUserClaims(fbUser.uid, { system_role: 'SUPER_ADMIN' })
+    await auth.setCustomUserClaims(fbUser.uid, { system_role: 'SUPER_ADMIN' })
     console.log('✅ Custom claim: system_role=SUPER_ADMIN')
 
     // 3. Create profile in Cloud SQL
