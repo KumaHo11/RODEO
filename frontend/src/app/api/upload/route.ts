@@ -4,11 +4,16 @@
  * Accepts multipart/form-data with a 'file' field and optional 'folder' field.
  *
  * Upload order:
- *  1. Firebase Storage bucket (NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) — Firebase Admin always has write access
- *  2. Custom GCS bucket (GCS_BUCKET_NAME) — requires Storage Object Admin IAM on the bucket
+ *  1. Firebase Storage bucket (NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
+ *     — firebase-adminsdk-fbsvc has roles/storage.admin project-wide → always writable
+ *     — bucket has allUsers objectViewer (set via gsutil iam ch) → URLs are public
+ *  2. Custom GCS bucket (GCS_BUCKET_NAME) as fallback
  *
- * NOTE: Local filesystem fallback was removed — Cloud Run containers are ephemeral and
- *       files saved to /public/uploads disappear on restart, causing 404s in production.
+ * NOTE: makePublic() NOT used — bucket has Uniform IAM enabled which blocks per-object ACLs.
+ *       Public access is granted at the bucket level (allUsers objectViewer).
+ *
+ * NOTE: Local filesystem fallback removed — Cloud Run containers are ephemeral.
+ *       Files saved to /public/uploads disappear on restart, causing 404s.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
@@ -40,12 +45,12 @@ export async function POST(req: NextRequest) {
     const gcsPath = `${folder}/${filename}`
 
     // ── Buckets to try in order ─────────────────────────────────────────────
-    // 1. Firebase Storage bucket — Firebase Admin SA always has full access by design
-    // 2. Custom GCS bucket (rodeo-media) — requires IAM Storage Object Admin role
+    // Deduplicate: if both env vars point to the same bucket, try it only once
+    const seen = new Set<string>()
     const bucketsToTry = [
       process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
       process.env.GCS_BUCKET_NAME,
-    ].filter(Boolean) as string[]
+    ].filter((b): b is string => !!b && !seen.has(b) && seen.add(b) as unknown as boolean)
 
     if (bucketsToTry.length === 0) {
       console.error('[upload] No GCS bucket configured — set NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET or GCS_BUCKET_NAME')
@@ -60,12 +65,12 @@ export async function POST(req: NextRequest) {
 
         await gcsFile.save(buffer, {
           metadata: { contentType: file.type || 'application/octet-stream' },
-          resumable: false, // more reliable for small files (<5MB)
+          resumable: false, // more reliable for files < 5MB
         })
 
-        // Make the file publicly readable so the storage.googleapis.com URL works
-        await gcsFile.makePublic()
-
+        // NOTE: do NOT call makePublic() here — the bucket uses Uniform IAM
+        // (bucket-level access). Public access is already granted via:
+        //   gsutil iam ch allUsers:roles/storage.objectViewer gs://<bucket>
         const publicUrl = `https://storage.googleapis.com/${bucketName}/${gcsPath}`
         console.log('[upload] GCS OK →', publicUrl, '(bucket:', bucketName, ')')
         return NextResponse.json({ url: publicUrl, filename: gcsPath })
@@ -75,7 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     // All GCS attempts failed
-    console.error('[upload] All GCS buckets failed. SA needs Storage Object Admin role on the bucket.')
+    console.error('[upload] All GCS buckets failed. SA needs Storage Object Admin on the bucket.')
     return NextResponse.json(
       { error: 'No se pudo guardar el archivo. Revisá los permisos IAM del bucket GCS.' },
       { status: 500 }
