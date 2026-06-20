@@ -103,8 +103,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return `menu_${item.permissionKey}`
   }
 
+  // Items that are explicitly disabled until ready for production
+  const FORCE_DISABLED_KEYS = ['menu_insights', 'menu_carbono']
+
   const isMenuEnabled = (item: NavItem) => {
     const key = getMenuConfigKey(item)
+    // Force-disabled items are always hidden
+    if (FORCE_DISABLED_KEYS.includes(key)) return false
     // If we haven't loaded config yet or it's not set, default to true
     if (Object.keys(menuConfig).length > 0 && menuConfig[key] === false) {
       return false
@@ -114,8 +119,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const filteredNav = useMemo<NavItem[]>(() => {
     return ALL_NAV_ITEMS.filter(item => {
+      // Menu config (super admin) takes priority over owner status
       if (!isMenuEnabled(item)) return false
-      if (isOwner) return true // owners see everything
+      if (isOwner) return true // owners see everything that's enabled
       if (item.permissionKey === null) return true // always visible (Panel, Equipo)
       return can(item.permissionKey as any)
     })
@@ -378,6 +384,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <WeatherProvider>
       <ClimateAnalyticsProvider>
+    <TermsGate>
     <div className="fixed inset-0 flex bg-gray-50 overflow-hidden">
 
       {/* ── Welcome overlay (first login of guests) ───────────────────────── */}
@@ -710,7 +717,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* ── Page content ───────────────────────────────────────────────────── */}
         <main className="flex-1 overflow-y-auto flex flex-col min-h-0 focus:outline-none" tabIndex={-1}>
-          <TermsGate>
             {isMiCampo ? (
               <div className="flex-1 flex flex-col md:overflow-hidden md:h-full focus:outline-none">{children}</div>
             ) : (
@@ -718,12 +724,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {children}
               </div>
             )}
-          </TermsGate>
         </main>
 
 
       </div>
     </div>
+    </TermsGate>
       </ClimateAnalyticsProvider>
     </WeatherProvider>
   )
