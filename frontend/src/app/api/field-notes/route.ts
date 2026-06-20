@@ -82,14 +82,14 @@ export async function POST(req: NextRequest) {
       [
         auth.orgId, auth.profileId,
         paddock_id || null,
-        tags || ['GENERAL'],
+        JSON.stringify(tags || ['GENERAL']),
         category,
         title,
         content || null,
         lat || null,
         lng || null,
         photo_url || null,
-        photo_urls ? JSON.stringify(photo_urls) : '[]',
+        JSON.stringify(photo_urls || []),
         audio_url || null,
         analysis_result ? JSON.stringify(analysis_result) : null,
       ]
