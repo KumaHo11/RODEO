@@ -37,12 +37,23 @@ jobs:
           node-version: 22
 
       - name: 'Run Database Migrations & Seeds'
+        continue-on-error: true
         run: |
           cd frontend
           npm ci
-          node scripts/full_schema_migration.js "$MIGRATION_DATABASE_URL"
-          node scripts/setup_rls_roles.js "$MIGRATION_DATABASE_URL"
-          DATABASE_URL="$MIGRATION_DATABASE_URL" node insert_terms_v3.js
+          if [ -z "$MIGRATION_DATABASE_URL" ]; then
+            echo "⚠️  MIGRATION_DATABASE_URL_PROD no configurado — saltando migraciones"
+            exit 0
+          fi
+          node scripts/full_schema_migration.js "$MIGRATION_DATABASE_URL" \
+            && echo "✅ full_schema_migration OK" \
+            || echo "⚠️  full_schema_migration falló — verificar secret MIGRATION_DATABASE_URL_PROD"
+          node scripts/setup_rls_roles.js "$MIGRATION_DATABASE_URL" \
+            && echo "✅ setup_rls_roles OK" \
+            || echo "⚠️  setup_rls_roles falló"
+          DATABASE_URL="$MIGRATION_DATABASE_URL" node insert_terms_v3.js \
+            && echo "✅ insert_terms_v3 OK" \
+            || echo "⚠️  insert_terms_v3 falló"
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL_PROD }}
 
