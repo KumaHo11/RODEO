@@ -32,15 +32,16 @@ export async function GET(req: NextRequest) {
     const today = new Date()
     const fmtIso = (d: Date) => d.toISOString().split('T')[0]
 
-    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
-    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+    const todayStr     = fmtIso(today)
+    const tomorrow     = new Date(today); tomorrow.setDate(today.getDate() + 1)
+    const yesterday    = new Date(today); yesterday.setDate(today.getDate() - 1)
     const threeDaysAgo = new Date(today); threeDaysAgo.setDate(today.getDate() - 3)
 
-    const tomorrowStr = fmtIso(tomorrow)
-    const yesterdayStr = fmtIso(yesterday)
+    const tomorrowStr     = fmtIso(tomorrow)
+    const yesterdayStr    = fmtIso(yesterday)
     const threeDaysAgoStr = fmtIso(threeDaysAgo)
 
-    // ── Fetch plans for tomorrow, yesterday and 3 days ago ───────────────────
+    // ── Fetch plans for today, tomorrow, yesterday and 3 days ago ────────────
     const plans = await serviceQuery<{
       plan_id: string
       paddock_name: string
@@ -72,10 +73,10 @@ export async function GET(req: NextRequest) {
       JOIN organizations o ON o.id = gp.org_id
       JOIN profiles  pr ON pr.organization_id = o.id
                         AND pr.team_role IS NULL   -- owner only
-      WHERE gp.exit_date IN ($1, $2, $3)
+      WHERE gp.exit_date IN ($1, $2, $3, $4)
         AND gp.status IN ('PLANNED', 'ACTIVE')
       ORDER BY o.id, gp.exit_date
-    `, [tomorrowStr, yesterdayStr, threeDaysAgoStr])
+    `, [todayStr, tomorrowStr, yesterdayStr, threeDaysAgoStr])
 
     const fmtDate = (iso: string) =>
       new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {
@@ -118,6 +119,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Group today's exits by org for Emails ────────────────────────────────
+    const plansToday = plans ? plans.filter(p => p.exit_date === todayStr) : []
+    const byOrgToday = new Map<string, typeof plansToday>()
+    for (const row of plansToday) {
+      if (!byOrgToday.has(row.org_id)) byOrgToday.set(row.org_id, [])
+      byOrgToday.get(row.org_id)!.push(row)
+    }
+
     // ── Group tomorrow's plans by org for Emails ─────────────────────────────
     const plansForEmail = plans ? plans.filter(p => p.exit_date === tomorrowStr) : []
     const byOrgTomorrow = new Map<string, typeof plansForEmail>()
@@ -137,7 +146,34 @@ export async function GET(req: NextRequest) {
     let sent = 0
     const errors: string[] = []
 
-    // 1. Send Tomorrow's Reminders
+    // 1. Send Today's Exit Notifications (día de salida)
+    for (const [, rows] of byOrgToday) {
+      const first = rows[0]
+      if (!first.owner_email) continue
+
+      try {
+        await sendEmail('paddock_move_today', first.owner_email, {
+          ownerName: first.owner_first_name || 'Productor',
+          orgName: first.org_name,
+          moves: rows.map(r => ({
+            paddockName: r.paddock_name,
+            herdName: r.herd_name,
+            headCount: r.head_count,
+            exitDate: fmtDate(r.exit_date),
+            recoveryDays: r.planned_recovery_days,
+          })),
+          dashboardUrl: `${APP_BASE_URL}/dashboard/grazing`,
+        })
+        sent++
+        console.log(`[paddock-reminders] ✓ sent today exit notification to ${first.owner_email} (org ${first.org_id})`)
+      } catch (err: any) {
+        const msg = `today-exit org=${first.org_id} email=${first.owner_email}: ${err.message}`
+        errors.push(msg)
+        console.error('[paddock-reminders] ✗', msg)
+      }
+    }
+
+    // 2. Send Tomorrow's Reminders
     for (const [, rows] of byOrgTomorrow) {
       const first = rows[0]
       if (!first.owner_email) continue
@@ -220,7 +256,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       sent,
-      orgs: byOrgTomorrow.size + byOrgOverdue.size,
+      orgs: byOrgToday.size + byOrgTomorrow.size + byOrgOverdue.size,
       plansFound: plans?.length || 0,
       eventsFound: events?.length || 0,
       errors: errors.length > 0 ? errors : undefined,

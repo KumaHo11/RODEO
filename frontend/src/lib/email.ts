@@ -233,6 +233,66 @@ const templates = {
     `),
   }),
 
+  paddock_move_today: (p: {
+    ownerName: string
+    orgName: string
+    moves: Array<{
+      paddockName: string
+      herdName: string
+      headCount: number
+      exitDate: string
+      recoveryDays: number
+    }>
+    dashboardUrl: string
+  }) => ({
+    subject: `🚨 HOY hay que mover los animales — ${p.orgName}`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 6px;color:#111827;font-size:22px;font-weight:900">HOY hay movimientos programados</h2>
+      <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
+        Hola <strong>${p.ownerName}</strong>, hoy es el día de mover los animales en
+        <strong>${p.moves.length} potrero${p.moves.length !== 1 ? 's' : ''}</strong>
+        de <strong>${p.orgName}</strong>. ¡No te olvides de registrarlo en el planificador!
+      </p>
+      <div style="margin-bottom:28px">
+        ${p.moves.map(m => `
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:18px 20px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <div style="width:10px;height:10px;border-radius:50%;background:#ea580c;flex-shrink:0"></div>
+              <p style="margin:0;color:#111827;font-size:16px;font-weight:800">${m.paddockName}</p>
+            </div>
+            <p style="margin:0 0 8px;color:#4b5563;font-size:13px;font-weight:500">
+              Rodeo: <strong>${m.herdName}</strong> · <strong>${m.headCount}</strong> cab.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="background:#fff;border:1px solid #fed7aa;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#c2410c">
+                📅 Salida: ${m.exitDate}
+              </span>
+              <span style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#374151">
+                ⏱ Descanso siguiente: ${m.recoveryDays}d
+              </span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px;margin-bottom:28px">
+        <p style="margin:0 0 8px;color:#9a3412;font-size:13px;font-weight:600">
+          📸 Al salir del potrero: registrá el remanente de pasto de salida y tomá fotos del pasto, la condición corporal y el animal.
+        </p>
+        <p style="margin:0;color:#9a3412;font-size:13px;font-weight:600">
+          ✅ Acordate de aplicar el movimiento en el planificador para mantener la autonomía actualizada.
+        </p>
+      </div>
+      <div style="text-align:center;margin-bottom:20px">
+        <a href="${p.dashboardUrl}" style="display:inline-block;background:#ea580c;color:#fff;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:800;text-decoration:none">
+          Ir al planificador →
+        </a>
+      </div>
+      <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">
+        Accedé desde: <a href="${p.dashboardUrl}" style="color:#ea580c">${p.dashboardUrl}</a>
+      </p>
+    `),
+  }),
+
   climate_alert: (p: {
     ownerName: string
     paddockName: string
