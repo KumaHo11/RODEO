@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
         pr.first_name    AS owner_first_name
       FROM grazing_plans gp
       JOIN paddocks  p  ON p.id  = gp.paddock_id
-      JOIN herds     h  ON h.id  = ANY(gp.herd_ids)
+      JOIN herds     h  ON h.id  = ANY(COALESCE(gp.herd_ids, ARRAY[]::uuid[]))
       JOIN organizations o ON o.id = gp.org_id
       JOIN profiles  pr ON pr.organization_id = o.id
                         AND pr.team_role IS NULL   -- owner only
