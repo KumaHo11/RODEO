@@ -459,7 +459,7 @@ export default function BitacoraPage() {
           const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
           if (tr.ok) {
             const d = await tr.json()
-            if (d.transcript && d.transcript !== '[Sin voz detectable]') transcript = d.transcript
+            if (d.transcript && !d.transcript.startsWith('[Sin voz detectable')) transcript = d.transcript
           }
         } catch { /* keep Web Speech transcript as fallback */ }
       }
