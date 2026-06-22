@@ -27,51 +27,12 @@ async function getAuth(req: NextRequest) {
   return { orgId: profile.organization_id, profileId: profile.id, uid: decoded.uid }
 }
 
-// ─── Ensure table exists (runs on first request, idempotent) ────────────────
-async function ensureTable() {
-  await serviceMutate(`
-    CREATE TABLE IF NOT EXISTS season_plans (
-      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      org_id          UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-      name            TEXT NOT NULL,
-      season_type     TEXT NOT NULL DEFAULT 'cerrado',  -- 'cerrado' | 'abierto'
-      year            INTEGER NOT NULL,
-      start_date      DATE,
-      end_date        DATE,
-      no_growth_from  DATE,                             -- inicio estación sin crecimiento
-      no_growth_to    DATE,                             -- fin estación sin crecimiento
-      drought_reserve_days INTEGER DEFAULT 0,           -- días de reserva para sequía
-      daily_allocation_kg  NUMERIC(8,2) DEFAULT 12,    -- kg MS/EqVc/día
-      cell_name        TEXT,                            -- nombre de la célula/módulo
-      total_ha         NUMERIC(10,2),                   -- hectáreas totales del módulo
-      source           TEXT NOT NULL DEFAULT 'manual',  -- 'manual' | 'excel_import'
-      source_filename  TEXT,                            -- nombre del archivo importado
-      status           TEXT NOT NULL DEFAULT 'draft',   -- 'draft' | 'active' | 'closed'
-      -- Datos de demanda y oferta (snapshot al momento de creación/cierre)
-      demand_snapshot  JSONB,   -- { total_ev, by_month: {YYYY-MM: ev}, by_category: [...] }
-      supply_snapshot  JSONB,   -- { total_ha, total_kg_ms, by_paddock: [...] }
-      -- Métricas calculadas (para histórico e IA)
-      metrics          JSONB,   -- { use_pct, rac_pot, da_ha, balance_days, ... }
-      notes            TEXT,
-      created_by       UUID REFERENCES profiles(id),
-      created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `)
-  // Index for fast historical queries
-  await serviceMutate(`
-    CREATE INDEX IF NOT EXISTS season_plans_org_year
-      ON season_plans(org_id, year DESC)
-  `)
-}
 
 // ─── GET ─────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
     const auth = await getAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-
-    await ensureTable()
 
     const { searchParams } = new URL(req.url)
     const year    = searchParams.get('year')
@@ -110,8 +71,6 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await getAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-
-    await ensureTable()
 
     const body = await req.json()
     const {
