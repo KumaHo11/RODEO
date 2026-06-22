@@ -52,12 +52,13 @@ export async function POST(req: NextRequest) {
     } catch (firebaseErr: any) {
       const errCode = firebaseErr.code || firebaseErr.errorInfo?.code || 'unknown'
       const errMsg = firebaseErr.message || 'unknown error'
-      console.error(`[verify-custom] Firebase Admin updateUser FAILED for uid=${uid}:`, {
+      console.error(`[verify-custom] ⚠ Firebase Admin updateUser FAILED for uid=${uid}:`, JSON.stringify({
         code: errCode,
         message: errMsg,
         errorInfo: firebaseErr.errorInfo,
-        stack: firebaseErr.stack?.split('\n').slice(0, 3).join('\n'),
-      })
+        fullError: String(firebaseErr),
+        stack: firebaseErr.stack?.split('\n').slice(0, 5).join('\n'),
+      }, null, 2))
       
       // User doesn't exist in this Firebase project (possible project mismatch)
       if (errCode === 'auth/user-not-found') {
