@@ -83,12 +83,11 @@ function createPoolFromUrl(connectionString: string): Pool {
     user: url.username,
     password: decodeURIComponent(url.password),
     database: url.pathname.slice(1).split('?')[0],
-    // En producción: validar CA de Cloud SQL para prevenir ataques MITM.
-    // Configurar DB_SSL_CA con el certificado raíz de Cloud SQL.
-    // En desarrollo: deshabilitar verificación (conexión local / Cloud SQL Proxy).
-    ssl: process.env.NODE_ENV === 'production'
-      ? { ca: process.env.DB_SSL_CA }          // cert CA de Cloud SQL en producción
-      : { rejectUnauthorized: false },          // dev / proxy local
+    // SSL: si hay un CA cert configurado, verificar la identidad del servidor (previene MITM).
+    // Si no hay CA cert (caso actual en Cloud Run con IP pública), usar SSL sin verificación.
+    ssl: process.env.DB_SSL_CA
+      ? { ca: process.env.DB_SSL_CA }
+      : { rejectUnauthorized: false },
     // max: 5 por pool × 2 pools (app + service) × N instancias Cloud Run.
     // Con Cloud Run max-instances configurado, esto mantiene las conexiones
     // totales por debajo de max_connections de Cloud SQL.
