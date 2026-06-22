@@ -12,10 +12,11 @@
  * @google-cloud/storage with Application Default Credentials (ADC) uses the
  * Cloud Run metadata server (http://metadata.google.internal) instead —
  * it's available locally in the container without any external network call.
- * The Cloud Run Compute SA (742778588748-compute@) already has
- * roles/storage.objectAdmin on rodeo-media-prod bucket.
+ * The Cloud Run Compute SA needs roles/storage.objectAdmin on the target bucket.
  *
- * Bucket: rodeo-media-prod (not Firebase Storage)
+ * Bucket: determined by GCS_BUCKET_NAME env var
+ *   - Staging:    rodeo-media
+ *   - Production: rodeo-media-prod
  *   - allUsers has roles/storage.objectViewer  → public read
  *   - Compute SA has roles/storage.objectAdmin → write access via ADC
  */
@@ -28,8 +29,8 @@ import { Storage } from '@google-cloud/storage'
 // Locally: uses GOOGLE_APPLICATION_CREDENTIALS or gcloud ADC.
 const gcs = new Storage()
 
-// Primary bucket: rodeo-media-prod (Compute SA has objectAdmin, allUsers has objectViewer)
-const PRIMARY_BUCKET = 'rodeo-media-prod'
+// Bucket determined by environment: 'rodeo-media' (staging) or 'rodeo-media-prod' (production)
+const PRIMARY_BUCKET = process.env.GCS_BUCKET_NAME || 'rodeo-media'
 
 export async function POST(req: NextRequest) {
   try {
