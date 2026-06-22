@@ -185,6 +185,20 @@ CREATE TABLE IF NOT EXISTS herds (
   updated_at              TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- season_plan
+CREATE TABLE IF NOT EXISTS season_plan (
+  id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id                  UUID        REFERENCES organizations(id) ON DELETE CASCADE,
+  year                    INT         NOT NULL,
+  status                  VARCHAR(50) DEFAULT 'DRAFT'
+    CHECK (status IN ('DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED')),
+  metrics                 JSONB       DEFAULT '{}',
+  notes                   TEXT,
+  created_by              UUID        REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at              TIMESTAMPTZ DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- grazing_plans
 CREATE TABLE IF NOT EXISTS grazing_plans (
   id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -221,6 +235,7 @@ CREATE TABLE IF NOT EXISTS grazing_plans (
   created_at              TIMESTAMPTZ DEFAULT NOW(),
   updated_at              TIMESTAMPTZ DEFAULT NOW()
 );
+
 
 -- biological_monitoring
 CREATE TABLE IF NOT EXISTS biological_monitoring (
