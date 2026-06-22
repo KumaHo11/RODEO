@@ -131,18 +131,21 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
     {
       target: '.tour-herramientas-potreros',
       title: 'Crear Potreros',
-      content: 'Puedes dibujar cada uno de tus potreros en el mapa usando las herramientas, o si tienes un archivo KML de tu campo, ¡cárgalo directamente aquí!',
+      content: 'Podés dibujar cada potrero en el mapa o cargar un archivo KML de tu campo directamente.',
       skipBeacon: true,
+      placement: 'bottom' as const,
     },
     {
       target: '.leaflet-pm-toolbar',
       title: 'Herramientas de Dibujo',
-      content: 'Utiliza esta barra lateral en el mapa para trazar polígonos, editarlos o borrarlos. El área se calculará automáticamente.',
+      content: 'Usá esta barra para trazar polígonos, editarlos o borrarlos. El área se calcula automáticamente.',
+      placement: 'auto' as const,
     },
     {
       target: '.tour-perimetro-campo',
       title: 'Demarcar tu Campo (Opcional)',
-      content: 'Si quieres, también puedes dibujar el perímetro exterior total de tu establecimiento.',
+      content: 'Si querés, también podés dibujar el perímetro exterior total de tu establecimiento.',
+      placement: 'bottom' as const,
     }
   ]
 
@@ -151,20 +154,21 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
       <OnboardingTour tourId="onboarding-step2-v1" steps={tourSteps} />
 
       {/* ── Header ── */}
-      <div className="px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
+      <div className="px-4 md:px-6 pt-4 md:pt-5 pb-3 md:pb-4 border-b border-gray-100 shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Paso 2 de 3 · Delimitación</p>
-            <h2 className="text-lg font-black text-gray-900 tracking-tight">{data.fieldName || 'Tu campo'}</h2>
+            <h2 className="text-base md:text-lg font-black text-gray-900 tracking-tight">{data.fieldName || 'Tu campo'}</h2>
           </div>
           <button onClick={prevStep} className="flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-gray-600 transition-colors">
-            <ArrowLeft className="w-3 h-3" /> Paso anterior
+            <ArrowLeft className="w-3 h-3" /> Atrás
           </button>
         </div>
       </div>
 
       {/* ── Scrollable body ── */}
-      <div className="flex-1 px-6 py-4 space-y-3 overflow-y-auto min-h-0">
+      <div className="flex-1 px-4 md:px-6 py-3 md:py-4 overflow-y-auto min-h-0">
+        <div className="rounded-2xl border-2 border-green-100 md:border-gray-200 bg-white shadow-sm p-3 md:p-4 space-y-3">
 
         {/* ── A) KML paddocks already loaded ── */}
         {hasPaddocks && (
@@ -213,11 +217,11 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
             </div>
 
             {/* KML import or draw hint */}
-            <div className="tour-herramientas-potreros border-2 border-dashed border-gray-100 rounded-2xl py-7 flex flex-col items-center gap-3 text-center">
-              <PenLine className="w-7 h-7 text-gray-200" />
+            <div className="tour-herramientas-potreros border-2 border-dashed border-gray-100 rounded-2xl py-5 md:py-7 flex flex-col items-center gap-3 text-center px-4">
+              <PenLine className="w-6 h-6 md:w-7 md:h-7 text-gray-200" />
               <div>
                 <p className="text-xs font-bold text-gray-400">Dibujá los potreros en el mapa</p>
-                <p className="text-[10px] text-gray-300 font-normal mt-0.5">Usá las herramientas de la barra lateral del mapa →</p>
+                <p className="text-[10px] text-gray-300 font-normal mt-0.5">Usá las herramientas del mapa <span className="hidden md:inline">→</span><span className="md:hidden">↓</span></p>
               </div>
               <div className="flex flex-col items-center gap-1.5">
                 <span className="text-[9px] text-gray-300 font-bold uppercase tracking-widest">O si ya tenés el archivo</span>
@@ -339,44 +343,45 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
         {/* ── G) Paddocks list ── */}
         <AnimatePresence>
           {hasPaddocks && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-1.5">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
               <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
                 Potreros · {data.paddocks.length}
               </p>
               {data.paddocks.map((p, idx) => (
                 <motion.div key={idx} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
-                  className="bg-white border border-gray-100 rounded-xl hover:border-green-100 overflow-hidden">
-                  <div className="flex items-center gap-2 p-2.5">
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PADDOCK_COLORS[idx % PADDOCK_COLORS.length] }} />
+                  className="bg-white border border-gray-100 rounded-xl hover:border-green-100 transition-all shadow-sm overflow-hidden">
+                  {/* Top row: color dot + name + area + delete */}
+                  <div className="flex items-center gap-2.5 p-3">
+                    <div className="w-4 h-4 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: PADDOCK_COLORS[idx % PADDOCK_COLORS.length] }} />
                     <input
                       type="text" value={p.name}
                       onChange={e => renamePaddock(idx, e.target.value)}
-                      className="flex-1 text-xs font-bold text-gray-700 bg-transparent outline-none focus:bg-gray-50 rounded px-1 py-0.5 min-w-0"
+                      className="flex-1 text-sm font-bold text-gray-800 bg-transparent outline-none focus:bg-gray-50 rounded px-1.5 py-0.5 min-w-0 transition-colors"
                     />
-                    <span className="text-[9px] font-black text-gray-400 shrink-0">{p.area_ha.toFixed(1)} ha</span>
+                    <span className="text-xs font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-md shrink-0">{p.area_ha.toFixed(1)} ha</span>
                     <button onClick={() => removePaddock(idx)}
-                      className="w-5 h-5 flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 rounded transition-all">
-                      <Trash2 className="w-3 h-3" />
+                      className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-all shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   {/* Forraje row */}
-                  <div className="flex items-center gap-2 px-2.5 pb-2">
-                    <div className="w-3 h-3 shrink-0" />
+                  <div className="flex items-center gap-2 px-3 pb-2.5 border-t border-gray-50 pt-2">
+                    <div className="w-4 shrink-0" />
                     <div className="flex items-center gap-1.5 flex-1">
-                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest shrink-0">Forraje:</span>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">Forraje:</span>
                       <div className="relative flex-1">
                         <input
                           type="number" min="0" max="10000" step="50"
                           value={(p as any).dry_matter_kg_ha ?? ''}
                           onChange={e => setForrajePaddock(idx, e.target.value)}
                           placeholder="kg MS/ha"
-                          className="w-full bg-gray-50 border border-gray-100 rounded-lg px-2 py-0.5 text-[10px] font-bold text-gray-700 placeholder:text-gray-300 outline-none focus:ring-1 focus:ring-green-400 pr-14"
+                          className="w-full bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1 text-xs font-bold text-gray-700 placeholder:text-gray-300 outline-none focus:ring-1 focus:ring-green-400 pr-14"
                         />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-gray-300 font-bold">kg MS/ha</span>
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-gray-300 font-bold">kg MS/ha</span>
                       </div>
                     </div>
                     {(p as any).dry_matter_kg_ha > 0 && (
-                      <span className="text-[8px] font-bold text-green-600 shrink-0">
+                      <span className="text-[10px] font-bold text-green-600 shrink-0">
                         {Math.round((p as any).dry_matter_kg_ha * p.area_ha).toLocaleString()} kg
                       </span>
                     )}
@@ -388,19 +393,20 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
         </AnimatePresence>
 
         <input type="file" ref={kmlFileRef} accept=".kml" className="hidden" onChange={handleKmlUpload} />
+        </div>{/* end card */}
       </div>
 
       {/* ── CTAs ── */}
-      <div className="px-6 py-4 border-t border-gray-100 shrink-0 space-y-2">
+      <div className="px-4 md:px-6 py-3 md:py-4 border-t border-gray-100 shrink-0 space-y-2">
         <button
           onClick={handleNext}
-          className="w-full bg-green-600 hover:bg-green-700 active:scale-[0.98] text-white font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-green-600/20"
+          className="w-full bg-green-600 hover:bg-green-700 active:scale-[0.98] text-white font-black py-3.5 md:py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-green-600/20"
         >
           Siguiente — Cargar hacienda <ArrowRight className="w-4 h-4" />
         </button>
         <button
           onClick={handleNext}
-          className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-gray-200 text-[11px] font-bold text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 py-2 md:py-2.5 rounded-xl border border-gray-200 text-[11px] font-bold text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
         >
           Saltar este paso por ahora
         </button>

@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/components/AuthProvider'
 import { useRouter } from 'next/navigation'
 import { Check, Loader2, X, Leaf, MapPin, PenLine } from 'lucide-react'
-import RodeoLogo from '@/components/RodeoLogo'
+import Image from 'next/image'
 import type { ParsedKmlFeature } from '@/lib/kmlParser'
 
 // Lazy-load the singleton map (never unmounts while step 1 or 2 is active)
@@ -231,8 +231,8 @@ function OnboardingWizard() {
 
       {/* -- Header -- */}
       {!isCompleting && (
-      <header className="bg-white border-b border-gray-100 px-6 py-4 shadow-sm z-30 flex items-center justify-between shrink-0">
-        <RodeoLogo variant="light" size="md" showTagline={false} />
+      <header className="bg-white border-b border-gray-100 px-4 md:px-6 py-2.5 md:py-4 shadow-sm z-30 flex items-center justify-between shrink-0">
+        <Image src="/LogoHeaderVerde_1.svg" alt="RODEO" width={120} height={26} className="h-6 md:h-7 w-auto object-contain object-left mb-1" priority />
         <div className="hidden sm:block">
           <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Configuración inicial</p>
         </div>
@@ -241,7 +241,7 @@ function OnboardingWizard() {
 
       {/* -- Stepper -- */}
       {!isCompleting && (
-      <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-3 sm:py-4 flex justify-center z-20 shrink-0">
+      <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-2.5 sm:py-4 flex justify-center z-20 shrink-0">
         <div className="flex items-center gap-0">
           {STEPS.map((s, idx) => {
             const isCompleted = step > s.id
@@ -258,12 +258,9 @@ function OnboardingWizard() {
                   `}>
                     {isCompleted ? <Check className="w-3 h-3" strokeWidth={3} /> : s.id}
                   </div>
-                  <div className="mt-1 text-center hidden sm:block">
-                    <p className={`text-xs font-semibold leading-tight ${isActive || isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>{s.title}</p>
-                    <p className={`text-[9px] font-medium ${isActive ? 'text-green-600' : 'text-gray-400'}`}>{s.subtitle}</p>
-                  </div>
-                  <div className="mt-1 sm:hidden">
-                    <p className={`text-[8px] font-bold ${isActive ? 'text-green-700' : 'text-gray-300'}`}>{isActive ? s.title : ''}</p>
+                  <div className="mt-1 text-center">
+                    <p className={`text-[10px] sm:text-xs font-semibold leading-tight ${isActive || isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>{s.title}</p>
+                    <p className={`text-[9px] font-medium hidden sm:block ${isActive ? 'text-green-600' : 'text-gray-400'}`}>{s.subtitle}</p>
                   </div>
                 </div>
                 {!isLast && (
@@ -279,12 +276,12 @@ function OnboardingWizard() {
       {/* -- Main content -- */}
       <main className="flex-1 flex overflow-hidden min-h-0">
 
-        {/* Steps 1+2: [Left panel | Persistent map] */}
+        {/* Steps 1+2: [Panel + Map] — stacked column on mobile, split row on md+ */}
         {showMap && (
-          <div className="flex-1 flex h-full overflow-hidden">
+          <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden">
 
-            {/* LEFT PANEL — swaps between Step1Panel and Step2Panel */}
-            <div className="w-[400px] xl:w-[440px] shrink-0 flex flex-col bg-white border-r border-gray-100 overflow-hidden relative z-10">
+            {/* PANEL — form content. Explicit h-[50vh] on mobile because children are absolute-positioned */}
+            <div className="w-full h-[50vh] md:h-auto md:w-[400px] xl:w-[440px] shrink-0 flex flex-col bg-white md:border-r border-b md:border-b-0 border-gray-100 overflow-hidden relative z-10">
               <AnimatePresence mode="wait">
                 {step === 1 && (
                   <motion.div
@@ -313,8 +310,8 @@ function OnboardingWizard() {
               </AnimatePresence>
             </div>
 
-            {/* RIGHT — singleton map, never unmounts */}
-            <div className="flex-1 relative">
+            {/* MAP — bottom on mobile (fills remaining), right side on desktop */}
+            <div className="flex-1 relative min-h-[200px]">
               <OnboardingMapSingleton
                 mode={mapMode}
                 location={data.location}
@@ -351,7 +348,7 @@ function OnboardingWizard() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute inset-0 z-[1500] flex items-end justify-center pb-6 px-4"
+                    className="absolute inset-0 z-[1500] flex items-end justify-center pb-4 md:pb-6 px-3 md:px-4"
                     style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(2px)' }}
                   >
                     <motion.div
@@ -370,7 +367,7 @@ function OnboardingWizard() {
                       onClick={e => e.stopPropagation()}
                     >
                       {/* Header */}
-                      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                      <div className="flex items-center justify-between px-4 md:px-5 py-3 md:py-4 border-b border-gray-100">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-xl bg-green-100 flex items-center justify-center">
                             <Leaf className="w-4 h-4 text-green-600" />
@@ -389,7 +386,7 @@ function OnboardingWizard() {
                       </div>
 
                       {/* Form */}
-                      <div className="px-5 py-4 space-y-3">
+                      <div className="px-4 md:px-5 py-3 md:py-4 space-y-3">
                         {/* Name */}
                         <div>
                           <label className="text-[10px] font-black text-gray-400 tracking-widest uppercase flex items-center gap-1.5 mb-1.5">
@@ -434,7 +431,7 @@ function OnboardingWizard() {
                       </div>
 
                       {/* CTA */}
-                      <div className="px-5 pb-5">
+                      <div className="px-4 md:px-5 pb-4 md:pb-5">
                         <button
                           onClick={commitPaddock}
                           disabled={!paddockModalName.trim()}

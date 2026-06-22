@@ -12,10 +12,15 @@ service firebase.storage {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Organizations folder: only users belonging to the org should access it
+    // Organizations folder:
+    //   READ  → cualquier usuario autenticado (los datos no son sensibles).
+    //   WRITE → BLOQUEADO. Todos los uploads pasan por /api/upload (server-side)
+    //           donde se valida la membresía a la organización antes de emitir
+    //           la URL firmada. Esto evita que un usuario de la Org A escriba
+    //           archivos en la Org B.
     match /organizations/{orgId}/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null; 
+      allow write: if false;
     }
 
     // Public assets

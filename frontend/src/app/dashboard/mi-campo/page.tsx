@@ -255,7 +255,7 @@ export default function MiCampoPage() {
     if (dryMatter !== undefined) updates.dry_matter_kg_ha = dryMatter
 
     if (!navigator.onLine) {
-      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      const { addToOfflineQueue } = await import('@/components/OfflineManager')
       addToOfflineQueue({
         type: 'paddock_update',
         data: { paddock_id: paddockId, ...updates },

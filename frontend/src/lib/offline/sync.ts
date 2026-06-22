@@ -42,6 +42,15 @@ export function initSync(getToken: () => Promise<string | null>): void {
         triggerSync(getToken)
       }
     })
+
+    // Registrar Background Sync para envíos pendientes (funciona incluso con tab cerrado)
+    navigator.serviceWorker.ready.then(registration => {
+      if ('sync' in registration) {
+        (registration as any).sync.register('rodeo-outbox-sync').catch(() => {
+          // Background Sync no soportado o denegado — no es crítico
+        })
+      }
+    }).catch(() => {})
   }
 
   // BroadcastChannel para coordinar entre tabs
@@ -53,6 +62,14 @@ export function initSync(getToken: () => Promise<string | null>): void {
       }
     }
   }
+
+  // Escuchar visibilitychange — sincronizar al volver al tab (común en mobile)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && navigator.onLine) {
+      // Delay corto para que la red se estabilice
+      setTimeout(() => triggerSync(getToken), 1500)
+    }
+  })
 
   // Si ya estamos online al inicializar, ejecutar sync inicial
   if (navigator.onLine) {

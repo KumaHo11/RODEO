@@ -24,7 +24,13 @@ import {
   PHYSIO_EV_BASE,
   type PhysiologicalCategory,
 } from '@/lib/grazing/evProjection'
-import { calcularEVRodeo } from '@/lib/grazing/evMatrix'
+import {
+  calcularEVRodeo,
+  LACTANCIA_RANGES,
+  ESTADIOS_GESTACION,
+  type LactanciaRange,
+  type EstadioGestacion,
+} from '@/lib/grazing/evMatrix'
 import { RAZAS_POR_CATEGORIA } from '@/lib/categorias'
 
 // ── Tipos públicos ───────────────────────────────────────────────────────────────────
@@ -38,6 +44,8 @@ export interface HerdFormValue {
   ageMonths: number | ''
   entryDate?: string
   exitDate?: string
+  lactanciaRange?: LactanciaRange | ''
+  estadioGestacion?: EstadioGestacion | ''
 }
 
 export interface HerdFormFieldsProps {
@@ -67,6 +75,11 @@ const PHYSIO_GROUP: { label: string; cats: PhysiologicalCategory[] }[] = [
     cats: ['TORO_DESCANSO', 'TORO_SERVICIO'],
   },
 ]
+
+/** Categories that need lactation range */
+const VACA_LACTANCIA_CATS = new Set<PhysiologicalCategory>(['VACA_CON_TERNERO'])
+/** Categories that need gestation stage */
+const VACA_GESTACION_CATS = new Set<PhysiologicalCategory>(['VACA_PRENADA'])
 
 const PHYSIO_SHORT: Record<PhysiologicalCategory, string> = {
   VACA_CON_TERNERO:  'Con ternero al pie',
@@ -118,6 +131,10 @@ export default function HerdFormFields({
     return RAZAS_POR_CATEGORIA[comercial] ?? ['Otra']
   }, [value.physioCategory])
 
+  // Which conditional fields to show
+  const showLactancia = value.physioCategory ? VACA_LACTANCIA_CATS.has(value.physioCategory as PhysiologicalCategory) : false
+  const showGestacion = value.physioCategory ? VACA_GESTACION_CATS.has(value.physioCategory as PhysiologicalCategory) : false
+
   // Cálculo EV en tiempo real — tablas Cocimano
   const evResult = useMemo(() => {
     const count = Number(value.count) || 0
@@ -128,12 +145,12 @@ export default function HerdFormFields({
         categoria: value.physioCategory,
         pesoKg: weight,
         adpvKgDay: 0,
-        lactanciaRange: null,
-        estadioGestacion: null,
+        lactanciaRange: (value.lactanciaRange as LactanciaRange) || null,
+        estadioGestacion: (value.estadioGestacion as EstadioGestacion) || null,
       },
       count,
     )
-  }, [value.physioCategory, value.count, value.weightKg])
+  }, [value.physioCategory, value.count, value.weightKg, value.lactanciaRange, value.estadioGestacion])
 
   const px = compact ? 'px-3 py-2.5' : 'px-3.5 py-3'
   const inputCls = `w-full bg-white border-2 border-gray-200 rounded-xl ${px} text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all`
@@ -258,6 +275,52 @@ export default function HerdFormFields({
                 />
               </div>
             </div>
+
+            {/* ── Período de lactancia (solo VACA_CON_TERNERO) ── */}
+            {showLactancia && (
+              <div className="space-y-1.5">
+                <label className={`${LABEL} flex items-center gap-1`}>
+                  Período de lactancia
+                </label>
+                <select
+                  id="herd-lactancia"
+                  value={value.lactanciaRange ?? ''}
+                  onChange={e => set('lactanciaRange', (e.target.value || '') as LactanciaRange | '')}
+                  className={inputCls}
+                >
+                  <option value="">Seleccionar mes de lactancia</option>
+                  {LACTANCIA_RANGES.map(r => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-gray-400">
+                  Impacta el EV: pico de lactancia = mayor demanda
+                </p>
+              </div>
+            )}
+
+            {/* ── Estadio de gestación (solo VACA_PRENADA) ── */}
+            {showGestacion && (
+              <div className="space-y-1.5">
+                <label className={`${LABEL} flex items-center gap-1`}>
+                  Mes de gestación
+                </label>
+                <select
+                  id="herd-gestacion"
+                  value={value.estadioGestacion ?? ''}
+                  onChange={e => set('estadioGestacion', (e.target.value || '') as EstadioGestacion | '')}
+                  className={inputCls}
+                >
+                  <option value="">Seleccionar mes de gestación</option>
+                  {ESTADIOS_GESTACION.map(e => (
+                    <option key={e.value} value={e.value}>{e.label}</option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-gray-400">
+                  Los últimos meses de gestación aumentan el EV
+                </p>
+              </div>
+            )}
 
             {/* ── EV en tiempo real ── */}
             {evResult && (
@@ -408,11 +471,19 @@ export function calcHerdEV(
   physioCategory: PhysiologicalCategory | '',
   weightKg: number | '',
   count: number | '',
+  lactanciaRange?: LactanciaRange | '' | null,
+  estadioGestacion?: EstadioGestacion | '' | null,
 ): number {
   if (!physioCategory || !count || Number(count) <= 0) return 0
   const weight = Number(weightKg) || PHYSIO_PESO_DEFAULT[physioCategory] || 400
   const result = calcularEVRodeo(
-    { categoria: physioCategory, pesoKg: weight, adpvKgDay: 0, lactanciaRange: null, estadioGestacion: null },
+    {
+      categoria: physioCategory,
+      pesoKg: weight,
+      adpvKgDay: 0,
+      lactanciaRange: (lactanciaRange as LactanciaRange) || null,
+      estadioGestacion: (estadioGestacion as EstadioGestacion) || null,
+    },
     Number(count),
   )
   return result.evTotal

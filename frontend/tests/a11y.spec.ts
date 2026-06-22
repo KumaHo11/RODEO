@@ -1,55 +1,81 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-test.describe('Accessibility and UI tests', () => {
+/**
+ * Tests de Accesibilidad — axe-core en todas las páginas protegidas
+ *
+ * NOTA: Login eliminado del beforeEach — la sesión la provee storageState.
+ * Los tests sin auth (login, registro) no necesitan beforeEach.
+ *
+ * Expandido de 2 páginas a todas las páginas principales de la app.
+ */
 
-  test.beforeEach(async ({ page }) => {
-    // Log in before each test to ensure IndexedDB session is active
+// ─────────────────────────────────────────────────────────────
+// Páginas públicas — no requieren sesión
+// ─────────────────────────────────────────────────────────────
+test.describe('A11y — Páginas Públicas', () => {
+  test('Login — debe pasar axe y ser navegable por teclado', async ({ page }) => {
     await page.goto('/login');
-    await page.waitForSelector('form');
-    await page.fill('input[type="email"]', 'javi.osorio.1@gmail.com');
-    await page.fill('input[type="password"]', '1q2w3e4r');
-    await page.click('button[type="submit"]');
-    // Wait until the dashboard or onboarding loads
-    await page.waitForURL(/.*(dashboard|onboarding).*/, { timeout: 15000 });
+
+    const results = await new AxeBuilder({ page }).analyze();
+    if (results.violations.length > 0) {
+      console.log('Axe violations in /login:', JSON.stringify(results.violations, null, 2));
+    }
+    expect(results.violations).toEqual([]);
+
+    // Navegación por teclado
+    await page.focus('body');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 
-  test('Login form should pass accessibility (requires logging out first)', async ({ page }) => {
-    // We need to go back to login to test its accessibility
-    // The easiest way is to use a new clean context, but we are inside beforeEach.
-    // We will just evaluate a sign out if possible, or just test a11y on the current page (dashboard).
-    // Actually, let's test Rodeos accessibility here.
-    
-    await page.goto('/dashboard/herds');
-    await page.waitForSelector('h1:has-text("Rodeos")', { timeout: 15000 });
+  test('Registro — debe pasar axe', async ({ page }) => {
+    await page.goto('/register');
+    await page.waitForSelector('form', { timeout: 10000 });
 
-    const accessibilityScanResults = await new AxeBuilder({ page }).analyze();
-    
-    // Output violations if any for debugging
-    if (accessibilityScanResults.violations.length > 0) {
-      console.log('Axe violations found in Rodeos:', JSON.stringify(accessibilityScanResults.violations, null, 2));
+    const results = await new AxeBuilder({ page }).analyze();
+    if (results.violations.length > 0) {
+      console.log('Axe violations in /register:', JSON.stringify(results.violations, null, 2));
     }
-
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(results.violations).toEqual([]);
   });
 });
 
-test.describe('Login Accessibility', () => {
-  // Separate describe block without the login beforeEach
-  test('Login form should be keyboard navigable and pass accessibility', async ({ page }) => {
-    await page.goto('/login');
+// ─────────────────────────────────────────────────────────────
+// Páginas protegidas — usan storageState via proyecto chromium
+// ─────────────────────────────────────────────────────────────
+const protectedPages = [
+  { name: 'Dashboard', path: '/dashboard' },
+  { name: 'Mi Campo', path: '/dashboard/mi-campo' },
+  { name: 'Grazing / Gantt', path: '/dashboard/grazing' },
+  { name: 'Mapa', path: '/dashboard/map' },
+  { name: 'Bitácora', path: '/dashboard/bitacora' },
+  { name: 'Tareas', path: '/dashboard/tareas' },
+  { name: 'Agenda', path: '/dashboard/agenda' },
+  { name: 'Clima', path: '/dashboard/clima' },
+  { name: 'Planes', path: '/dashboard/planes' },
+  { name: 'Equipo', path: '/dashboard/equipo' },
+  { name: 'Perfil', path: '/dashboard/profile' },
+  { name: 'Calculadora', path: '/dashboard/calculadora' },
+];
 
-    const accessibilityScanResults = await new AxeBuilder({ page }).analyze();
-    
-    if (accessibilityScanResults.violations.length > 0) {
-      console.log('Axe violations found in Login:', JSON.stringify(accessibilityScanResults.violations, null, 2));
-    }
+test.describe('A11y — Páginas Protegidas', () => {
+  for (const { name, path } of protectedPages) {
+    test(`${name} (${path}) — debe pasar axe`, async ({ page }) => {
+      await page.goto(path);
+      // Esperar que la página cargue algo (no blank)
+      await page.waitForSelector('h1, main, [role="main"]', { timeout: 20000 });
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+      const results = await new AxeBuilder({ page })
+        // Ignorar violaciones de color en elementos de terceros (Leaflet, etc.)
+        .exclude('.leaflet-container')
+        .analyze();
 
-    await page.focus('body');
-    await page.keyboard.press('Tab');
-    const emailInput = page.locator('input[type="email"]');
-    await expect(emailInput).toBeVisible();
-  });
+      if (results.violations.length > 0) {
+        console.log(`Axe violations in ${path}:`, JSON.stringify(results.violations, null, 2));
+      }
+
+      expect(results.violations).toEqual([]);
+    });
+  }
 });

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/lib/apiFetch'
-import { addToOfflineQueue } from '@/components/OfflineIndicator'
+import { addToOfflineQueue } from '@/components/OfflineManager'
 import { X, Mic, Camera, Loader2, Check, Square, Trash2, CloudOff } from 'lucide-react'
 import { toast } from 'sonner'
 

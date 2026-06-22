@@ -375,7 +375,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       let finalId = targetId
 
       if (await isOffline()) {
-        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        const { addToOfflineQueue } = await import('@/components/OfflineManager')
         const tempId = targetId || `temp-${Date.now()}`
         finalId = tempId
         addToOfflineQueue({
@@ -713,7 +713,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       if (isAdd && actWeight !== '' && Number(actWeight) > 0) patchPayload.avg_weight_kg = newWeight
 
         if (await isOffline()) {
-          const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+          const { addToOfflineQueue } = await import('@/components/OfflineManager')
           addToOfflineQueue({
             type: 'herd_update',
             data: { herd_id: targetId, ...patchPayload },
@@ -1145,7 +1145,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           title: `Condición Corporal: ${bcsScore}/5 — ${label}`
         })
       }
-      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      const { addToOfflineQueue } = await import('@/components/OfflineManager')
       addToOfflineQueue({
         type: 'bcs_update',
         data: {
@@ -1263,7 +1263,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       const isNetErr = networkErr instanceof TypeError || networkErr?.message?.includes('fetch')
       if (isNetErr) {
         console.warn('[saveBcs] network error → saving offline')
-        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        const { addToOfflineQueue } = await import('@/components/OfflineManager')
         const mediaId = bcsPhotoFile ? (crypto.randomUUID?.() ?? `${Date.now()}`) : undefined
         if (mediaId && bcsPhotoFile) {
           const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
@@ -1355,7 +1355,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         await savePendingAudio({ id: mediaId, blob: effectiveBlob, durationSecs: 0, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: quickNote.trim() })
       }
 
-      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      const { addToOfflineQueue } = await import('@/components/OfflineManager')
       addToOfflineQueue({
         type: 'farm_event',
         data: { title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado' },
@@ -1451,7 +1451,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       // Auto-fallback offline (común en iOS con navigator.onLine=true sin internet real)
       const isNetErr = networkErr instanceof TypeError || networkErr?.message?.includes('fetch')
       if (isNetErr) {
-        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        const { addToOfflineQueue } = await import('@/components/OfflineManager')
         const offlineId = (crypto.randomUUID?.() ?? `${Date.now()}`)
         let mediaType: 'audio' | 'photo' | undefined
         let mediaId: string | undefined
@@ -1491,7 +1491,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     }
 
     if (await isOffline()) {
-      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      const { addToOfflineQueue } = await import('@/components/OfflineManager')
       addToOfflineQueue({
         type: 'farm_event',
         data: payload,

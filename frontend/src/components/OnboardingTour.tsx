@@ -36,7 +36,7 @@ function CustomTooltip({
   return (
     <div
       {...tooltipProps}
-      className="bg-white rounded-[24px] p-5 w-[300px] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.3)] border border-gray-100 font-sans"
+      className="bg-white rounded-[24px] p-5 w-[280px] max-w-[calc(100vw-2rem)] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.3)] border border-gray-100 font-sans"
     >
       <div className="flex flex-col gap-1.5">
         <h3 className="text-[15px] font-black text-gray-900 leading-tight">

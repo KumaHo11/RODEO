@@ -675,7 +675,7 @@ export default function PaddockModal({
     // ── Offline path: save locally and show confirmation ─────────────────────
     if (!navigator.onLine && !isCreating) {
       try {
-        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        const { addToOfflineQueue } = await import('@/components/OfflineManager')
         const updates: Record<string, any> = { technical_data: td }
         if (msHa !== '') updates.dry_matter_kg_ha = Number(msHa)
         addToOfflineQueue({
@@ -809,7 +809,7 @@ export default function PaddockModal({
       
       if (!effectiveBlob && noteImages.length === 0) {
         // Nota de texto — encolar directamente
-        import('@/components/OfflineIndicator').then(({ addToOfflineQueue }) => {
+        import('@/components/OfflineManager').then(({ addToOfflineQueue }) => {
           addToOfflineQueue({
             type: 'field_note',
             data: {
@@ -837,7 +837,7 @@ export default function PaddockModal({
           title: noteTitle.trim() || `Audio · ${timestamp}`,
           transcript: audioTranscript
         })
-        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        const { addToOfflineQueue } = await import('@/components/OfflineManager')
         addToOfflineQueue({
           type: 'field_note',
           data: {
@@ -863,7 +863,7 @@ export default function PaddockModal({
           createdAt: new Date().toISOString(),
           title: noteTitle.trim() || noteImages[0]?.name,
         })
-        const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+        const { addToOfflineQueue } = await import('@/components/OfflineManager')
         addToOfflineQueue({
           type: 'field_note',
           data: {
@@ -1023,7 +1023,7 @@ export default function PaddockModal({
       }
 
       console.warn('[saveQuickNote] network error → saving offline:', networkErr.message)
-      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      const { addToOfflineQueue } = await import('@/components/OfflineManager')
       const offlineId = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
       const offlineTitle = noteTitle.trim() || noteText?.slice(0, 60) || audioTranscript?.slice(0, 60) || 'Nota de campo'
 

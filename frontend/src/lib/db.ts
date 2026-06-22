@@ -15,7 +15,9 @@ import { headers, cookies } from 'next/headers'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 
 const tokenCache = new Map<string, { uid: string, orgId: string | null, expiresAt: number }>()
-const CACHE_TTL_MS = 5 * 60 * 1000
+// 1 min — reduce la ventana de acceso post-revocación (usuarios removidos de una org
+// siguen accediendo como máximo 60s en lugar de 5 minutos)
+const CACHE_TTL_MS = 60 * 1000
 
 async function getContextUid(): Promise<{ uid: string; orgId: string | null } | null> {
   try {
@@ -81,9 +83,17 @@ function createPoolFromUrl(connectionString: string): Pool {
     user: url.username,
     password: decodeURIComponent(url.password),
     database: url.pathname.slice(1).split('?')[0],
-    ssl: { rejectUnauthorized: false },
-    max: parseInt(process.env.DB_POOL_MAX || '20'),
-    min: parseInt(process.env.DB_POOL_MIN || '2'),
+    // En producción: validar CA de Cloud SQL para prevenir ataques MITM.
+    // Configurar DB_SSL_CA con el certificado raíz de Cloud SQL.
+    // En desarrollo: deshabilitar verificación (conexión local / Cloud SQL Proxy).
+    ssl: process.env.NODE_ENV === 'production'
+      ? { ca: process.env.DB_SSL_CA }          // cert CA de Cloud SQL en producción
+      : { rejectUnauthorized: false },          // dev / proxy local
+    // max: 5 por pool × 2 pools (app + service) × N instancias Cloud Run.
+    // Con Cloud Run max-instances configurado, esto mantiene las conexiones
+    // totales por debajo de max_connections de Cloud SQL.
+    max: parseInt(process.env.DB_POOL_MAX || '5'),
+    min: parseInt(process.env.DB_POOL_MIN || '1'),
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
     statement_timeout: 30000,

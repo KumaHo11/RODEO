@@ -54,14 +54,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfile = useCallback(async (firebaseUser: User) => {
     // ── Offline fast path: use cached profile immediately ──
+    // No intentar getIdToken(true) ni fetch a la API si estamos offline
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       try {
+        // Intentar IndexedDB primero (más confiable)
+        const idbProfile = await getCachedProfile()
+        if (idbProfile) {
+          setProfile(idbProfile)
+          return
+        }
+        // Fallback a localStorage
         const cached = localStorage.getItem('rodeo_cached_profile')
         if (cached) {
           setProfile(JSON.parse(cached))
           return
         }
       } catch { /* ignore */ }
+      // Sin caché offline — el perfil queda null
+      return
     }
 
     try {
