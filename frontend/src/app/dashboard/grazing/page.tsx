@@ -2039,7 +2039,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         />
 
       {/* ─── Header simplificado ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col gap-3">
 
         {/* Left: Título modo Gantt — Dropdown Custom (neutral) */}
         <div className="flex items-center gap-3 min-w-0">
@@ -2068,7 +2068,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             {activeSeasonPlanId && viewMode === 'gantt' && (
               <div className="mt-2 flex items-center gap-1.5 px-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Nombre del plan:</span>
-                <span className="text-sm font-bold text-gray-800 bg-gray-100/80 px-2 py-0.5 rounded-md">
+                <span className="text-sm font-bold text-gray-800 bg-gray-100/80 px-2 py-0.5 rounded-md truncate">
                   {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan Forrajero'}
                 </span>
               </div>
@@ -2077,7 +2077,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             {showGanttModeDropdown && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowGanttModeDropdown(false)} />
-                <div className="absolute left-0 top-full mt-2 z-50 min-w-[320px] rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
+                <div className="absolute left-0 right-0 sm:right-auto top-full mt-2 z-50 min-w-[280px] sm:min-w-[320px] max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
                   {/* Manual */}
                   <button
                     onClick={() => {
@@ -2123,10 +2123,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         </div>
 
         {/* Right: View toggle + acciones */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 sm:pb-0">
 
           {/* Vista toggle */}
-          <div className="tour-planificador-vista bg-white border border-gray-200 rounded-xl p-1 flex items-center shadow-sm gap-0.5">
+          <div className="tour-planificador-vista bg-white border border-gray-200 rounded-xl p-1 flex items-center shadow-sm gap-0.5 shrink-0">
             {[
               { id: 'gantt',   Icon: CalendarDays, label: 'Gantt'     },
               { id: 'list',    Icon: AlignJustify,  label: 'Lista'     },
@@ -2243,33 +2243,37 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
       {/* DRAWING MODE BANNER — barra sticky superior con rodeos seleccionados */}
       {drawingMode && activeGanttTab === 'manual' && (
-        <div className="sticky top-0 z-[100] flex items-center gap-3 bg-white/95 backdrop-blur-md text-gray-900 px-4 py-3 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-2 border-green-500 animate-in fade-in slide-in-from-top-2 duration-200 mb-3">
-          <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center animate-pulse shrink-0">
-            <span className="text-xs font-black text-green-700">✏</span>
+        <div className="sticky top-0 z-[100] flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-white/95 backdrop-blur-md text-gray-900 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-2 border-green-500 animate-in fade-in slide-in-from-top-2 duration-200 mb-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center animate-pulse shrink-0">
+              <span className="text-xs font-black text-green-700">✏</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-gray-900">
+                Modo Pastoreo Activo
+                {drawingHerdIds.length > 0 && (
+                  <span className="ml-1.5 text-green-700 bg-green-50 px-1.5 py-0.5 rounded-md text-[11px] font-bold">
+                    {herds.filter((h: any) => drawingHerdIds.includes(h.id)).map((h: any) => h.name).join(', ')}
+                  </span>
+                )}
+              </p>
+              <p className="text-[10px] text-gray-500 font-medium mt-0.5 hidden sm:block">Arrastrá en el calendario para crear pastoreos. <strong className="text-gray-700">Debés "Terminar Pastoreo" para poder editar otras planificaciones.</strong></p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-gray-900">
-              Modo Pastoreo Activo
-              {drawingHerdIds.length > 0 && (
-                <span className="ml-1.5 text-green-700 bg-green-50 px-1.5 py-0.5 rounded-md text-[11px] font-bold">
-                  {herds.filter((h: any) => drawingHerdIds.includes(h.id)).map((h: any) => h.name).join(', ')}
-                </span>
-              )}
-            </p>
-            <p className="text-[10px] text-gray-500 font-medium mt-0.5">Arrastrá en el calendario para crear pastoreos. <strong className="text-gray-700">Debés "Terminar Pastoreo" para poder editar otras planificaciones.</strong></p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowContinuePlanModal(true)}
+              className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap shrink-0 border border-gray-200"
+            >
+              Cambiar rodeos
+            </button>
+            <button
+              onClick={() => { setDrawingMode(false); setQuickConfirm(null) }}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-[11px] font-black transition-colors whitespace-nowrap shrink-0 shadow-sm"
+            >
+              Terminar ✓
+            </button>
           </div>
-          <button
-            onClick={() => setShowContinuePlanModal(true)}
-            className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap shrink-0 border border-gray-200"
-          >
-            Cambiar rodeos
-          </button>
-          <button
-            onClick={() => { setDrawingMode(false); setQuickConfirm(null) }}
-            className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-[11px] font-black transition-colors whitespace-nowrap shrink-0 shadow-sm"
-          >
-            Terminar Pastoreo ✓
-          </button>
         </div>
       )}
 
@@ -2337,7 +2341,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       ) : viewMode === 'gantt' ? (
         <div className="space-y-3">
           {/* Gantt period control — solo Anual + filtros de temporada */}
-          <div className={`flex flex-wrap items-center gap-2 justify-start w-full transition-opacity duration-300 ${drawingMode ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className={`flex flex-wrap items-center gap-2 justify-start w-full transition-opacity duration-300 overflow-x-auto pb-1 ${drawingMode ? 'opacity-40 pointer-events-none' : ''}`}>
             <div className="flex bg-gray-100 rounded-xl p-0.5 gap-0.5">
               {/* Anual = ambas temporadas activas */}
               <button

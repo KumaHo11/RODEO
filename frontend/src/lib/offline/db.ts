@@ -67,6 +67,14 @@ interface RodeoDBSchema extends DBSchema {
     value: { id: string; data: any; updated_at: number }
     indexes: { by_updated: number }
   }
+  calculator_state: {
+    key: string
+    value: { id: string; data: any; updated_at: number }
+  }
+  dashboard_cache: {
+    key: string
+    value: { id: string; data: any; updated_at: number }
+  }
   outbox: {
     key: string
     value: OutboxItem
@@ -81,49 +89,64 @@ interface RodeoDBSchema extends DBSchema {
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
 const DB_NAME    = 'rodeo-offline-db'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 let _dbPromise: Promise<IDBPDatabase<RodeoDBSchema>> | null = null
 
 function getDB(): Promise<IDBPDatabase<RodeoDBSchema>> {
   if (!_dbPromise) {
     _dbPromise = openDB<RodeoDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        // paddocks
-        const paddockStore = db.createObjectStore('paddocks', { keyPath: 'id' })
-        paddockStore.createIndex('by_updated', 'updated_at')
+      upgrade(db, oldVersion) {
+        // ── v1 stores ──────────────────────────────────────────────────────
+        if (oldVersion < 1) {
+          // paddocks
+          const paddockStore = db.createObjectStore('paddocks', { keyPath: 'id' })
+          paddockStore.createIndex('by_updated', 'updated_at')
 
-        // herds
-        const herdStore = db.createObjectStore('herds', { keyPath: 'id' })
-        herdStore.createIndex('by_updated', 'updated_at')
+          // herds
+          const herdStore = db.createObjectStore('herds', { keyPath: 'id' })
+          herdStore.createIndex('by_updated', 'updated_at')
 
-        // farm_events
-        const eventsStore = db.createObjectStore('farm_events', { keyPath: 'id' })
-        eventsStore.createIndex('by_updated', 'updated_at')
-        eventsStore.createIndex('by_date', 'data.event_date')
+          // farm_events
+          const eventsStore = db.createObjectStore('farm_events', { keyPath: 'id' })
+          eventsStore.createIndex('by_updated', 'updated_at')
+          eventsStore.createIndex('by_date', 'data.event_date')
 
-        // field_notes
-        const notesStore = db.createObjectStore('field_notes', { keyPath: 'id' })
-        notesStore.createIndex('by_updated', 'updated_at')
+          // field_notes
+          const notesStore = db.createObjectStore('field_notes', { keyPath: 'id' })
+          notesStore.createIndex('by_updated', 'updated_at')
 
-        // tasks
-        const tasksStore = db.createObjectStore('tasks', { keyPath: 'id' })
-        tasksStore.createIndex('by_updated', 'updated_at')
+          // tasks
+          const tasksStore = db.createObjectStore('tasks', { keyPath: 'id' })
+          tasksStore.createIndex('by_updated', 'updated_at')
 
-        // organizations (single record per session)
-        db.createObjectStore('organizations', { keyPath: 'id' })
+          // organizations (single record per session)
+          db.createObjectStore('organizations', { keyPath: 'id' })
 
-        // grazing_plans
-        const plansStore = db.createObjectStore('grazing_plans', { keyPath: 'id' })
-        plansStore.createIndex('by_updated', 'updated_at')
+          // grazing_plans
+          const plansStore = db.createObjectStore('grazing_plans', { keyPath: 'id' })
+          plansStore.createIndex('by_updated', 'updated_at')
 
-        // outbox
-        const outboxStore = db.createObjectStore('outbox', { keyPath: 'id' })
-        outboxStore.createIndex('by_created', 'created_at')
-        outboxStore.createIndex('by_type', 'type')
+          // outbox
+          const outboxStore = db.createObjectStore('outbox', { keyPath: 'id' })
+          outboxStore.createIndex('by_created', 'created_at')
+          outboxStore.createIndex('by_type', 'type')
 
-        // meta
-        db.createObjectStore('meta', { keyPath: 'key' })
+          // meta
+          db.createObjectStore('meta', { keyPath: 'key' })
+        }
+
+        // ── v2 stores: calculadora + dashboard cache ─────────────────────
+        if (oldVersion < 2) {
+          // calculator_state — persistir inputs/resultados de la calculadora
+          if (!db.objectStoreNames.contains('calculator_state')) {
+            db.createObjectStore('calculator_state', { keyPath: 'id' })
+          }
+          // dashboard_cache — cachear datos computados del panel principal
+          if (!db.objectStoreNames.contains('dashboard_cache')) {
+            db.createObjectStore('dashboard_cache', { keyPath: 'id' })
+          }
+        }
       },
     })
   }
@@ -132,7 +155,7 @@ function getDB(): Promise<IDBPDatabase<RodeoDBSchema>> {
 
 // ── Generic helpers ───────────────────────────────────────────────────────────
 
-type StoreNames = 'paddocks' | 'herds' | 'farm_events' | 'field_notes' | 'tasks' | 'organizations' | 'grazing_plans' | 'outbox'
+type StoreNames = 'paddocks' | 'herds' | 'farm_events' | 'field_notes' | 'tasks' | 'organizations' | 'grazing_plans' | 'calculator_state' | 'dashboard_cache' | 'outbox'
 
 /** Devuelve todos los registros de un store como array de `data` */
 export async function dbGetAll(store: StoreNames): Promise<any[]> {

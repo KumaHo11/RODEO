@@ -9,6 +9,13 @@ import { checkFeatureAccess } from '@/lib/plan-limits'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
+// Helper: timeout de 30s para llamadas a Gemini
+function makeGeminiTimeout(): Promise<never> {
+  return new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Gemini timeout after 30s')), 30_000)
+  )
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Auth Check
@@ -62,9 +69,9 @@ Respondé SOLO con el JSON, sin markdown, sin bloques de código, sin explicacio
       },
     }))
 
-    const result = await model.generateContent([
-      ...imageParts,
-      prompt,
+    const result = await Promise.race([
+      model.generateContent([...imageParts, prompt]),
+      makeGeminiTimeout(),
     ])
 
     const text = result.response.text().trim()
@@ -86,7 +93,11 @@ Respondé SOLO con el JSON, sin markdown, sin bloques de código, sin explicacio
 
     return NextResponse.json({ success: true, data })
   } catch (err: any) {
+    const isTimeout = err?.message?.includes('timeout')
     console.error('Gemini analyze-biomass error:', err)
-    return NextResponse.json({ success: false, error: err.message || 'Error en análisis de IA' }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: isTimeout ? 'El análisis tardó demasiado, intentá nuevamente' : (err.message || 'Error en análisis de IA') },
+      { status: isTimeout ? 504 : 500 }
+    )
   }
 }

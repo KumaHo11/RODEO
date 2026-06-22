@@ -3,6 +3,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
+// Helper: timeout de 30s para llamadas a Gemini
+function makeGeminiTimeout(): Promise<never> {
+  return new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Gemini timeout after 30s')), 30_000)
+  )
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { imageBase64, mimeType, species } = await req.json()
@@ -30,14 +37,17 @@ El JSON debe tener exactamente estos campos:
   "animal_count_visible": número de animales visibles en la imagen (1 si es solo uno)
 }`
 
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          data: imageBase64,
-          mimeType: mimeType || 'image/jpeg',
+    const result = await Promise.race([
+      model.generateContent([
+        {
+          inlineData: {
+            data: imageBase64,
+            mimeType: mimeType || 'image/jpeg',
+          },
         },
-      },
-      prompt,
+        prompt,
+      ]),
+      makeGeminiTimeout(),
     ])
 
     const text = result.response.text().trim()
@@ -47,7 +57,11 @@ El JSON debe tener exactamente estos campos:
     const data = JSON.parse(jsonMatch[0])
     return NextResponse.json({ success: true, data })
   } catch (err: any) {
+    const isTimeout = err?.message?.includes('timeout')
     console.error('[analyze-body-condition]', err)
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: isTimeout ? 'El análisis tardó demasiado, intentá nuevamente' : err.message },
+      { status: isTimeout ? 504 : 500 }
+    )
   }
 }

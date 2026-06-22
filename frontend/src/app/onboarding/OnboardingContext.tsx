@@ -34,6 +34,8 @@ interface OnboardingData {
     age: number
     ageMonths?: number | null
     admissionDate?: string | null
+    lactanciaRange?: string | null
+    estadioGestacion?: string | null
     totalEV: number
     // v8 physiological fields
     physiologicalCategory?: string | null

@@ -152,7 +152,16 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
 
   // ── Listeners ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    const handleOnline = () => {
+    const handleOnline = async () => {
+      // Verificar conectividad real (iOS puede reportar onLine:true sin red)
+      const { isOffline: checkOffline, invalidateConnectivityCache } = await import('@/lib/connectivity')
+      invalidateConnectivityCache()
+      const stillOffline = await checkOffline()
+      if (stillOffline) {
+        console.log('[OfflineManager] navigator.onLine=true but real check failed — staying offline')
+        return
+      }
+
       setIsOffline(false)
       if (toastIdRef.current) toast.dismiss(toastIdRef.current)
       toast.success('Conexión restaurada', {
@@ -160,6 +169,15 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
         duration: 3000,
         icon: <Wifi className="w-4 h-4 text-green-500" />,
       })
+
+      // Registrar Background Sync para redundancia
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+          if ('sync' in reg) {
+            (reg as any).sync.register('rodeo-outbox-sync').catch(() => {})
+          }
+        }).catch(() => {})
+      }
     }
 
     const handleOffline = () => {

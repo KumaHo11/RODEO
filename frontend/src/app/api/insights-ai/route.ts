@@ -27,7 +27,10 @@ export async function POST(req: NextRequest) {
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({ model: 'gemini-flash-lite-latest' })
 
-
+  // Timeout de 30s: si Gemini no responde, devolvemos error en lugar de colgar
+  const geminiTimeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Gemini timeout after 30s')), 30_000)
+  )
 
 
   const prompt = `Eres un experto en pastoreo holístico (Savory Institute) y ganadería regenerativa en el Río de la Plata.
@@ -50,10 +53,17 @@ Datos del campo:
 Responde SOLO con la recomendación. Sin introducción ni cierre. En español rioplatense. Máximo 3 oraciones.`
 
   try {
-    const result = await model.generateContent(prompt)
+    const result = await Promise.race([
+      model.generateContent(prompt),
+      geminiTimeout,
+    ])
     const text = result.response.text().trim()
     return NextResponse.json({ recommendation: text })
-  } catch (err) {
-    return NextResponse.json({ error: 'Gemini error', details: String(err) }, { status: 500 })
+  } catch (err: any) {
+    const isTimeout = err?.message?.includes('timeout')
+    return NextResponse.json(
+      { error: isTimeout ? 'El servicio de IA tardó demasiado, intentá nuevamente' : 'Gemini error', details: String(err) },
+      { status: isTimeout ? 504 : 500 }
+    )
   }
 }

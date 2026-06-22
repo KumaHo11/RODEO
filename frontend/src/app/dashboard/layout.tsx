@@ -19,6 +19,7 @@ import RodeoLogo from '@/components/RodeoLogo'
 import { WelcomeScreen } from '@/components/WelcomeScreen'
 import { WeatherProvider } from '@/lib/context/WeatherContext'
 import { ClimateAnalyticsProvider } from '@/lib/context/ClimateAnalyticsContext'
+import { InstallPWAButton } from '@/components/InstallPWAButton'
 
 
 const NOTIF_ICONS: Record<string, React.ComponentType<any>> = {
@@ -439,6 +440,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <ul role="list" className="flex flex-1 flex-col gap-y-0">
               {filteredGroups.map(renderNavGroup)}
 
+              {/* Install PWA — antes de cerrar sesión */}
+              <li className="pt-2">
+                {sidebarOpen ? (
+                  <InstallPWAButton variant="full" />
+                ) : (
+                  <InstallPWAButton variant="compact" />
+                )}
+              </li>
+
               {/* Sign out — bottom */}
               <li className="mt-auto pt-2 border-t border-gray-100">
                 <button
@@ -517,6 +527,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               ))}
             </nav>
             <div className="px-2 pb-4 border-t border-gray-100 pt-3">
+              {/* Install PWA */}
+              <div className="mb-2">
+                <InstallPWAButton variant="full" />
+              </div>
               <Link
                 href="/dashboard/profile"
                 onClick={() => setMobileMenuOpen(false)}
@@ -570,6 +584,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <WifiOff className="w-3 h-3" /> Sin conexión
               </span>
             )}
+
+            {/* Install PWA compact */}
+            <InstallPWAButton variant="compact" />
 
             {/* Guest role badge in header (desktop) */}
             {!isOwner && teamRole && (

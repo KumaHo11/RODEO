@@ -1,18 +1,10 @@
 import type { NextConfig } from "next";
-import withPWAInit from "@ducanh2912/next-pwa";
-
-const withPWA = withPWAInit({
-  dest: "public",
-  disable: process.env.NODE_ENV === "development",
-});
 
 const nextConfig: NextConfig = {
   output: "standalone", // Required for Cloud Run Docker deployment
   // Packages that must NOT be bundled — they use Node.js internals incompatible with
   // the Next.js server bundler. Adding them here keeps them as external node_modules.
   serverExternalPackages: ['resend'],
-  // turbopack: {} — requerido en Next.js 16 cuando hay config webpack de plugins
-  // (next-pwa inyecta webpack config internamente; esto silencia el error)
   turbopack: {},
   images: {
     remotePatterns: [
@@ -42,4 +34,4 @@ const nextConfig: NextConfig = {
   }
 };
 
-export default withPWA(nextConfig);
+export default nextConfig;

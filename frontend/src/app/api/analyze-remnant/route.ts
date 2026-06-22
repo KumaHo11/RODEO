@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+// Helper: timeout de 30s para llamadas a Gemini
+function makeGeminiTimeout(): Promise<never> {
+  return new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Gemini timeout after 30s')), 30_000)
+  )
+}
+
 export async function POST(req: NextRequest) {
   try {
     const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
@@ -39,14 +46,17 @@ Estimá la materia seca residual en base a la altura y densidad del pasto visibl
 Si el remanente es menor a 800 kg MS/ha, la condición debe ser POBRE.
 Si es 800-1200, REGULAR. Si es 1200-1800, BUENO. Si supera 1800, EXCELENTE.`
 
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType as any,
-        }
-      },
-      { text: prompt }
+    const result = await Promise.race([
+      model.generateContent([
+        {
+          inlineData: {
+            data: base64Data,
+            mimeType: mimeType as any,
+          }
+        },
+        { text: prompt }
+      ]),
+      makeGeminiTimeout(),
     ])
 
     const text = result.response.text().trim()
@@ -69,7 +79,11 @@ Si es 800-1200, REGULAR. Si es 1200-1800, BUENO. Si supera 1800, EXCELENTE.`
 
     return NextResponse.json(parsed)
   } catch (err: any) {
+    const isTimeout = err?.message?.includes('timeout')
     console.error('[analyze-remnant]', err)
-    return NextResponse.json({ error: err.message || 'Unknown error' }, { status: 500 })
+    return NextResponse.json(
+      { error: isTimeout ? 'El análisis tardó demasiado, intentá nuevamente' : (err.message || 'Unknown error') },
+      { status: isTimeout ? 504 : 500 }
+    )
   }
 }

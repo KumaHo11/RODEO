@@ -375,7 +375,7 @@ export default function BitacoraPage() {
         transcript: liveTranscript,
       }
       await savePendingAudio(pa)
-      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      const { addToOfflineQueue } = await import('@/components/OfflineManager')
       addToOfflineQueue({
         type: 'field_note',
         data: {
@@ -398,7 +398,7 @@ export default function BitacoraPage() {
       const id = `local-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const blob = new Blob([await photoFile.arrayBuffer()], { type: photoFile.type })
       await savePendingPhoto({ id, blob, lat, lng, createdAt: new Date().toISOString(), title })
-      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      const { addToOfflineQueue } = await import('@/components/OfflineManager')
       addToOfflineQueue({
         type: 'field_note',
         data: {
@@ -418,7 +418,7 @@ export default function BitacoraPage() {
     // ── OFFLINE path: texto (y cualquier nota sin blob ni foto)
     if (!navigator.onLine) {
       setSavingMsg('Guardando sin conexión...')
-      const { addToOfflineQueue } = await import('@/components/OfflineIndicator')
+      const { addToOfflineQueue } = await import('@/components/OfflineManager')
       addToOfflineQueue({
         type: 'field_note',
         data: {

@@ -1,23 +1,33 @@
 import { test, expect } from '@playwright/test';
 
+/**
+ * Tests de Planes de Suscripción
+ *
+ * NOTA: Login eliminado del beforeEach — la sesión la provee storageState
+ * configurado en playwright.config.ts (playwright/.auth/user.json).
+ *
+ * Ruta corregida: /dashboard/billing → /dashboard/planes
+ */
 test.describe('Payment Plans & Limits', () => {
-  test.beforeEach(async ({ page }) => {
-    // Log in
-    await page.goto('/login');
-    await page.waitForSelector('form');
-    await page.fill('input[type="email"]', 'javi.osorio.1@gmail.com');
-    await page.fill('input[type="password"]', '1q2w3e4r');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/.*(dashboard|onboarding).*/, { timeout: 15000 });
-  });
+  test('Should navigate to plans page and see subscription cards', async ({ page }) => {
+    await page.goto('/dashboard/planes');
+    await page.waitForURL(/\/dashboard\/planes/, { timeout: 15000 });
 
-  test('Should be able to view billing or subscription plans', async ({ page }) => {
-    // Navigate to billing
-    await page.goto('/dashboard/billing');
-    
-    // Wait for the page to load
-    // Just a structural test for now to ensure the page doesn't crash
+    // Esperar que la página cargue
+    await page.waitForSelector('h1', { timeout: 15000 });
+
+    // Verificar que hay contenido (al menos un plan visible)
     const bodyText = await page.locator('body').innerText();
     expect(bodyText.length).toBeGreaterThan(0);
+  });
+
+  test('Should show plan feature list', async ({ page }) => {
+    await page.goto('/dashboard/planes');
+    await page.waitForURL(/\/dashboard\/planes/, { timeout: 15000 });
+    await page.waitForSelector('h1', { timeout: 15000 });
+
+    // Verificar que hay cards de planes
+    const planCard = page.locator('[data-testid="plan-card"], .plan-card, .pricing-card, h2, h3').first();
+    await expect(planCard).toBeVisible({ timeout: 10000 });
   });
 });

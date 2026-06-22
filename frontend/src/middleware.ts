@@ -78,15 +78,18 @@ async function verifyFirebaseToken(token: string): Promise<VerifyResult> {
 
 /**
  * Detecta si la request viene del subdominio admin.
- * En desarrollo: usa header X-Admin-Subdomain o query param ?_admin=1
+ * En producción: SOLO el subdominio real admin.* es válido.
+ * En desarrollo: también acepta header X-Admin-Subdomain o query param ?_admin=1
  */
 function isAdminSubdomain(request: NextRequest): boolean {
   const host = request.headers.get('host') || ''
   // Producción: admin.rodeo.app
   if (host.startsWith('admin.')) return true
-  // Desarrollo: header o query param
-  if (request.headers.get('x-admin-subdomain') === '1') return true
-  if (request.nextUrl.searchParams.get('_admin') === '1') return true
+  // Desarrollo únicamente — jamás en producción
+  if (process.env.NODE_ENV !== 'production') {
+    if (request.headers.get('x-admin-subdomain') === '1') return true
+    if (request.nextUrl.searchParams.get('_admin') === '1') return true
+  }
   return false
 }
 
