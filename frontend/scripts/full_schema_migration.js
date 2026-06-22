@@ -507,6 +507,9 @@ CREATE INDEX IF NOT EXISTS idx_team_invitations_email     ON team_invitations(em
 CREATE INDEX IF NOT EXISTS idx_team_invitations_token     ON team_invitations(token);
 CREATE INDEX IF NOT EXISTS idx_team_inv_org_status        ON team_invitations(org_id, status);
 
+-- Backfill columns added after initial table creation
+ALTER TABLE team_invitations ADD COLUMN IF NOT EXISTS first_name TEXT;
+ALTER TABLE team_invitations ADD COLUMN IF NOT EXISTS last_name  TEXT;
 
 -- custom_roles (RBAC)
 CREATE TABLE IF NOT EXISTS custom_roles (
