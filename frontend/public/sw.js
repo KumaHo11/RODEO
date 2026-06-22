@@ -11,7 +11,7 @@
  * Versionado: Cambiá CACHE_VERSION para invalidar todas las caches.
  */
 
-const CACHE_VERSION = 'rodeo-v1'
+const CACHE_VERSION = 'rodeo-v2'
 const STATIC_CACHE  = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 const API_CACHE     = `${CACHE_VERSION}-api`
@@ -78,6 +78,13 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
+  // ── 0. Never intercept Server Actions or non-GET mutations ─────────────
+  // Next.js Server Actions send POST with 'next-action' header or
+  // 'text/x-component' accept. Caching them breaks everything.
+  if (request.method !== 'GET') return
+  if (request.headers.get('next-action')) return
+  if (request.headers.get('accept')?.includes('text/x-component')) return
+
   // Solo interceptar requests del mismo origen y HTTPS/localhost
   if (url.origin !== self.location.origin && !FONT_ORIGINS.some(o => url.href.startsWith(o))) {
     return
@@ -99,9 +106,6 @@ self.addEventListener('fetch', (event) => {
 
   // ── 3. API calls: Network-first con timeout de 5s ─────────────────────
   if (url.pathname.startsWith('/api/')) {
-    // No cachear escrituras
-    if (request.method !== 'GET') return
-
     event.respondWith(networkFirst(request, API_CACHE, 5000))
     return
   }

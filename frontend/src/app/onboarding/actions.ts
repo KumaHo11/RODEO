@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { queryOne, mutate, query } from '@/lib/db'
+import { serviceQueryOne, serviceMutate } from '@/lib/db'
 
 /**
  * Extrae el objeto Geometry de un GeoJSON que puede ser:
@@ -39,7 +39,7 @@ export async function finishOnboarding(formData: {
   if (!formData.firebaseUid) throw new Error('No session')
 
   // 1. Get Profile → Org
-  const profile = await queryOne<{ organization_id: string; id: string }>(
+  const profile = await serviceQueryOne<{ organization_id: string; id: string }>(
     'SELECT id, organization_id FROM profiles WHERE firebase_uid = $1',
     [formData.firebaseUid]
   )
@@ -54,7 +54,7 @@ export async function finishOnboarding(formData: {
 
   try {
     if (fieldGeom) {
-      await mutate(
+      await serviceMutate(
         `UPDATE organizations SET
            name          = $1,
            total_area_ha = $2,
@@ -72,7 +72,7 @@ export async function finishOnboarding(formData: {
       )
     } else {
       // No boundary drawn — save name, area AND location point from step 1
-      await mutate(
+      await serviceMutate(
         `UPDATE organizations SET name = $1, total_area_ha = $2,
          location = ST_SetSRID(ST_GeomFromGeoJSON($3), 4326),
          updated_at = NOW() WHERE id = $4`,
@@ -83,7 +83,7 @@ export async function finishOnboarding(formData: {
     console.error('Error updating organization:', err.message)
     // If geometry fails, at least save name/area
     try {
-      await mutate(
+      await serviceMutate(
         `UPDATE organizations SET name = $1, total_area_ha = $2, updated_at = NOW() WHERE id = $3`,
         [formData.fieldName, areaHa, orgId]
       )
@@ -100,13 +100,13 @@ export async function finishOnboarding(formData: {
         console.warn('Paddock without geometry, inserting without geom:', p.name)
         try {
           if (p.dry_matter_kg_ha && p.dry_matter_kg_ha > 0) {
-            await mutate(
+            await serviceMutate(
               `INSERT INTO paddocks (org_id, name, area_ha, current_status, dry_matter_kg_ha, created_at, updated_at)
                VALUES ($1, $2, $3, 'RESTING', $4, NOW(), NOW())`,
               [orgId, p.name, p.area_ha, p.dry_matter_kg_ha]
             )
           } else {
-            await mutate(
+            await serviceMutate(
               `INSERT INTO paddocks (org_id, name, area_ha, current_status, created_at, updated_at)
                VALUES ($1, $2, $3, 'RESTING', NOW(), NOW())`,
               [orgId, p.name, p.area_ha]
@@ -119,13 +119,13 @@ export async function finishOnboarding(formData: {
       }
       try {
         if (p.dry_matter_kg_ha && p.dry_matter_kg_ha > 0) {
-          await mutate(
+          await serviceMutate(
             `INSERT INTO paddocks (org_id, name, area_ha, current_status, dry_matter_kg_ha, geom, created_at, updated_at)
              VALUES ($1, $2, $3, 'RESTING', $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), NOW(), NOW())`,
             [orgId, p.name, p.area_ha, p.dry_matter_kg_ha, JSON.stringify(geomJson)]
           )
         } else {
-          await mutate(
+          await serviceMutate(
             `INSERT INTO paddocks (org_id, name, area_ha, current_status, geom, created_at, updated_at)
              VALUES ($1, $2, $3, 'RESTING', ST_SetSRID(ST_GeomFromGeoJSON($4), 4326), NOW(), NOW())`,
             [orgId, p.name, p.area_ha, JSON.stringify(geomJson)]
@@ -141,7 +141,7 @@ export async function finishOnboarding(formData: {
   if (formData.herds && formData.herds.length > 0) {
     for (const h of formData.herds) {
       try {
-        await mutate(
+        await serviceMutate(
           `INSERT INTO herds
              (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria,
               admission_date, age_months, physiological_category, last_weigh_date, daily_gain_kg, created_at, updated_at)
@@ -166,7 +166,7 @@ export async function finishOnboarding(formData: {
         console.error('Insert herd (full) error:', err.message, h.name)
         // Fallback: insert only guaranteed columns
         try {
-          await mutate(
+          await serviceMutate(
             `INSERT INTO herds (org_id, name, species, breed, head_count, avg_weight_kg, total_ev, categoria, created_at, updated_at)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8, NOW(), NOW())`,
             [orgId, h.name, h.species || 'Bovine', h.breed || null,
@@ -180,7 +180,7 @@ export async function finishOnboarding(formData: {
   }
 
   // 5. Update Profile — mark onboarding complete (step 4 = fully done)
-  await mutate(
+  await serviceMutate(
     `UPDATE profiles SET onboarding_step = 4, updated_at = NOW() WHERE firebase_uid = $1`,
     [formData.firebaseUid]
   )
