@@ -185,13 +185,28 @@ CREATE TABLE IF NOT EXISTS herds (
   updated_at              TIMESTAMPTZ DEFAULT NOW()
 );
 
--- season_plan
-CREATE TABLE IF NOT EXISTS season_plan (
+-- season_plans (histórico de planes forrajeros)
+CREATE TABLE IF NOT EXISTS season_plans (
   id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id                  UUID        REFERENCES organizations(id) ON DELETE CASCADE,
+  name                    TEXT        NOT NULL,
+  season_type             VARCHAR(50) DEFAULT 'cerrado',
   year                    INT         NOT NULL,
-  status                  VARCHAR(50) DEFAULT 'DRAFT'
-    CHECK (status IN ('DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED')),
+  start_date              DATE,
+  end_date                DATE,
+  no_growth_from          DATE,
+  no_growth_to            DATE,
+  drought_reserve_days    INT         DEFAULT 0,
+  daily_allocation_kg     DECIMAL(8,2) DEFAULT 12,
+  cell_name               TEXT,
+  total_ha                DECIMAL(10,2),
+  source                  TEXT        DEFAULT 'manual'
+    CHECK (source IN ('manual', 'excel_import', 'suggested')),
+  source_filename         TEXT,
+  status                  VARCHAR(50) DEFAULT 'draft'
+    CHECK (status IN ('draft', 'active', 'completed', 'archived')),
+  demand_snapshot         JSONB,
+  supply_snapshot         JSONB,
   metrics                 JSONB       DEFAULT '{}',
   notes                   TEXT,
   created_by              UUID        REFERENCES profiles(id) ON DELETE SET NULL,

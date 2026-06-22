@@ -136,7 +136,7 @@ async function main() {
       'paddocks',          // org_id
       'herds',             // org_id
       'grazing_plans',     // org_id
-      'season_plan',       // org_id
+      'season_plans',       // org_id
       'biological_monitoring', // via paddock → org
       'rainfall_logs',     // org_id
       'subscriptions_plans', // public read
@@ -184,7 +184,7 @@ async function main() {
     )
 
     // --- Tables with org_id FK ---
-    const orgIdTables = ['paddocks', 'herds', 'grazing_plans', 'season_plan', 'rainfall_logs']
+    const orgIdTables = ['paddocks', 'herds', 'grazing_plans', 'season_plans', 'rainfall_logs']
     for (const table of orgIdTables) {
       const policyName = `${table}_tenant_isolation`
       await createPolicy(table, policyName,
