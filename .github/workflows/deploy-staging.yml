@@ -100,6 +100,7 @@ jobs:
             f'TITILER_URL: {q(os.environ.get("TITILER_URL",""))}',
             f'EMAIL_VERIFY_JWT_SECRET: {q(os.environ.get("EMAIL_VERIFY_JWT_SECRET",""))}',
             f'CONTACT_FORM_DESTINATION_EMAILS: {q(os.environ.get("CONTACT_FORM_DESTINATION_EMAILS",""))}',
+            f'CRON_SECRET: {q(os.environ.get("CRON_SECRET",""))}',
           ]
           with open('/tmp/rodeo-staging-env.yaml','w') as f: f.write('\n'.join(lines))
           print('  ✓ /tmp/rodeo-staging-env.yaml generado')
@@ -121,6 +122,7 @@ jobs:
           TITILER_URL: ${{ secrets.TITILER_URL }}
           EMAIL_VERIFY_JWT_SECRET: ${{ secrets.EMAIL_VERIFY_JWT_SECRET }}
           CONTACT_FORM_DESTINATION_EMAILS: ${{ secrets.CONTACT_FORM_DESTINATION_EMAILS }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
 
       # 7. Despliegue en Cloud Run
       - name: 'Deploy to Cloud Run'

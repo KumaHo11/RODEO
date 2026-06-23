@@ -2039,7 +2039,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         />
 
       {/* ─── Header simplificado ─── */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-start gap-3 justify-between">
 
         {/* Left: Título modo Gantt — Dropdown Custom (neutral) */}
         <div className="flex items-center gap-3 min-w-0">
@@ -2084,6 +2084,9 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       setActiveGanttTab('manual')
                       setActiveSeasonPlanId(null)
                       setDrawingMode(false) // Cancel drawing mode when switching tabs
+                      setDrawingHerdIds([])
+                      setShowSeasonPlan(false) // Close modal to reset state between modes
+                      setSeasonPlanToEdit(null)
                       setShowGanttModeDropdown(false)
                     }}
                     className={`w-full flex items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 ${activeGanttTab === 'manual' ? 'bg-gray-50' : ''}`}
@@ -2104,6 +2107,9 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                     onClick={() => {
                       setActiveGanttTab('suggested')
                       setDrawingMode(false) // Drawing mode not applicable in suggested
+                      setDrawingHerdIds([])
+                      setShowSeasonPlan(false) // Close modal to reset state between modes
+                      setSeasonPlanToEdit(null)
                       setShowGanttModeDropdown(false)
                     }}
                     className={`w-full flex items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 ${activeGanttTab === 'suggested' ? 'bg-gray-50' : ''}`}
@@ -2122,7 +2128,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           </div>
         </div>
 
-        {/* Right: View toggle + acciones */}
+        {/* Center: View toggle */}
         <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 sm:pb-0">
 
           {/* Vista toggle */}
@@ -2144,10 +2150,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               </button>
             ))}
           </div>
+        </div>
 
-
-
-          <div className="relative">
+        {/* Right: + Planificar button */}
+        <div className="relative shrink-0 ml-auto">
             <button
               onClick={async () => {
                 if (activeGanttTab === 'suggested') {
@@ -2163,7 +2169,11 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       cancelLabel: 'Nueva hoja',
                       variant: 'primary',
                     })
-                    if (!sameSheet) {
+                    if (sameSheet === null) {
+                      // X clicked or backdrop dismissed — do nothing
+                      return
+                    }
+                    if (sameSheet === false) {
                       // Nueva hoja: eliminar bloques sugeridos PLANNED existentes
                       setSaving(true)
                       try {
@@ -2195,6 +2205,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       cancelLabel: 'Nueva hoja',
                       variant: 'success',
                     })
+                    if (continueCurrent === null) {
+                      // X clicked or backdrop dismissed — do nothing
+                      return
+                    }
                     if (continueCurrent) {
                       // Misma hoja: continuar con el plan existente (NO crear plan nuevo)
                       setActiveSeasonPlanId(planIdToContinue)
@@ -2223,7 +2237,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             </button>
           </div>
 
-        </div>
       </div>
 
       {/* Aviso contextual si faltan datos (no bloquea, solo informa) */}
@@ -2400,11 +2413,16 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 </button>
               )
             })()}
-            {/* Toggle Clima — movido al panel de capas (Ojo) */}
             {/* Toggles de Capas Visuales */}
             <div className="relative">
               <button
-                onClick={() => setShowLayersPanel(p => !p)}
+                ref={(el) => { if (el) (el as any).__layersBtnRef = el }}
+                onClick={(e) => {
+                  // Store button rect for portal positioning
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  (window as any).__layersBtnRect = rect
+                  setShowLayersPanel(p => !p)
+                }}
                 title="Visibilidad de capas"
                 className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-bold transition-all ${
                   showLayersPanel ? 'bg-green-50 text-green-700 border-green-200' : 'text-gray-400 hover:text-green-600 hover:bg-green-50 border-transparent hover:border-green-100'
@@ -2412,11 +2430,17 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               >
                 <Eye className="w-4 h-4" />
               </button>
-              {showLayersPanel && (
+              {showLayersPanel && typeof document !== 'undefined' && createPortal(
                 <>
                   {/* Backdrop */}
-                  <div className="fixed inset-0 z-[49]" onClick={() => setShowLayersPanel(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-60 bg-white border border-gray-100 shadow-2xl rounded-2xl overflow-hidden z-[50] animate-in fade-in zoom-in-95 duration-150">
+                  <div className="fixed inset-0 z-[9000]" onClick={() => setShowLayersPanel(false)} />
+                  <div
+                    className="fixed w-60 bg-white border border-gray-100 shadow-2xl rounded-2xl overflow-hidden z-[9001] animate-in fade-in zoom-in-95 duration-150"
+                    style={{
+                      top: ((window as any).__layersBtnRect?.bottom ?? 0) + 8,
+                      right: Math.max(8, window.innerWidth - ((window as any).__layersBtnRect?.right ?? 0)),
+                    }}
+                  >
                     {/* Header */}
                     <div className="px-4 pt-4 pb-2 border-b border-gray-100">
                       <div className="flex items-center gap-2">
@@ -2486,7 +2510,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
                     </div>
                   </div>
-                </>
+                </>,
+                document.body
               )}
             </div>
 
@@ -4141,8 +4166,9 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
 
       {/* ── Season Plan Modal (Sugerido y Manual) ───────── */}
-      <SeasonPlanModal
-        className={showSeasonPlan ? '' : 'hidden'}
+      {showSeasonPlan && (
+        <SeasonPlanModal
+          key={activeGanttTab === 'suggested' ? 'suggested' : 'manual'}
           paddocks={paddocks}
           herds={herds}
           existingPlan={seasonPlanToEdit}
@@ -4151,6 +4177,8 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           onClose={() => {
             setShowSeasonPlan(false)
             setSeasonPlanToEdit(null)
+            setDrawingMode(false)
+            setDrawingHerdIds([])
           }}
           onSaved={(seasonPlan) => {
             setShowSeasonPlan(false)
@@ -4180,6 +4208,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             }
           }}
         />
+      )}
       {/* ── Excel Importer Modal — temporalmente deshabilitado (TODO: reimplementar flujo completo)
       {showExcelImporter && (
         <ExcelImporter

@@ -45,16 +45,25 @@ export async function POST(req: NextRequest) {
     const mimeType = (file.type || 'audio/webm') as string
 
     // ── Gemini ────────────────────────────────────────────────────────────────
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-05-20' })
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        // Disable thinking to get faster, literal transcription without model "reasoning"
+        // @ts-expect-error -- thinkingConfig is supported but not yet in @google/generative-ai types
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    })
 
     const result = await model.generateContent([
       { inlineData: { data: base64Audio, mimeType: mimeType as any } },
       `Sos el asistente de campo de RODEO, sistema de gestión ganadera regenerativa.
 Audio grabado por un capataz o recorredor en Argentina.
 
+INSTRUCCIÓN PRINCIPAL: La transcripción debe ser LITERAL, palabra por palabra exactamente como habla la persona. NO parafrasees, NO resumas, NO interpretes el contenido. Si la persona dice "eh", "este", "bueno", incluilo tal cual.
+
 Analizá el audio y respondé ÚNICAMENTE con un objeto JSON (sin markdown, sin texto extra):
 {
-  "transcript": "<transcripción literal en español rioplatense>",
+  "transcript": "<transcripción LITERAL palabra por palabra en español rioplatense>",
   "category": "<una de las categorías de abajo>",
   "paddock_hint": "<nombre del potrero mencionado, o null>",
   "tasks": ["<tarea pendiente concreta>"],

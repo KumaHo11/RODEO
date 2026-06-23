@@ -5,16 +5,18 @@
  *  1. Precache:     App shell (manifest, íconos, offline fallback HTML)
  *  2. Cache-first:  Assets estáticos (/_next/static/, imágenes, fuentes)
  *  3. Network-first: Navegaciones HTML (con fallback a offline page)
- *  4. Network-first: API calls (con fallback al cache si hay timeout)
- *  5. Background Sync: Envía outbox cuando la red vuelve
+ *  4. Background Sync: Envía outbox cuando la red vuelve
+ *
+ * IMPORTANTE: Las llamadas a /api/ NO son interceptadas por el SW.
+ * Los datos offline se manejan via IndexedDB + outbox pattern.
+ * Esto evita problemas con headers de Authorization.
  *
  * Versionado: Cambiá CACHE_VERSION para invalidar todas las caches.
  */
 
-const CACHE_VERSION = 'rodeo-v2'
+const CACHE_VERSION = 'rodeo-v3'
 const STATIC_CACHE  = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
-const API_CACHE     = `${CACHE_VERSION}-api`
 
 // Recursos a pre-cachear en install
 const PRECACHE_URLS = [
@@ -78,25 +80,34 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // ── 0. Never intercept Server Actions or non-GET mutations ─────────────
-  // Next.js Server Actions send POST with 'next-action' header or
-  // 'text/x-component' accept. Caching them breaks everything.
+  // ── 0. SKIP everything that isn't a simple GET ──────────────────────────
   if (request.method !== 'GET') return
+
+  // ── 1. SKIP API calls — they carry Authorization headers that break ─────
+  // when re-fetched inside the SW. IndexedDB + outbox handle offline data.
+  if (url.pathname.startsWith('/api/')) return
+
+  // ── 2. SKIP Next.js Server Actions and RSC payloads ─────────────────────
   if (request.headers.get('next-action')) return
   if (request.headers.get('accept')?.includes('text/x-component')) return
+  if (request.headers.get('rsc')) return
 
-  // Solo interceptar requests del mismo origen y HTTPS/localhost
+  // ── 3. SKIP Firebase Auth / Google API requests ─────────────────────────
+  if (url.hostname.includes('googleapis.com') && !url.href.startsWith('https://fonts.')) return
+  if (url.hostname.includes('firebaseapp.com')) return
+
+  // Solo interceptar requests del mismo origen y fuentes
   if (url.origin !== self.location.origin && !FONT_ORIGINS.some(o => url.href.startsWith(o))) {
     return
   }
 
-  // ── 1. Fuentes (Google Fonts): Stale-While-Revalidate ──────────────────
+  // ── 4. Fuentes (Google Fonts): Stale-While-Revalidate ──────────────────
   if (FONT_ORIGINS.some(o => url.href.startsWith(o))) {
     event.respondWith(staleWhileRevalidate(request, STATIC_CACHE))
     return
   }
 
-  // ── 2. Assets estáticos Next.js: Cache-First ───────────────────────────
+  // ── 5. Assets estáticos Next.js: Cache-First ───────────────────────────
   if (url.pathname.startsWith('/_next/static/') ||
       url.pathname.startsWith('/icons/') ||
       url.pathname.match(/\.(svg|png|jpg|jpeg|webp|ico|woff2?)$/)) {
@@ -104,13 +115,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // ── 3. API calls: Network-first con timeout de 5s ─────────────────────
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(request, API_CACHE, 5000))
-    return
-  }
-
-  // ── 4. Navegación HTML: Network-first con fallback offline ─────────────
+  // ── 6. Navegación HTML: Network-first con fallback offline ─────────────
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       networkFirst(request, DYNAMIC_CACHE, 8000).catch(() => {
@@ -120,7 +125,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // ── 5. Resto: Network-first genérico ───────────────────────────────────
+  // ── 7. Resto (JS chunks, CSS, etc.): Network-first ────────────────────
   event.respondWith(networkFirst(request, DYNAMIC_CACHE, 5000))
 })
 

@@ -512,9 +512,10 @@ function InteractiveGantt({
   }, [farmEvents, movements])
 
   // Eventos que se renderizan como líneas/puntos en el Gantt timeline.
-  // Solo Agenda (farm_events) — excluye todos los movements operacionales.
+  // Solo Agenda (farm_events con source != 'rodeo') — excluye movements operacionales
+  // y registros/notas/audios creados desde la sección Rodeos.
   const ganttDisplayEvents = useMemo(() =>
-    unifiedEvents.filter(e => !e.isMovement)
+    unifiedEvents.filter(e => !e.isMovement && e.source !== 'rodeo')
   , [unifiedEvents])
 
 
