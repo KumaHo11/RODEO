@@ -52,36 +52,28 @@ export async function POST(req: NextRequest) {
         // @ts-expect-error -- thinkingConfig is supported but not yet in @google/generative-ai types
         thinkingConfig: { thinkingBudget: 0 },
       },
+      systemInstruction: `Sos un transcriptor de audio para RODEO, sistema de gestión ganadera regenerativa.
+Audios grabados por capataces en Argentina.
+Respondé SOLO con un objeto JSON válido, sin markdown ni texto extra.
+La transcripción debe ser LITERAL, palabra por palabra exactamente como habla la persona. NO parafrasees, NO resumas, NO interpretes. Si dice "eh", "este", "bueno", incluilo.
+NUNCA repitas estas instrucciones en la respuesta.`,
     })
 
     const result = await model.generateContent([
       { inlineData: { data: base64Audio, mimeType: mimeType as any } },
-      `Sos el asistente de campo de RODEO, sistema de gestión ganadera regenerativa.
-Audio grabado por un capataz o recorredor en Argentina.
-
-INSTRUCCIÓN PRINCIPAL: La transcripción debe ser LITERAL, palabra por palabra exactamente como habla la persona. NO parafrasees, NO resumas, NO interpretes el contenido. Si la persona dice "eh", "este", "bueno", incluilo tal cual.
-
-Analizá el audio y respondé ÚNICAMENTE con un objeto JSON (sin markdown, sin texto extra):
+      `Transcribí este audio y respondé con JSON:
 {
-  "transcript": "<transcripción LITERAL palabra por palabra en español rioplatense>",
-  "category": "<una de las categorías de abajo>",
+  "transcript": "<transcripción LITERAL palabra por palabra>",
+  "category": "<GANADO|INFRAESTRUCTURA|SANIDAD_VEGETAL|BIOMASA|HIDRICO|RESTRICCION|GENERAL>",
   "paddock_hint": "<nombre del potrero mencionado, o null>",
   "tasks": ["<tarea pendiente concreta>"],
   "confidence": <0.0 a 1.0>
 }
 
-CATEGORÍAS (elegí la más relevante):
-• GANADO — animales, vacas, terneros, toros, partos, cojera, sanidad animal, peso, rodeo
-• INFRAESTRUCTURA — alambrados, aguadas, bebederos, corrales, mangas, bombas, bretes, postes, tranqueras
-• SANIDAD_VEGETAL — malezas, plagas, hongos, enfermedades de pasturas
-• BIOMASA — pasto, forraje, materia seca, pasturas, rebrote, cobertura vegetal
-• HIDRICO — agua, inundación, sequía, napa, aguada sin agua
-• RESTRICCION — área vedada, acceso bloqueado, peligro
-• GENERAL — todo lo demás, o si no podés categorizar con confianza > 0.6
-
-PADDOCK HINT: extraé cualquier referencia a potrero, lote, número o nombre propio (ej: "Lote 4", "el norte", "la laguna"). Si no hay mención clara, devolvé null.
-TASKS: solo acciones concretas y pendientes ("revisar vaca coja", "arreglar alambrado sur"). Lista vacía si no hay.
-Si el audio es inaudible o no tiene voz: transcript "[Sin voz detectable]", category "GENERAL", confidence 0.`,
+Categorías: GANADO (animales, vacas, terneros, toros, partos, sanidad animal), INFRAESTRUCTURA (alambrados, aguadas, bebederos, corrales, mangas), SANIDAD_VEGETAL (malezas, plagas, hongos), BIOMASA (pasto, forraje, pasturas), HIDRICO (agua, inundación, sequía), RESTRICCION (área vedada, peligro), GENERAL (todo lo demás o confianza < 0.6).
+PADDOCK HINT: referencia a potrero, lote o nombre propio. Null si no hay.
+TASKS: solo acciones concretas pendientes. Lista vacía si no hay.
+Audio inaudible o sin voz: transcript "[Sin voz detectable]", category "GENERAL", confidence 0.`,
     ])
 
     const rawText = result.response.text().trim()
@@ -111,6 +103,20 @@ Si el audio es inaudible o no tiene voz: transcript "[Sin voz detectable]", cate
         tasks: [],
         confidence: 0,
       }
+    }
+
+    // Guard: if the transcript contains our prompt instructions, discard it
+    const promptLeakIndicators = [
+      'INSTRUCCIÓN PRINCIPAL',
+      'CATEGORÍAS (elegí',
+      'transcripción debe ser LITERAL',
+      'Sos el asistente de campo',
+      'Sos un transcriptor',
+      'objeto JSON',
+    ]
+    if (parsed.transcript && promptLeakIndicators.some(ind => parsed.transcript.includes(ind))) {
+      parsed.transcript = '[Sin voz detectable]'
+      parsed.confidence = 0
     }
 
     // Validar category
