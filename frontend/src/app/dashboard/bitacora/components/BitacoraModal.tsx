@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { apiFetch } from '@/lib/apiFetch'
 import { addToOfflineQueue } from '@/components/OfflineManager'
 import { X, Mic, Camera, Loader2, Check, Square, Trash2, CloudOff } from 'lucide-react'
@@ -126,13 +127,15 @@ export default function BitacoraModal({
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
+  const [showPhotoMenu, setShowPhotoMenu] = useState(false)
 
   const resetAll = useCallback(() => {
     setSaving(false); setSavingMsg(''); setTextContent('')
     setIsRecording(false); setRecordSecs(0); setAudioBlob(null); setMediaStream(null); setLiveTranscript('')
     if (timerRef.current) clearInterval(timerRef.current)
     speechRef.current?.stop(); mediaRecorderRef.current?.stop()
-    setPhotoFile(null); setPhotoPreview(null)
+    setPhotoFile(null); setPhotoPreview(null); setShowPhotoMenu(false)
   }, [])
 
   useEffect(() => {
@@ -478,11 +481,12 @@ export default function BitacoraModal({
               </button>
             )}
             
-            <button type="button" onClick={() => cameraRef.current?.click()}
+            <button type="button" onClick={() => setShowPhotoMenu(true)}
               className="w-10 h-10 rounded-full bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-500 flex items-center justify-center transition-colors">
               <Camera className="w-5 h-5" />
             </button>
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={handlePhotoChange} />
+            <input ref={galleryRef} type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
           </div>
 
           <button type="button" onClick={handleSave} disabled={!canSave()}
@@ -495,6 +499,42 @@ export default function BitacoraModal({
 
         </div>
       </div>
+
+      {/* Photo menu modal */}
+      {showPhotoMenu && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-gray-900/50 backdrop-blur-md px-4"
+          onClick={() => setShowPhotoMenu(false)}>
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-6 relative animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowPhotoMenu(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+            <div className="text-center mb-6 mt-2">
+              <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-100">
+                <Camera className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Agregar imagen</h3>
+              <p className="text-sm text-gray-500 mt-1">Seleccioná el origen de la foto</p>
+            </div>
+            
+            <div className="space-y-3">
+              <button onClick={() => { setShowPhotoMenu(false); cameraRef.current?.click() }}
+                className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-600 text-white rounded-2xl hover:bg-green-700 transition-all font-bold">
+                <Camera className="w-4 h-4" />
+                <span>Tomar foto con la cámara</span>
+              </button>
+              
+              <button onClick={() => { setShowPhotoMenu(false); galleryRef.current?.click() }}
+                className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-50 text-green-700 rounded-2xl hover:bg-green-100 transition-all font-bold border border-green-200">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                <span>Elegir de la galería</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   )
 }

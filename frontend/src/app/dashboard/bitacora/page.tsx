@@ -1,12 +1,13 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio, savePendingPhoto, getAllPendingPhotos, deletePendingPhoto, countPendingItems } from '@/lib/audioOfflineStore'
 import {
   Mic, Camera, Loader2, Image as ImageIcon,
-  CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp, Lock, MessageCircle, Filter,
+  CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp, Lock, MessageCircle, Filter, FileText
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
@@ -165,6 +166,10 @@ export default function BitacoraPage() {
   const galleryRef = useRef<HTMLInputElement>(null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
+
+  // Text
+  const [showTextMenu, setShowTextMenu] = useState(false)
+  const [textNote, setTextNote] = useState('')
 
   // Ref to always access the latest saveNote without adding it to useEffect deps
   const saveNoteRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -490,6 +495,45 @@ export default function BitacoraPage() {
     }
   }
 
+  const saveTextNote = async () => {
+    if (saving || !textNote.trim()) return
+    setSaving(true)
+    const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+    const title = `Nota de texto · ${timestamp}`
+
+    if (!navigator.onLine) {
+      setSavingMsg('Guardando sin conexión...')
+      const { addToOfflineQueue } = await import('@/components/OfflineManager')
+      addToOfflineQueue({
+        type: 'field_note',
+        data: {
+          paddock_id: null, tags: ['GENERAL'], title,
+          content: textNote.trim(), lat, lng,
+          sync_status: 'PENDING',
+        },
+        timestamp: Date.now(),
+      } as any)
+      toast.success('📝 Nota guardada. Se subirá al servidor cuando tengas conexión.')
+      flashSaved(); resetCapture(); setShowTextMenu(false); setTextNote(''); return
+    }
+
+    try {
+      setSavingMsg('Guardando nota...')
+      await apiFetch('/api/field-notes', {
+        method: 'POST',
+        body: JSON.stringify({
+          paddock_id: null, tags: ['GENERAL'], title,
+          content: textNote.trim(), lat, lng,
+        }),
+      })
+      flashSaved(); resetCapture(); setShowTextMenu(false); setTextNote(''); loadNotes()
+    } catch (e) {
+      console.error('saveTextNote error:', e)
+      toast.error('No se pudo guardar la nota')
+      setSaving(false)
+    }
+  }
+
   // Keep the ref in sync with the latest saveNote closure
   saveNoteRef.current = saveNote
 
@@ -594,55 +638,45 @@ export default function BitacoraPage() {
           */}
         </div>
 
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto">
+        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2 scrollbar-hide">
+          {/* File Type Filters */}
+          <div className="bg-gray-50 rounded-2xl p-1 flex gap-1 shrink-0 items-center border border-gray-100">
+            {['audio', 'foto', 'texto'].map(t => (
+              <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
+                className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-all ${
+                  historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                {t === 'audio' ? 'Audio' : t === 'foto' ? 'Imagen' : 'Texto'}
+              </button>
+            ))}
+          </div>
 
-          {/* Filters panel — expands to the left of search */}
-          {(isFilterExpanded || historyTypeFilter || historyMonthFilter) && (
-            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
-                {['audio', 'foto', 'texto'].map(t => (
-                  <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
-                    className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                      historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
-                    }`}>
-                    {t.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-              {availableMonths.length > 0 && (
-                <div className="bg-gray-100 rounded-2xl p-1 flex gap-1 shrink-0">
-                  {availableMonths.map(m => (
-                    <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
-                      className={`px-4 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                        historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-white/50'
-                      }`}>
-                      {m.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              )}
+          {/* Month Filters */}
+          {availableMonths.length > 0 && (
+            <div className="bg-gray-50 rounded-2xl p-1 flex gap-1 shrink-0 items-center border border-gray-100">
+              {availableMonths.map(m => (
+                <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
+                  className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-all ${
+                    historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {m}
+                </button>
+              ))}
             </div>
           )}
 
           <div className="flex-1" />
 
-          {/* Search + Filter — always visible on the right */}
-          <div className="tour-bitacora-filtros flex items-center gap-1 bg-gray-100 rounded-2xl px-3 shrink-0">
+          {/* Search */}
+          <div className="tour-bitacora-filtros flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-2xl px-3 shrink-0">
             <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               type="text"
               placeholder="Buscar..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="bg-transparent border-none py-2.5 text-xs outline-none focus:ring-0 text-gray-900 w-40 sm:w-52 placeholder:text-gray-400"
+              className="bg-transparent border-none py-2 text-sm font-medium outline-none focus:ring-0 text-gray-900 w-32 sm:w-52 placeholder:text-gray-400"
             />
-            <div className="w-px h-4 bg-gray-200 mx-1 shrink-0" />
-            <button
-              onClick={() => setIsFilterExpanded(!isFilterExpanded)}
-              className={`p-1 rounded-xl transition-all shrink-0 ${isFilterExpanded || historyTypeFilter || historyMonthFilter ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              <Filter className="w-4 h-4" />
-            </button>
           </div>
         </div>
         <div className="sm:hidden mt-6">
@@ -718,7 +752,10 @@ export default function BitacoraPage() {
                 className="tour-bitacora-grabar w-24 h-24 rounded-full bg-white border-[6px] border-gray-100 flex items-center justify-center shadow-2xl hover:scale-105 active:scale-90 transition-all">
                 <div className="w-16 h-16 rounded-full bg-red-600 shadow-lg shadow-red-200" />
               </button>
-              <div className="w-14 h-14 invisible" />
+              <button onClick={() => setShowTextMenu(true)}
+                className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all border border-gray-100 active:scale-95">
+                <FileText className="w-6 h-6" />
+              </button>
             </div>
           ) : (
             /* Plan no incluye voice — mostrar mensaje de upgrade */
@@ -739,32 +776,78 @@ export default function BitacoraPage() {
         </div>
       </div>
 
-      {/* Photo menu */}
-      {showPhotoMenu && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm px-4 overflow-hidden"
+      {/* Photo menu modal */}
+      {showPhotoMenu && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/50 backdrop-blur-md px-4"
           onClick={() => setShowPhotoMenu(false)}>
-          <div className="bg-white w-full max-w-sm rounded-t-3xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 duration-300 pb-10"
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-6 relative animate-in zoom-in-95 duration-200"
             onClick={e => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mt-4 mb-6" />
-            <div className="px-6 space-y-2">
+            <button onClick={() => setShowPhotoMenu(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+            <div className="text-center mb-6 mt-2">
+              <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-100">
+                <Camera className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Agregar imagen</h3>
+              <p className="text-sm text-gray-500 mt-1">Seleccioná el origen de la foto</p>
+            </div>
+            
+            <div className="space-y-3">
               <button onClick={() => { setShowPhotoMenu(false); cameraRef.current?.click() }}
-                className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl transition-all text-left">
-                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                  <Camera className="w-5 h-5 text-blue-600" />
-                </div>
-                <div><p className="text-sm font-black text-gray-900">Tomar Foto</p><p className="text-xs text-gray-400">Usar la cámara del dispositivo</p></div>
+                className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-600 text-white rounded-2xl hover:bg-green-700 transition-all font-bold">
+                <Camera className="w-4 h-4" />
+                <span>Tomar foto con la cámara</span>
               </button>
+              
               <button onClick={() => { setShowPhotoMenu(false); galleryRef.current?.click() }}
-                className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl transition-all text-left">
-                <div className="w-10 h-10 rounded-full bg-violet-50 flex items-center justify-center">
-                  <ImageIcon className="w-5 h-5 text-violet-600" />
-                </div>
-                <div><p className="text-sm font-black text-gray-900">Galería</p><p className="text-xs text-gray-400">Elegir de tus archivos</p></div>
+                className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-50 text-green-700 rounded-2xl hover:bg-green-100 transition-all font-bold border border-green-200">
+                <ImageIcon className="w-4 h-4" />
+                <span>Elegir de la galería</span>
               </button>
             </div>
-            <button onClick={() => setShowPhotoMenu(false)} className="w-full mt-4 py-4 text-sm font-black text-gray-400">CERRAR</button>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Text menu modal */}
+      {showTextMenu && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/50 backdrop-blur-md px-4"
+          onClick={() => setShowTextMenu(false)}>
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-6 relative animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowTextMenu(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+            <div className="text-center mb-6 mt-2">
+              <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-100">
+                <FileText className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Agregar texto</h3>
+              <p className="text-sm text-gray-500 mt-1">Escribí tu nota de campo</p>
+            </div>
+            
+            <div className="space-y-4">
+              <textarea
+                autoFocus
+                value={textNote}
+                onChange={e => setTextNote(e.target.value)}
+                placeholder="Ej: Revisar el bebedero del fondo..."
+                className="w-full h-32 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+              />
+              
+              <button 
+                onClick={saveTextNote}
+                disabled={!textNote.trim() || saving}
+                className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-600 text-white rounded-2xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold">
+                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                <span>Guardar nota</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
