@@ -26,7 +26,7 @@ export type ConfirmOptions = {
   variant?: 'danger' | 'warning' | 'info' | 'primary' | 'success'
 }
 
-type ResolveCallback = (value: boolean) => void
+type ResolveCallback = (value: boolean | null) => void
 
 export function useConfirm() {
   const [open, setOpen] = useState(false)
@@ -38,7 +38,7 @@ export function useConfirm() {
   })
   const resolveRef = useRef<ResolveCallback | null>(null)
 
-  const confirm = useCallback((opts: ConfirmOptions): Promise<boolean> => {
+  const confirm = useCallback((opts: ConfirmOptions): Promise<boolean | null> => {
     setOptions({
       confirmLabel: 'Confirmar',
       cancelLabel: 'Cancelar',
@@ -46,7 +46,7 @@ export function useConfirm() {
       ...opts,
     })
     setOpen(true)
-    return new Promise<boolean>((resolve) => {
+    return new Promise<boolean | null>((resolve) => {
       resolveRef.current = resolve
     })
   }, [])
@@ -59,6 +59,11 @@ export function useConfirm() {
   const handleCancel = useCallback(() => {
     setOpen(false)
     resolveRef.current?.(false)
+  }, [])
+
+  const handleDismiss = useCallback(() => {
+    setOpen(false)
+    resolveRef.current?.(null)
   }, [])
 
   const [mounted, setMounted] = useState(false)
@@ -90,7 +95,7 @@ export function useConfirm() {
       <div
         className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pb-20 md:pb-4"
         style={{ backdropFilter: 'blur(4px)', backgroundColor: 'rgba(0,0,0,0.45)' }}
-        onMouseDown={(e) => { if (e.target === e.currentTarget) handleCancel() }}
+        onMouseDown={(e) => { if (e.target === e.currentTarget) handleDismiss() }}
       >
         <div
           className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150"
@@ -114,7 +119,7 @@ export function useConfirm() {
               )}
             </div>
             <button
-              onClick={handleCancel}
+              onClick={handleDismiss}
               className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
             >
               <X className="w-4 h-4" />

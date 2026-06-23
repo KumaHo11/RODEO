@@ -1853,21 +1853,24 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       </div>
                     )}
 
-                    {/* ADPV */}
-                    {['TERNERO','NOVILLITO','RECRIA_NOVILLO','RECRIA_VAQUILLONA','TORO_DESCANSO','TORO_SERVICIO'].includes(physioPanel.physioCategory) && (
+                    {/* ADPV — shown for all categories */}
+                    {physioPanel.physioCategory && (
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5">
                           <label className={LABEL} style={{ marginBottom: 0 }}>
                             <TrendingUp className="w-3 h-3 text-teal-500 inline mr-1" />ADPV (kg/día)
                           </label>
-                          <Tooltip text="Aumento Diario de Peso Vivo. Cuántos kg gana cada animal por día. Rango típico en pastoreo: 0.300–0.800 kg/día." />
+                          <Tooltip text={['VACA_CON_TERNERO','VACA_PRENADA','VACA_VACIA','VACA_SECA'].includes(physioPanel.physioCategory)
+                            ? 'Aumento Diario de Peso Vivo. Para vacas adultas en mantenimiento, el ADPV típico es 0 a 0.150 kg/día. Podés dejarlo en 0 para ver la proyección de mantenimiento.'
+                            : 'Aumento Diario de Peso Vivo. Cuántos kg gana cada animal por día. Rango típico en pastoreo: 0.300–0.800 kg/día.'} />
                         </div>
                         <input type="number" step="0.05" min="-0.2" max="1.5" inputMode="decimal"
                           className={INPUT}
                           value={physioPanel.adpvKgDay}
                           onChange={e => setPhysioPanel(p => ({ ...p, adpvKgDay: e.target.value === '' ? '' : Number(e.target.value) }))}
-                          onFocus={e => e.target.select()} placeholder="Ej: 0.500" />
-                        <p className="text-[10px] text-gray-400">Aumento Diario de Peso Vivo</p>
+                          onFocus={e => e.target.select()}
+                          placeholder={['VACA_CON_TERNERO','VACA_PRENADA','VACA_VACIA','VACA_SECA'].includes(physioPanel.physioCategory) ? 'Ej: 0 (mantenimiento)' : 'Ej: 0.500'} />
+                        <p className="text-[10px] text-gray-400">Aumento Diario de Peso Vivo{['VACA_CON_TERNERO','VACA_PRENADA','VACA_VACIA','VACA_SECA'].includes(physioPanel.physioCategory) ? ' (0 = mantenimiento)' : ''}</p>
                       </div>
                     )}
 
@@ -2018,12 +2021,12 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       </AnimatePresence>
                     </div>
 
-                    {/* Proyección de crecimiento */}
-                    {effectiveEV > 0 && physioPanel.adpvKgDay !== '' && Number(physioPanel.adpvKgDay) > 0 && physioPanel.pesoKg !== '' && (
+                    {/* Proyección de crecimiento — show for any category with valid weight */}
+                    {effectiveEV > 0 && physioPanel.pesoKg !== '' && Number(physioPanel.pesoKg) > 0 && (
                       <GrowthProjectionChart
                         physioCategory={physioCategory || null}
                         avgWeightKg={Number(physioPanel.pesoKg)}
-                        gdpKgDay={Number(physioPanel.adpvKgDay)}
+                        gdpKgDay={Number(physioPanel.adpvKgDay) || 0}
                         headCount={Number(count) || 1}
                         lastWeighDate={physioPanel.lastWeighDate || null}
                         months={6}

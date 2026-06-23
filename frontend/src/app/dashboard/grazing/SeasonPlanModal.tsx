@@ -581,7 +581,8 @@ export default function SeasonPlanModal({
       const fullPlan = { ...payload, ...data, id: existingPlan?.id || data.id } as SeasonPlan
       import('@/lib/analytics').then(({ event }) => event({ action: 'plan_wizard_complete', category: 'planner', mode: isSuggestedMode ? 'sugerido' : 'manual', season_days: seasonDays, herds_count: selectedHerdIds.length }))
       onSaved(fullPlan)
-      onClose()
+      // Note: onClose() not called here — parent's onSaved already sets showSeasonPlan(false)
+      // which unmounts this component. Calling both caused double state updates.
     } catch (e: any) {
       setError('Error de red: ' + e.message)
     } finally {

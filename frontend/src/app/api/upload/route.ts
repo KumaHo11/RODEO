@@ -24,10 +24,36 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { Storage } from '@google-cloud/storage'
 
-// Instantiate a GCS client using ADC.
-// In Cloud Run: automatically uses the Compute SA via metadata server.
-// Locally: uses GOOGLE_APPLICATION_CREDENTIALS or gcloud ADC.
-const gcs = new Storage()
+// Instantiate a GCS client.
+// In Cloud Run: automatically uses the Compute SA via metadata server (ADC).
+// Locally: falls back to FIREBASE_ADMIN_CREDENTIALS_BASE64 service account key.
+function createGcsClient(): Storage {
+  // Try ADC first (works in Cloud Run and when GOOGLE_APPLICATION_CREDENTIALS is set)
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    return new Storage()
+  }
+  // Fallback: use the Firebase Admin SA key (already available in local dev)
+  if (process.env.FIREBASE_ADMIN_CREDENTIALS_BASE64) {
+    try {
+      const json = JSON.parse(
+        Buffer.from(process.env.FIREBASE_ADMIN_CREDENTIALS_BASE64, 'base64').toString('utf8')
+      )
+      return new Storage({
+        projectId: json.project_id,
+        credentials: {
+          client_email: json.client_email,
+          private_key: json.private_key,
+        },
+      })
+    } catch (e) {
+      console.warn('[upload] Failed to parse FIREBASE_ADMIN_CREDENTIALS_BASE64, falling back to ADC')
+    }
+  }
+  // Final fallback: ADC (may fail locally if not configured)
+  return new Storage()
+}
+
+const gcs = createGcsClient()
 
 // Bucket determined by environment: 'rodeo-media' (staging) or 'rodeo-media-prod' (production)
 const PRIMARY_BUCKET = process.env.GCS_BUCKET_NAME || 'rodeo-media'

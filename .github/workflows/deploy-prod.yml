@@ -102,6 +102,7 @@ jobs:
             f'TITILER_URL: {q(os.environ.get("TITILER_URL",""))}',
             f'EMAIL_VERIFY_JWT_SECRET: {q(os.environ.get("EMAIL_VERIFY_JWT_SECRET",""))}',
             f'CONTACT_FORM_DESTINATION_EMAILS: {q(os.environ.get("CONTACT_FORM_DESTINATION_EMAILS",""))}',
+            f'CRON_SECRET: {q(os.environ.get("CRON_SECRET",""))}',
           ]
           with open('/tmp/rodeo-prod-env.yaml','w') as f: f.write('\n'.join(lines))
           print('  ✓ /tmp/rodeo-prod-env.yaml generado')
@@ -123,6 +124,7 @@ jobs:
           TITILER_URL: ${{ secrets.TITILER_URL_PROD }}
           EMAIL_VERIFY_JWT_SECRET: ${{ secrets.EMAIL_VERIFY_JWT_SECRET_PROD }}
           CONTACT_FORM_DESTINATION_EMAILS: ${{ secrets.CONTACT_FORM_DESTINATION_EMAILS_PROD }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET_PROD }}
 
       - name: 'Clear legacy Cloud Run secret bindings'
         run: |-

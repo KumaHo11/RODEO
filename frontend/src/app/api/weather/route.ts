@@ -25,7 +25,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
-import { serviceQueryOne, serviceQuery, serviceMutate, getDbPool } from '@/lib/db'
+import { serviceQueryOne, serviceQuery, serviceMutate, getServicePool } from '@/lib/db'
 import type { CreateWeatherEventPayload } from '@/lib/types/weather'
 
 // ── Auth helper (same pattern as other routes) ────────────────────────────────
@@ -172,9 +172,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Transaction: insert event + M2M links
-    const client = await getDbPool().connect()
+    const client = await getServicePool().connect()
     try {
       await client.query('BEGIN')
+      console.log(`[POST /api/weather] Starting transaction: type=${body.type} value=${body.value} date=${body.date} paddocks=${body.paddockIds.length}`)
 
       const eventResult = await client.query(
         `INSERT INTO weather_events (org_id, recorder_id, type, value, date, notes)
@@ -182,37 +183,50 @@ export async function POST(req: NextRequest) {
         [auth.orgId, auth.profileId, body.type, body.value, body.date, body.notes ?? null]
       )
       const event = eventResult.rows[0]
+      console.log(`[POST /api/weather] ✓ weather_event created: id=${event.id}`)
 
-      // Insert M2M links and update historial_potrero
+      // Insert M2M links (within main transaction)
       for (const paddockId of paddocks.map(p => p.id)) {
         await client.query(
           'INSERT INTO weather_event_paddocks (weather_event_id, paddock_id) VALUES ($1, $2)',
           [event.id, paddockId]
         )
-
-        if (body.type === 'RAIN') {
-          await client.query(`
-            INSERT INTO historial_potrero (
-              org_id, paddock_id, fecha, precipitacion_usuario_mm, lluvia_fuente
-            ) VALUES ($1, $2, $3, $4, 'user')
-            ON CONFLICT (paddock_id, fecha) DO UPDATE SET
-              precipitacion_usuario_mm = EXCLUDED.precipitacion_usuario_mm,
-              lluvia_fuente = 'user',
-              updated_at = NOW()
-          `, [auth.orgId, paddockId, body.date, body.value])
-        } else if (body.type === 'FROST') {
-          await client.query(`
-            INSERT INTO historial_potrero (
-              org_id, paddock_id, fecha, temperatura_c
-            ) VALUES ($1, $2, $3, $4)
-            ON CONFLICT (paddock_id, fecha) DO UPDATE SET
-              temperatura_c = EXCLUDED.temperatura_c,
-              updated_at = NOW()
-          `, [auth.orgId, paddockId, body.date, body.value])
-        }
       }
+      console.log(`[POST /api/weather] ✓ weather_event_paddocks linked: ${paddocks.length} paddocks`)
 
       await client.query('COMMIT')
+      console.log(`[POST /api/weather] ✓ main transaction committed`)
+
+      // ── Best-effort: update historial_potrero (outside main transaction) ────
+      // This runs AFTER the main event is saved, so if historial_potrero has
+      // missing columns or constraints, the weather event is still persisted.
+      for (const paddockId of paddocks.map(p => p.id)) {
+        try {
+          if (body.type === 'RAIN') {
+            await client.query(`
+              INSERT INTO historial_potrero (
+                org_id, paddock_id, fecha, precipitacion_usuario_mm, lluvia_fuente
+              ) VALUES ($1, $2, $3, $4, 'user')
+              ON CONFLICT (paddock_id, fecha) DO UPDATE SET
+                precipitacion_usuario_mm = EXCLUDED.precipitacion_usuario_mm,
+                lluvia_fuente = 'user',
+                updated_at = NOW()
+            `, [auth.orgId, paddockId, body.date, body.value])
+          } else if (body.type === 'FROST') {
+            await client.query(`
+              INSERT INTO historial_potrero (
+                org_id, paddock_id, fecha, temperatura_c
+              ) VALUES ($1, $2, $3, $4)
+              ON CONFLICT (paddock_id, fecha) DO UPDATE SET
+                temperatura_c = EXCLUDED.temperatura_c,
+                updated_at = NOW()
+            `, [auth.orgId, paddockId, body.date, body.value])
+          }
+        } catch (histErr: any) {
+          // Log but don't fail — the main event is already saved
+          console.warn(`[POST /api/weather] ⚠ historial_potrero update failed for paddock=${paddockId}: ${histErr.message}`)
+        }
+      }
 
       // Fetch the full event with paddock details for the response
       const fullEvents = await serviceQuery<Record<string, unknown>>(`
@@ -237,7 +251,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ event: fullEvents[0] }, { status: 201 })
     } catch (err) {
-      await client.query('ROLLBACK')
+      await client.query('ROLLBACK').catch(() => {})
       throw err
     } finally {
       client.release()
