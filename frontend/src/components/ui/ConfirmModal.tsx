@@ -147,7 +147,7 @@ export function useConfirm() {
     
     if (typeof document === 'undefined') return null
     return createPortal(modalContent, document.body)
-  }, [open, options, handleConfirm, handleCancel, mounted])
+  }, [open, options, handleConfirm, handleCancel, handleDismiss, mounted])
 
   return { confirm, ConfirmModal }
 }

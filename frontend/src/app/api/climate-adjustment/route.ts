@@ -135,11 +135,11 @@ export async function POST(req: NextRequest) {
       FROM weather_cache WHERE org_id = $1 ORDER BY fetched_at DESC LIMIT 1
     `, [auth.orgId]).catch(() => null)
 
-    // Manual rainfall events last 7d
+    // Manual rainfall events last 7d (from historial_potrero)
     const rainfallRow = await serviceQueryOne<{ total_mm: number }>(`
-      SELECT COALESCE(SUM(value), 0) AS total_mm
-      FROM weather_events
-      WHERE org_id = $1 AND type = 'RAIN' AND date >= CURRENT_DATE - INTERVAL '7 days'
+      SELECT COALESCE(SUM(precipitacion), 0) AS total_mm
+      FROM historial_potrero
+      WHERE org_id = $1 AND precipitacion > 0 AND fecha >= CURRENT_DATE - INTERVAL '7 days'
     `, [auth.orgId]).catch(() => null)
 
     // Days since previous NDVI

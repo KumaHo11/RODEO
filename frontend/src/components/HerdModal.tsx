@@ -187,6 +187,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const canVoice     = hasFeature('voice_bitacora')
 
   const [tab, setTab] = useState<'operativo' | 'actividades' | 'registros' | 'historial'>('operativo')
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   // liveHerd: copia local del herd que se actualiza optimistamente tras cada actividad.
   // Esto evita que el modal muestre datos obsoletos mientras el padre refetcha.
@@ -2892,7 +2893,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                 )}
                                 {ev.photo_url && (
                                   // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-24 object-cover" />
+                                  <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-24 object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setLightboxUrl(ev.photo_url)} />
                                 )}
                                 {!ev.audio_url && !ev.photo_url && <div className="pb-1" />}
                               </div>
@@ -3026,7 +3027,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                               </div>
                               {ev.photo_url && (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-60 object-cover" />
+                                <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-60 object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setLightboxUrl(ev.photo_url)} />
                               )}
                             </div>
                           </div>
@@ -3312,6 +3313,27 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     <>
       {createPortal(modalContent, document.body)}
       {confirmPortalContent && createPortal(confirmPortalContent, document.body)}
+      {lightboxUrl && createPortal(
+        <div
+          className="fixed inset-0 z-[10010] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setLightboxUrl(null) }}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-10"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt="Vista completa"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>,
+        document.body
+      )}
       {weaningWizardOpen && herd && (
         <WeaningWizard
           herd={herd}
