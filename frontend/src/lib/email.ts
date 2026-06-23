@@ -27,9 +27,9 @@ function baseLayout(body: string): string {
   <tr><td align="center">
   <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06)">
     <!-- Header -->
-    <tr><td style="background:#16a34a;padding:28px 40px;text-align:left">
-      <div style="width:259px;height:56px;overflow:hidden;margin:0 auto;display:inline-block;text-align:left;">
-        <img src="${imgBaseUrl}/LogoHeaderBlanco259x56.png" alt="RODEO" width="259" height="56" style="display:block;width:259px;height:56px;object-fit:contain;" />
+    <tr><td style="background:#16a34a;padding:32px 40px;text-align:center">
+      <div style="width:180px;margin:0 auto;display:inline-block;text-align:center;">
+        <img src="${imgBaseUrl}/LogoHeaderBlancoEmail.png" alt="RODEO" width="180" style="display:block;width:180px;height:auto;object-fit:contain;margin:0 auto;" />
       </div>
     </td></tr>
     <!-- Body -->
