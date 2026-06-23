@@ -29,7 +29,7 @@ import { Storage } from '@google-cloud/storage'
 // Locally: falls back to FIREBASE_ADMIN_CREDENTIALS_BASE64 service account key.
 function createGcsClient(): Storage {
   // Try ADC first (works in Cloud Run and when GOOGLE_APPLICATION_CREDENTIALS is set)
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  if (process.env.K_SERVICE || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     return new Storage()
   }
   // Fallback: use the Firebase Admin SA key (already available in local dev)
