@@ -67,7 +67,7 @@ function NoteRow({ note }: { note: any }) {
   const hasTranscript = !!note.content
 
   return (
-    <div className="group py-4 border-b border-gray-50 last:border-0">
+    <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-base font-bold text-gray-950 tracking-tight leading-snug">
@@ -272,14 +272,25 @@ export default function BitacoraPage() {
   useEffect(() => { refreshPending() }, [refreshPending])
 
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    let isLoadingRef = false
+
     const queueHandler = () => { refreshPending(); loadNotes() }
-    const syncHandler = () => { loadNotes() }
+    const syncHandler = () => {
+      if (isLoadingRef) return
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        isLoadingRef = true
+        loadNotes().finally(() => { isLoadingRef = false })
+      }, 3000) // 3s debounce
+    }
     
     window.addEventListener('rodeo_queue_updated', queueHandler)
     window.addEventListener('rodeo_sync_completed', syncHandler)
     return () => {
       window.removeEventListener('rodeo_queue_updated', queueHandler)
       window.removeEventListener('rodeo_sync_completed', syncHandler)
+      if (debounceTimer) clearTimeout(debounceTimer)
     }
   }, [refreshPending, loadNotes])
 
@@ -582,7 +593,7 @@ export default function BitacoraPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="relative min-h-[calc(100vh-120px)] flex flex-col bg-white">
+    <div className="relative min-h-[calc(100vh-120px)] flex flex-col">
       <OnboardingTour
         tourId="tour-bitacora-v1"
         steps={[
@@ -600,9 +611,31 @@ export default function BitacoraPage() {
       />
 
       {/* Header */}
-      <div className="px-6 pt-10 pb-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-4xl font-black tracking-tight text-gray-950">Bitácora</h1>
+      <div className="pt-2 pb-2">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-gray-950">Bitácora</h1>
+            <p className="text-sm font-semibold text-gray-500 mt-1">
+              Registro de actividades · Notas de voz y fotos · Historial del campo
+            </p>
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit mt-3">
+              {(() => {
+                const ac = notes.filter(n => !!n.audio_url).length;
+                const ic = notes.filter(n => !!n.photo_url).length;
+                const tc = notes.filter(n => !n.audio_url && !n.photo_url).length;
+                return [
+                  { label: 'Audios', count: ac },
+                  { label: 'Imágenes', count: ic },
+                  { label: 'Textos', count: tc },
+                ].map(s => (
+                  <div key={s.label} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-white text-gray-900 shadow-sm pointer-events-none select-none">
+                    {s.label}
+                    <span className="w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center bg-gray-900 text-white">{s.count}</span>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
           {pendingOffline > 0 && (
             <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
               <WifiOff className="w-3.5 h-3.5 text-amber-600" />
@@ -611,72 +644,45 @@ export default function BitacoraPage() {
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 mt-4 w-fit">
-          <Link
-            href="/dashboard/bitacora"
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
-              pathname === '/dashboard/bitacora'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Mic2 className="w-3.5 h-3.5" />
-            Notas
-          </Link>
-          {/* Bandeja WA — deshabilitado temporalmente
-          <Link
-            href="/dashboard/bitacora/bandeja"
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
-              pathname === '/dashboard/bitacora/bandeja'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Bandeja WA
-          </Link>
-          */}
-        </div>
-
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2 scrollbar-hide">
-          {/* File Type Filters */}
-          <div className="bg-gray-50 rounded-2xl p-1 flex gap-1 shrink-0 items-center border border-gray-100">
-            {['audio', 'foto', 'texto'].map(t => (
-              <button key={t} onClick={() => setHistoryTypeFilter(f => f === t ? null : t)}
-                className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-all ${
-                  historyTypeFilter === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}>
-                {t === 'audio' ? 'Audio' : t === 'foto' ? 'Imagen' : 'Texto'}
-              </button>
-            ))}
-          </div>
-
-          {/* Month Filters */}
-          {availableMonths.length > 0 && (
-            <div className="bg-gray-50 rounded-2xl p-1 flex gap-1 shrink-0 items-center border border-gray-100">
-              {availableMonths.map(m => (
-                <button key={m} onClick={() => setHistoryMonthFilter(f => f === m ? null : m)}
-                  className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-all ${
-                    historyMonthFilter === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}>
-                  {m}
-                </button>
-              ))}
+        {/* Search & Filter Bar - unified like Agenda/Rodeos */}
+        <div className="tour-bitacora-filtros flex gap-3 flex-wrap items-center bg-white p-3 rounded-2xl border border-gray-100 shadow-sm mt-4">
+          <div className="relative flex-1 min-w-[200px]">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400">
+              <Search className="w-4 h-4" />
             </div>
-          )}
-
-          <div className="flex-1" />
-
-          {/* Search */}
-          <div className="tour-bitacora-filtros flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-2xl px-3 shrink-0">
-            <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               type="text"
-              placeholder="Buscar..."
+              placeholder="Buscar en bitácora..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="bg-transparent border-none py-2 text-sm font-medium outline-none focus:ring-0 text-gray-900 w-32 sm:w-52 placeholder:text-gray-400"
+              className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={historyTypeFilter || 'all'}
+              onChange={e => setHistoryTypeFilter(e.target.value === 'all' ? null : (e.target.value as 'audio' | 'foto' | 'texto'))}
+              className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none cursor-pointer focus:ring-1 focus:ring-green-600"
+            >
+              <option value="all">Tipo</option>
+              <option value="audio">Audios</option>
+              <option value="foto">Imágenes</option>
+              <option value="texto">Textos</option>
+            </select>
+
+            {availableMonths.length > 0 && (
+              <select
+                value={historyMonthFilter || 'all'}
+                onChange={e => setHistoryMonthFilter(e.target.value === 'all' ? null : e.target.value)}
+                className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none cursor-pointer focus:ring-1 focus:ring-green-600"
+              >
+                <option value="all">Mes</option>
+                {availableMonths.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
         <div className="sm:hidden mt-6">
@@ -688,7 +694,7 @@ export default function BitacoraPage() {
       </div>
 
       {/* Notes list */}
-      <div className={`flex-1 pb-64 px-4 sm:px-6 ${showMobileHistory ? 'block' : 'hidden sm:block'} mt-4 sm:mt-0`}>
+      <div className={`flex-1 pb-64 ${showMobileHistory ? 'block' : 'hidden sm:block'} mt-4 sm:mt-0`}>
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 text-gray-300 animate-spin" /></div>
         ) : filtered.length === 0 ? (
@@ -701,7 +707,7 @@ export default function BitacoraPage() {
         ) : (
           Array.from(grouped.entries()).map(([dateLabel, dayNotes]) => (
             <div key={dateLabel} className="mb-6">
-              <div className="py-2 sticky top-0 bg-white/95 backdrop-blur-md z-10 border-b border-gray-50">
+              <div className="py-2 sticky top-0 z-10">
                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{dateLabel}</span>
               </div>
               {dayNotes.map(note => <NoteRow key={note.id} note={note} />)}
@@ -711,7 +717,7 @@ export default function BitacoraPage() {
       </div>
 
       {/* Capture area — pinned to bottom of viewport */}
-      <div className="sticky bottom-0 left-0 right-0 mt-auto pb-24 sm:pb-6 px-8 pt-8 bg-gradient-to-t from-white via-white to-transparent pointer-events-none z-50">
+      <div className="sticky bottom-0 left-0 right-0 mt-auto pb-24 sm:pb-6 px-8 pt-8 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent pointer-events-none z-50">
         <div className="max-w-md mx-auto flex flex-col items-center gap-8 pointer-events-auto">
 
           {isRecording ? (

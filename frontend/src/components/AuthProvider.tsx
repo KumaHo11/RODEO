@@ -7,7 +7,8 @@ import {
   signOut as firebaseSignOut,
   User,
 } from 'firebase/auth'
-import { cacheAuthToken, cacheProfile, getCachedProfile, clearAuthCache, decodeJwtExp } from '@/lib/offline/auth-cache'
+import { cacheAuthToken, cacheProfile, getCachedProfile, getCachedAuthToken, clearAuthCache, decodeJwtExp } from '@/lib/offline/auth-cache'
+import { dismissRecoveryOverlay } from '@/lib/pwa-diagnostics'
 
 type Profile = {
   id: string
@@ -227,6 +228,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user, fetchProfile])
 
   useEffect(() => {
+    // On mount: try to restore cookie from IndexedDB before Firebase SDK initializes
+    // This is critical for iOS standalone where cookies may be purged by the OS
+    const restoreCookieIfNeeded = async () => {
+      if (typeof document === 'undefined') return
+      const hasCookie = document.cookie.includes('__session')
+      if (!hasCookie) {
+        try {
+          const cachedToken = await getCachedAuthToken()
+          if (cachedToken) {
+            const isHttps = window.location.protocol === 'https:'
+            document.cookie = `__session=${cachedToken}; path=/; max-age=604800; SameSite=Lax${isHttps ? '; Secure' : ''}`
+            console.log('[AuthProvider] Cookie restored from IndexedDB cache')
+          }
+        } catch { /* ignore */ }
+      }
+    }
+    restoreCookieIfNeeded()
+
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser)
       if (firebaseUser) {
@@ -236,9 +255,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const expMs = decodeJwtExp(token)
         if (expMs) cacheAuthToken(token, expMs).catch(() => {})
         // Set Secure flag only over HTTPS (production) — not in localhost dev
+        // max-age=604800 (7 days) — covers rural usage patterns where users
+        // may be offline for days. Token is validated server-side on each API call.
         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
-        document.cookie = `__session=${token}; path=/; max-age=3600; SameSite=Lax${isHttps ? '; Secure' : ''}`
+        document.cookie = `__session=${token}; path=/; max-age=604800; SameSite=Lax${isHttps ? '; Secure' : ''}`
         await fetchProfile(firebaseUser)
+        // App loaded successfully — dismiss any recovery overlay from pwa-diagnostics
+        dismissRecoveryOverlay()
       } else {
         // Limpiar cookie al cerrar sesión
         document.cookie = '__session=; path=/; max-age=0'

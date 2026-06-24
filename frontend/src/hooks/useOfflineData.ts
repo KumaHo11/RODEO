@@ -22,7 +22,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { dbGetAll, dbUpsertMany, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 import { isOffline } from '@/lib/connectivity'
 
-type StoreNames = 'paddocks' | 'herds' | 'farm_events' | 'field_notes' | 'tasks' | 'grazing_plans'
+type StoreNames = 'paddocks' | 'herds' | 'farm_events' | 'field_notes' | 'tasks' | 'grazing_plans' | 'team_members' | 'invitations' | 'dashboard_cache'
 
 interface UseOfflineDataOptions<T> {
   store: StoreNames | 'organizations'

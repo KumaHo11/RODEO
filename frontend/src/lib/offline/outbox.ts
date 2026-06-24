@@ -218,12 +218,8 @@ function dispatchSyncCompletedEvent() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('rodeo_sync_completed'))
   }
-  // También notificar al SW para que propague a otras tabs
-  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-    navigator.serviceWorker.ready.then(reg => {
-      reg.active?.postMessage({ type: 'SYNC_COMPLETED' })
-    }).catch(() => {})
-  }
+  // NOTA: NO propagar al SW — el SW reenviaba SYNC_COMPLETED a todos los
+  // clients, lo que creaba un loop infinito de sync → SYNC_COMPLETED → sync.
 }
 
 function sleep(ms: number): Promise<void> {

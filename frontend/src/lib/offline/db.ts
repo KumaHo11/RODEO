@@ -75,6 +75,16 @@ interface RodeoDBSchema extends DBSchema {
     key: string
     value: { id: string; data: any; updated_at: number }
   }
+  team_members: {
+    key: string
+    value: { id: string; data: any; updated_at: number }
+    indexes: { by_updated: number }
+  }
+  invitations: {
+    key: string
+    value: { id: string; data: any; updated_at: number; status: string }
+    indexes: { by_updated: number; by_status: string }
+  }
   outbox: {
     key: string
     value: OutboxItem
@@ -89,7 +99,7 @@ interface RodeoDBSchema extends DBSchema {
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
 const DB_NAME    = 'rodeo-offline-db'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 let _dbPromise: Promise<IDBPDatabase<RodeoDBSchema>> | null = null
 
@@ -147,6 +157,21 @@ function getDB(): Promise<IDBPDatabase<RodeoDBSchema>> {
             db.createObjectStore('dashboard_cache', { keyPath: 'id' })
           }
         }
+
+        // ── v3 stores: equipo + invitaciones ───────────────────────────
+        if (oldVersion < 3) {
+          // team_members — datos de miembros del equipo para uso offline
+          if (!db.objectStoreNames.contains('team_members')) {
+            const tmStore = db.createObjectStore('team_members', { keyPath: 'id' })
+            tmStore.createIndex('by_updated', 'updated_at')
+          }
+          // invitations — invitaciones pendientes (se envían al reconectar)
+          if (!db.objectStoreNames.contains('invitations')) {
+            const invStore = db.createObjectStore('invitations', { keyPath: 'id' })
+            invStore.createIndex('by_updated', 'updated_at')
+            invStore.createIndex('by_status', 'status')
+          }
+        }
       },
     })
   }
@@ -155,7 +180,7 @@ function getDB(): Promise<IDBPDatabase<RodeoDBSchema>> {
 
 // ── Generic helpers ───────────────────────────────────────────────────────────
 
-type StoreNames = 'paddocks' | 'herds' | 'farm_events' | 'field_notes' | 'tasks' | 'organizations' | 'grazing_plans' | 'calculator_state' | 'dashboard_cache' | 'outbox'
+type StoreNames = 'paddocks' | 'herds' | 'farm_events' | 'field_notes' | 'tasks' | 'organizations' | 'grazing_plans' | 'calculator_state' | 'dashboard_cache' | 'team_members' | 'invitations' | 'outbox'
 
 /** Devuelve todos los registros de un store como array de `data` */
 export async function dbGetAll(store: StoreNames): Promise<any[]> {

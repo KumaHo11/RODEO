@@ -267,10 +267,7 @@ export default function OfflineIndicator() {
           setStatus('synced')
           // Notificar a todas las páginas que el sync terminó → pueden recargar datos
           window.dispatchEvent(new Event('rodeo_sync_completed'))
-          // También notificar al SW para que difunda a otras tabs
-          if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({ type: 'SYNC_COMPLETED' })
-          }
+          // NOTA: NO propagar al SW — crea loop infinito de sync
         } else {
           setStatus('offline') // algunos fallaron, siguen pendientes
         }

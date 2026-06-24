@@ -24,7 +24,7 @@ function SimpleInput({ label, value, onChange, unit, min, max, step }: any) {
   const [localStr, setLocalStr] = useState<string | null>(null)
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none">{label}</label>
+      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">{label}</label>
       <div className="relative">
         <input 
           type="number" min={min} max={max} step={step}
@@ -197,7 +197,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
       {/* ── CONTROLES INTERACTIVOS (Sticky Header) ── */}
       <div className="sticky top-4 z-20 bg-gray-50/95 backdrop-blur-md border border-gray-200 rounded-2xl p-4 shadow-sm">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="text-xs font-bold text-gray-800 uppercase tracking-widest">Parámetros Globales</h3>
+          <h3 className="text-sm font-black text-gray-900">Parámetros globales</h3>
         </div>
         <div className="flex flex-wrap gap-4">
           <SimpleInput
@@ -213,7 +213,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
             title="Materia seca base a dejar como residuo"
           />
           <div className="flex flex-col flex-1 min-w-[120px]">
-            <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Temporada</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Temporada</label>
             <select 
               value={seasonType}
               onChange={(e) => handleSeasonTypeChange(e.target.value)}
@@ -225,7 +225,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
             </select>
           </div>
           <div className="flex flex-col flex-1 min-w-[120px]">
-            <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Inicio Temp.</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Inicio Temp.</label>
             <input 
               type="date" value={seasonStart} 
               onChange={(e) => { setSeasonStart(e.target.value); setSeasonType('personalizada') }}
@@ -234,7 +234,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
             />
           </div>
           <div className="flex flex-col flex-1 min-w-[120px]">
-            <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Fin Temp.</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Fin Temp.</label>
             <input 
               type="date" value={seasonEnd} 
               onChange={(e) => { setSeasonEnd(e.target.value); setSeasonType('personalizada') }}
@@ -260,7 +260,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
       <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-6 items-start">
         <div className="space-y-4">
           <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest">Rodeos de Simulación</h3>
+            <h3 className="text-sm font-black text-gray-900">Rodeos de simulación</h3>
             <span className="text-[10px] text-gray-500 font-medium">{herdsMath.filter(h => h.isActive).length} Activos</span>
           </div>
           
@@ -284,7 +284,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                   {h.isActive && (
                     <div className="pt-2 mt-2 border-t border-gray-50 grid grid-cols-2 gap-y-2 gap-x-2">
                       <div className="col-span-2 flex justify-between items-center">
-                        <span className="text-[10px] text-gray-500 font-bold uppercase">Ración (kg MS)</span>
+                        <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Ración (kg MS)</span>
                         <InlineInput 
                           value={h.ration} 
                           min={6} max={25} step={0.5} 
@@ -292,11 +292,11 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                         />
                       </div>
                       <div>
-                        <p className="text-[9px] text-gray-400 font-bold uppercase">Total EV</p>
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Total EV</p>
                         <p className="font-black text-black text-sm">{h.evTotal.toFixed(1)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[9px] text-gray-400 font-bold uppercase">Demanda</p>
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Demanda</p>
                         <p className="font-black text-red-600 text-sm">{h.demandaTotalDiaria.toFixed(0)} <span className="text-[9px] text-red-400 font-normal">kg/d</span></p>
                       </div>
                     </div>
@@ -304,9 +304,9 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                 </div>
               ))}
               
-              <div className="bg-green-600 rounded-xl p-3 text-white mt-4 shadow-md">
-                <p className="text-[10px] text-green-100 font-bold uppercase mb-1">Total Demanda Activa</p>
-                <p className="text-xl font-black text-white">{globalDemand.toFixed(0)} <span className="text-xs text-green-100 font-normal">kg MS/día</span></p>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mt-4 shadow-sm">
+                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Total demanda activa</p>
+                <p className="text-xl font-black text-gray-900">{globalDemand.toFixed(0)} <span className="text-xs text-gray-500 font-medium">kg MS/día</span></p>
               </div>
             </div>
           )}
@@ -314,7 +314,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
 
         <div className="space-y-4">
           <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest">Oferta Forrajera</h3>
+            <h3 className="text-sm font-black text-gray-900">Oferta forrajera</h3>
             <span className="text-[10px] text-gray-500 font-medium">Ordenado por RAC/POT</span>
           </div>
 
@@ -325,7 +325,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                   <thead>
-                    <tr className="bg-gray-50 text-[9px] text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                    <tr className="bg-gray-50 text-[10px] text-gray-400 uppercase tracking-widest border-b border-gray-100">
                       <th className="px-4 py-3 font-bold" title="Nombre del lote">Potrero</th>
                       <th className="px-4 py-3 font-bold">Área</th>
                       <th className="px-4 py-3 font-bold" title="Materia seca base a dejar">Remanente (kg MS/ha)</th>
@@ -390,21 +390,21 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
 
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row gap-6 mt-4 justify-around items-center">
             <div className="text-center">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Días Totales Planificados</p>
+              <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Días totales planificados</p>
               <p className="text-2xl font-black text-gray-900 mt-1">
                 {paddocksMath.reduce((s, p) => s + p.diasPlan, 0).toFixed(1)} <span className="text-sm font-medium text-gray-500">días</span>
               </p>
             </div>
             <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
             <div className="text-center">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Ración Total Planificada</p>
+              <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Ración total planificada</p>
               <p className="text-2xl font-black text-gray-900 mt-1">
                 {paddocksMath.reduce((s, p) => s + p.racionPotreroKg, 0).toFixed(0)} <span className="text-sm font-medium text-gray-500">kg MS</span>
               </p>
             </div>
             <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
             <div className="text-center">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Oferta Total Aprovechable</p>
+              <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Oferta total aprovechable</p>
               <p className="text-2xl font-black text-gray-900 mt-1">
                 {paddocksMath.reduce((s, p) => s + p.msAprovechable, 0).toFixed(0)} <span className="text-sm font-medium text-gray-500">kg MS</span>
               </p>
