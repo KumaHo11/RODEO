@@ -11,7 +11,11 @@ import { ROUTE_PERMISSION_MAP } from '@/lib/navigation'
 const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
 
 const JWKS = createRemoteJWKSet(
-  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'),
+  {
+    timeoutDuration: 3000,   // 3s — prevents hanging on iOS standalone with bad network
+    cacheMaxAge: 600_000,    // 10min — reduces refetches in rural/low-connectivity
+  }
 )
 
 // In-memory rate limiter (WAF / DDoS protection)
@@ -48,23 +52,39 @@ type VerifyResult =
 
 async function verifyFirebaseToken(token: string): Promise<VerifyResult> {
   try {
-    const { payload } = await jwtVerify(token, JWKS, {
-      issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,
-      audience: FIREBASE_PROJECT_ID,
-    })
-    return { payload: payload as { sub: string; email?: string; system_role?: string; [key: string]: unknown } }
+    // Wrap in AbortController for explicit timeout (belt & suspenders with jose timeout)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3500)
+
+    try {
+      const { payload } = await jwtVerify(token, JWKS, {
+        issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,
+        audience: FIREBASE_PROJECT_ID,
+      })
+      return { payload: payload as { sub: string; email?: string; system_role?: string; [key: string]: unknown } }
+    } finally {
+      clearTimeout(timeoutId)
+    }
   } catch (err: any) {
     // Distinguir error de red (offline) de token realmente inválido
     // jose lanza TypeError o errores de fetch cuando no puede contactar el JWKS endpoint
+    // iOS Safari en standalone mode puede lanzar variantes adicionales
+    const errMsg = (err?.message || '').toLowerCase()
+    const errCode = err?.code || ''
     const isNetworkError =
       err instanceof TypeError ||                        // fetch failed
-      err?.code === 'ERR_JWKS_TIMEOUT' ||               // jose timeout
-      err?.code === 'ERR_JWKS_MULTIPLE_MATCHING_KEYS' ||
-      err?.message?.includes('fetch') ||
-      err?.message?.includes('network') ||
-      err?.message?.includes('ENOTFOUND') ||
-      err?.message?.includes('ECONNREFUSED') ||
-      err?.message?.includes('Failed to fetch')
+      err?.name === 'AbortError' ||                     // our timeout or jose timeout
+      errCode === 'ERR_JWKS_TIMEOUT' ||                 // jose timeout
+      errCode === 'ERR_JWKS_MULTIPLE_MATCHING_KEYS' ||
+      errCode === 'ERR_JWKS_NO_MATCHING_KEY' ||         // stale cache
+      errMsg.includes('fetch') ||
+      errMsg.includes('network') ||
+      errMsg.includes('enotfound') ||
+      errMsg.includes('econnrefused') ||
+      errMsg.includes('failed to fetch') ||
+      errMsg.includes('load failed') ||                 // Safari-specific
+      errMsg.includes('the internet connection appears to be offline') || // iOS Safari
+      errMsg.includes('a server with the specified hostname could not be found') // iOS Safari
 
     if (isNetworkError) {
       console.warn('[middleware] JWKS fetch failed (offline?) — allowing pass-through')
@@ -105,6 +125,13 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const response = NextResponse.next({ request: { headers: request.headers } })
 
+  // Helper: create response with offline passthrough header
+  const offlinePassthrough = () => {
+    const r = NextResponse.next({ request: { headers: request.headers } })
+    r.headers.set('X-Rodeo-Auth-Status', 'offline-passthrough')
+    return r
+  }
+
   const adminSubdomain = isAdminSubdomain(request)
 
   // ── ADMIN SUBDOMAIN ────────────────────────────────────────────────────
@@ -128,7 +155,7 @@ export async function middleware(request: NextRequest) {
     const result = await verifyFirebaseToken(token)
     // Si hay error de red (offline), permitir paso sin redirigir
     if (!result) return NextResponse.redirect(new URL('/login', request.url))
-    if ('networkError' in result) return response
+    if ('networkError' in result) return offlinePassthrough()
 
     if (result.payload.system_role !== 'SUPER_ADMIN') {
       return NextResponse.redirect(new URL(`${process.env.NEXT_PUBLIC_APP_URL || 'https://rodeo.app'}/dashboard`, request.url))
@@ -156,6 +183,15 @@ export async function middleware(request: NextRequest) {
       // networkError → tiene cookie → asumir sesión válida, ir al dashboard
       if (result && 'networkError' in result) {
         return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+      // Cookie exists but token verification failed — in standalone mode,
+      // allow dashboard access to avoid blank screen
+      if (!result && request.headers.get('sec-fetch-mode') === 'navigate') {
+        // Check if it might be a standalone PWA launch
+        const isStandaloneLaunch = request.headers.get('sec-fetch-dest') === 'document'
+        if (isStandaloneLaunch) {
+          return NextResponse.redirect(new URL('/dashboard', request.url))
+        }
       }
     }
     return NextResponse.redirect(new URL('/landing', request.url))
@@ -228,7 +264,7 @@ export async function middleware(request: NextRequest) {
 
     // Error de red (offline) + hay cookie → permitir paso sin verificar firma
     // El cliente (Firebase SDK) ya validó la sesión en su momento
-    if ('networkError' in result) return response
+    if ('networkError' in result) return offlinePassthrough()
 
     // Super Admin no debería estar en /dashboard
     if (result.payload.system_role === 'SUPER_ADMIN' && !isSoporteTerminos) {

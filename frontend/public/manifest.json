@@ -2,6 +2,7 @@
   "name": "RODEO — Gestión Ganadera Regenerativa",
   "short_name": "RODEO",
   "description": "Plataforma de gestión holística para ganadería regenerativa. Potreros, rebaños, pastoreo rotacional y bitácora de campo.",
+  "id": "/dashboard",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
@@ -11,12 +12,45 @@
   "categories": ["agriculture", "productivity", "utilities"],
   "lang": "es",
   "dir": "ltr",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "icons": [
     {
-      "src": "/FaviconFondoVerde.svg",
-      "sizes": "72x72 96x96 128x128 192x192 512x512",
+      "src": "/icons/icon-72.svg",
+      "sizes": "72x72",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-96.svg",
+      "sizes": "96x96",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-128.svg",
+      "sizes": "128x128",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/FaviconFondoVerde.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -25,14 +59,21 @@
       "short_name": "Bitácora",
       "description": "Registrar observación de campo",
       "url": "/dashboard/bitacora",
-      "icons": [{ "src": "/FaviconFondoVerde.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
     },
     {
       "name": "Mi Campo",
       "short_name": "Campo",
       "description": "Ver mapa de potreros",
       "url": "/dashboard/mi-campo",
-      "icons": [{ "src": "/FaviconFondoVerde.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Agenda",
+      "short_name": "Agenda",
+      "description": "Ver eventos del campo",
+      "url": "/dashboard/agenda",
+      "icons": [{ "src": "/icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
     }
   ],
   "screenshots": [

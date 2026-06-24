@@ -22,6 +22,7 @@ const DASHBOARD_ROUTES = [
   '/dashboard/tareas',
   '/dashboard/calculadora',
   '/dashboard/grazing',
+  '/dashboard/equipo',
   '/dashboard/profile',
 ]
 
@@ -50,6 +51,22 @@ export default function ServiceWorkerRegistrar() {
         })
 
         console.log('[SW] Registrado:', registration.scope)
+
+        // Register Periodic Sync (Chrome/Edge only — Safari ignores this)
+        // Syncs data every 30 minutes even when the app isn't actively in use
+        if ('periodicSync' in registration) {
+          try {
+            const status = await navigator.permissions.query({ name: 'periodic-background-sync' as any })
+            if (status.state === 'granted') {
+              await (registration as any).periodicSync.register('rodeo-periodic-sync', {
+                minInterval: 30 * 60 * 1000, // 30 minutes
+              })
+              console.log('[SW] Periodic sync registered (30min)')
+            }
+          } catch {
+            // Periodic sync not supported or permission denied — not critical
+          }
+        }
 
         // Pre-cachear rutas del dashboard después de un delay
         // (solo si ya hay un SW activo controlando la página)

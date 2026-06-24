@@ -72,11 +72,15 @@ export function useOfflineStatus() {
 import { enqueue } from '@/lib/offline/outbox'
 
 const LEGACY_URL_MAP: Record<string, string> = {
-  farm_event:   '/api/farm-events',
-  task:         '/api/tasks',
-  field_note:   '/api/field-notes',
-  paddock_update: '/api/paddocks',
-  herd_event:   '/api/movements',
+  farm_event:       '/api/farm-events',
+  task:             '/api/tasks',
+  field_note:       '/api/field-notes',
+  paddock_update:   '/api/paddocks',
+  herd_event:       '/api/movements',
+  team_invitation:  '/api/team/invitations',
+  team_member:      '/api/team/members',
+  bitacora_audio:   '/api/field-notes',
+  bitacora_photo:   '/api/field-notes',
 }
 
 export function addToOfflineQueue(item: {

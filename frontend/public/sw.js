@@ -14,7 +14,7 @@
  * Versionado: Cambiá CACHE_VERSION para invalidar todas las caches.
  */
 
-const CACHE_VERSION = 'rodeo-v3'
+const CACHE_VERSION = 'rodeo-v4'
 const STATIC_CACHE  = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 
@@ -118,7 +118,13 @@ self.addEventListener('fetch', (event) => {
   // ── 6. Navegación HTML: Network-first con fallback offline ─────────────
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      networkFirst(request, DYNAMIC_CACHE, 8000).catch(() => {
+      networkFirst(request, DYNAMIC_CACHE, 8000).catch(async () => {
+        // For dashboard sub-routes, try to serve the cached dashboard shell
+        // This provides a better offline experience than the generic offline page
+        if (url.pathname.startsWith('/dashboard/')) {
+          const dashboardCached = await caches.match('/dashboard')
+          if (dashboardCached) return dashboardCached
+        }
         return caches.match('/_offline') || new Response('Offline', { status: 503 })
       })
     )
@@ -167,6 +173,12 @@ async function networkFirst(request, cacheName, timeoutMs = 5000) {
 
     // Para navegaciones, devolver offline page
     if (request.mode === 'navigate') {
+      // Try dashboard shell first for dashboard routes
+      const url = new URL(request.url)
+      if (url.pathname.startsWith('/dashboard/')) {
+        const dashboardCached = await caches.match('/dashboard')
+        if (dashboardCached) return dashboardCached
+      }
       const offlinePage = await caches.match('/_offline')
       if (offlinePage) return offlinePage
     }
@@ -222,6 +234,26 @@ self.addEventListener('message', (event) => {
       }
     })
   }
+
+  // Diagnostic report: return SW status info
+  if (type === 'DIAGNOSTIC_REPORT') {
+    Promise.all([
+      caches.open(STATIC_CACHE).then(c => c.keys()).then(k => k.length),
+      caches.open(DYNAMIC_CACHE).then(c => c.keys()).then(k => k.length),
+    ]).then(([staticCount, dynamicCount]) => {
+      if (event.source) {
+        event.source.postMessage({
+          type: 'DIAGNOSTIC_RESPONSE',
+          data: {
+            version: CACHE_VERSION,
+            staticCached: staticCount,
+            dynamicCached: dynamicCount,
+            timestamp: Date.now(),
+          }
+        })
+      }
+    }).catch(() => {})
+  }
 })
 
 // ── Background Sync ─────────────────────────────────────────────────────────
@@ -234,6 +266,23 @@ self.addEventListener('sync', (event) => {
         clients.forEach(client => {
           client.postMessage({ type: 'SYNC_STARTED' })
         })
+      })
+    )
+  }
+})
+
+// ── Periodic Background Sync (Chrome/Edge only) ─────────────────────────────
+// Syncs data every 30 minutes even when the app isn't active.
+// Safari/Firefox ignore this — those rely on visibilitychange + online events.
+
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'rodeo-periodic-sync') {
+    event.waitUntil(
+      self.clients.matchAll().then(clients => {
+        if (clients.length > 0) {
+          // At least one tab is open — trigger sync there
+          clients[0].postMessage({ type: 'SYNC_STARTED' })
+        }
       })
     )
   }
