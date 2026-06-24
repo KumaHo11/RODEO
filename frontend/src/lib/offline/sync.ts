@@ -19,6 +19,8 @@ import { syncPendingMedia } from './mediaSync'
 
 let _initialized = false
 let _isSyncing   = false
+let _lastSyncAt  = 0
+const SYNC_COOLDOWN_MS = 10_000 // 10s entre syncs para evitar loops
 
 // ── Inicialización ─────────────────────────────────────────────────────────────
 
@@ -37,9 +39,12 @@ export function initSync(getToken: () => Promise<string | null>): void {
   })
 
   // Escuchar mensajes del Service Worker
+  // NOTA: Solo reaccionar a SYNC_STARTED (desde Background Sync API).
+  // NO escuchar SYNC_COMPLETED aquí porque nosotros mismos lo enviamos
+  // al SW al final del sync, lo que crearía un loop infinito.
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (ev) => {
-      if (ev.data?.type === 'SYNC_STARTED' || ev.data?.type === 'SYNC_COMPLETED') {
+      if (ev.data?.type === 'SYNC_STARTED') {
         triggerSync(getToken)
       }
     })
@@ -85,6 +90,13 @@ export async function triggerSync(getToken: () => Promise<string | null>): Promi
   if (_isSyncing) return
   if (typeof navigator !== 'undefined' && !navigator.onLine) return
 
+  // Cooldown: evitar syncs consecutivos (previene loops con SW/BroadcastChannel)
+  const now = Date.now()
+  if (now - _lastSyncAt < SYNC_COOLDOWN_MS) {
+    console.log('[sync] Skipped — cooldown active')
+    return
+  }
+  _lastSyncAt = now
   _isSyncing = true
 
   // Notificar inicio a la UI
@@ -123,12 +135,9 @@ export async function triggerSync(getToken: () => Promise<string | null>): Promi
       }))
     }
 
-    // Propagar al SW para notificar otras tabs
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then(reg => {
-        reg.active?.postMessage({ type: 'SYNC_COMPLETED' })
-      }).catch(() => {})
-    }
+    // NOTA: NO propagar SYNC_COMPLETED de vuelta al SW.
+    // El SW reenviaba este mensaje a todos los clients, lo que
+    // provocaba que initSync() volviera a llamar triggerSync() → loop infinito.
 
     // Broadcast a otras tabs abiertas
     if (typeof BroadcastChannel !== 'undefined') {

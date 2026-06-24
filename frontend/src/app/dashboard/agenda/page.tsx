@@ -150,13 +150,24 @@ export default function AgendaPage() {
   useEffect(() => { loadData() }, [user])
 
   // Escuchar cuando el sync offline completa para recargar datos frescos
+  // Debounce de 3s para evitar que múltiples eventos de sync disparen loadData en ráfaga
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    let isLoadingRef = false
+
     const handleSyncCompleted = () => {
-      loadData()
+      if (isLoadingRef) return // ya estamos cargando, ignorar
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        isLoadingRef = true
+        loadData().finally(() => { isLoadingRef = false })
+      }, 3000) // 3s debounce
     }
     window.addEventListener('rodeo_sync_completed', handleSyncCompleted)
-    return () => window.removeEventListener('rodeo_sync_completed', handleSyncCompleted)
-   
+    return () => {
+      window.removeEventListener('rodeo_sync_completed', handleSyncCompleted)
+      if (debounceTimer) clearTimeout(debounceTimer)
+    }
   }, [user])
 
   const openCreate = () => {

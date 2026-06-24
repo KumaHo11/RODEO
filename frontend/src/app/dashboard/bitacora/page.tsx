@@ -272,14 +272,25 @@ export default function BitacoraPage() {
   useEffect(() => { refreshPending() }, [refreshPending])
 
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    let isLoadingRef = false
+
     const queueHandler = () => { refreshPending(); loadNotes() }
-    const syncHandler = () => { loadNotes() }
+    const syncHandler = () => {
+      if (isLoadingRef) return
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        isLoadingRef = true
+        loadNotes().finally(() => { isLoadingRef = false })
+      }, 3000) // 3s debounce
+    }
     
     window.addEventListener('rodeo_queue_updated', queueHandler)
     window.addEventListener('rodeo_sync_completed', syncHandler)
     return () => {
       window.removeEventListener('rodeo_queue_updated', queueHandler)
       window.removeEventListener('rodeo_sync_completed', syncHandler)
+      if (debounceTimer) clearTimeout(debounceTimer)
     }
   }, [refreshPending, loadNotes])
 
