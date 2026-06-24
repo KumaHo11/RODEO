@@ -14,7 +14,7 @@
  * Versionado: Cambiá CACHE_VERSION para invalidar todas las caches.
  */
 
-const CACHE_VERSION = 'rodeo-v4'
+const CACHE_VERSION = 'rodeo-v5'
 const STATIC_CACHE  = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 

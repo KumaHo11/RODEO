@@ -334,14 +334,16 @@ function TareasContent({ user }: { user: any }) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-gray-950">Tareas</h1>
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
+          <p className="text-sm text-gray-500 font-medium mt-1">Gestión y seguimiento de tareas del equipo</p>
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit mt-3">
             {[
               { label: 'Pendientes', count: pendingCount },
               { label: 'En proceso', count: inProgressCount },
               { label: 'Completadas', count: doneCount },
             ].map(s => (
-              <span key={s.label} className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 shadow-sm">
-                {s.count} {s.label}
+              <span key={s.label} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-white text-gray-900 shadow-sm">
+                {s.label}
+                <span className="w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center bg-gray-900 text-white">{s.count}</span>
               </span>
             ))}
           </div>

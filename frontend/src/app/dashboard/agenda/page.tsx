@@ -411,6 +411,17 @@ export default function AgendaPage() {
           <p className="text-sm text-gray-500 font-medium mt-1 line-clamp-1 sm:line-clamp-none">
             Gestión de eventos ganaderos: servicios, pariciones, sanidad y más
           </p>
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit mt-3">
+            {[
+              { label: 'Total eventos', count: events.length },
+              { label: 'Próximos', count: upcoming },
+            ].map(s => (
+              <span key={s.label} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-white text-gray-900 shadow-sm">
+                {s.label}
+                <span className="w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center bg-gray-900 text-white">{s.count}</span>
+              </span>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* View toggle */}
@@ -442,20 +453,6 @@ export default function AgendaPage() {
           </button>
         </div>
       </div>
-
-      {/* KPIs Row */}
-      <div className="tour-eventos-agenda grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Total eventos</p>
-          <p className="text-3xl font-black text-gray-950">{events.length}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Próximos</p>
-          <p className="text-3xl font-black text-blue-600">{upcoming}</p>
-        </div>
-      </div>
-
-      {/* Filters (only in list view) */}
       {agendaView === 'lista' && (
         <div className="flex gap-3 flex-wrap items-center bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
           <div className="relative flex-1 min-w-[200px]">

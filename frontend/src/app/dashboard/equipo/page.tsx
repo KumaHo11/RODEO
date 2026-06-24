@@ -410,34 +410,20 @@ export default function EquipoPage() {
           }
         ]}
       />
-      <AppHeader title="Equipo" subtitle="Gestión de miembros y permisos" />
-
-      {/* Read-only banner for guests */}
-      {!isOwner && (
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3.5">
-          <Eye className="w-4 h-4 text-blue-500 shrink-0" />
-          <p className="text-sm text-blue-700 font-bold">
-            Estás viendo el equipo en modo lectura. Solo el propietario puede invitar o gestionar miembros.
-          </p>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-            {members.length} miembro{members.length !== 1 ? 's' : ''} · {pendingInvitations.length} invitación{pendingInvitations.length !== 1 ? 'es' : ''} pendiente{pendingInvitations.length !== 1 ? 's' : ''}
-          </p>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Equipo</h1>
+          <p className="text-sm text-gray-500 font-medium mt-1">Gestión de miembros y permisos</p>
         </div>
         {isOwner && (
-          <Button className="tour-nuevo-miembro" onClick={() => setModalOpen(true)} leftIcon={<Plus className="w-4 h-4" />}>
+          <Button className="tour-nuevo-miembro shrink-0" onClick={() => setModalOpen(true)} leftIcon={<Plus className="w-4 h-4" />}>
             Invitar al equipo
           </Button>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="tour-equipo-miembros flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+      <div className="tour-equipo-miembros flex gap-1 bg-gray-100 p-1 rounded-2xl w-fit">
         {([
           { key: 'members' as Tab, label: 'Miembros', count: members.length },
           { key: 'pending' as Tab, label: 'Pendientes', count: pendingInvitations.length },
@@ -446,7 +432,7 @@ export default function EquipoPage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
               activeTab === tab.key
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-500 hover:text-gray-700'
@@ -454,8 +440,8 @@ export default function EquipoPage() {
           >
             {tab.label}
             {tab.count > 0 && (
-              <span className={`w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center ${
-                activeTab === tab.key ? 'bg-gray-900 text-white shadow-sm' : 'bg-gray-200 text-gray-500'
+              <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${
+                activeTab === tab.key ? 'bg-gray-900 text-white' : 'bg-gray-300 text-gray-600'
               }`}>
                 {tab.count}
               </span>
