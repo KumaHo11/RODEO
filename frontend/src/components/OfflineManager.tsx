@@ -89,6 +89,7 @@ export function addToOfflineQueue(item: {
   timestamp?: number
   mediaType?: string
   mediaId?: string
+  mediaIds?: any
   [key: string]: any
 }): void {
   const url = LEGACY_URL_MAP[item.type] ?? `/api/${item.type}s`
@@ -97,6 +98,9 @@ export function addToOfflineQueue(item: {
     url,
     method: 'POST',
     body: item.data,
+    mediaType: item.mediaType,
+    mediaId: item.mediaId,
+    mediaIds: item.mediaIds,
     idempotency_key: `${item.type}-${item.timestamp ?? Date.now()}-${Math.random().toString(36).slice(2)}`,
   }).catch(err => console.warn('[OfflineManager] enqueue error:', err))
 }

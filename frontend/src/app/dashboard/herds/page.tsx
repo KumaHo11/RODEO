@@ -59,237 +59,247 @@ async function exportHerdsExcel(
   lotes: LoteData[],
   ungrouped: HerdData[],
 ) {
-  const { utils, writeFile } = await import('xlsx')
-  const wb = utils.book_new()
+  try {
+    const { utils, writeFile } = await import('xlsx')
+    const wb = utils.book_new()
 
-  // ── Sheet 1: Resumen del Establecimiento ──────────────────────────────────
-  const totalCabezas = herds.reduce((s, h) => s + (h.head_count || 0), 0)
-  const totalEV = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
-  const resumen = [
-    ['REPORTE DE RODEOS — RODEO APP', '', '', ''],
-    ['Generado', new Date().toLocaleString('es-AR'), '', ''],
-    ['', '', '', ''],
-    ['TOTALES DEL ESTABLECIMIENTO', '', '', ''],
-    ['Total animales (cabezas)', totalCabezas, '', ''],
-    ['Total EV', Math.round(totalEV), '', ''],
-    ['Consumo MS/día (kg)', Math.round(totalEV * 11), '', ''],
-    ['Lotes de manejo', lotes.length, '', ''],
-    ['Rodeos individuales (sin lote)', ungrouped.length, '', ''],
-    ['Total rodeos', herds.length, '', ''],
-    ['', '', '', ''],
-  ]
-  const wsRes = utils.aoa_to_sheet(resumen)
-  utils.book_append_sheet(wb, wsRes, 'Resumen')
+    // ── Sheet 1: Resumen del Establecimiento ──────────────────────────────────
+    const totalCabezas = herds.reduce((s, h) => s + (h.head_count || 0), 0)
+    const totalEV = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
+    const resumen = [
+      ['REPORTE DE RODEOS — RODEO APP', '', '', ''],
+      ['Generado', new Date().toLocaleString('es-AR'), '', ''],
+      ['', '', '', ''],
+      ['TOTALES DEL ESTABLECIMIENTO', '', '', ''],
+      ['Total animales (cabezas)', totalCabezas, '', ''],
+      ['Total EV', Math.round(totalEV), '', ''],
+      ['Consumo MS/día (kg)', Math.round(totalEV * 11), '', ''],
+      ['Lotes de manejo', lotes.length, '', ''],
+      ['Rodeos individuales (sin lote)', ungrouped.length, '', ''],
+      ['Total rodeos', herds.length, '', ''],
+      ['', '', '', ''],
+    ]
+    const wsRes = utils.aoa_to_sheet(resumen)
+    utils.book_append_sheet(wb, wsRes, 'Resumen')
 
-  // ── Sheet 2: Detalle por Lote ─────────────────────────────────────────────
-  const detRows: any[][] = [
-    ['Lote', 'Rodeo / Sub-rodeo', 'Categoría Comercial', 'Cat. Fisiológica',
-     'Stock (cab)', 'Peso prom (kg)', 'EV Total', 'Consumo MS/día (kg)',
-     'Raza', 'Fecha ingreso', 'BCS'],
-  ]
-  // Lotes con sus hijos
-  for (const lote of lotes) {
-    const lt = lote.totales ?? {
-      head_count: lote.hijos.reduce((s, h) => s + (h.head_count || 0), 0),
-      total_ev: lote.hijos.reduce((s, h) => s + (Number(h.total_ev) || 0), 0),
-      consumo_kg_ms_dia: 0,
-    }
-    detRows.push([
-      `📂 ${lote.nombre}`,
-      `(${lote.hijos.length} sub-rodeos)`,
-      '', '', lt.head_count, '', Math.round(lt.total_ev),
-      Math.round(lt.total_ev * 11), '', '', '',
-    ])
-    for (const h of lote.hijos) {
-      const ev = Number(h.total_ev) || calculateBaseEV(h.categoria as any, Number(h.avg_weight_kg), h.head_count)
+    // ── Sheet 2: Detalle por Lote ─────────────────────────────────────────────
+    const detRows: any[][] = [
+      ['Lote', 'Rodeo / Sub-rodeo', 'Categoría Comercial', 'Cat. Fisiológica',
+       'Stock (cab)', 'Peso prom (kg)', 'EV Total', 'Consumo MS/día (kg)',
+       'Raza', 'Fecha ingreso', 'BCS'],
+    ]
+    // Lotes con sus hijos
+    for (const lote of lotes) {
+      const lt = lote.totales ?? {
+        head_count: lote.hijos.reduce((s, h) => s + (h.head_count || 0), 0),
+        total_ev: lote.hijos.reduce((s, h) => s + (Number(h.total_ev) || 0), 0),
+        consumo_kg_ms_dia: 0,
+      }
       detRows.push([
-        lote.nombre,
-        `  └ ${h.name}`,
-        h.categoria ? (CATEGORIA_LABEL_RAE[h.categoria as CategoriaComercial] ?? h.categoria) : h.species,
-        h.physiological_category ? (PHYSIO_LABEL[h.physiological_category as keyof typeof PHYSIO_LABEL] ?? h.physiological_category) : '—',
-        h.head_count,
-        h.avg_weight_kg ? Math.round(Number(h.avg_weight_kg)) : '',
-        Math.round(ev),
-        Math.round(ev * 11),
-        h.breed ?? '',
-        h.admission_date ?? '',
-        h.bcs_score ?? '',
+        `📂 ${lote.nombre}`,
+        `(${lote.hijos.length} sub-rodeos)`,
+        '', '', lt.head_count, '', Math.round(lt.total_ev),
+        Math.round(lt.total_ev * 11), '', '', '',
       ])
+      for (const h of lote.hijos) {
+        const ev = Number(h.total_ev) || calculateBaseEV(h.categoria as any, Number(h.avg_weight_kg), h.head_count)
+        detRows.push([
+          lote.nombre,
+          `  └ ${h.name}`,
+          h.categoria ? (CATEGORIA_LABEL_RAE[h.categoria as CategoriaComercial] ?? h.categoria) : h.species,
+          h.physiological_category ? (PHYSIO_LABEL[h.physiological_category as keyof typeof PHYSIO_LABEL] ?? h.physiological_category) : '—',
+          h.head_count,
+          h.avg_weight_kg ? Math.round(Number(h.avg_weight_kg)) : '',
+          Math.round(ev),
+          Math.round(ev * 11),
+          h.breed ?? '',
+          h.admission_date ?? '',
+          h.bcs_score ?? '',
+        ])
+      }
+      detRows.push(['', '', '', '', '', '', '', '', '', '', ''])
     }
-    detRows.push(['', '', '', '', '', '', '', '', '', '', ''])
-  }
-  // Rodeos individuales
-  if (ungrouped.length > 0) {
-    detRows.push(['RODEOS INDIVIDUALES (sin lote)', '', '', '', '', '', '', '', '', '', ''])
-    for (const h of ungrouped) {
-      const ev = Number(h.total_ev) || calculateBaseEV(h.categoria as any, Number(h.avg_weight_kg), h.head_count)
-      detRows.push([
-        '—',
-        h.name,
-        h.categoria ? (CATEGORIA_LABEL_RAE[h.categoria as CategoriaComercial] ?? h.categoria) : h.species,
-        h.physiological_category ? (PHYSIO_LABEL[h.physiological_category as keyof typeof PHYSIO_LABEL] ?? h.physiological_category) : '—',
-        h.head_count,
-        h.avg_weight_kg ? Math.round(Number(h.avg_weight_kg)) : '',
-        Math.round(ev),
-        Math.round(ev * 11),
-        h.breed ?? '',
-        h.admission_date ?? '',
-        h.bcs_score ?? '',
-      ])
+    // Rodeos individuales
+    if (ungrouped.length > 0) {
+      detRows.push(['RODEOS INDIVIDUALES (sin lote)', '', '', '', '', '', '', '', '', '', ''])
+      for (const h of ungrouped) {
+        const ev = Number(h.total_ev) || calculateBaseEV(h.categoria as any, Number(h.avg_weight_kg), h.head_count)
+        detRows.push([
+          '—',
+          h.name,
+          h.categoria ? (CATEGORIA_LABEL_RAE[h.categoria as CategoriaComercial] ?? h.categoria) : h.species,
+          h.physiological_category ? (PHYSIO_LABEL[h.physiological_category as keyof typeof PHYSIO_LABEL] ?? h.physiological_category) : '—',
+          h.head_count,
+          h.avg_weight_kg ? Math.round(Number(h.avg_weight_kg)) : '',
+          Math.round(ev),
+          Math.round(ev * 11),
+          h.breed ?? '',
+          h.admission_date ?? '',
+          h.bcs_score ?? '',
+        ])
+      }
     }
-  }
-  const wsDet = utils.aoa_to_sheet(detRows)
-  utils.book_append_sheet(wb, wsDet, 'Rodeos por Lote')
+    const wsDet = utils.aoa_to_sheet(detRows)
+    utils.book_append_sheet(wb, wsDet, 'Rodeos por Lote')
 
-  writeFile(wb, `rodeos-${new Date().toISOString().split('T')[0]}.xlsx`)
+    writeFile(wb, `rodeos-${new Date().toISOString().split('T')[0]}.xlsx`)
+  } catch (err: any) {
+    console.error('Error exportando:', err)
+    import('sonner').then(({ toast }) => toast.error('Error al exportar archivo: ' + err.message))
+  }
 }
 
 async function exportHistorialExcel(
   herds: HerdData[],
   lotes: LoteData[],
 ) {
-  const { utils, writeFile } = await import('xlsx')
-  const { apiFetch: fetch } = await import('@/lib/apiFetch')
+  try {
+    const { utils, writeFile } = await import('xlsx')
+    const { apiFetch: fetch } = await import('@/lib/apiFetch')
 
-  // Fetch events fresh so export is never stale
-  const [evRes, movRes] = await Promise.all([
-    fetch('/api/farm-events?limit=2000'),
-    fetch('/api/movements?limit=2000'),
-  ])
-  const farmEvents: any[] = evRes.ok  ? ((await evRes.json()).events    ?? []) : []
-  const movements:  any[] = movRes.ok ? ((await movRes.json()).movements ?? []) : []
+    // Fetch events fresh so export is never stale
+    const [evRes, movRes] = await Promise.all([
+      fetch('/api/farm-events?limit=2000'),
+      fetch('/api/movements?limit=2000'),
+    ])
+    const farmEvents: any[] = evRes.ok  ? ((await evRes.json()).events    ?? []) : []
+    const movements:  any[] = movRes.ok ? ((await movRes.json()).movements ?? []) : []
 
-  // Normalise to common shape
-  const allEvs: any[] = [
-    ...farmEvents.map((e: any) => ({
-      herd_id:    e.herd_id ?? null,
-      event_type: e.event_type ?? '',
-      occurred_at: e.event_date ? e.event_date + 'T12:00:00Z' : null,
-      quantity:   null,
-      weight_kg:  null,
-      bcs_score:  null,
-      notes:      e.description ?? e.title ?? null,
-    })),
-    ...movements.map((m: any) => ({
-      herd_id:    m.entity_id ?? null,
-      event_type: m.event_type ?? '',
-      occurred_at: m.occurred_at ?? null,
-      quantity:   m.quantity ?? null,
-      weight_kg:  m.weight_kg ?? null,
-      bcs_score:  m.bcs_score ?? null,
-      notes:      m.notes ?? null,
-    })),
-  ].sort((a, b) => (b.occurred_at ?? '').localeCompare(a.occurred_at ?? ''))
+    // Normalise to common shape
+    const allEvs: any[] = [
+      ...farmEvents.map((e: any) => ({
+        herd_id:    e.herd_id ?? null,
+        event_type: e.event_type ?? '',
+        occurred_at: e.event_date ? e.event_date + 'T12:00:00Z' : null,
+        quantity:   null,
+        weight_kg:  null,
+        bcs_score:  null,
+        notes:      e.description ?? e.title ?? null,
+      })),
+      ...movements.map((m: any) => ({
+        herd_id:    m.entity_id ?? null,
+        event_type: m.event_type ?? '',
+        occurred_at: m.occurred_at ?? null,
+        quantity:   m.quantity ?? null,
+        weight_kg:  m.weight_kg ?? null,
+        bcs_score:  m.bcs_score ?? null,
+        notes:      m.notes ?? null,
+      })),
+    ].sort((a, b) => (b.occurred_at ?? '').localeCompare(a.occurred_at ?? ''))
 
-  const herdMap = Object.fromEntries(herds.map(h => [h.id, h]))
-  const wb = utils.book_new()
+    const herdMap = Object.fromEntries(herds.map(h => [h.id, h]))
+    const wb = utils.book_new()
 
-  // ── Sheet 1: Resumen ──────────────────────────────────────────────────────
-  const totalCabezas = herds.reduce((s, h) => s + (h.head_count || 0), 0)
-  const totalEV      = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
+    // ── Sheet 1: Resumen ──────────────────────────────────────────────────────
+    const totalCabezas = herds.reduce((s, h) => s + (h.head_count || 0), 0)
+    const totalEV      = herds.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)
 
-  const resRows: any[][] = [
-    ['HISTORIAL DE EVENTOS — RODEO APP'],
-    ['Generado', new Date().toLocaleString('es-AR')],
-    [''],
-    ['TOTALES DEL ESTABLECIMIENTO'],
-    ['Total animales (cabezas)', totalCabezas],
-    ['Total EV', Math.round(totalEV)],
-    ['Consumo MS/dia (kg)', Math.round(totalEV * 11)],
-    ['Total Lotes de Manejo', lotes.length],
-    ['Total Rodeos', herds.length],
-    ['Total eventos exportados', allEvs.length],
-    [''],
-    // Detalle de lotes en resumen
-    ['LOTES DE MANEJO'],
-    ['Lote', 'Sub-rodeos', 'Cabezas', 'EV Total'],
-    ...lotes.map(l => {
-      const tot = l.totales ?? {
-        head_count: l.hijos.reduce((s, h) => s + (h.head_count || 0), 0),
-        total_ev:   l.hijos.reduce((s, h) => s + (Number(h.total_ev) || 0), 0),
+    const resRows: any[][] = [
+      ['HISTORIAL DE EVENTOS — RODEO APP'],
+      ['Generado', new Date().toLocaleString('es-AR')],
+      [''],
+      ['TOTALES DEL ESTABLECIMIENTO'],
+      ['Total animales (cabezas)', totalCabezas],
+      ['Total EV', Math.round(totalEV)],
+      ['Consumo MS/dia (kg)', Math.round(totalEV * 11)],
+      ['Total Lotes de Manejo', lotes.length],
+      ['Total Rodeos', herds.length],
+      ['Total eventos exportados', allEvs.length],
+      [''],
+      // Detalle de lotes en resumen
+      ['LOTES DE MANEJO'],
+      ['Lote', 'Sub-rodeos', 'Cabezas', 'EV Total'],
+      ...lotes.map(l => {
+        const tot = l.totales ?? {
+          head_count: l.hijos.reduce((s, h) => s + (h.head_count || 0), 0),
+          total_ev:   l.hijos.reduce((s, h) => s + (Number(h.total_ev) || 0), 0),
+        }
+        return [l.nombre, l.hijos.length, tot.head_count, Math.round(tot.total_ev)]
+      }),
+      [''],
+      ['RODEOS INDIVIDUALES (sin lote)'],
+      ['Nombre', 'Categoria', 'Cabezas', 'EV'],
+      ...herds
+        .filter(h => !h.grupo_manejo_id)
+        .map(h => [
+          h.name,
+          h.categoria ? (CATEGORIA_LABEL_RAE[h.categoria as CategoriaComercial] ?? h.categoria) : h.species,
+          h.head_count,
+          Math.round(Number(h.total_ev) || 0),
+        ]),
+    ]
+    utils.book_append_sheet(wb, utils.aoa_to_sheet(resRows), 'Resumen')
+
+    // ── Sheet 2: Historial completo de eventos ────────────────────────────────
+    // Agrupar por lote
+    const byLote = new Map<string, { nombre: string; evs: any[] }>()
+    const sinLote: any[] = []
+
+    for (const ev of allEvs) {
+      const herd = herdMap[ev.herd_id]
+      const gid   = herd?.grupo_manejo_id
+      const gnom  = herd?.grupo_manejo_nombre
+      if (gid && gnom) {
+        if (!byLote.has(gid)) byLote.set(gid, { nombre: gnom, evs: [] })
+        byLote.get(gid)!.evs.push({ ...ev, _herdName: herd?.name ?? '' })
+      } else {
+        sinLote.push({ ...ev, _herdName: herd?.name ?? '' })
       }
-      return [l.nombre, l.hijos.length, tot.head_count, Math.round(tot.total_ev)]
-    }),
-    [''],
-    ['RODEOS INDIVIDUALES (sin lote)'],
-    ['Nombre', 'Categoria', 'Cabezas', 'EV'],
-    ...herds
-      .filter(h => !h.grupo_manejo_id)
-      .map(h => [
-        h.name,
-        h.categoria ? (CATEGORIA_LABEL_RAE[h.categoria as CategoriaComercial] ?? h.categoria) : h.species,
-        h.head_count,
-        Math.round(Number(h.total_ev) || 0),
-      ]),
-  ]
-  utils.book_append_sheet(wb, utils.aoa_to_sheet(resRows), 'Resumen')
-
-  // ── Sheet 2: Historial completo de eventos ────────────────────────────────
-  // Agrupar por lote
-  const byLote = new Map<string, { nombre: string; evs: any[] }>()
-  const sinLote: any[] = []
-
-  for (const ev of allEvs) {
-    const herd = herdMap[ev.herd_id]
-    const gid   = herd?.grupo_manejo_id
-    const gnom  = herd?.grupo_manejo_nombre
-    if (gid && gnom) {
-      if (!byLote.has(gid)) byLote.set(gid, { nombre: gnom, evs: [] })
-      byLote.get(gid)!.evs.push({ ...ev, _herdName: herd?.name ?? '' })
-    } else {
-      sinLote.push({ ...ev, _herdName: herd?.name ?? '' })
     }
-  }
 
-  const histRows: any[][] = [
-    ['Fecha', 'Tipo de evento', 'Lote', 'Rodeo', 'Cantidad', 'Peso prom. (kg)', 'BCS', 'Notas'],
-  ]
+    const histRows: any[][] = [
+      ['Fecha', 'Tipo de evento', 'Lote', 'Rodeo', 'Cantidad', 'Peso prom. (kg)', 'BCS', 'Notas'],
+    ]
 
-  const fmtEvDate = (ev: any): string => {
-    const d = ev.occurred_at ?? null
-    if (!d) return ''
-    try { return new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) }
-    catch { return '' }
-  }
-
-  // Lotes agrupados
-  for (const [, { nombre, evs }] of byLote) {
-    // Separador de lote
-    histRows.push([`=== LOTE: ${nombre} (${evs.length} eventos) ===`, '', '', '', '', '', '', ''])
-    for (const ev of evs) {
-      histRows.push([
-        fmtEvDate(ev),
-        EVENT_LABEL[ev.event_type] ?? ev.event_type,
-        nombre,
-        ev._herdName,
-        ev.quantity ?? '',
-        ev.weight_kg != null ? Math.round(ev.weight_kg) : '',
-        ev.bcs_score ?? '',
-        ev.notes ?? '',
-      ])
+    const fmtEvDate = (ev: any): string => {
+      const d = ev.occurred_at ?? null
+      if (!d) return ''
+      try { return new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) }
+      catch { return '' }
     }
-    histRows.push(['', '', '', '', '', '', '', '']) // separador vacío
-  }
 
-  // Rodeos sin lote
-  if (sinLote.length > 0) {
-    histRows.push([`=== RODEOS INDIVIDUALES (${sinLote.length} eventos) ===`, '', '', '', '', '', '', ''])
-    for (const ev of sinLote) {
-      histRows.push([
-        fmtEvDate(ev),
-        EVENT_LABEL[ev.event_type] ?? ev.event_type,
-        '',
-        ev._herdName,
-        ev.quantity ?? '',
-        ev.weight_kg != null ? Math.round(ev.weight_kg) : '',
-        ev.bcs_score ?? '',
-        ev.notes ?? '',
-      ])
+    // Lotes agrupados
+    for (const [, { nombre, evs }] of byLote) {
+      // Separador de lote
+      histRows.push([`=== LOTE: ${nombre} (${evs.length} eventos) ===`, '', '', '', '', '', '', ''])
+      for (const ev of evs) {
+        histRows.push([
+          fmtEvDate(ev),
+          EVENT_LABEL[ev.event_type] ?? ev.event_type,
+          nombre,
+          ev._herdName,
+          ev.quantity ?? '',
+          ev.weight_kg != null ? Math.round(ev.weight_kg) : '',
+          ev.bcs_score ?? '',
+          ev.notes ?? '',
+        ])
+      }
+      histRows.push(['', '', '', '', '', '', '', '']) // separador vacío
     }
-  }
 
-  utils.book_append_sheet(wb, utils.aoa_to_sheet(histRows), 'Historial')
-  writeFile(wb, `historial-${new Date().toISOString().split('T')[0]}.xlsx`)
+    // Rodeos sin lote
+    if (sinLote.length > 0) {
+      histRows.push([`=== RODEOS INDIVIDUALES (${sinLote.length} eventos) ===`, '', '', '', '', '', '', ''])
+      for (const ev of sinLote) {
+        histRows.push([
+          fmtEvDate(ev),
+          EVENT_LABEL[ev.event_type] ?? ev.event_type,
+          '',
+          ev._herdName,
+          ev.quantity ?? '',
+          ev.weight_kg != null ? Math.round(ev.weight_kg) : '',
+          ev.bcs_score ?? '',
+          ev.notes ?? '',
+        ])
+      }
+    }
+
+    utils.book_append_sheet(wb, utils.aoa_to_sheet(histRows), 'Historial')
+    writeFile(wb, `historial-${new Date().toISOString().split('T')[0]}.xlsx`)
+  } catch (err: any) {
+    console.error('Error exportando historial:', err)
+    import('sonner').then(({ toast }) => toast.error('Error al exportar historial: ' + err.message))
+  }
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────

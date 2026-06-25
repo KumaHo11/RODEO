@@ -73,6 +73,9 @@ export async function enqueue(op: OutboxOperation): Promise<void> {
     body: JSON.stringify(op.body ?? {}),
     headers: { 'Content-Type': 'application/json', ...op.headers },
     idempotency_key,
+    mediaType: op.mediaType,
+    mediaId: op.mediaId,
+    mediaIds: op.mediaIds,
   }
 
   // Intentar envío inmediato si hay red
@@ -118,17 +121,116 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
         continue
       }
 
+      // Process media before sending (if applicable)
+      let mediaProcessed = false
+      let mediaUrls: string[] = []
+      let audioUrl: string | null = null
+      let photoUrl: string | null = null
+      let transcript: string | null = null
+      let durationSecs: number | null = null
+
+      try {
+        const token = await auth.currentUser?.getIdToken()
+        if (item.mediaType === 'audio' && item.mediaId) {
+          const { getPendingAudio } = await import('@/lib/audioOfflineStore')
+          const pa = await getPendingAudio(item.mediaId)
+          if (pa) {
+            const fd = new FormData()
+            fd.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
+            fd.append('folder', 'bitacora-audio')
+            const uploadRes = await fetch('/api/upload', { 
+              method: 'POST', 
+              body: fd,
+              headers: token ? { Authorization: `Bearer ${token}` } : {}
+            })
+            if (uploadRes.ok) audioUrl = (await uploadRes.json()).url
+
+            transcript = pa.transcript || ''
+            if (!transcript) {
+              try {
+                const tf = new FormData()
+                tf.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
+                const tr = await fetch('/api/transcribe-audio', { 
+                  method: 'POST', 
+                  body: tf,
+                  headers: token ? { Authorization: `Bearer ${token}` } : {} 
+                })
+                if (tr.ok) { const d = await tr.json(); transcript = d.transcript || '' }
+              } catch { /* ignore */ }
+            }
+            durationSecs = pa.durationSecs
+            mediaProcessed = true
+          }
+        } else if (item.mediaType === 'photo') {
+          const { getPendingPhoto } = await import('@/lib/audioOfflineStore')
+          const ppIds = item.mediaIds?.photos || (item.mediaId ? [item.mediaId] : [])
+          for (const ppId of ppIds) {
+            if (!ppId) continue
+            const pp = await getPendingPhoto(ppId)
+            if (pp) {
+              const fd = new FormData()
+              fd.append('file', new File([pp.blob], `photo-${pp.id}.jpg`, { type: 'image/jpeg' }))
+              fd.append('folder', 'bitacora-photos')
+              const uploadRes = await fetch('/api/upload', { 
+                method: 'POST', 
+                body: fd,
+                headers: token ? { Authorization: `Bearer ${token}` } : {} 
+              })
+              if (uploadRes.ok) mediaUrls.push((await uploadRes.json()).url)
+              mediaProcessed = true
+            }
+          }
+          if (mediaUrls.length > 0) photoUrl = mediaUrls[0]
+        }
+      } catch (err) {
+        console.warn('[outbox] Error processing media before sending:', err)
+      }
+
+      // Update body if media was processed
+      let bodyToSent = item.body
+      if (mediaProcessed) {
+        try {
+          const parsed = JSON.parse(bodyToSent)
+          if (item.mediaType === 'audio' && audioUrl) {
+            parsed.audio_url = audioUrl
+            if (!parsed.content && transcript && transcript !== '[Sin voz detectable]') parsed.content = transcript
+            parsed.audio_duration_secs = durationSecs
+          } else if (item.mediaType === 'photo' && mediaUrls.length > 0) {
+            if (!parsed.photo_urls) parsed.photo_url = photoUrl
+            parsed.photo_urls = mediaUrls
+          }
+          bodyToSent = JSON.stringify(parsed)
+        } catch { /* ignore parse error */ }
+      }
+
       const sent = await trySend({
         type: item.type,
         url: item.url,
         method: item.method,
-        body: item.body,
+        body: bodyToSent,
         headers: { ...item.headers, 'X-Idempotency-Key': item.idempotency_key },
         idempotency_key: item.idempotency_key,
       })
 
       if (sent) {
         await outboxDelete(item.id)
+        
+        // Clean up media offline store
+        try {
+          if (item.mediaType === 'audio' && item.mediaId) {
+            const { deletePendingAudio } = await import('@/lib/audioOfflineStore')
+            await deletePendingAudio(item.mediaId)
+          } else if (item.mediaType === 'photo') {
+            const { deletePendingPhoto } = await import('@/lib/audioOfflineStore')
+            const ppIds = item.mediaIds?.photos || (item.mediaId ? [item.mediaId] : [])
+            for (const ppId of ppIds) {
+              if (ppId) await deletePendingPhoto(ppId)
+            }
+          }
+        } catch (err) {
+          console.warn('[outbox] Error deleting media from store after sync:', err)
+        }
+        
         processed++
       } else {
         await outboxUpdate(item.id, {

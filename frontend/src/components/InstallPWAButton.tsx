@@ -36,6 +36,11 @@ function isIOS(): boolean {
   ) && !(window as any).MSStream
 }
 
+function isAndroid(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /android/i.test(navigator.userAgent.toLowerCase())
+}
+
 // Cooldown de 7 días para no molestar
 const DISMISS_KEY = 'rodeo_install_dismissed_at'
 const DISMISS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
@@ -60,11 +65,13 @@ export function InstallPWAButton({ variant = 'full' }: { variant?: 'full' | 'com
   const [showGuide, setShowGuide] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [isIOSDevice, setIsIOSDevice] = useState(false)
+  const [isAndroidDevice, setIsAndroidDevice] = useState(false)
 
   useEffect(() => {
     if (isStandalone()) { setInstalled(true); return }
     if (isDismissed()) setDismissed(true)
     setIsIOSDevice(isIOS())
+    setIsAndroidDevice(isAndroid())
 
     const handler = (e: Event) => {
       e.preventDefault()
@@ -106,7 +113,7 @@ export function InstallPWAButton({ variant = 'full' }: { variant?: 'full' | 'com
       return
     }
 
-    // Fallback: mostrar guía
+    // Fallback/Android sin prompt: mostrar guía
     setShowGuide(true)
   }, [deferredPrompt, isIOSDevice])
 
@@ -118,8 +125,8 @@ export function InstallPWAButton({ variant = 'full' }: { variant?: 'full' | 'com
   // No mostrar si ya instalada o dismiss activo
   if (installed || dismissed) return null
 
-  // No mostrar si no hay prompt y no es iOS
-  if (!deferredPrompt && !isIOSDevice) return null
+  // Mostrar si tenemos prompt, si es iOS, O si es Android (para mostrar la guía si falla el prompt)
+  if (!deferredPrompt && !isIOSDevice && !isAndroidDevice) return null
 
   // ── Compact variant (header icon) ────────────────────────────────────────
   if (variant === 'compact') {
@@ -138,6 +145,7 @@ export function InstallPWAButton({ variant = 'full' }: { variant?: 'full' | 'com
         {showGuide && (
           <InstallGuideOverlay
             isIOS={isIOSDevice}
+            isAndroid={isAndroidDevice}
             onClose={() => setShowGuide(false)}
           />
         )}
@@ -169,6 +177,7 @@ export function InstallPWAButton({ variant = 'full' }: { variant?: 'full' | 'com
       {showGuide && (
         <InstallGuideOverlay
           isIOS={isIOSDevice}
+          isAndroid={isAndroidDevice}
           onClose={() => setShowGuide(false)}
         />
       )}
@@ -178,7 +187,9 @@ export function InstallPWAButton({ variant = 'full' }: { variant?: 'full' | 'com
 
 // ── Install Guide Overlay (minimalista) ────────────────────────────────────
 
-function InstallGuideOverlay({ isIOS, onClose }: { isIOS: boolean; onClose: () => void }) {
+import { MoreVertical } from 'lucide-react'
+
+function InstallGuideOverlay({ isIOS, isAndroid, onClose }: { isIOS: boolean; isAndroid: boolean; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center">
       {/* Backdrop */}
@@ -206,6 +217,15 @@ function InstallGuideOverlay({ isIOS, onClose }: { isIOS: boolean; onClose: () =
               Presioná <span className="inline-flex items-center gap-1 font-bold text-gray-800">Compartir <span className="text-blue-500 text-base">↑</span></span>{' '}
               y luego <span className="font-bold text-gray-800">&quot;Agregar a pantalla de inicio&quot;</span>
             </p>
+          ) : isAndroid ? (
+            <div className="text-sm text-gray-500 leading-relaxed mt-3 flex flex-col gap-3">
+              <p>
+                Tocá el menú de opciones <span className="inline-flex items-center mx-1 bg-gray-100 rounded px-1"><MoreVertical className="w-4 h-4 text-gray-600" /></span> en la esquina superior de Chrome.
+              </p>
+              <p>
+                Luego seleccioná <span className="font-bold text-gray-800">&quot;Instalar aplicación&quot;</span> o <span className="font-bold text-gray-800">&quot;Agregar a la pantalla principal&quot;</span>.
+              </p>
+            </div>
           ) : (
             <p className="text-sm text-gray-500 leading-relaxed mt-3">
               Buscá el ícono de <span className="font-bold text-gray-800">instalación</span> en la barra de tu navegador

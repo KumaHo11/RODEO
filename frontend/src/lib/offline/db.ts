@@ -30,6 +30,9 @@ interface OutboxItem {
   created_at: number    // timestamp ms
   attempts: number      // reintentos
   last_error?: string
+  mediaType?: string
+  mediaId?: string
+  mediaIds?: any
 }
 
 interface RodeoDBSchema extends DBSchema {
