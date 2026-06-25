@@ -15,7 +15,6 @@
 
 import { processQueue } from './outbox'
 import { prefetchAll } from './prefetch'
-import { syncPendingMedia } from './mediaSync'
 
 let _initialized = false
 let _isSyncing   = false
@@ -110,15 +109,7 @@ export async function triggerSync(getToken: () => Promise<string | null>): Promi
     result = await processQueue()
     console.log(`[sync] Outbox: ${result.processed} enviados, ${result.failed} fallidos`)
 
-    // 2. Sync pending media (audio/photos stored offline)
-    try {
-      const mediaResult = await syncPendingMedia()
-      if (mediaResult.audiosSynced + mediaResult.photosSynced > 0) {
-        console.log(`[sync] Media: ${mediaResult.audiosSynced} audios, ${mediaResult.photosSynced} fotos sincronizadas`)
-      }
-    } catch (mediaErr) {
-      console.warn('[sync] Media sync error (non-critical):', mediaErr)
-    }
+
 
     // 3. Pre-fetch incremental de datos (solo lo que tiene > 5 min)
     const token = await getToken()

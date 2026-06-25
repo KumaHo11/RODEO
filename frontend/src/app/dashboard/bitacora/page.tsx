@@ -277,6 +277,7 @@ export default function BitacoraPage() {
 
     const queueHandler = () => { refreshPending(); loadNotes() }
     const syncHandler = () => {
+      refreshPending()
       if (isLoadingRef) return
       if (debounceTimer) clearTimeout(debounceTimer)
       debounceTimer = setTimeout(() => {
