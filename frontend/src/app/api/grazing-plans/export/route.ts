@@ -92,10 +92,10 @@ export async function GET(req: NextRequest) {
         r.planned_recovery_days,
         r.status,
         tipo,
-      ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')
+      ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')
     })
 
-    const csv = [headers.join(','), ...csvRows].join('\r\n')
+    const csv = '\uFEFF' + [headers.join(';'), ...csvRows].join('\r\n')
 
     return new NextResponse(csv, {
       status: 200,

@@ -1718,10 +1718,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         stockFin,
         plan.exit_dry_matter_kg_ha || '',
         desvio !== '' ? (Number(desvio) > 0 ? `+${desvio}` : desvio) : '',
-      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')
     })
 
-    const csv = [headers.map(h => `"${h}"`).join(','), ...rows].join('\n')
+    const csv = [headers.map(h => `"${h}"`).join(';'), ...rows].join('\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
