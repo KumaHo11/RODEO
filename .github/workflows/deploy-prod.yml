@@ -158,5 +158,6 @@ jobs:
           jq '. + {"hosting": {"public": "public", "rewrites": [{"source": "**", "run": {"serviceId": "${{ env.SERVICE_NAME }}", "region": "${{ env.REGION }}"}}]}}' firebase.json > firebase.tmp.json && mv firebase.tmp.json firebase.json
           mkdir -p public && touch public/.gitkeep
           npm install -g firebase-tools
-          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_key.json
-          firebase deploy --only hosting --project ${{ env.PROJECT_ID }}
+          # firebase-tools doesn't read GOOGLE_APPLICATION_CREDENTIALS — use gcloud access token
+          FIREBASE_TOKEN=$(gcloud auth print-access-token)
+          firebase deploy --only hosting --project ${{ env.PROJECT_ID }} --token "$FIREBASE_TOKEN"
