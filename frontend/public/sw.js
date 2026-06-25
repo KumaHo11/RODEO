@@ -14,7 +14,7 @@
  * Versionado: Cambiá CACHE_VERSION para invalidar todas las caches.
  */
 
-const CACHE_VERSION = 'rodeo-v6'
+const CACHE_VERSION = 'rodeo-v7'
 const STATIC_CACHE  = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 
@@ -118,10 +118,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   // ── 6. Navegación HTML: Network-first con fallback offline ─────────────
-  // Timeout reducido a 4s para evitar pantalla en blanco en iOS standalone
+  // Timeout extendido a 15s para evitar fallos por serverless cold starts
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      networkFirst(request, DYNAMIC_CACHE, 4000).catch(async () => {
+      networkFirst(request, DYNAMIC_CACHE, 15000).catch(async () => {
         // For dashboard sub-routes, try to serve the cached dashboard shell
         // This provides a better offline experience than the generic offline page
         if (url.pathname.startsWith('/dashboard/')) {
@@ -158,7 +158,7 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
-async function networkFirst(request, cacheName, timeoutMs = 4000) {
+async function networkFirst(request, cacheName, timeoutMs = 15000) {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
