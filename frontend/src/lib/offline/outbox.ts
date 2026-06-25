@@ -27,6 +27,9 @@ export interface OutboxOperation {
   localData?: { store: string; data: any }
   /** ID para eliminación optimista del store local (opcional) */
   localDeleteId?: { store: string; id: string }
+  mediaType?: string
+  mediaId?: string
+  mediaIds?: any
 }
 
 // ── Lock global: un solo procesamiento simultáneo ────────────────────────────
