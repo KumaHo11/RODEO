@@ -1,8 +1,8 @@
 /**
- * RODEO — Service Worker Avanzado
+ * RODEO — Service Worker v6
  *
  * Estrategias:
- *  1. Precache:     App shell (manifest, íconos, offline fallback HTML)
+ *  1. Precache:     App shell (manifest, íconos, offline fallback HTML, login)
  *  2. Cache-first:  Assets estáticos (/_next/static/, imágenes, fuentes)
  *  3. Network-first: Navegaciones HTML (con fallback a offline page)
  *  4. Background Sync: Envía outbox cuando la red vuelve
@@ -14,7 +14,7 @@
  * Versionado: Cambiá CACHE_VERSION para invalidar todas las caches.
  */
 
-const CACHE_VERSION = 'rodeo-v5'
+const CACHE_VERSION = 'rodeo-v6'
 const STATIC_CACHE  = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 
@@ -22,10 +22,12 @@ const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 const PRECACHE_URLS = [
   '/',
   '/dashboard',
+  '/login',
   '/manifest.json',
   '/FaviconFondoVerde.svg',
   '/LogoHeaderVerde_1.svg',
   '/LogoInstallapp.svg',
+  '/icons/icon-180.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/_offline',
@@ -116,9 +118,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   // ── 6. Navegación HTML: Network-first con fallback offline ─────────────
+  // Timeout reducido a 4s para evitar pantalla en blanco en iOS standalone
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      networkFirst(request, DYNAMIC_CACHE, 8000).catch(async () => {
+      networkFirst(request, DYNAMIC_CACHE, 4000).catch(async () => {
         // For dashboard sub-routes, try to serve the cached dashboard shell
         // This provides a better offline experience than the generic offline page
         if (url.pathname.startsWith('/dashboard/')) {
@@ -131,8 +134,10 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // ── 7. Resto (JS chunks, CSS, etc.): Network-first ────────────────────
-  event.respondWith(networkFirst(request, DYNAMIC_CACHE, 5000))
+  // ── 7. Resto (JS chunks, CSS, etc.): Stale-While-Revalidate ───────────
+  // Cambiado de network-first a SWR para que los chunks carguen instantáneamente
+  // desde cache mientras se revalida en background (evita bloqueos offline)
+  event.respondWith(staleWhileRevalidate(request, DYNAMIC_CACHE))
 })
 
 // ── Cache Strategies ────────────────────────────────────────────────────────
@@ -153,7 +158,7 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
-async function networkFirst(request, cacheName, timeoutMs = 5000) {
+async function networkFirst(request, cacheName, timeoutMs = 4000) {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)

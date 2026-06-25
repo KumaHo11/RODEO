@@ -30,6 +30,7 @@ export const viewport: Viewport = {
   themeColor: '#16a34a',
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({
@@ -41,28 +42,14 @@ export default function RootLayout({
     <html lang="es" data-scroll-behavior="smooth">
       <head>
         <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
-        <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
         <link rel="apple-touch-startup-image" href="/icons/icon-512.png" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="RODEO" />
-        {/* PWA Diagnostics: capture startup errors in standalone mode */}
-        <Script
-          id="pwa-diagnostics"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              if (typeof window !== 'undefined' && (
-                window.matchMedia('(display-mode: standalone)').matches ||
-                window.navigator.standalone === true
-              )) {
-                import('/pwa-diagnostics-init.js').catch(function() {});
-              }
-            `,
-          }}
-        />
         {/* Anti-ServiceWorker para desarrollo: Muerte súbita a cachés corruptas */}
         <Script
           id="sw-unregister"

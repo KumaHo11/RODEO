@@ -17,21 +17,9 @@
   },
   "icons": [
     {
-      "src": "/icons/icon-72.svg",
-      "sizes": "72x72",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-96.svg",
-      "sizes": "96x96",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-128.svg",
-      "sizes": "128x128",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
       "purpose": "any"
     },
     {
@@ -47,9 +35,21 @@
       "purpose": "any"
     },
     {
-      "src": "/FaviconFondoVerde.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -59,21 +59,21 @@
       "short_name": "Bitácora",
       "description": "Registrar observación de campo",
       "url": "/dashboard/bitacora",
-      "icons": [{ "src": "/icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Mi Campo",
       "short_name": "Campo",
       "description": "Ver mapa de potreros",
       "url": "/dashboard/mi-campo",
-      "icons": [{ "src": "/icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Agenda",
       "short_name": "Agenda",
       "description": "Ver eventos del campo",
       "url": "/dashboard/agenda",
-      "icons": [{ "src": "/icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
   "screenshots": [
