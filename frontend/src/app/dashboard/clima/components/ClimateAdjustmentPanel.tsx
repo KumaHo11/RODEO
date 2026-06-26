@@ -11,6 +11,7 @@ import { usePlan } from '@/hooks/usePlan'
 import { useWeather } from '@/lib/context/WeatherContext'
 import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
 import { useAuth } from '@/components/AuthProvider'
+import { toast } from 'sonner'
 import type { CreateWeatherEventPayload } from '@/lib/types/weather'
 import {
   LineChart, Line, ReferenceLine, XAxis, YAxis,
@@ -151,7 +152,10 @@ function PaddockWeatherForm({
       if (onRecalculate) {
         await onRecalculate(paddockId, tab === 'rain' ? Number(value) : undefined)
       }
+      toast.success(tab === 'rain' ? 'Lluvia registrada' : 'Helada registrada')
       setTimeout(() => setSaved(false), 2000)
+    } else {
+      toast.error('No se pudo registrar el evento')
     }
   }
 
@@ -210,10 +214,9 @@ function PaddockWeatherForm({
           type="button"
           onClick={handleSubmit}
           disabled={!isValid || saving || !onSave}
-          className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl transition-all shadow-sm disabled:opacity-40 shrink-0"
-          style={{ backgroundColor: saved ? '#10b981' : '#166534', color: 'white' }}
+          className={`w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl transition-all shadow-sm disabled:opacity-40 shrink-0 text-white ${saved ? 'bg-emerald-500' : 'bg-green-600 hover:bg-green-700'}`}
         >
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : null}
           {saving ? 'Guardando…' : saved ? 'Guardado' : 'Registrar'}
         </button>
       </div>

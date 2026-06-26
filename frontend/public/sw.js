@@ -14,15 +14,12 @@
  * Versionado: Cambiá CACHE_VERSION para invalidar todas las caches.
  */
 
-const CACHE_VERSION = 'rodeo-v7'
+const CACHE_VERSION = 'rodeo-v9'
 const STATIC_CACHE  = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 
 // Recursos a pre-cachear en install
 const PRECACHE_URLS = [
-  '/',
-  '/dashboard',
-  '/login',
   '/manifest.json',
   '/FaviconFondoVerde.svg',
   '/LogoHeaderVerde_1.svg',
@@ -122,12 +119,6 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       networkFirst(request, DYNAMIC_CACHE, 15000).catch(async () => {
-        // For dashboard sub-routes, try to serve the cached dashboard shell
-        // This provides a better offline experience than the generic offline page
-        if (url.pathname.startsWith('/dashboard/')) {
-          const dashboardCached = await caches.match('/dashboard')
-          if (dashboardCached) return dashboardCached
-        }
         return caches.match('/_offline') || new Response('Offline', { status: 503 })
       })
     )
@@ -166,6 +157,7 @@ async function networkFirst(request, cacheName, timeoutMs = 15000) {
     const response = await fetch(request, { signal: controller.signal })
     clearTimeout(timeout)
 
+    // Solo cacheamos si es exitosa o 304 (no redirecciones)
     if (response.ok || response.status === 304) {
       const cache = await caches.open(cacheName)
       cache.put(request, response.clone())
@@ -173,17 +165,12 @@ async function networkFirst(request, cacheName, timeoutMs = 15000) {
     return response
   } catch (err) {
     // Red caída o timeout → intentar cache
-    const cached = await caches.match(request)
+    const matchOptions = request.mode === 'navigate' ? { ignoreSearch: true } : {}
+    const cached = await caches.match(request, matchOptions)
     if (cached) return cached
 
     // Para navegaciones, devolver offline page
     if (request.mode === 'navigate') {
-      // Try dashboard shell first for dashboard routes
-      const url = new URL(request.url)
-      if (url.pathname.startsWith('/dashboard/')) {
-        const dashboardCached = await caches.match('/dashboard')
-        if (dashboardCached) return dashboardCached
-      }
       const offlinePage = await caches.match('/_offline')
       if (offlinePage) return offlinePage
     }

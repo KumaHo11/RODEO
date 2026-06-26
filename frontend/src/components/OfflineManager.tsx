@@ -178,7 +178,13 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
         icon: <Wifi className="w-4 h-4 text-green-500" />,
       })
 
-      // Registrar Background Sync para redundancia
+      // Llamar a syncNow() inmediatamente para procesar la cola
+      // ya que iOS Safari no soporta Background Sync API
+      setTimeout(() => {
+        syncNow()
+      }, 1000)
+
+      // Registrar Background Sync para redundancia (Chrome/Android)
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then(reg => {
           if ('sync' in reg) {
