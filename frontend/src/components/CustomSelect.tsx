@@ -67,6 +67,7 @@ export function CustomSelect({
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
 
   // Flatten all options for label lookup
@@ -106,13 +107,17 @@ export function CustomSelect({
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent | TouchEvent) => {
-      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setOpen(false)
       }
     }
     const onScroll = () => { updatePosition() }
     document.addEventListener('mousedown', close)
-    document.addEventListener('touchstart', close)
+    document.addEventListener('touchstart', close, { passive: true })
     window.addEventListener('scroll', onScroll, true)
     return () => {
       document.removeEventListener('mousedown', close)
@@ -133,7 +138,7 @@ export function CustomSelect({
       <button
         key={opt.value}
         type="button"
-        onMouseDown={() => select(opt)}
+        onClick={() => select(opt)}
         className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors text-left ${
           isActive ? 'bg-green-50 text-green-800 font-semibold' : 'text-gray-800 hover:bg-gray-50'
         }`}
@@ -154,6 +159,7 @@ export function CustomSelect({
 
   const dropdown = open ? (
     <div
+      ref={dropdownRef}
       style={dropdownStyle}
       className="bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden overflow-y-auto max-h-80"
     >

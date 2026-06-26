@@ -84,70 +84,77 @@ export default function CalculadoraPage() {
   const loadFieldData = useCallback(async () => {
     if (!user) return
     setLoadingField(true)
+
+    const applyPaddocks = (paddocks: any[]) => {
+      const active = paddocks.filter((p: any) => p.is_active !== false)
+      setPaddocksData(active)
+      if (active.length > 0) {
+        const totalArea = active.reduce((s: number, p: any) => s + (Number(p.area_ha) || 0), 0)
+        const msArr = active.filter((p: any) => p.dry_matter_kg_ha)
+        const avgMs = msArr.length > 0 ? msArr.reduce((s: number, p: any) => s + (Number(p.dry_matter_kg_ha) || 0), 0) / msArr.length : 0
+        const ndviArr = active.filter((p: any) => p.current_ndvi)
+        const avgNdvi = ndviArr.length > 0 ? ndviArr.reduce((s: number, p: any) => s + (Number(p.current_ndvi) || 0), 0) / ndviArr.length : 0
+
+        setInput(prev => ({
+          ...prev,
+          ...(totalArea > 0 ? { totalAreaHa: Math.round(totalArea) } : {}),
+          ...(avgMs > 0     ? { msKgHa: Math.round(avgMs) }          : {}),
+          ...(avgNdvi > 0   ? { ndvi: parseFloat(avgNdvi.toFixed(2)) }: {}),
+        }))
+        setRealSources(prev => ({
+          ...prev,
+          ...(totalArea > 0 ? { totalAreaHa: true } : {}),
+          ...(avgMs > 0     ? { msKgHa: true }       : {}),
+          ...(avgNdvi > 0   ? { ndvi: true }          : {}),
+        }))
+      }
+    }
+
+    const applyHerds = (herds: any[]) => {
+      setHerdsData(herds)
+      if (herds.length > 0) {
+        const totalHead = herds.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
+        const avgWeight = herds.length > 0 ? herds.reduce((s: number, h: any) => s + (Number(h.avg_weight_kg) || 450), 0) / herds.length : 0
+        const topCategoria = (herds[0]?.categoria?.toUpperCase() ?? 'VACAS') as CategoriaAnimal
+
+        setInput(prev => ({
+          ...prev,
+          ...(totalHead > 0 ? { headCount: totalHead }                              : {}),
+          ...(avgWeight > 0 ? { avgWeightKg: Math.round(avgWeight) }                : {}),
+          ...(CATEGORIAS.includes(topCategoria) ? { categoria: topCategoria }        : {}),
+        }))
+        setRealSources(prev => ({
+          ...prev,
+          ...(totalHead > 0 ? { headCount: true, avgWeightKg: true } : {}),
+        }))
+      }
+    }
+
+    try {
+      const cachedStr = localStorage.getItem('rodeo_grazing_data_cache')
+      if (cachedStr) {
+        const cached = JSON.parse(cachedStr)
+        if (cached.paddocks && cached.paddocks.length > 0) applyPaddocks(cached.paddocks)
+        if (cached.herds && cached.herds.length > 0) applyHerds(cached.herds)
+      }
+    } catch (err) {}
+
     try {
       const token = await user.getIdToken()
 
-      // Potreros: área total y MS/ha promedio
-      const paddocksRes = await fetch('/api/paddocks', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const paddocksRes = await fetch('/api/paddocks', { headers: { Authorization: `Bearer ${token}` } })
       if (paddocksRes.ok) {
         const { paddocks = [] } = await paddocksRes.json()
-        const active = paddocks.filter((p: any) => p.is_active !== false)
-        setPaddocksData(active)
-        if (active.length > 0) {
-          const totalArea = active.reduce((s: number, p: any) => s + (Number(p.area_ha) || 0), 0)
-          const avgMs = active
-            .filter((p: any) => p.dry_matter_kg_ha)
-            .reduce((s: number, p: any, _: any, arr: any[]) =>
-              s + (Number(p.dry_matter_kg_ha) || 0) / arr.length, 0)
-          const avgNdvi = active
-            .filter((p: any) => p.current_ndvi)
-            .reduce((s: number, p: any, _: any, arr: any[]) =>
-              s + (Number(p.current_ndvi) || 0) / arr.length, 0)
-
-          setInput(prev => ({
-            ...prev,
-            ...(totalArea > 0 ? { totalAreaHa: Math.round(totalArea) } : {}),
-            ...(avgMs > 0     ? { msKgHa: Math.round(avgMs) }          : {}),
-            ...(avgNdvi > 0   ? { ndvi: parseFloat(avgNdvi.toFixed(2)) }: {}),
-          }))
-          setRealSources(prev => ({
-            ...prev,
-            ...(totalArea > 0 ? { totalAreaHa: true } : {}),
-            ...(avgMs > 0     ? { msKgHa: true }       : {}),
-            ...(avgNdvi > 0   ? { ndvi: true }          : {}),
-          }))
-        }
+        applyPaddocks(paddocks)
       }
 
-      // Rodeos: cabezas totales y peso promedio
-      const herdsRes = await fetch('/api/herds', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const herdsRes = await fetch('/api/herds', { headers: { Authorization: `Bearer ${token}` } })
       if (herdsRes.ok) {
         const { herds = [] } = await herdsRes.json()
-        setHerdsData(herds)
-        if (herds.length > 0) {
-          const totalHead = herds.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
-          const avgWeight = herds.reduce((s: number, h: any, _: any, arr: any[]) =>
-            s + (Number(h.avg_weight_kg) || 450) / arr.length, 0)
-          const topCategoria = (herds[0]?.categoria?.toUpperCase() ?? 'VACAS') as CategoriaAnimal
-
-          setInput(prev => ({
-            ...prev,
-            ...(totalHead > 0 ? { headCount: totalHead }                              : {}),
-            ...(avgWeight > 0 ? { avgWeightKg: Math.round(avgWeight) }                : {}),
-            ...(CATEGORIAS.includes(topCategoria) ? { categoria: topCategoria }        : {}),
-          }))
-          setRealSources(prev => ({
-            ...prev,
-            ...(totalHead > 0 ? { headCount: true, avgWeightKg: true } : {}),
-          }))
-        }
+        applyHerds(herds)
       }
     } catch (e) {
-      // Falla silenciosa — se usan valores por defecto
+      // Falla silenciosa — se usan valores por defecto o cache
     } finally {
       setLoadingField(false)
     }

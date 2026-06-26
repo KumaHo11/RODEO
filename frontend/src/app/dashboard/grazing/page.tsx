@@ -1080,50 +1080,19 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         getPaddockWeather(-37.32, -59.13).catch(() => null),
       ])
 
-      const [paddocksResJson, herdsResJson, plansResJson, eventsResJson, movementsResJson, orgResJson, spResJson, wEvResJson] = await Promise.all([
-        paddocksRes?.ok ? paddocksRes.json() : Promise.resolve({ paddocks: [] }),
-        herdsRes?.ok    ? herdsRes.json()    : Promise.resolve({ herds: [] }),
-        plansRes?.ok    ? plansRes.json()    : Promise.resolve({ plans: [] }),
-        eventsRes?.ok   ? eventsRes.json()   : Promise.resolve({ events: [] }),
-        movementsRes?.ok? movementsRes.json(): Promise.resolve({ movements: [] }),
-        orgRes?.ok      ? orgRes.json()      : Promise.resolve({ organization: null }),
-        spRes?.ok       ? spRes.json()       : Promise.resolve({ plans: [] }),
-        wEvRes?.ok      ? wEvRes.json()      : Promise.resolve({ events: [] }),
-      ])
-      
-      const pData = paddocksResJson.paddocks ?? []
-      const hData = herdsResJson.herds ?? []
-      const plData = plansResJson.plans ?? []
-      const feData = eventsResJson.events ?? []
-      const mData = movementsResJson.movements ?? []
-      
-      setPaddocks(pData)
-      setHerds(hData)
-      setPlans(plData)
-      setFarmEvents(feData)
-      setMovements(mData)
-      setMercado(mercadoRes?.ok ? (await mercadoRes.json()) : null)
+      let pData = paddocks; let hData = herds; let plData = plans;
+      let feData = farmEvents; let mData = movements; let spData = seasonPlans; let wEventsData = weatherEvents;
 
-      if (orgResJson.organization) {
-        const org = orgResJson.organization
-        const newDaily = Number(org.default_daily_allocation_kg ?? 12)
-        const newRemnant = Number(org.default_target_remnant_kg_ha ?? 600)
-        setDailyAllocationKg(newDaily)
-        setRawDailyAlloc(String(newDaily))
-        setTargetRemnant(newRemnant)
-        setRawTargetRemnant(String(newRemnant))
-      }
-
-      let spData = []
-      if (spResJson) {
-        spData = spResJson.plans ?? spResJson ?? []
-        setSeasonPlans(spData)
-      }
-
-      let wEventsData = []
-      if (wEvResJson) {
-        wEventsData = wEvResJson.events || []
-        setWeatherEvents(wEventsData)
+      if (paddocksRes?.ok) { const j = await paddocksRes.json(); pData = j.paddocks ?? []; setPaddocks(pData); }
+      if (herdsRes?.ok) { const j = await herdsRes.json(); hData = j.herds ?? []; setHerds(hData); }
+      if (plansRes?.ok) { const j = await plansRes.json(); plData = j.plans ?? []; setPlans(plData); }
+      if (eventsRes?.ok) { const j = await eventsRes.json(); feData = j.events ?? []; setFarmEvents(feData); }
+      if (movementsRes?.ok) { const j = await movementsRes.json(); mData = j.movements ?? []; setMovements(mData); }
+      if (spRes?.ok) { const j = await spRes.json(); spData = j.plans ?? j ?? []; setSeasonPlans(spData); }
+      if (wEvRes?.ok) { 
+        const j = await wEvRes.json(); 
+        wEventsData = j.events ?? []; 
+        setWeatherEvents(wEventsData);
         const fromDb: Record<string, number> = {}
         ;(wEventsData).forEach((ev: any) => {
           if (ev.type === 'RAIN') {
@@ -1131,10 +1100,24 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             fromDb[key] = (fromDb[key] || 0) + Number(ev.value)
           }
         })
-        // Merge: DB values override localStorage for same month key
         setRainfallData(prev => ({ ...prev, ...fromDb }))
       }
 
+      if (mercadoRes?.ok) setMercado(await mercadoRes.json())
+      if (orgRes?.ok) {
+        const j = await orgRes.json()
+        if (j.organization) {
+          const org = j.organization
+          const newDaily = Number(org.default_daily_allocation_kg ?? 12)
+          const newRemnant = Number(org.default_target_remnant_kg_ha ?? 600)
+          setDailyAllocationKg(newDaily)
+          setRawDailyAlloc(String(newDaily))
+          setTargetRemnant(newRemnant)
+          setRawTargetRemnant(String(newRemnant))
+        }
+      }
+
+      // Solo actualizar cache con los últimos datos en memoria
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           paddocks: pData, herds: hData, plans: plData, farmEvents: feData,
