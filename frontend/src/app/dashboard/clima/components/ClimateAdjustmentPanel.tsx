@@ -11,7 +11,7 @@ import { usePlan } from '@/hooks/usePlan'
 import { useWeather } from '@/lib/context/WeatherContext'
 import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
 import { useAuth } from '@/components/AuthProvider'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import type { CreateWeatherEventPayload } from '@/lib/types/weather'
 import {
   LineChart, Line, ReferenceLine, XAxis, YAxis,
