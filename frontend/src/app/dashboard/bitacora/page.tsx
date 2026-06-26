@@ -60,7 +60,7 @@ function Waveform({ active }: { active: boolean }) {
 }
 
 // ── Note row ──────────────────────────────────────────────────────────────────
-function NoteRow({ note }: { note: any }) {
+function NoteRow({ note, onDelete, onEdit }: { note: any, onDelete: (id: string, isPending: boolean) => void, onEdit: (note: any) => void }) {
   const [expanded, setExpanded] = useState(false)
   const isAudio = !!note.audio_url
   const isPhoto = !!note.photo_url
@@ -122,6 +122,28 @@ function NoteRow({ note }: { note: any }) {
           ) : null}
         </div>
       </div>
+      
+      {/* Actions */}
+      <div className="mt-3 flex items-center justify-end gap-1.5 pt-3 border-t border-gray-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
+        {!isAudio && !isPhoto && !note.is_pending && (
+          <button
+            onClick={() => onEdit(note)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-all"
+          >
+            Editar
+          </button>
+        )}
+        <button
+          onClick={() => {
+            if (window.confirm('¿Seguro que querés eliminar esta nota?')) {
+              onDelete(note.id, !!note.is_pending)
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all"
+        >
+          Eliminar
+        </button>
+      </div>
     </div>
   )
 }
@@ -142,9 +164,11 @@ export default function BitacoraPage() {
   const [search, setSearch] = useState('')
   const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [isFilterExpanded, setIsFilterExpanded] = useState(false)
-  const [showMobileHistory, setShowMobileHistory] = useState(false)
+  const [showMobileHistory, setShowMobileHistory] = useState(true)
   const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
+  const [editingTextNote, setEditingTextNote] = useState<any | null>(null)
+
 
   const monthNames = useMemo(() => ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], []);
 
@@ -327,11 +351,12 @@ export default function BitacoraPage() {
     // MediaRecorder for audio blob
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream)
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+      const mr = new MediaRecorder(stream, { mimeType })
       audioChunksRef.current = []
       mr.ondataavailable = ev => { if (ev.data.size > 0) audioChunksRef.current.push(ev.data) }
       mr.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const blob = new Blob(audioChunksRef.current, { type: mimeType })
         setAudioBlob(blob)
         setAudioUrl(URL.createObjectURL(blob))
         stream.getTracks().forEach(t => t.stop())
@@ -462,8 +487,9 @@ export default function BitacoraPage() {
       if (audioBlob) {
         // 1. Upload blob
         setSavingMsg('Subiendo audio...')
+        const ext = audioBlob.type.includes('mp4') ? 'mp4' : 'webm'
         const fd = new FormData()
-        fd.append('file', new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
+        fd.append('file', new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: audioBlob.type }))
         fd.append('folder', 'bitacora-audio')
         const r = await apiFetch('/api/upload', { method: 'POST', body: fd })
         if (r.ok) { audio_url = (await r.json()).url }
@@ -472,7 +498,7 @@ export default function BitacoraPage() {
         setSavingMsg('Transcribiendo...')
         try {
           const tf = new FormData()
-          tf.append('file', new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
+          tf.append('file', new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: audioBlob.type }))
           const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
           if (tr.ok) {
             const d = await tr.json()
@@ -543,6 +569,47 @@ export default function BitacoraPage() {
       console.error('saveTextNote error:', e)
       toast.error('No se pudo guardar la nota')
       setSaving(false)
+    }
+  }
+
+  const updateTextNote = async () => {
+    if (saving || !editingTextNote || !editingTextNote.content.trim()) return
+    setSaving(true)
+    try {
+      setSavingMsg('Actualizando nota...')
+      await apiFetch(`/api/field-notes/${editingTextNote.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          content: editingTextNote.content.trim(),
+        }),
+      })
+      toast.success('Nota actualizada')
+      setEditingTextNote(null)
+      loadNotes()
+    } catch (e) {
+      console.error('updateTextNote error:', e)
+      toast.error('No se pudo actualizar la nota')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteNote = async (id: string, isPending: boolean) => {
+    if (isPending) {
+      // It's pending in offline queue, we should ideally remove it, but for simplicity we skip or notify
+      toast.info('No se pueden eliminar notas pendientes hasta que se sincronicen.')
+      return
+    }
+    try {
+      const res = await apiFetch(`/api/field-notes/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setNotes(prev => prev.filter(n => n.id !== id))
+        toast.success('Nota eliminada')
+      } else {
+        throw new Error('Error API')
+      }
+    } catch (e) {
+      toast.error('No se pudo eliminar la nota')
     }
   }
 
@@ -687,9 +754,16 @@ export default function BitacoraPage() {
           </div>
         </div>
         <div className="sm:hidden mt-6">
-          <button onClick={() => setShowMobileHistory(!showMobileHistory)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-700">
-            <span>Ver historial de registros ({filtered.length})</span>
-            {showMobileHistory ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          <button 
+            onClick={() => {
+              setShowMobileHistory(!showMobileHistory)
+              if (!showMobileHistory) {
+                setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100)
+              }
+            }} 
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-200 shadow-sm rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-all">
+            <span>{showMobileHistory ? 'Ocultar historial' : 'Ver historial de registros'} ({filtered.length})</span>
+            {showMobileHistory ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
           </button>
         </div>
       </div>
@@ -711,7 +785,7 @@ export default function BitacoraPage() {
               <div className="py-2 sticky top-0 z-10">
                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{dateLabel}</span>
               </div>
-              {dayNotes.map(note => <NoteRow key={note.id} note={note} />)}
+              {dayNotes.map(note => <NoteRow key={note.id} note={note} onDelete={deleteNote} onEdit={setEditingTextNote} />)}
             </div>
           ))
         )}
@@ -859,6 +933,45 @@ export default function BitacoraPage() {
 
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
       <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+
+      {/* Edit text note modal */}
+      {editingTextNote && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/50 backdrop-blur-md px-4"
+          onClick={() => setEditingTextNote(null)}>
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-6 relative animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}>
+            <button onClick={() => setEditingTextNote(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+            <div className="text-center mb-6 mt-2">
+              <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-blue-100">
+                <FileText className="w-6 h-6 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Editar nota</h3>
+              <p className="text-sm text-gray-500 mt-1">Modifica el texto guardado</p>
+            </div>
+            
+            <div className="space-y-4">
+              <textarea
+                autoFocus
+                value={editingTextNote.content}
+                onChange={e => setEditingTextNote({ ...editingTextNote, content: e.target.value })}
+                className="w-full h-32 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              />
+              
+              <button 
+                onClick={updateTextNote}
+                disabled={saving || !editingTextNote.content.trim()}
+                className="w-full flex items-center justify-center gap-3 py-3.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold">
+                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                <span>Guardar cambios</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   )
 }

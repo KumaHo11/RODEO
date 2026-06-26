@@ -771,44 +771,48 @@ export default function HerdsPage() {
       )}
 
       {/* ── Stats ── */}
-      <div className="tour-metricas-rodeos grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="tour-metricas-rodeos">
+        <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-5 text-white shadow-md shadow-green-200">
+          <div className="flex flex-col sm:flex-row gap-6">
+            
+            <div className="flex-1">
+              <p className="text-[10px] font-black tracking-widest uppercase text-green-100 mb-1">Establecimiento</p>
+              <div className="flex items-end gap-2">
+                <p className="text-4xl font-black tabular-nums leading-none">{totalAnimals.toLocaleString('es-AR')}</p>
+                <p className="text-sm font-bold text-green-100 mb-0.5">cabezas</p>
+              </div>
+              <div className="mt-4 pt-4 border-t border-green-500/40 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[9px] font-black text-green-200 uppercase tracking-widest">Equiv. Vaca</p>
+                  <p className="text-xl font-black">{totalEV.toLocaleString('es-AR')}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-green-200 uppercase tracking-widest">Mat. Seca/día</p>
+                  <p className="text-xl font-black">{totalMsDay.toLocaleString('es-AR')} <span className="text-sm font-medium text-green-200">kg</span></p>
+                </div>
+              </div>
+            </div>
 
-        <div className="sm:col-span-1 bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-5 text-white shadow-md shadow-green-200">
-          <p className="text-[10px] font-black tracking-widest uppercase text-green-100 mb-2">Establecimiento</p>
-          <p className="text-4xl font-black tabular-nums leading-none">{totalAnimals.toLocaleString('es-AR')}</p>
-          <p className="text-sm font-bold text-green-100 mt-1">animales totales</p>
-          <div className="mt-3 pt-3 border-t border-green-500/40 flex items-center gap-4">
-            <div>
-              <p className="text-[9px] font-black text-green-200 uppercase tracking-widest">EV Total</p>
-              <p className="text-lg font-black">{totalEV.toLocaleString('es-AR')}</p>
+            <div className="hidden sm:block w-px bg-green-500/40" />
+            <div className="sm:hidden h-px w-full bg-green-500/40 my-1" />
+
+            <div className="flex-1 grid grid-cols-2 sm:grid-cols-1 gap-4">
+              <div>
+                <p className="text-[10px] font-black tracking-widest uppercase text-green-100 mb-1">Organización</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-3xl font-black leading-none">{lotes.length}</p>
+                  <p className="text-xs font-bold text-green-100 leading-tight">Lotes<br/>Activos</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] font-black tracking-widest uppercase text-green-100 mb-1 sm:mt-3">Rodeos sueltos</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-3xl font-black leading-none">{ungrouped.length}</p>
+                  <p className="text-xs font-bold text-green-100 leading-tight">Sin<br/>agrupar</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-[9px] font-black text-green-200 uppercase tracking-widest">MS/día</p>
-              <p className="text-lg font-black">{totalMsDay.toLocaleString('es-AR')} <span className="text-xs font-medium text-green-200">kg</span></p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex items-start justify-between mb-2">
-            <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Lotes de manejo</p>
-            <Info className="w-3.5 h-3.5 text-gray-300" />
-          </div>
-          <p className="text-4xl font-black text-gray-950">{lotes.length}</p>
-          <p className="text-[9px] text-gray-400 mt-1 font-medium">{lotes.length === 1 ? 'lote activo' : 'lotes activos'}</p>
-          <div className="mt-3 pt-3 border-t border-gray-50">
-            <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-0.5">Sub-rodeos</p>
-            <p className="text-xl font-black text-gray-700">{herds.length - ungrouped.length}</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Rodeos individuales</p>
-          <p className="text-4xl font-black text-gray-950">{ungrouped.length}</p>
-          <p className="text-[9px] text-gray-400 mt-1 font-medium">sin agrupar en lote</p>
-          <div className="mt-3 pt-3 border-t border-gray-50">
-            <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-0.5">EV individual</p>
-            <p className="text-xl font-black text-gray-700">
-              {Math.round(ungrouped.reduce((s, h) => s + (Number(h.total_ev) || 0), 0)).toLocaleString('es-AR')}
-            </p>
+
           </div>
         </div>
       </div>

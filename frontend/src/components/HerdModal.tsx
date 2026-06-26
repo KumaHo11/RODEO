@@ -1892,10 +1892,11 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                         </div>
                         <div className="relative">
                           <input type="text" inputMode="decimal" step="0.5" min="1" max="30"
-                            className="w-full bg-white border-2 border-emerald-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none transition-all pr-28"
+                            className="w-full bg-white border-2 border-emerald-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none transition-all pr-28 placeholder-gray-300"
                             value={physioPanel.customRacionKgDia !== null && physioPanel.customRacionKgDia !== undefined
                               ? physioPanel.customRacionKgDia
-                              : (RATION_SUGERIDA_POR_CATEGORIA[physioPanel.physioCategory as string] ?? 12)}
+                              : ''}
+                            placeholder={String(RATION_SUGERIDA_POR_CATEGORIA[physioPanel.physioCategory as string] ?? 12)}
                             onChange={e => {
                               const v = e.target.value.replace(',', '.')
                               if (v === '' || v === '.') {
@@ -1978,35 +1979,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                 </div>
                               </div>
 
-                              {/* Toggle rodeo temporario */}
-                              <div className="space-y-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setExitDate(isTemporary ? '' : (exitDate || ''))}
-                                  className="flex items-center gap-2 group w-fit"
-                                >
-                                  <div className={`w-8 h-4 rounded-full transition-colors shrink-0 ${isTemporary ? 'bg-amber-400' : 'bg-gray-200'}`}>
-                                    <div className={`w-3 h-3 bg-white rounded-full m-0.5 shadow-sm transition-transform ${isTemporary ? 'translate-x-4' : 'translate-x-0'}`} />
-                                  </div>
-                                  <p className="text-[10px] font-bold text-gray-500 group-hover:text-gray-700 transition-colors">
-                                    Rodeo temporario
-                                  </p>
-                                  {isTemporary && (
-                                    <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200">
-                                      Requerí la fecha de salida
-                                    </span>
-                                  )}
-                                </button>
-                                {isTemporary && (
-                                  <div className="space-y-1.5">
-                                    <label className={`${LABEL} flex items-center gap-1.5`}>
-                                      <Calendar className="w-3 h-3 text-gray-400" /> Fecha de salida *
-                                    </label>
-                                    <input type="date" value={exitDate}
-                                      onChange={e => setExitDate(e.target.value)} className={INPUT} />
-                                  </div>
-                                )}
-                              </div>
+
 
                               {/* Categoría comercial derivada */}
                               {catKey && (
