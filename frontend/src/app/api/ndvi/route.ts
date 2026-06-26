@@ -38,13 +38,13 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        collections: ['sentinel-2-l2a'],
+        collections: ['sentinel-2-c1-l2a', 'sentinel-2-l2a'],
         intersects: geometry,
         query: {
           'eo:cloud_cover': { lt: 25 },
         },
         limit: 5,
-        sortby: [{ field: 'datetime', direction: 'desc' }],
+        sortby: [{ field: 'properties.datetime', direction: 'desc' }],
       }),
     })
 

@@ -238,7 +238,10 @@ export default function MiCampoPage() {
           if (!p.dry_matter_kg_ha && ndvi.estimatedAvailableDryMatterHa) {
             await apiFetch(`/api/paddocks/${p.id}`, {
               method: 'PATCH',
-              body: JSON.stringify({ current_ndvi: ndvi.averageNdvi }),
+              body: JSON.stringify({
+                current_ndvi: ndvi.averageNdvi,
+                dry_matter_kg_ha: ndvi.estimatedAvailableDryMatterHa,
+              }),
             })
           }
         } catch {}
