@@ -603,9 +603,9 @@ export default function BitacoraPage() {
     const ok = await confirm({
       title: 'Eliminar nota',
       description: '¿Estás seguro que deseas eliminar esta nota de la bitácora? Esta acción no se puede deshacer.',
-      confirmText: 'Eliminar',
-      cancelText: 'Cancelar',
-      type: 'danger'
+      confirmLabel: 'Eliminar',
+      cancelLabel: 'Cancelar',
+      variant: 'danger'
     })
     if (!ok) return
 
