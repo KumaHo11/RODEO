@@ -297,7 +297,7 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Demanda</p>
-                        <p className="font-black text-red-600 text-sm">{h.demandaTotalDiaria.toFixed(0)} <span className="text-[9px] text-red-400 font-normal">kg/d</span></p>
+                        <p className="font-black text-gray-900 text-sm">{h.demandaTotalDiaria.toFixed(0)} <span className="text-[9px] text-gray-500 font-normal">kg/d</span></p>
                       </div>
                     </div>
                   )}
@@ -369,12 +369,12 @@ export function MiCampoTab({ paddocks, herds, input, result, onChangeInput }: Pr
                         </td>
                         <td className="px-4 py-3 text-right w-24">
                           <div className="flex flex-col items-end gap-1">
-                            <span className={`font-bold text-[10px] ${p.usoPct > 100 ? 'text-red-600' : p.usoPct < 90 ? 'text-amber-500' : 'text-green-600'}`}>
+                            <span className={`font-bold text-[10px] ${p.usoPct > 100 ? 'text-gray-900' : p.usoPct < 90 ? 'text-amber-500' : 'text-green-600'}`}>
                               {p.usoPct.toFixed(1)}%
                             </span>
                             <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                               <div 
-                                className={`h-full rounded-full ${p.usoPct > 100 ? 'bg-red-500' : p.usoPct < 90 ? 'bg-amber-400' : 'bg-green-500'}`} 
+                                className={`h-full rounded-full ${p.usoPct > 100 ? 'bg-gray-800' : p.usoPct < 90 ? 'bg-amber-400' : 'bg-green-500'}`} 
                                 style={{ width: `${Math.min(100, p.usoPct)}%` }}
                               />
                             </div>
