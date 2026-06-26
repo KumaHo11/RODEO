@@ -42,7 +42,7 @@ export function Tabs<T extends string>({
             role="tab"
             aria-selected={activeTab === item.id}
             className={twMerge(
-              'flex items-center gap-2 px-5 py-3 text-sm font-bold transition-all',
+              'flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold transition-all whitespace-nowrap',
               'border-b-2 -mb-px',
               activeTab === item.id
                 ? 'border-green-600 text-green-700'
@@ -80,7 +80,7 @@ export function Tabs<T extends string>({
           role="tab"
           aria-selected={activeTab === item.id}
           className={twMerge(
-            'flex items-center gap-1.5 flex-1 py-2 px-4 text-sm font-bold rounded-lg transition-all capitalize',
+            'flex items-center justify-center gap-1.5 flex-1 py-2 px-4 text-sm font-bold rounded-lg transition-all capitalize whitespace-nowrap',
             activeTab === item.id
               ? 'bg-white text-green-700 shadow-sm'
               : 'text-gray-500 hover:text-gray-700'
