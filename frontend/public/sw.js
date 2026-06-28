@@ -28,7 +28,8 @@ const PRECACHE_URLS = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/_offline',
-  '/startup.html'
+  '/dashboard',
+  '/login'
 ]
 
 // Dominios de fuentes para SWR
@@ -115,15 +116,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // ── 6. Navegación HTML: Network-first con fallback offline ─────────────
-  // Se usa network-first para asegurar que Next.js App Router siempre reciba la última versión.
-  // La velocidad de arranque PWA se garantiza usando startup.html en el manifest start_url.
+  // ── 6. Navegación HTML: Stale-While-Revalidate especializada ─────────────
+  // Se usa SWR capturando redirecciones manuales para que el arranque PWA sea
+  // ultra-rápido desde caché y no sufra pantallazos blancos por cold starts.
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(
-      networkFirst(request, DYNAMIC_CACHE, 6000).catch(async () => {
-        return caches.match('/_offline') || new Response('Offline', { status: 503 })
-      })
-    )
+    event.respondWith(swrForNavigations(request, DYNAMIC_CACHE))
     return
   }
 
@@ -198,6 +195,34 @@ async function staleWhileRevalidate(request, cacheName) {
       return response
     })
     .catch(() => cached || new Response('', { status: 408 }))
+
+  return cached || fetchPromise
+}
+
+async function swrForNavigations(request, cacheName) {
+  const cache = await caches.open(cacheName)
+  const cached = await cache.match(request)
+
+  const fetchPromise = fetch(request)
+    .then(response => {
+      if (response.redirected) {
+        // Redirección transparente de Next.js (ej. /dashboard -> /login)
+        // Safari prohíbe devolver esto directamente. Forzamos una redirección limpia.
+        // IMPORTANTE: Borramos la caché y NO guardamos esto para no romper el modo offline.
+        cache.delete(request)
+        return Response.redirect(response.url, 307)
+      }
+      
+      if (response.ok) {
+        // Solo cacheamos respuestas 200 OK reales.
+        cache.put(request, response.clone())
+      }
+      
+      return response
+    })
+    .catch(async () => {
+      return cached || await caches.match('/_offline') || new Response('Offline', { status: 503 })
+    })
 
   return cached || fetchPromise
 }
