@@ -285,6 +285,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [user])
 
+  // Fade out global native splash screen when loading finishes
+  useEffect(() => {
+    if (!isLoading) {
+      const splash = document.getElementById('global-native-splash')
+      if (splash) {
+        splash.style.opacity = '0'
+        setTimeout(() => splash.remove(), 600)
+      }
+    }
+  }, [isLoading])
+
   const signOut = async () => {
     await firebaseSignOut(auth)
     document.cookie = '__session=; path=/; max-age=0'

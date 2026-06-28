@@ -115,10 +115,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   // ── 6. Navegación HTML: Network-first con fallback offline ─────────────
-  // Timeout extendido a 15s para evitar fallos por serverless cold starts
+  // Timeout reducido a 6s para evitar fallos largos por serverless cold starts
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      networkFirst(request, DYNAMIC_CACHE, 15000).catch(async () => {
+      networkFirst(request, DYNAMIC_CACHE, 6000).catch(async () => {
         return caches.match('/_offline') || new Response('Offline', { status: 503 })
       })
     )
@@ -149,7 +149,7 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
-async function networkFirst(request, cacheName, timeoutMs = 15000) {
+async function networkFirst(request, cacheName, timeoutMs = 6000) {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)

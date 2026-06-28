@@ -268,14 +268,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ([path]) => pathname === path || (path !== '/dashboard' && pathname.startsWith(path))
   )?.[1] ?? 'Rodeo'
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
-        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-400 font-bold tracking-widest text-[10px]">Cargando panel...</p>
-      </div>
-    )
-  }
+  if (isLoading) return null
 
   if (!user) return null
 
