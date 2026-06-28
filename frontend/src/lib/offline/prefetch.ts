@@ -81,9 +81,7 @@ export async function prefetchAll(token: string): Promise<void> {
       prefetchTasks(token),
       prefetchOrganization(token),
       prefetchGrazingPlans(token),
-      prefetchTeamMembers(token),
-      prefetchInvitations(token),
-      prefetchDashboardSummary(token),
+      prefetchTeam(token),
     ])
 
     console.log('[prefetch] Done.')
@@ -171,37 +169,16 @@ async function prefetchGrazingPlans(token: string): Promise<void> {
   console.log(`[prefetch] grazing_plans: ${plans.length} records`)
 }
 
-async function prefetchTeamMembers(token: string): Promise<void> {
-  if (!(await needsRefresh('team_members'))) return
-  const data = await safeFetch('/api/team/members', token)
+async function prefetchTeam(token: string): Promise<void> {
+  if (!(await needsRefresh('team'))) return
+  const data = await safeFetch('/api/team', token)
   if (!data) return
-  const members = data.members ?? data.team ?? []
-  await dbUpsertMany('team_members', members)
-  await markFetched('team_members')
-  console.log(`[prefetch] team_members: ${members.length} records`)
-}
-
-async function prefetchInvitations(token: string): Promise<void> {
-  if (!(await needsRefresh('invitations'))) return
-  const data = await safeFetch('/api/team/invitations', token)
-  if (!data) return
+  const members = data.members ?? []
   const invitations = data.invitations ?? []
+  await dbUpsertMany('team_members', members)
   await dbUpsertMany('invitations', invitations)
-  await markFetched('invitations')
-  console.log(`[prefetch] invitations: ${invitations.length} records`)
-}
-
-async function prefetchDashboardSummary(token: string): Promise<void> {
-  if (!(await needsRefresh('dashboard_cache'))) return
-  // Cache dashboard summary data from multiple existing stores
-  // The dashboard typically reads paddocks, herds, and events — which are
-  // already prefetched above. This function caches any computed summary data.
-  const data = await safeFetch('/api/dashboard/summary', token)
-  if (!data) return
-  // Store as a single record with key 'summary'
-  await dbUpsert('dashboard_cache', { id: 'summary', ...data })
-  await markFetched('dashboard_cache')
-  console.log('[prefetch] dashboard_cache: summary cached')
+  await markFetched('team')
+  console.log(`[prefetch] team: ${members.length} members, ${invitations.length} invitations`)
 }
 
 // ── Force refresh ─────────────────────────────────────────────────────
@@ -216,9 +193,7 @@ export async function prefetchForce(token: string): Promise<void> {
     metaSet('prefetch_ts_tasks', 0),
     metaSet('prefetch_ts_organization', 0),
     metaSet('prefetch_ts_grazing_plans', 0),
-    metaSet('prefetch_ts_team_members', 0),
-    metaSet('prefetch_ts_invitations', 0),
-    metaSet('prefetch_ts_dashboard_cache', 0),
+    metaSet('prefetch_ts_team', 0),
   ])
   await prefetchAll(token)
 }

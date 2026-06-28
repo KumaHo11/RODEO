@@ -102,6 +102,19 @@ export default function RootLayout({
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           <p style={{ marginTop: '24px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.15em', opacity: 0.9 }}>PREPARANDO ENTORNO...</p>
         </div>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              try {
+                var isPwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+                var path = window.location.pathname;
+                if (!isPwa || path === '/landing' || path === '/login' || path === '/') {
+                  document.getElementById('global-native-splash').style.display = 'none';
+                }
+              } catch(e) {}
+            })();
+          `
+        }} />
 
         <AuthProvider>
           <OfflineManager>
