@@ -28,6 +28,8 @@ const PRECACHE_URLS = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/_offline',
+  '/login',
+  '/dashboard'
 ]
 
 // Dominios de fuentes para SWR
@@ -114,11 +116,12 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // ── 6. Navegación HTML: Network-first con fallback offline ─────────────
-  // Timeout reducido a 6s para evitar fallos largos por serverless cold starts
+  // ── 6. Navegación HTML: Stale-While-Revalidate ─────────────
+  // Se usa SWR en lugar de network-first para que la PWA arranque INSTANTÁNEAMENTE
+  // usando el HTML cacheado, eliminando la pantalla blanca de 5 segundos.
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      networkFirst(request, DYNAMIC_CACHE, 6000).catch(async () => {
+      staleWhileRevalidate(request, DYNAMIC_CACHE).catch(async () => {
         return caches.match('/_offline') || new Response('Offline', { status: 503 })
       })
     )
