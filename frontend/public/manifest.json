@@ -3,7 +3,7 @@
   "short_name": "RODEO",
   "description": "Plataforma de gestión holística para ganadería regenerativa. Potreros, rebaños, pastoreo rotacional y bitácora de campo.",
   "id": "/dashboard",
-  "start_url": "/dashboard",
+  "start_url": "/startup.html",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
