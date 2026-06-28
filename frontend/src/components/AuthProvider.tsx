@@ -288,12 +288,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Fade out global native splash screen when loading finishes
   useEffect(() => {
     if (!isLoading) {
-      const splash = document.getElementById('global-native-splash')
-      if (splash) {
-        splash.style.opacity = '0'
-        splash.style.pointerEvents = 'none'
-        setTimeout(() => { splash.style.display = 'none' }, 600)
-      }
+      // Pequeño delay para permitir que los Suspense boundaries de Next.js (como el login con useSearchParams) 
+      // resuelvan y pinten la vista antes de quitar la pantalla verde, evitando el parpadeo blanco.
+      const t = setTimeout(() => {
+        const splash = document.getElementById('global-native-splash')
+        if (splash) {
+          splash.style.opacity = '0'
+          splash.style.pointerEvents = 'none'
+          setTimeout(() => { splash.style.display = 'none' }, 600)
+        }
+      }, 150)
+      return () => clearTimeout(t)
     }
   }, [isLoading])
 
