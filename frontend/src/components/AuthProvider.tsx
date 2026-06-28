@@ -291,7 +291,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const splash = document.getElementById('global-native-splash')
       if (splash) {
         splash.style.opacity = '0'
-        setTimeout(() => splash.remove(), 600)
+        splash.style.pointerEvents = 'none'
+        setTimeout(() => { splash.style.display = 'none' }, 600)
       }
     }
   }, [isLoading])
