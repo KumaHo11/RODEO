@@ -134,9 +134,12 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
 
       try {
         const token = await auth.currentUser?.getIdToken()
-        if (item.mediaType === 'audio' && item.mediaId) {
+        
+        // --- 1. AUDIO ---
+        const audioId = item.mediaIds?.audio || (item.mediaType === 'audio' ? item.mediaId : null)
+        if (audioId) {
           const { getPendingAudio } = await import('@/lib/audioOfflineStore')
-          const pa = await getPendingAudio(item.mediaId)
+          const pa = await getPendingAudio(audioId)
           if (pa) {
             const fd = new FormData()
             fd.append('file', new File([pa.blob], `audio-${pa.id}.webm`, { type: 'audio/webm' }))
@@ -164,10 +167,15 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
             durationSecs = pa.durationSecs
             mediaProcessed = true
           }
-        } else if (item.mediaType === 'photo') {
+        }
+
+        // --- 2. PHOTOS ---
+        const rawPhotoIds = item.mediaIds?.photos || (item.mediaIds?.photo ? [item.mediaIds.photo] : null) || (item.mediaType === 'photo' ? [item.mediaId] : [])
+        const photoIds = Array.isArray(rawPhotoIds) ? rawPhotoIds.filter(Boolean) : []
+        
+        if (photoIds.length > 0) {
           const { getPendingPhoto } = await import('@/lib/audioOfflineStore')
-          const ppIds = item.mediaIds?.photos || (item.mediaId ? [item.mediaId] : [])
-          for (const ppId of ppIds) {
+          for (const ppId of photoIds) {
             if (!ppId) continue
             const pp = await getPendingPhoto(ppId)
             if (pp) {
@@ -194,11 +202,12 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
       if (mediaProcessed) {
         try {
           const parsed = JSON.parse(bodyToSent)
-          if (item.mediaType === 'audio' && audioUrl) {
+          if (audioUrl) {
             parsed.audio_url = audioUrl
             if (!parsed.content && transcript && transcript !== '[Sin voz detectable]') parsed.content = transcript
             parsed.audio_duration_secs = durationSecs
-          } else if (item.mediaType === 'photo' && mediaUrls.length > 0) {
+          }
+          if (mediaUrls.length > 0) {
             if (!parsed.photo_urls) parsed.photo_url = photoUrl
             parsed.photo_urls = mediaUrls
           }
@@ -220,13 +229,17 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
         
         // Clean up media offline store
         try {
-          if (item.mediaType === 'audio' && item.mediaId) {
+          const audioId = item.mediaIds?.audio || (item.mediaType === 'audio' ? item.mediaId : null)
+          if (audioId) {
             const { deletePendingAudio } = await import('@/lib/audioOfflineStore')
-            await deletePendingAudio(item.mediaId)
-          } else if (item.mediaType === 'photo') {
+            await deletePendingAudio(audioId)
+          }
+
+          const rawPhotoIds = item.mediaIds?.photos || (item.mediaIds?.photo ? [item.mediaIds.photo] : null) || (item.mediaType === 'photo' ? [item.mediaId] : [])
+          const photoIds = Array.isArray(rawPhotoIds) ? rawPhotoIds.filter(Boolean) : []
+          if (photoIds.length > 0) {
             const { deletePendingPhoto } = await import('@/lib/audioOfflineStore')
-            const ppIds = item.mediaIds?.photos || (item.mediaId ? [item.mediaId] : [])
-            for (const ppId of ppIds) {
+            for (const ppId of photoIds) {
               if (ppId) await deletePendingPhoto(ppId)
             }
           }

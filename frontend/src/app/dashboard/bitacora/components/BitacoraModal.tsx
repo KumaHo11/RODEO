@@ -263,19 +263,17 @@ export default function BitacoraModal({
       const photoId = photoFile ? crypto.randomUUID() : undefined
 
       if (audioBlob && audioId) {
-        import('@/lib/audioOfflineStore').then(({ savePendingAudio }) => {
-          savePendingAudio({
-            id: audioId, blob: audioBlob, durationSecs: recordSecsSnap.current,
-            lat: null, lng: null, createdAt: new Date().toISOString(), title: genTitle, transcript: ''
-          })
+        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+        await savePendingAudio({
+          id: audioId, blob: audioBlob, durationSecs: recordSecsSnap.current,
+          lat: null, lng: null, createdAt: new Date().toISOString(), title: genTitle, transcript: ''
         })
       }
 
       if (photoFile && photoId) {
-        import('@/lib/audioOfflineStore').then(({ savePendingPhoto }) => {
-          savePendingPhoto({
-            id: photoId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: genTitle
-          })
+        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+        await savePendingPhoto({
+          id: photoId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: genTitle
         })
       }
 
@@ -290,7 +288,7 @@ export default function BitacoraModal({
         mediaIds: { audio: audioId, photo: photoId },
         hasAudio: !!audioBlob,
         hasPhoto: !!photoFile
-      })
+      } as any)
       toast.success('Nota guardada en el dispositivo. Se sincronizará automáticamente.')
       setSaving(false); onSaved(); onClose(); return
     }
