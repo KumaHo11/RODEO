@@ -88,9 +88,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 // ── component ─────────────────────────────────────────────────────────────────
 
-interface Props { hasPlanAccess?: boolean; className?: string }
+interface Props { hasPlanAccess?: boolean; refreshTrigger?: number; className?: string }
 
-export default function ForageVigorMonitor({ hasPlanAccess = true, className = '' }: Props) {
+export default function ForageVigorMonitor({ hasPlanAccess = true, refreshTrigger = 0, className = '' }: Props) {
   const { user } = useAuth()
   const [data, setData]       = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -179,7 +179,7 @@ export default function ForageVigorMonitor({ hasPlanAccess = true, className = '
     }
   }, [user])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, refreshTrigger])
 
   if (!hasPlanAccess) {
     return (
