@@ -804,32 +804,14 @@ export default function PaddockModal({
 
     // ── Offline Path ──  (navigator.onLine no es confiable en iOS)
     if (await isOffline()) {
-      const offlineId = crypto.randomUUID()
       const offlineTitle = noteTitle.trim() || (noteText || audioTranscript).slice(0, 60) || 'Nota de campo'
-      
-      if (!effectiveBlob && noteImages.length === 0) {
-        // Nota de texto — encolar directamente
-        import('@/components/OfflineManager').then(({ addToOfflineQueue }) => {
-          addToOfflineQueue({
-            type: 'field_note',
-            data: {
-              paddock_id: paddock.id,
-              category: noteResult ? 'BIOMASA' : 'GENERAL',
-              tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-              title: offlineTitle,
-              content: noteText || audioTranscript || null,
-              sync_status: 'PENDING',
-              analysis_result: noteResult || null,
-            },
-            timestamp: Date.now(),
-          })
-        })
-        toast.success('Nota guardada. Se sincronizará cuando tengas internet.')
-      } else if (effectiveBlob) {
-        // Audio — guardar blob en IndexedDB y encolar
+      const audioId = effectiveBlob ? crypto.randomUUID() : undefined
+      const photoId = noteImages.length > 0 ? crypto.randomUUID() : undefined
+
+      if (effectiveBlob && audioId) {
         const { savePendingAudio } = await import('@/lib/audioOfflineStore')
         await savePendingAudio({
-          id: offlineId,
+          id: audioId,
           blob: effectiveBlob,
           durationSecs: 0,
           lat: null, lng: null,
@@ -837,50 +819,38 @@ export default function PaddockModal({
           title: noteTitle.trim() || `Audio · ${timestamp}`,
           transcript: audioTranscript
         })
-        const { addToOfflineQueue } = await import('@/components/OfflineManager')
-        addToOfflineQueue({
-          type: 'field_note',
-          data: {
-            paddock_id: paddock.id,
-            category: 'GENERAL',
-            tags: ['GENERAL'],
-            title: noteTitle.trim() || `Audio · ${timestamp}`,
-            content: audioTranscript || null,
-            sync_status: 'PENDING',
-          },
-          timestamp: Date.now(),
-          mediaType: 'audio',
-          mediaId: offlineId,
-        } as any)
-        toast.success('🎙️ Audio guardado. Se subirá al servidor cuando tengas conexión.')
-      } else if (noteImages.length > 0) {
-        // Foto — guardar blob en IndexedDB y encolar, mostrar preview
+      }
+
+      if (noteImages.length > 0 && photoId) {
         const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
         await savePendingPhoto({
-          id: offlineId,
+          id: photoId,
           blob: noteImages[0],
           lat: null, lng: null,
           createdAt: new Date().toISOString(),
           title: noteTitle.trim() || noteImages[0]?.name,
         })
-        const { addToOfflineQueue } = await import('@/components/OfflineManager')
+      }
+
+      import('@/components/OfflineManager').then(({ addToOfflineQueue }) => {
         addToOfflineQueue({
           type: 'field_note',
           data: {
             paddock_id: paddock.id,
             category: noteResult ? 'BIOMASA' : 'GENERAL',
             tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-            title: noteTitle.trim() || noteImages[0]?.name,
-            content: noteText || null,
+            title: offlineTitle,
+            content: noteText || audioTranscript || null,
             sync_status: 'PENDING',
             analysis_result: noteResult || null,
           },
           timestamp: Date.now(),
-          mediaType: 'photo',
-          mediaId: offlineId,
+          mediaIds: { audio: audioId, photo: photoId }
         } as any)
-        toast.success('📷 Foto guardada. Se subirá al servidor cuando tengas conexión.')
-      }
+      })
+
+      toast.success('Nota guardada. Se sincronizará cuando tengas internet.')
+      
       setNoteSaving(false)
       setNoteSaved(true)
       setSessionNoteCount(c => c + 1)
