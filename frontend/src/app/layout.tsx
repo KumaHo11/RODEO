@@ -88,6 +88,21 @@ export default function RootLayout({
         )}
       </head>
       <body className={`${inter.className} overflow-x-hidden`}>
+        {/* Global Native Splash Screen (Immediately visible, removed by AuthProvider) */}
+        <div 
+          id="global-native-splash" 
+          style={{ 
+            position: 'fixed', inset: 0, backgroundColor: '#16a34a', zIndex: 999999, 
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+            transition: 'opacity 0.5s ease-out', color: 'white'
+          }}
+        >
+          <img src="/LogoLoginBlanco.svg" alt="RODEO" style={{ width: '220px', height: 'auto', marginBottom: '32px' }} />
+          <div style={{ width: '40px', height: '40px', border: '3px solid rgba(255,255,255,0.2)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          <p style={{ marginTop: '24px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.15em', opacity: 0.9 }}>PREPARANDO ENTORNO...</p>
+        </div>
+
         <AuthProvider>
           <OfflineManager>
             {children}

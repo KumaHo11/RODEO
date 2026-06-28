@@ -76,12 +76,7 @@ function LoginContent() {
     }
   }
 
-  if (isLoading) return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-white flex-col gap-4">
-      <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
-      <p className="text-gray-400 font-bold tracking-widest text-[10px]">Verificando sesión...</p>
-    </div>
-  )
+  if (isLoading) return null
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -368,12 +363,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-[100dvh] flex items-center justify-center bg-white flex-col gap-4">
-        <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
-        <p className="text-gray-400 font-bold tracking-widest text-[10px]">Cargando...</p>
-      </div>
-    }>
+    <Suspense fallback={null}>
       <LoginContent />
     </Suspense>
   )
