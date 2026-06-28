@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>RODEO</title>
+  <meta name="theme-color" content="#16a34a">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #16a34a;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #global-native-splash {
+      position: fixed;
+      inset: 0;
+      background-color: #16a34a;
+      z-index: 999999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-center: center;
+      color: white;
+    }
+    .splash-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="global-native-splash">
+    <div class="splash-content">
+      <img src="/LogoLoginBlanco.svg" alt="RODEO" style="width: 220px; height: auto; margin-bottom: 32px;" />
+      <div style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+      <p style="margin-top: 24px; font-size: 11px; font-weight: bold; letter-spacing: 0.15em; opacity: 0.9;">PREPARANDO ENTORNO...</p>
+    </div>
+  </div>
+  <script>
+    // Inmediatamente después de renderizar la pantalla, redirigimos a la app principal.
+    // La pantalla verde se mantendrá visible en el navegador mientras se descarga el HTML de /dashboard.
+    window.location.replace('/dashboard');
+  </script>
+</body>
+</html>

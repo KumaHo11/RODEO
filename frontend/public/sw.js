@@ -28,8 +28,7 @@ const PRECACHE_URLS = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/_offline',
-  '/login',
-  '/dashboard'
+  '/startup.html'
 ]
 
 // Dominios de fuentes para SWR
@@ -116,12 +115,12 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // ── 6. Navegación HTML: Stale-While-Revalidate ─────────────
-  // Se usa SWR en lugar de network-first para que la PWA arranque INSTANTÁNEAMENTE
-  // usando el HTML cacheado, eliminando la pantalla blanca de 5 segundos.
+  // ── 6. Navegación HTML: Network-first con fallback offline ─────────────
+  // Se usa network-first para asegurar que Next.js App Router siempre reciba la última versión.
+  // La velocidad de arranque PWA se garantiza usando startup.html en el manifest start_url.
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      staleWhileRevalidate(request, DYNAMIC_CACHE).catch(async () => {
+      networkFirst(request, DYNAMIC_CACHE, 6000).catch(async () => {
         return caches.match('/_offline') || new Response('Offline', { status: 503 })
       })
     )
@@ -160,7 +159,14 @@ async function networkFirst(request, cacheName, timeoutMs = 6000) {
     const response = await fetch(request, { signal: controller.signal })
     clearTimeout(timeout)
 
-    // Solo cacheamos si es exitosa o 304 (no redirecciones)
+    // Safari/PWA Fix: Si la respuesta es una redirección, el Service Worker no puede devolverla
+    // a una petición 'navigate' de forma opaca sin romper el enrutamiento o la caché.
+    // Debemos devolver un redireccionamiento real usando Response.redirect.
+    if (response.redirected) {
+      return Response.redirect(response.url, 307)
+    }
+
+    // Solo cacheamos si es exitosa o 304 (no redirecciones HTTP puras ni opacas)
     if (response.ok || response.status === 304) {
       const cache = await caches.open(cacheName)
       cache.put(request, response.clone())
