@@ -63,6 +63,7 @@ export default function DashboardOverview() {
   const [avgGrowthRate, setAvgGrowthRate] = useState<number | null>(null)
   const [lastUpdated, setLastUpdated]     = useState<string | null>(null)
   const [dataLoaded, setDataLoaded]       = useState(false)
+  const [ndviRefreshCount, setNdviRefreshCount] = useState(0)
 
   useEffect(() => {
     // Wait until Firebase auth + profile fetch are both complete
@@ -263,6 +264,15 @@ export default function DashboardOverview() {
             }),
           })
 
+          // Trigger climate adjustment snapshot to log this NDVI
+          await apiFetch('/api/climate-adjustment', {
+            method: 'POST',
+            body: JSON.stringify({
+              paddockId: p.id,
+              overrideNdvi: res.averageNdvi,
+            }),
+          }).catch(() => {})
+
           processed++
           setNdviStatus(`Procesando ${processed}/${toProcess.length} potreros...`)
         } catch {
@@ -287,6 +297,7 @@ export default function DashboardOverview() {
     setLastUpdated(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }))
     setNdviStatus('')
     setNdviLoading(false)
+    setNdviRefreshCount(c => c + 1)
   }, [paddocks, ndviLoading, growthRates])
 
   // Auto-trigger NDVI when paddocks load — always refresh on first load
@@ -634,7 +645,7 @@ export default function DashboardOverview() {
           className="lg:col-span-2"
         >
           <div className="rounded-xl relative">
-             <ForageVigorMonitor className="min-h-[260px] h-full" />
+             <ForageVigorMonitor refreshTrigger={ndviRefreshCount} className="min-h-[260px] h-full" />
           </div>
         </FeatureWidget>
 
