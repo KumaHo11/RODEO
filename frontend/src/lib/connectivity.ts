@@ -20,9 +20,9 @@ const CACHE_TTL_MS = 5000 // re-verificar cada 5 s máximo
  * Tiene caché de 5 segundos para no hacer fetch en cada llamada.
  */
 export async function isOffline(): Promise<boolean> {
-  // Rápido: si el browser dice offline, creemos sin verificar
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return true
-
+  // Eliminamos el short-circuit de !navigator.onLine porque Chrome/Safari a veces
+  // lo reportan como false en el arranque de la PWA aunque haya internet.
+  // Si realmente no hay red, el fetch fallará de inmediato sin penalización.
   const now = Date.now()
   if (_cachedOffline !== null && now - _lastCheck < CACHE_TTL_MS) {
     return _cachedOffline
