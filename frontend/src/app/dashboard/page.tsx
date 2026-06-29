@@ -472,10 +472,10 @@ export default function DashboardOverview() {
                   </p>
                 </div>
               )}
-              {!isColdStress && !isHeatStress && weatherForecast?.length > 0 && (
-                <div className="flex gap-2 justify-between mt-2 pt-3 border-t border-blue-200/50">
-                  {weatherForecast.slice(0, 4).map((d, i) => (
-                    <div key={i} className="text-center">
+              {weatherForecast?.length > 0 && (
+                <div className="flex gap-2 justify-between mt-2 pt-3 border-t border-blue-200/50 overflow-x-auto pb-1">
+                  {weatherForecast.slice(0, 7).map((d, i) => (
+                    <div key={i} className="text-center min-w-[32px]">
                       <p className="text-[9px] font-bold uppercase text-blue-800/80">
                         {WEEK_DAYS[new Date(d.date + 'T00:00:00').getDay()]}
                       </p>
