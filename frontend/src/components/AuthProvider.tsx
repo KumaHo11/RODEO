@@ -71,8 +71,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           return
         }
       } catch { /* ignore */ }
-      // Sin caché offline — el perfil queda null
-      return
+      // If we are here, we are supposedly offline but we have NO cache.
+      // Instead of giving up and leaving the profile null, we will fall through
+      // and attempt the network fetch anyway. Sometimes navigator.onLine is false
+      // even when the device actually has internet access.
+      console.warn('[AuthProvider] Offline but no cache found. Attempting network fetch anyway...');
     }
 
     try {

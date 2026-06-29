@@ -276,7 +276,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Esto evita la pantalla en blanco + falsa redirección cuando el perfil aún no fue consultado
   if (authProfile === null && !isLoading) {
     // Si estamos offline, intentar leer el perfil cacheado del localStorage
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!isOnline) {
       try {
         const cached = localStorage.getItem('rodeo_cached_profile')
         if (!cached) {
@@ -301,6 +301,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
         <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
         <p className="text-gray-400 font-bold tracking-widest text-[10px]">Cargando perfil...</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg hover:bg-green-100 transition-colors"
+        >
+          Reintentar
+        </button>
       </div>
     )
   }
