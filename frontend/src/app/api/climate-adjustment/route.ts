@@ -245,7 +245,7 @@ export async function GET(req: NextRequest) {
       WHERE ca.org_id = $1
       ORDER BY ca.calculated_at DESC
       LIMIT 500
-    `, [auth.orgId]).catch(() => [])
+    `, [auth.orgId])
 
     return NextResponse.json({ snapshots })
   } catch (err: unknown) {
