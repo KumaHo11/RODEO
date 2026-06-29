@@ -85,7 +85,7 @@ export function MarketWidget() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 w-full flex flex-col gap-4">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 w-full h-full flex flex-col justify-between gap-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
