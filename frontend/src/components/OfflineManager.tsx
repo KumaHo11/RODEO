@@ -143,8 +143,17 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
     // Inicializar motor de sync
     initSync(getToken)
 
-    // Estado inicial de red
-    setIsOffline(!navigator.onLine)
+    // Estado inicial de red (verificado)
+    const initialNetworkState = !navigator.onLine
+    setIsOffline(initialNetworkState)
+    
+    // Doble verificación al montar, ya que navigator.onLine puede mentir
+    import('@/lib/connectivity').then(({ isOffline: checkOffline, invalidateConnectivityCache }) => {
+      invalidateConnectivityCache()
+      checkOffline().then(realOffline => {
+        setIsOffline(realOffline)
+      })
+    }).catch(() => {})
 
     // Prefetch inicial si hay red
     if (navigator.onLine) {

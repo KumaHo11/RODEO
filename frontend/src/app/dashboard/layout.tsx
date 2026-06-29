@@ -20,7 +20,7 @@ import { WelcomeScreen } from '@/components/WelcomeScreen'
 import { WeatherProvider } from '@/lib/context/WeatherContext'
 import { ClimateAnalyticsProvider } from '@/lib/context/ClimateAnalyticsContext'
 import { InstallPWAButton } from '@/components/InstallPWAButton'
-
+import { useOfflineStatus } from '@/components/OfflineManager'
 
 const NOTIF_ICONS: Record<string, React.ComponentType<any>> = {
   EVENTO:    CalendarDays,
@@ -67,7 +67,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [notifications, setNotifications]   = useState<any[]>([])
   const [notifOpen, setNotifOpen]           = useState(false)
   const [pendingTasks, setPendingTasks]     = useState(0)
-  const [isOnline, setIsOnline]             = useState(true)
+  const { isOffline }                       = useOfflineStatus()
   const [showWelcome, setShowWelcome]       = useState(false)
   const [menuConfig, setMenuConfig]         = useState<Record<string, boolean>>({})
   const notifRef = useRef<HTMLDivElement>(null)
@@ -141,18 +141,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     })).filter(g => g.items.length > 0)
   }, [isOwner, can, menuConfig])
 
-  // ── Online/Offline detection ─────────────────────────────────────────────
-  useEffect(() => {
-    setIsOnline(navigator.onLine)
-    const onOnline  = () => setIsOnline(true)
-    const onOffline = () => setIsOnline(false)
-    window.addEventListener('online',  onOnline)
-    window.addEventListener('offline', onOffline)
-    return () => {
-      window.removeEventListener('online',  onOnline)
-      window.removeEventListener('offline', onOffline)
-    }
-  }, [])
 
   // ── Sidebar persistence ────────────────────────────────────────────────────
   useEffect(() => {
@@ -276,7 +264,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Esto evita la pantalla en blanco + falsa redirección cuando el perfil aún no fue consultado
   if (authProfile === null && !isLoading) {
     // Si estamos offline, intentar leer el perfil cacheado del localStorage
-    if (!isOnline) {
+    if (isOffline) {
       try {
         const cached = localStorage.getItem('rodeo_cached_profile')
         if (!cached) {
@@ -578,7 +566,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-1 sm:gap-2 shrink-0" ref={notifRef}>
 
             {/* Offline indicator */}
-            {!isOnline && (
+            {isOffline && (
               <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full border border-amber-200">
                 <WifiOff className="w-3 h-3" /> Sin conexión
               </span>
