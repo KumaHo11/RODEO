@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
         gp.id            AS plan_id,
         p.name           AS paddock_name,
         COALESCE(h.name, 'Sin rodeo')   AS herd_name,
-        COALESCE(h.head_count, h.animal_count, 0) AS head_count,
+        COALESCE(h.head_count, 0) AS head_count,
         TO_CHAR(gp.exit_date, 'YYYY-MM-DD')       AS exit_date,
         COALESCE(gp.planned_recovery_days, 0)      AS planned_recovery_days,
         o.id             AS org_id,
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
       LEFT JOIN herds h ON h.id  = gp.herd_id
       JOIN organizations o ON o.id = gp.org_id
       JOIN profiles  pr ON pr.organization_id = o.id
-                        AND (pr.team_role IS NULL OR pr.team_role = 'owner')
+                        AND (pr.role = 'OWNER' OR pr.team_role = 'owner' OR pr.team_role = 'OWNER')
       WHERE gp.exit_date IN ($1, $2, $3, $4)
         AND gp.status IN ('PLANNED', 'ACTIVE')
       ORDER BY o.id, gp.exit_date
@@ -131,14 +131,13 @@ export async function GET(req: NextRequest) {
 
         // Insert in-app notification using service pool (no RLS)
         await serviceMutate(`
-          INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, data)
-          VALUES ($1, $2, $2, 'ALERTA', $3, $4, $4, $5::jsonb)
+          INSERT INTO notifications (org_id, profile_id, user_id, type, title, body)
+          VALUES ($1, $2, $2, 'ALERTA', $3, $4)
         `, [
           plan.org_id,
           plan.owner_profile_id,
           title,
-          body,
-          JSON.stringify({ link: `/dashboard/grazing` })
+          body
         ]).catch(e => console.error('[paddock-reminders] ✗ Failed to insert notification', e))
         inAppInserted++
       }
@@ -278,14 +277,13 @@ export async function GET(req: NextRequest) {
     if (events && events.length > 0) {
       for (const ev of events) {
         await serviceMutate(`
-          INSERT INTO notifications (org_id, profile_id, user_id, type, title, message, body, data)
-          VALUES ($1, $2, $2, 'EVENTO', $3, $4, $4, $5::jsonb)
+          INSERT INTO notifications (org_id, profile_id, user_id, type, title, body)
+          VALUES ($1, $2, $2, 'EVENTO', $3, $4)
         `, [
           ev.org_id,
           ev.owner_profile_id,
           `Tenés un evento que inicia mañana: ${ev.title}`,
-          `Acordate de revisar tu agenda.`,
-          JSON.stringify({ link: `/dashboard/agenda` })
+          `Acordate de revisar tu agenda.`
         ]).catch(e => console.error('[paddock-reminders] ✗ Failed to insert event notification', e))
       }
     }
