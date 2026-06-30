@@ -54,7 +54,7 @@ INSERT INTO system_feature_flags (flag_key, flag_type, flag_value, description)
 VALUES (
   'climate_adjustment',
   'boolean',
-  'true',
+  'true'::jsonb,
   'Habilita el motor de Ajuste Clima para orgs con plan Planificador o superior. Desactivar apaga el cron y las APIs.'
 ) ON CONFLICT (flag_key) DO NOTHING;
 
@@ -94,10 +94,10 @@ $$;
 -- 5. Feature flag por plan en plan_feature_flags
 -- Agrega el flag "climate_adjustment" a los planes elegibles
 INSERT INTO plan_feature_flags (plan_id, flag_key, flag_value, flag_type)
-SELECT sp.id, 'climate_adjustment', true, 'boolean'
+SELECT sp.id, 'climate_adjustment', 'true'::jsonb, 'boolean'
 FROM subscriptions_plans sp
 WHERE sp.slug IN ('planificador', 'pro_ganadero', 'pro_ganadero+', 'holistico', 'latifundio', 'enterprise')
-ON CONFLICT (plan_id, flag_key) DO UPDATE SET flag_value = true;
+ON CONFLICT (plan_id, flag_key) DO UPDATE SET flag_value = 'true'::jsonb;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Vercel Cron: agregar en vercel.json

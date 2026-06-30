@@ -91,6 +91,7 @@ export default function RootLayout({
         {/* Global Native Splash Screen (Immediately visible, removed by AuthProvider) */}
         <div 
           id="global-native-splash" 
+          suppressHydrationWarning
           style={{ 
             position: 'fixed', inset: 0, backgroundColor: '#16a34a', zIndex: 999999, 
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 

@@ -3442,82 +3442,80 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       })()}
 
       {/* ─── MODAL: Finalizar Pastoreo ──────────────────────────────────────── */}
-      {closePlanModal && (() => {
-        const plan = closePlanModal.plan
-        const paddock = paddocks.find((p: any) => p.id === plan.paddock_id)
-        const planHerds = herds.filter((h: any) => (plan.herd_ids || [plan.herd_id]).includes(h.id))
-        const planDays = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : null
-        const isAlreadyCompleted = plan.status === 'COMPLETED'
-        return (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-
-              {/* Header */}
-              <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${isAlreadyCompleted ? 'bg-amber-500' : 'bg-green-500'}`} />
-                    <p className="text-base font-black text-gray-950">
-                      {isAlreadyCompleted ? 'Corregir datos de cierre' : 'Finalizar pastoreo'}
+      {closePlanModal && typeof document !== 'undefined' && createPortal(
+        (() => {
+          const plan = closePlanModal.plan
+          const paddock = paddocks.find((p: any) => p.id === plan.paddock_id)
+          const planHerds = herds.filter((h: any) => (plan.herd_ids || [plan.herd_id]).includes(h.id))
+          const planDays = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : null
+          const isAlreadyCompleted = plan.status === 'COMPLETED'
+          return (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+  
+                {/* Header */}
+                <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${isAlreadyCompleted ? 'bg-amber-500' : 'bg-green-500'}`} />
+                      <h3 className="text-base font-black text-gray-950">
+                        {isAlreadyCompleted ? 'Corregir datos de cierre' : 'Finalizar pastoreo'}
+                      </h3>
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                      {paddock?.name || '—'} · {Number(paddock?.area_ha || 0).toFixed(1)} ha
                     </p>
                   </div>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                    {paddock?.name || '—'} · {Number(paddock?.area_ha || 0).toFixed(1)} ha
-                  </p>
+                  <button onClick={() => setClosePlanModal(null)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all shrink-0">
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <button onClick={() => setClosePlanModal(null)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Plan summary — scrollable body */}
-              <div className="overflow-y-auto flex-1">
-              <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Entrada plan</p>
-                    <p className="text-sm font-bold text-gray-700">{plan.entry_date ? new Date(plan.entry_date + 'T12:00').toLocaleDateString('es', { day:'2-digit', month:'2-digit' }) : '—'}</p>
+  
+                {/* Plan summary — scrollable body */}
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+                  {/* Summary Box */}
+                  <div className="px-5 py-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Entrada plan</p>
+                        <p className="text-sm font-bold text-gray-700">{plan.entry_date ? new Date(plan.entry_date + 'T12:00').toLocaleDateString('es', { day:'2-digit', month:'2-digit' }) : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Salida plan</p>
+                        <p className="text-sm font-bold text-gray-700">{plan.exit_date ? new Date(plan.exit_date + 'T12:00').toLocaleDateString('es', { day:'2-digit', month:'2-digit' }) : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Estadía plan</p>
+                        <p className="text-sm font-bold text-gray-700">{planDays ? `${planDays}d` : '—'}</p>
+                      </div>
+                    </div>
+                    {planHerds.length > 0 && (
+                      <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                        {planHerds.map((h: any) => (
+                          <span key={h.id} className="text-[10px] font-bold px-2 py-0.5 bg-white rounded-lg border border-gray-200 text-gray-600">
+                            {h.name} · {h.animal_count || h.head_count || '?'} cab.
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Salida plan</p>
-                    <p className="text-sm font-bold text-gray-700">{plan.exit_date ? new Date(plan.exit_date + 'T12:00').toLocaleDateString('es', { day:'2-digit', month:'2-digit' }) : '—'}</p>
+  
+                  {/* Recordatorio de salida */}
+                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                    <Camera className="w-5 h-5 text-amber-600 shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-amber-900">Registro en campo</p>
+                      <p className="text-xs text-amber-800 mt-1">
+                        No olvides registrar el remanente de pasto y tomar fotos (del pasto, condición corporal y animal) para nutrir el modelo IA.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Estadía plan</p>
-                    <p className="text-sm font-bold text-gray-700">{planDays ? `${planDays}d` : '—'}</p>
-                  </div>
-                </div>
-                {planHerds.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {planHerds.map((h: any) => (
-                      <span key={h.id} className="text-[10px] font-bold px-2 py-0.5 bg-white rounded-lg border border-gray-200 text-gray-600">
-                        {h.name} · {h.animal_count || h.head_count || '?'} cab.
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Recordatorio de salida */}
-              <div className="bg-amber-50 border-l-4 border-amber-500 p-4 mx-6 mt-4 rounded-r-xl">
-                <div className="flex gap-3">
-                  <Camera className="w-5 h-5 text-amber-600 shrink-0" />
-                  <div>
-                    <p className="text-sm font-bold text-amber-900">Registro en campo</p>
-                    <p className="text-xs text-amber-800 mt-1">
-                      No olvides registrar el remanente de pasto y tomar fotos (del pasto, condición corporal y animal) para nutrir el modelo IA.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Form */}
-              <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
-                  
-                  <div className="grid grid-cols-2 gap-4">
+  
+                  {/* Form */}
+                  <div className="grid grid-cols-2 gap-4 border border-gray-100 rounded-xl p-4 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
                     {/* Fecha real de entrada */}
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Fecha real de entrada *</label>
+                      <p className="text-sm font-black text-gray-950">Entrada real *</p>
                       <input
                         type="date"
                         value={closeForm.actual_entry_date}
@@ -3525,10 +3523,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                         className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                       />
                     </div>
-
+  
                     {/* Fecha real de salida */}
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Fecha real de salida *</label>
+                      <p className="text-sm font-black text-gray-950">Salida real *</p>
                       <input
                         type="date"
                         value={closeForm.actual_exit_date}
@@ -3537,27 +3535,34 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       />
                     </div>
                   </div>
-
+  
                   {/* Remanente MS */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Remanente de pasto (kg MS/ha)</label>
-                    <input
-                      type="number"
-                      step={50}
-                      min={0}
-                      value={closeForm.exit_dry_matter_kg_ha}
-                      onChange={e => setCloseForm(prev => ({ ...prev, exit_dry_matter_kg_ha: e.target.value }))}
-                      placeholder="Ej: 800"
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300"
-                    />
-                    <p className="text-[10px] text-gray-400 font-medium">Pasto que quedó en pie al terminar el pastoreo. Dato clave para validar el remanente objetivo.</p>
+                  <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                    <div>
+                      <p className="text-sm font-black text-gray-950">Remanente de pasto (kg MS/ha)</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Pasto que quedó en pie al terminar el pastoreo. Dato clave para validar el remanente objetivo.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        step={50}
+                        min={0}
+                        value={closeForm.exit_dry_matter_kg_ha}
+                        onChange={e => setCloseForm(prev => ({ ...prev, exit_dry_matter_kg_ha: e.target.value }))}
+                        placeholder="Ej: 800"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300"
+                      />
+                    </div>
                   </div>
-
+  
                   {/* Stock de cierre */}
                   {closeForm.closing_stock.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Stock de cierre</label>
+                        <div>
+                          <p className="text-sm font-black text-gray-950">Stock de cierre</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">Ajustá las cabezas de cierre si hubo bajas, nacimientos o compras.</p>
+                        </div>
                         <span className="text-[9px] text-gray-400 font-medium">Inicio → Fin</span>
                       </div>
                       <div className="rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
@@ -3599,13 +3604,15 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                           )
                         })}
                       </div>
-                      <p className="text-[10px] text-gray-400 font-medium">Ajustá las cabezas de cierre si hubo bajas, nacimientos o compras durante la estadía.</p>
                     </div>
                   )}
-
+  
                   {/* Observaciones */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Observaciones</label>
+                  <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                    <div>
+                      <p className="text-sm font-black text-gray-950">Observaciones</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Opcional. Registra cualquier eventualidad en el pastoreo.</p>
+                    </div>
                     <textarea
                       value={closeForm.exit_notes}
                       onChange={e => setCloseForm(prev => ({ ...prev, exit_notes: e.target.value }))}
@@ -3613,70 +3620,70 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300 min-h-[80px]"
                     />
                   </div>
-                </div>
-              </div> {/* end scrollable body */}
-
-              {/* Footer */}
-              <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-3 shrink-0">
-                <button
-                  onClick={() => setClosePlanModal(null)}
-                  className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  disabled={!closeForm.actual_exit_date || !closeForm.actual_entry_date || savingClose}
-                  onClick={async () => {
-                    if (!closeForm.actual_exit_date || !closeForm.actual_entry_date) return
-                    setSavingClose(true)
-                    try {
-                      const body: any = {
-                        status: 'COMPLETED',
-                        actual_entry_date: closeForm.actual_entry_date,
-                        actual_exit_date: closeForm.actual_exit_date,
-                      }
-                      if (closeForm.exit_notes) {
-                        body.exit_notes = closeForm.exit_notes
-                      }
-                      if (closeForm.exit_dry_matter_kg_ha) {
-                        body.exit_dry_matter_kg_ha = Number(closeForm.exit_dry_matter_kg_ha)
-                      }
-                      if (closeForm.closing_stock.length > 0) {
-                        body.ai_analysis = {
-                          ...(plan.ai_analysis || {}),
-                          closing_stock: closeForm.closing_stock.map(r => ({
-                            herd_id: r.herd_id,
-                            name: r.name,
-                            initial: r.initial,
-                            final: r.final,
-                          })),
+                </div> {/* end scrollable body */}
+  
+                {/* Footer */}
+                <div className="p-5 border-t border-gray-100 flex items-center gap-3 shrink-0">
+                  <button
+                    onClick={() => setClosePlanModal(null)}
+                    className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    disabled={!closeForm.actual_exit_date || !closeForm.actual_entry_date || savingClose}
+                    onClick={async () => {
+                      if (!closeForm.actual_exit_date || !closeForm.actual_entry_date) return
+                      setSavingClose(true)
+                      try {
+                        const body: any = {
+                          status: 'COMPLETED',
+                          actual_entry_date: closeForm.actual_entry_date,
+                          actual_exit_date: closeForm.actual_exit_date,
                         }
-                      }
-                      const res = await apiFetch(`/api/grazing-plans/${plan.id}`, {
-                        method: 'PATCH',
-                        body: JSON.stringify(body),
-                      })
-                      if (res.ok) {
-                        const updated = await res.json()
-                        setPlans((prev: any[]) => prev.map(p => p.id === plan.id ? { ...p, ...body } : p))
-                        setClosePlanModal(null)
-                      } else {
-                        const err = await res.json().catch(() => ({ error: 'Error' }))
-                        toast.error(err.error || 'No se pudo guardar')
-                      }
-                    } catch(e: any) { toast.error(e.message) }
-                    setSavingClose(false)
-                  }}
-                  className="flex-2 px-8 py-2.5 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 transition-all disabled:opacity-40 flex items-center gap-2"
-                >
-                  {savingClose ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  {isAlreadyCompleted ? 'Actualizar' : 'Confirmar salida'}
-                </button>
+                        if (closeForm.exit_notes) {
+                          body.exit_notes = closeForm.exit_notes
+                        }
+                        if (closeForm.exit_dry_matter_kg_ha) {
+                          body.exit_dry_matter_kg_ha = Number(closeForm.exit_dry_matter_kg_ha)
+                        }
+                        if (closeForm.closing_stock.length > 0) {
+                          body.ai_analysis = {
+                            ...(plan.ai_analysis || {}),
+                            closing_stock: closeForm.closing_stock.map(r => ({
+                              herd_id: r.herd_id,
+                              name: r.name,
+                              initial: r.initial,
+                              final: r.final,
+                            })),
+                          }
+                        }
+                        const res = await apiFetch(`/api/grazing-plans/${plan.id}`, {
+                          method: 'PATCH',
+                          body: JSON.stringify(body),
+                        })
+                        if (res.ok) {
+                          const updated = await res.json()
+                          setPlans((prev: any[]) => prev.map(p => p.id === plan.id ? { ...p, ...body } : p))
+                          setClosePlanModal(null)
+                        } else {
+                          const err = await res.json().catch(() => ({ error: 'Error' }))
+                          toast.error(err.error || 'No se pudo guardar')
+                        }
+                      } catch(e: any) { toast.error(e.message) }
+                      setSavingClose(false)
+                    }}
+                    className="flex-2 px-8 py-3 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                  >
+                    {savingClose ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    {isAlreadyCompleted ? 'Actualizar' : 'Confirmar salida'}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )
-      })()}
+          )
+        })()
+      , document.body)}
 
       {/* ─── MODAL: Confirmación de borrado masivo ──────────────────────────── */}
       {showDeleteConfirm && (() => {

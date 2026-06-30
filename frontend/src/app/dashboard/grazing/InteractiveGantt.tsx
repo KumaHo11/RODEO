@@ -515,7 +515,7 @@ function InteractiveGantt({
   // Solo Agenda (farm_events con source != 'rodeo') — excluye movements operacionales
   // y registros/notas/audios creados desde la sección Rodeos.
   const ganttDisplayEvents = useMemo(() =>
-    unifiedEvents.filter(e => !e.isMovement && e.source !== 'rodeo')
+    unifiedEvents.filter(e => !e.isMovement && e.source !== 'rodeo' && e.event_type !== 'MOVEMENT')
   , [unifiedEvents])
 
 
