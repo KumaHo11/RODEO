@@ -73,6 +73,14 @@ async function run() {
   try {
     await client.query('BEGIN');
     
+    // Check if v1.3 already exists
+    const checkRes = await client.query("SELECT id FROM terms_and_conditions_versions WHERE version_number = 'v1.3'");
+    if (checkRes.rowCount > 0) {
+      console.log('Terms version v1.3 already exists. Skipping automatic insertion.');
+      await client.query('COMMIT');
+      return;
+    }
+    
     // Deactivate previous active version
     await client.query('UPDATE terms_and_conditions_versions SET is_active = false');
     

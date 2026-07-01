@@ -54,6 +54,19 @@ export async function POST(req: NextRequest) {
 
     if (!email) return NextResponse.json({ error: 'Email requerido' }, { status: 400 })
 
+    // Parche temporal: Evitar colisión de cuentas si el email ya existe
+    const existingProfile = await serviceQueryOne<{ id: string }>(
+      'SELECT id FROM profiles WHERE email = $1',
+      [email.toLowerCase()]
+    )
+
+    if (existingProfile) {
+      return NextResponse.json(
+        { error: 'El usuario ya se encuentra registrado en otro campo. Temporalmente, se requiere utilizar una dirección de correo electrónico diferente para poder invitarlo.' },
+        { status: 400 }
+      )
+    }
+
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 

@@ -117,10 +117,17 @@ export default function OnboardingTour({ tourId, steps }: OnboardingTourProps) {
   }, [tourId, hasChecked])
 
   const handleJoyrideCallback = async (data: EventData) => {
-    const { status, type } = data
+    const { status, type, action, index } = data
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED]
 
-    if (finishedStatuses.includes(status) || type === EVENTS.TOUR_END) {
+    // Capture the end of the tour more aggressively
+    const isFinished = 
+      finishedStatuses.includes(status) || 
+      type === EVENTS.TOUR_END || 
+      action === 'close' ||
+      (type === EVENTS.STEP_AFTER && action === 'next' && index === steps.length - 1)
+
+    if (isFinished) {
       setRun(false)
 
       // Save to localStorage immediately (failsafe)
