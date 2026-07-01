@@ -9,6 +9,8 @@ import { Toaster } from 'sonner'
 
 const inter = Inter({ subsets: ['latin'], preload: false })
 
+import { GA_MEASUREMENT_ID } from '@/lib/analytics'
+
 export const metadata: Metadata = {
   title: 'RODEO — Gestión Ganadera Regenerativa',
   description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rodeos, pastoreo rotacional y bitácora de campo con IA.',
@@ -64,11 +66,11 @@ export default function RootLayout({
             `,
           }}
         />
-        {process.env.NEXT_PUBLIC_GA_ID && (
+        {GA_MEASUREMENT_ID && process.env.NEXT_PUBLIC_APP_URL === 'https://rodeoagtech.com' && (
           <>
             <Script
               strategy="afterInteractive"
-              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID}`}
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
             />
             <Script
               id="gtag-init"
@@ -78,7 +80,7 @@ export default function RootLayout({
                   window.dataLayer = window.dataLayer || [];
                   function gtag(){dataLayer.push(arguments);}
                   gtag('js', new Date());
-                  gtag('config', '${process.env.NEXT_PUBLIC_GA_ID}', {
+                  gtag('config', '${GA_MEASUREMENT_ID}', {
                     page_path: window.location.pathname,
                   });
                 `,

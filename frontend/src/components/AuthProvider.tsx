@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth'
 import { cacheAuthToken, cacheProfile, getCachedProfile, getCachedAuthToken, clearAuthCache, decodeJwtExp } from '@/lib/offline/auth-cache'
 import { dismissRecoveryOverlay } from '@/lib/pwa-diagnostics'
+import { GA_MEASUREMENT_ID } from '@/lib/analytics'
 
 type Profile = {
   id: string
@@ -279,9 +280,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Initialize Google Analytics User ID
   useEffect(() => {
-    if (user && process.env.NEXT_PUBLIC_GA_ID) {
+    const isProductionUrl = typeof window !== 'undefined' && window.location.hostname === 'rodeoagtech.com';
+    if (user && GA_MEASUREMENT_ID && isProductionUrl) {
       if (typeof window !== 'undefined' && (window as any).gtag) {
-        (window as any).gtag('config', process.env.NEXT_PUBLIC_GA_ID, {
+        (window as any).gtag('config', GA_MEASUREMENT_ID, {
           user_id: user.uid,
         })
       }
