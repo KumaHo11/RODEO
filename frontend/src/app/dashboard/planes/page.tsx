@@ -224,7 +224,7 @@ export default function PlanesPage() {
   const [loading, setLoading] = useState(true)
   const [billing, setBilling] = useState<'monthly' | 'annual'>('annual')
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
-  const [mpPlanSelected, setMpPlanSelected] = useState<{ planId: string, amount: number } | null>(null)
+  const [mpPlanSelected, setMpPlanSelected] = useState<{ planId: string, amount: number, billing: 'monthly' | 'annual' } | null>(null)
 
   useEffect(() => {
     if (mpPlanSelected) {
@@ -278,11 +278,11 @@ export default function PlanesPage() {
         }
       }
 
-      // Fallback MercadoPago (o por defecto si no hay stripe)
       if (plan.mp_preapproval_plan_id || !stripeId) {
         setMpPlanSelected({
            planId: plan.id,
-           amount: Math.round(Number(billing === 'annual' ? plan.price_yearly : plan.price) * exchangeRate)
+           amount: Math.round(Number(billing === 'annual' ? plan.price_yearly * 12 : plan.price) * exchangeRate),
+           billing: billing
         })
         return
       }
@@ -386,6 +386,7 @@ export default function PlanesPage() {
           <MercadoPagoBrick 
             planId={mpPlanSelected.planId} 
             amount={mpPlanSelected.amount} 
+            billing={mpPlanSelected.billing}
             hideHeader={true}
             onCancel={() => setMpPlanSelected(null)}
             onSuccess={() => {

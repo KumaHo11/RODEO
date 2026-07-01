@@ -12,11 +12,12 @@ initMercadoPago(process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '', { locale: 
 interface Props {
   planId: string
   amount: number
+  billing?: 'monthly' | 'annual'
   onSuccess: () => void
   onCancel: () => void
 }
 
-export function MercadoPagoBrick({ planId, amount, onSuccess, onCancel, hideHeader }: Props & { hideHeader?: boolean }) {
+export function MercadoPagoBrick({ planId, amount, billing, onSuccess, onCancel, hideHeader }: Props & { hideHeader?: boolean }) {
   const [loading, setLoading] = useState(true)
 
   const initialization = {
@@ -28,9 +29,6 @@ export function MercadoPagoBrick({ planId, amount, onSuccess, onCancel, hideHead
     paymentMethods: {
       creditCard: 'all',
       debitCard: 'all',
-      ticket: 'all',
-      bankTransfer: 'all',
-      mercadoPago: 'all',
     },
   }
 
@@ -47,6 +45,8 @@ export function MercadoPagoBrick({ planId, amount, onSuccess, onCancel, hideHead
           documentType: formData.payer.identification.type,
           documentNumber: formData.payer.identification.number,
           planId: planId,
+          amount: amount,
+          billing: billing,
         }),
       })
 

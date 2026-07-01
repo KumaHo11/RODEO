@@ -11,7 +11,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import {
   LogOut, ChevronLeft, ChevronRight, Menu,
   Bell, X, Check, AlertCircle, ClipboardList, WifiOff,
-  CalendarDays, Users, Trash2
+  CalendarDays, Users, Trash2, Sparkles
 } from 'lucide-react'
 import clsx from 'clsx'
 import Image from 'next/image'
@@ -564,6 +564,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Right: offline badge + role badge (desktop) + bell + avatar */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0" ref={notifRef}>
+
+            {/* Trial Info */}
+            {profile?.plan_status === 'trialing' && (
+              <span className="hidden md:flex items-center text-[11px] font-bold text-gray-500 mr-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
+                <Sparkles className="w-3 h-3 text-green-500 mr-1.5" />
+                Estás en tu período de prueba ({
+                  Math.max(0, (profile.plan_trial_days || 45) - Math.floor((Date.now() - new Date(profile.org_created_at).getTime()) / (1000 * 60 * 60 * 24)))
+                } días restantes).
+                <Link href="/dashboard/planes" className="text-green-600 hover:text-green-700 underline ml-1.5">
+                  Ver planes
+                </Link>
+              </span>
+            )}
 
             {/* Offline indicator */}
             {isOffline && (
