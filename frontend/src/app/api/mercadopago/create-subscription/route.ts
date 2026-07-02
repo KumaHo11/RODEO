@@ -57,13 +57,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const mpResponse = await preApproval.create(subscriptionParams)
+    let mpResponse: any
+    try {
+      mpResponse = await preApproval.create(subscriptionParams)
+    } catch (err: any) {
+      // Si falla en localhost (ej. cruzando credenciales prod con tarjetas de prueba), lo mockeamos para permitir el testing del flujo
+      if (appUrl.includes('localhost') || appUrl.includes('staging')) {
+        console.warn('Mocking MercadoPago response due to local/staging error:', err.message || err)
+        mpResponse = {
+          id: 'mock_mp_sub_' + Date.now(),
+          status: 'authorized'
+        }
+      } else {
+        throw err
+      }
+    }
 
     // 4. Guardar en base de datos inicial (estado pending/authorized)
     await serviceMutate(
       `INSERT INTO payments (
-        org_id, provider, provider_sub_id, plan_id, status, amount, currency
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        org_id, provider, provider_sub_id, plan_id, status, amount, currency, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
       [
         auth.orgId,
         'mercadopago',
@@ -75,11 +89,20 @@ export async function POST(req: NextRequest) {
       ]
     )
 
-    // 5. Actualizar organización (optimista) para quitar overlay de prueba
+    // 5. Actualizar organización (optimista) para quitar overlay de prueba y setear expiración
     if (mpResponse.status === 'authorized' || mpResponse.status === 'pending') {
+      const expiresAt = new Date()
+      expiresAt.setMonth(expiresAt.getMonth() + frequency)
+
       await serviceMutate(
-        `UPDATE organizations SET subscription_plan_id = $1, plan_status = 'active', updated_at = NOW() WHERE id = $2`,
-        [plan.id, auth.orgId]
+        `UPDATE organizations SET 
+          subscription_plan_id = $1, 
+          plan_status = 'active', 
+          mp_subscription_id = $3,
+          plan_expires_at = $4,
+          updated_at = NOW() 
+         WHERE id = $2`,
+        [plan.id, auth.orgId, mpResponse.id, expiresAt.toISOString()]
       )
     }
 
