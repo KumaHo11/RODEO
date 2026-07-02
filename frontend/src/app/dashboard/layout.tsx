@@ -570,7 +570,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="hidden md:flex items-center text-[11px] font-bold text-gray-500 mr-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
                 <Sparkles className="w-3 h-3 text-green-500 mr-1.5" />
                 Estás en tu período de prueba ({
-                  Math.max(0, (profile.plan_trial_days || 45) - Math.floor((Date.now() - new Date(profile.org_created_at).getTime()) / (1000 * 60 * 60 * 24)))
+                  Math.max(0, (profile.plan_trial_days || 45) - Math.floor((Date.now() - new Date(profile.org_created_at || Date.now()).getTime()) / (1000 * 60 * 60 * 24)))
                 } días restantes).
                 <Link href="/dashboard/planes" className="text-green-600 hover:text-green-700 underline ml-1.5">
                   Ver planes
