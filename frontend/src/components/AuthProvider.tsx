@@ -45,12 +45,12 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   isLoading: true,
   isSuperAdmin: false,
-  signOut: async () => {},
-  refreshProfile: async () => {},
+  signOut: async () => { },
+  refreshProfile: async () => { },
 })
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser]       = useState<User | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -87,7 +87,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       // Timeout de 10 s (reducido de 15) para evitar que isLoading quede bloqueado si la DB tarda
       const controller = new AbortController()
-      const timeoutId  = setTimeout(() => controller.abort(), 10000)
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
 
       let res: Response
       try {
@@ -257,7 +257,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const token = await firebaseUser.getIdToken()
         // Cachear token en IndexedDB para login offline
         const expMs = decodeJwtExp(token)
-        if (expMs) cacheAuthToken(token, expMs).catch(() => {})
+        if (expMs) cacheAuthToken(token, expMs).catch(() => { })
         // Set Secure flag only over HTTPS (production) — not in localhost dev
         // max-age=604800 (7 days) — covers rural usage patterns where users
         // may be offline for days. Token is validated server-side on each API call.
@@ -269,7 +269,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         // Limpiar cookie al cerrar sesión
         document.cookie = '__session=; path=/; max-age=0'
-        clearAuthCache().catch(() => {})
+        clearAuthCache().catch(() => { })
         setProfile(null)
       }
       setIsLoading(false)
