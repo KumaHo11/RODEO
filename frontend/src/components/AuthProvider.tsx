@@ -28,6 +28,8 @@ type Profile = {
   system_role?: 'SUPER_ADMIN' | 'SUPPORT_AGENT' | null
   plan_slug?: string | null
   plan_name?: string | null
+  plan_status?: string | null
+  plan_trial_days?: number | null
   plan_feature_flags?: Array<{ flag_key: string; flag_value: any; flag_type: string; label?: string }>
 }
 
