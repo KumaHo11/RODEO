@@ -30,6 +30,7 @@ type Profile = {
   plan_name?: string | null
   plan_status?: string | null
   plan_trial_days?: number | null
+  org_created_at?: string | null
   plan_feature_flags?: Array<{ flag_key: string; flag_value: any; flag_type: string; label?: string }>
 }
 
