@@ -12,8 +12,22 @@ const inter = Inter({ subsets: ['latin'], preload: false })
 import { GA_MEASUREMENT_ID } from '@/lib/analytics'
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://rodeoagtech.com'),
   title: 'RODEO — Gestión Ganadera Regenerativa',
   description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rodeos, pastoreo rotacional y bitácora de campo con IA.',
+  keywords: ['ganadería regenerativa', 'ganadería holística', 'agtech', 'pastoreo rotacional', 'software ganadero', 'gestión de potreros', 'RODEO'],
+  authors: [{ name: 'RODEO AgTech' }],
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
