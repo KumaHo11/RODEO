@@ -36,6 +36,13 @@ jobs:
         with:
           node-version: 22
 
+      - name: 'Setup Cloud SQL Auth Proxy'
+        run: |
+          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          ./cloud-sql-proxy ${{ env.PROJECT_ID }}:${{ env.REGION }}:rodeo-db-prod &
+          sleep 5
+
       - name: 'Run Database Migrations & Seeds'
         continue-on-error: true
         run: |
@@ -150,6 +157,7 @@ jobs:
             --cpu=1 \
             --min-instances=1 \
             --max-instances=10 \
+            --add-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:rodeo-db-prod \
             --env-vars-file=/tmp/rodeo-prod-env.yaml \
             --set-secrets=FIREBASE_ADMIN_CREDENTIALS_BASE64=FIREBASE_ADMIN_CREDENTIALS_BASE64:latest \
             --quiet

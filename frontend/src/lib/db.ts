@@ -76,9 +76,10 @@ function createPoolFromUrl(connectionString: string): Pool {
 
   // Extraer partes de la URL para evitar errores de encoding con caracteres especiales
   const url = new URL(connectionString.replace('postgresql://', 'http://'))
+  const socketHost = url.searchParams.get('host')
 
   const pool = new Pool({
-    host: url.hostname,
+    host: socketHost || url.hostname,
     port: parseInt(url.port || '5432'),
     user: url.username,
     password: decodeURIComponent(url.password),
