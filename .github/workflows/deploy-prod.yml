@@ -103,6 +103,7 @@ jobs:
             f'EMAIL_VERIFY_JWT_SECRET: {q(os.environ.get("EMAIL_VERIFY_JWT_SECRET",""))}',
             f'CONTACT_FORM_DESTINATION_EMAILS: {q(os.environ.get("CONTACT_FORM_DESTINATION_EMAILS",""))}',
             f'CRON_SECRET: {q(os.environ.get("CRON_SECRET",""))}',
+            f'MERCADOPAGO_WEBHOOK_SECRET: {q(os.environ.get("MERCADOPAGO_WEBHOOK_SECRET",""))}',
           ]
           with open('/tmp/rodeo-prod-env.yaml','w') as f: f.write('\n'.join(lines))
           print('  ✓ /tmp/rodeo-prod-env.yaml generado')
@@ -121,6 +122,7 @@ jobs:
           RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL_PROD }}
           MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN_PROD }}
           NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY_PROD }}
+          MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET_PROD }}
           TITILER_URL: ${{ secrets.TITILER_URL_PROD }}
           EMAIL_VERIFY_JWT_SECRET: ${{ secrets.EMAIL_VERIFY_JWT_SECRET_PROD }}
           CONTACT_FORM_DESTINATION_EMAILS: ${{ secrets.CONTACT_FORM_DESTINATION_EMAILS_PROD }}

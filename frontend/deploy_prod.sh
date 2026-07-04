@@ -23,6 +23,7 @@ docker build --platform linux/amd64 \
   --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}" \
   --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${NEXT_PUBLIC_FIREBASE_APP_ID}" \
   --build-arg NEXT_PUBLIC_APP_URL="${PROD_URL}" \
+  --build-arg NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY="${NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY}" \
   -f Dockerfile .
 
 echo "▶ Pushing image to Artifact Registry..."
@@ -38,7 +39,7 @@ gcloud run deploy rodeo-prod \
   --platform managed \
   --project rodeo-app-prod-v1 \
   --allow-unauthenticated \
-  --set-env-vars="NEXT_PUBLIC_APP_URL=${PROD_URL}" \
+  --set-env-vars="NEXT_PUBLIC_APP_URL=${PROD_URL},MERCADOPAGO_ACCESS_TOKEN=${MERCADOPAGO_ACCESS_TOKEN},MERCADOPAGO_WEBHOOK_SECRET=${MERCADOPAGO_WEBHOOK_SECRET}" \
   --update-secrets="DATABASE_URL=projects/rodeo-app-prod-v1/secrets/rodeo-db-url:latest,RESEND_API_KEY=projects/rodeo-app-prod-v1/secrets/resend-api-key:latest,FIREBASE_ADMIN_CREDENTIALS_BASE64=projects/rodeo-app-prod-v1/secrets/firebase-sa-key:latest,GEMINI_API_KEY=projects/rodeo-app-prod-v1/secrets/gemini-api-key:latest,EMAIL_VERIFY_JWT_SECRET=projects/rodeo-app-prod-v1/secrets/EMAIL_VERIFY_JWT_SECRET:latest"
 
 # ── Configurar Mapeo de Dominio Personalizado ──
