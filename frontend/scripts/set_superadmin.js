@@ -1,9 +1,15 @@
 const { Client } = require('pg');
+const dotenv = require('dotenv');
+dotenv.config({ path: '.env.local' });
 
 async function setSuperadmin() {
   const email = process.argv[2] || 'superadmin@rodeo.app';
   
-  const connectionString = 'postgresql://postgres:RodeoStaging2026_rotated_f3f96a0359291e11@34.95.223.44:5432/rodeo';
+  const connectionString = process.env.DATABASE_URL_SERVICE || process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.error('❌ Set DATABASE_URL_SERVICE or DATABASE_URL in .env.local');
+    process.exit(1);
+  }
   const client = new Client({ connectionString });
   
   try {

@@ -43,8 +43,8 @@ async function main() {
   }
 
   // Construir connection string de postgres a partir del service URL
-  const dbUrl = new URL(serviceConnStr)
-  const postgresConnStr = `postgresql://postgres:RodeoStaging2026_rotated_f3f96a0359291e11@${dbUrl.hostname}:${dbUrl.port}${dbUrl.pathname}`
+  // Construir connection string de postgres a partir del service URL (ahora requiere DATABASE_URL_ADMIN para ddl)
+  const postgresConnStr = process.env.DATABASE_URL_ADMIN || serviceConnStr;
 
   // Pool para DDL (postgres superuser)
   const ddlPool = new Pool({ connectionString: postgresConnStr, ssl: { rejectUnauthorized: false } })
