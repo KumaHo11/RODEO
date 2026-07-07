@@ -20,6 +20,7 @@ tmp/
 # ── Security: Secrets & Credentials ──
 .env.*
 !.env.example
+!.env.prod.local.example
 *.pem
 *-sa-key.json
 serviceAccountKey*.json

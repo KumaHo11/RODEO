@@ -86,13 +86,30 @@ jobs:
         run: |-
           python3 - <<'PYEOF'
           import os, json
+          from urllib.parse import urlparse, urlencode, parse_qs
           def q(v): return json.dumps(str(v))
+
+          # ── Transform DATABASE_URL to use Cloud SQL Unix socket ──
+          CLOUD_SQL_INSTANCE = os.environ.get("CLOUD_SQL_INSTANCE", "")
+          def to_socket_url(url_str):
+              if not url_str or not CLOUD_SQL_INSTANCE:
+                  return url_str
+              if 'host=' in url_str:
+                  return url_str  # Already using socket format
+              parsed = urlparse(url_str.replace('postgresql://', 'http://'))
+              db_path = parsed.path.split('?')[0]
+              creds = f"{parsed.username}:{parsed.password}" if parsed.password else parsed.username
+              socket_url = f"postgresql://{creds}@localhost:{parsed.port or 5432}{db_path}?host=/cloudsql/{CLOUD_SQL_INSTANCE}"
+              return socket_url
+
           staging_url = os.environ.get("STAGING_URL", "")
+          db_url = to_socket_url(os.environ.get("DATABASE_URL", ""))
+          db_url_service = to_socket_url(os.environ.get("DATABASE_URL_SERVICE", ""))
           lines = [
             f'NODE_ENV: production',
             f'NEXT_PUBLIC_APP_URL: {q(staging_url)}',
-            f'DATABASE_URL: {q(os.environ.get("DATABASE_URL",""))}',
-            f'DATABASE_URL_SERVICE: {q(os.environ.get("DATABASE_URL_SERVICE",""))}',
+            f'DATABASE_URL: {q(db_url)}',
+            f'DATABASE_URL_SERVICE: {q(db_url_service)}',
             f'FIREBASE_ADMIN_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
             # FIREBASE_ADMIN_CREDENTIALS_BASE64 se monta via Secret Manager (ver --set-secrets abajo)
             f'FIREBASE_ADMIN_IMPERSONATE_SA: {q(os.environ.get("FIREBASE_ADMIN_IMPERSONATE_SA",""))}',
@@ -114,6 +131,7 @@ jobs:
           PYEOF
         env:
           STAGING_URL: ${{ env.STAGING_URL }}
+          CLOUD_SQL_INSTANCE: ${{ env.PROJECT_ID }}:${{ env.REGION }}:rodeo-db-preprod
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_URL_SERVICE: ${{ secrets.DATABASE_URL_SERVICE }}
           FIREBASE_ADMIN_PROJECT_ID: ${{ env.PROJECT_ID }}
