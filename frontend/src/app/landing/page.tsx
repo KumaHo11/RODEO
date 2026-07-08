@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import {
   Map, Footprints, CalendarDays, Mic, Target, TrendingUp, Sprout,
-  ArrowRight, Check, X, ChevronDown, Building2, CheckCircle2,
+  ArrowRight, Check, X, ChevronDown, ChevronLeft, ChevronRight, Building2, CheckCircle2,
   Camera, WifiOff, Brain, BarChart3, Zap, Shield, Loader2, CloudRain, Leaf,
 } from 'lucide-react'
 import RodeoLogo from '@/components/RodeoLogo'
@@ -143,7 +143,7 @@ export default function LandingPage() {
   }, [])
 
   useEffect(() => {
-    const t = setInterval(() => setActiveFeature(f => (f + 1) % features.length), 4500)
+    const t = setInterval(() => setActiveFeature(f => (f + 1) % features.length), 10000)
     return () => clearInterval(t)
   }, [])
 
@@ -591,11 +591,32 @@ export default function LandingPage() {
                   ))}
                 </div>
 
-                <div className="flex gap-1.5 mt-8">
-                  {features.map((_, i) => (
-                    <button key={i} onClick={() => setActiveFeature(i)}
-                      className={`h-1 rounded-full transition-all duration-300 ${i === activeFeature ? 'w-8 bg-white' : 'w-4 bg-white/30'}`} />
-                  ))}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-8 pt-4 border-t border-white/10">
+                  <div className="flex flex-wrap gap-1 md:gap-1.5">
+                    {features.map((_, i) => (
+                      <button key={i} onClick={() => setActiveFeature(i)}
+                        className="py-2 px-1 focus:outline-none"
+                        aria-label={`Diapositiva ${i + 1}`}>
+                        <div className={`h-1.5 md:h-1 rounded-full transition-all duration-300 ${i === activeFeature ? 'w-8 bg-white' : 'w-4 bg-white/30'}`} />
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-3 justify-end">
+                    <button 
+                      onClick={() => setActiveFeature(f => (f - 1 + features.length) % features.length)} 
+                      className="p-3 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-colors flex items-center justify-center backdrop-blur-sm"
+                      aria-label="Anterior"
+                    >
+                      <ChevronLeft className="w-5 h-5 text-white" />
+                    </button>
+                    <button 
+                      onClick={() => setActiveFeature(f => (f + 1) % features.length)} 
+                      className="p-3 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-colors flex items-center justify-center backdrop-blur-sm"
+                      aria-label="Siguiente"
+                    >
+                      <ChevronRight className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
