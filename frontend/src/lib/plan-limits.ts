@@ -1,4 +1,4 @@
-import { queryOne, query } from '@/lib/db'
+import { serviceQueryOne, serviceQuery } from '@/lib/db'
 
 export type FeatureKey =
   | 'ndvi_access'
@@ -90,7 +90,7 @@ const SLUG_TO_PLAN: Record<string, string> = {
 }
 
 export async function checkFeatureAccess(firebaseUid: string, feature: FeatureKey): Promise<boolean> {
-  const profile = await queryOne(
+  const profile = await serviceQueryOne(
     `SELECT p.organization_id, sp.slug AS plan_slug
      FROM profiles p
      LEFT JOIN organizations o ON p.organization_id = o.id
@@ -106,7 +106,7 @@ export async function checkFeatureAccess(firebaseUid: string, feature: FeatureKe
 
   // Check DB flags first (overrides)
   if ((profile as any).organization_id) {
-    const flags = await query(
+    const flags = await serviceQuery(
       `SELECT pff.flag_key, pff.flag_value, pff.flag_type
        FROM plan_feature_flags pff
        JOIN subscriptions_plans sp ON pff.plan_id = sp.id

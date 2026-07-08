@@ -84,11 +84,12 @@ function createPoolFromUrl(connectionString: string): Pool {
     user: url.username,
     password: decodeURIComponent(url.password),
     database: url.pathname.slice(1).split('?')[0],
-    // SSL: si hay un CA cert configurado, verificar la identidad del servidor (previene MITM).
-    // Si no hay CA cert (caso actual en Cloud Run con IP pública), usar SSL sin verificación.
-    ssl: process.env.DB_SSL_CA
-      ? { ca: process.env.DB_SSL_CA }
-      : { rejectUnauthorized: false },
+    // SSL: deshabilitado para conexiones locales (localhost) y Unix sockets (Cloud SQL connector).
+    // Cloud SQL connector monta un socket Unix en /cloudsql/... que no soporta SSL.
+    // Para conexiones por IP pública, usar SSL (con CA cert si disponible, sin verificación si no).
+    ssl: (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || socketHost?.startsWith('/'))
+      ? false
+      : (process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : { rejectUnauthorized: false }),
     // max: 5 por pool × 2 pools (app + service) × N instancias Cloud Run.
     // Con Cloud Run max-instances configurado, esto mantiene las conexiones
     // totales por debajo de max_connections de Cloud SQL.
