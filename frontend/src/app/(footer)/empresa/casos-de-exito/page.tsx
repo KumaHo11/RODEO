@@ -140,7 +140,7 @@ export default function CasosDeExito() {
         <div className="max-w-2xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-black text-white mb-4">Escribí tu propio caso de éxito.</h2>
           <p className="text-green-100 mb-8 leading-relaxed">
-            Más de 12.000 productores ya eligieron Rodeo. El próximo resultado podría ser el tuyo.
+            Más de 800 productores ya eligieron Rodeo. El próximo resultado podría ser el tuyo.
             Empezá gratis, sin tarjeta de crédito.
           </p>
           <Link href="/register" className="inline-flex items-center gap-2 bg-white text-green-700 font-black px-8 py-4 rounded-xl text-base transition-all hover:bg-green-50 shadow-xl">

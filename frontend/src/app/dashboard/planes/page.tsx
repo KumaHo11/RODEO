@@ -187,6 +187,16 @@ function PlanCard({
           <div className="w-full py-3.5 rounded-2xl bg-gray-100 text-gray-500 text-sm font-black text-center">
             Plan activo
           </div>
+        ) : plan.slug === 'latifundio' || plan.slug === 'enterprise' ? (
+          <a
+            href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'ventas@rodeoagtech.com'}?subject=Consulta%20sobre%20Plan%20Latifundio`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-black transition-all active:scale-95 bg-gray-900 hover:bg-gray-800 text-white"
+          >
+            Hablar con ventas
+            <ArrowRight className="w-4 h-4" />
+          </a>
         ) : (
           <button
             onClick={() => onSelect(plan)}
@@ -201,11 +211,7 @@ function PlanCard({
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                {plan.slug === 'latifundio' || plan.slug === 'enterprise'
-                  ? 'Hablar con ventas'
-                  : price === 0
-                  ? 'Comenzar gratis'
-                  : 'Contratar ahora'}
+                {price === 0 ? 'Comenzar gratis' : 'Contratar ahora'}
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -249,11 +255,6 @@ export default function PlanesPage() {
 
   const handleSelect = async (plan: ApiPlan) => {
     if (!user) return
-    
-    if (plan.slug === 'latifundio' || plan.slug === 'enterprise') {
-      window.location.href = `mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'ventas@rodeoagtech.com'}?subject=Consulta sobre Plan Latifundio`;
-      return;
-    }
 
     setCheckoutLoading(plan.id)
     try {

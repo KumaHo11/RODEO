@@ -51,7 +51,7 @@ function useInView(threshold = 0.2) {
 function StatsSection() {
   const { ref, inView } = useInView()
   const hectares   = useCounter(2400000, 2200, inView)
-  const ranchers   = useCounter(12000,   2000, inView)
+  const ranchers   = useCounter(800,   2000, inView)
   const countries  = useCounter(8,       1200, inView)
   const efficiency = useCounter(34,      1800, inView)
   const stats = [
@@ -292,11 +292,11 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white">
 
       {/* ── NAV ── */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/98 backdrop-blur-xl shadow-sm border-b border-gray-100' : 'bg-transparent'}`}>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-xl shadow-sm border-b border-gray-100' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
             <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-              <Image src={scrolled ? "/LogoHeaderVerde_1.svg" : "/LogoHeaderBlanco.svg"} alt="RODEO" width={259} height={56} className="h-full w-full object-contain object-left" priority />
+              <Image src={scrolled ? "/LogoHeaderVerde_1.svg" : "/RODEO.LogoHeaderBlanco.svg"} alt="RODEO" width={259} height={56} className="h-full w-full object-contain object-left" priority />
             </Link>
             <span className={`hidden sm:block text-[10px] font-bold px-2 py-0.5 rounded-full tracking-widest border ${
               scrolled
@@ -428,7 +428,7 @@ export default function LandingPage() {
                 ))}
               </div>
               <div className="text-sm text-gray-400">
-                <span className="text-white font-bold">+12.000</span> productores ya digitalizaron su campo
+                <span className="text-white font-bold">+800</span> productores ya digitalizaron su campo
               </div>
             </div>
           </div>
@@ -918,7 +918,7 @@ export default function LandingPage() {
             Regístrate gratis y probá<br />el Planificador Holístico.
           </h2>
           <p className="text-green-100 text-base mb-10 max-w-md mx-auto">
-            Sumáte a más de 12.000 productores que ya digitalizaron su campo con Rodeo. Gratis para empezar, sin tarjeta de crédito.
+            Sumáte a más de 800 productores que ya digitalizaron su campo con Rodeo. Gratis para empezar, sin tarjeta de crédito.
           </p>
 
           <Link href="/register"
@@ -941,7 +941,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-10 mb-12">
             <div>
               <div className="mb-6">
-                <img src="/LogoHeaderBlanco.svg" alt="Rodeo" className="h-6 w-auto" />
+                <img src="/RODEO.LogoHeaderBlanco.svg" alt="Rodeo" className="h-6 w-auto" />
               </div>
               <p className="text-sm leading-relaxed text-gray-400">
                 Plataforma de gestión ganadera con IA y pastoreo holístico para el productor latinoamericano.

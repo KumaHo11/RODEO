@@ -49,7 +49,7 @@ export default function SobreRodeo() {
                 Rodeo existe para cambiar eso.
               </p>
               <p className="text-gray-600 leading-relaxed">
-                Hoy, más de 12.000 productores ganaderos de Argentina, Uruguay, Brasil, Paraguay, Colombia
+                Hoy, más de 800 productores ganaderos de Argentina, Uruguay, Brasil, Paraguay, Colombia
                 y Chile usan Rodeo para digitalizar sus establecimientos, optimizar la carga animal y
                 adoptar prácticas de ganadería regenerativa respaldadas por datos.
               </p>
@@ -84,7 +84,7 @@ export default function SobreRodeo() {
         <div className="max-w-5xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             {[
-              { value: '12.000+', label: 'Productores activos' },
+              { value: '800+', label: 'Productores activos' },
               { value: '2.4M ha', label: 'Hectáreas gestionadas' },
               { value: '6', label: 'Países en LATAM' },
               { value: '2022', label: 'Año de fundación' },
@@ -131,7 +131,7 @@ export default function SobreRodeo() {
         <div className="max-w-2xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-black text-gray-950 mb-4">Sumate a la comunidad.</h2>
           <p className="text-gray-500 mb-8 leading-relaxed">
-            Más de 12.000 productores ya eligieron Rodeo para digitalizar su campo.
+            Más de 800 productores ya eligieron Rodeo para digitalizar su campo.
             Empezá gratis, sin tarjeta de crédito, y sé parte del cambio en la ganadería latinoamericana.
           </p>
           <Link href="/register" className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-8 py-4 rounded-xl text-base transition-all shadow-lg shadow-green-600/30">

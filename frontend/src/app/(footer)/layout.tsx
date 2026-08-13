@@ -40,7 +40,7 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-[100dvh] bg-white">
       {/* NAV */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-white/98 backdrop-blur-xl shadow-sm border-b border-gray-100' : 'bg-white border-b border-gray-100'
+        scrolled ? 'bg-white/95 backdrop-blur-xl shadow-sm border-b border-gray-100' : 'bg-white border-b border-gray-100'
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
@@ -117,7 +117,7 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
             Empezá a gestionar tu campo con IA. Gratis.
           </h2>
           <p className="text-green-100 text-base mb-8 max-w-md mx-auto">
-            Más de 12.000 productores ya digitalizaron su establecimiento con Rodeo. Sin tarjeta de crédito.
+            Más de 800 productores ya digitalizaron su establecimiento con Rodeo. Sin tarjeta de crédito.
           </p>
           <Link href="/register"
             className="inline-flex items-center gap-2 bg-white text-green-700 font-black px-8 py-3.5 rounded-xl text-base transition-all hover:bg-green-50 shadow-xl">
@@ -136,7 +136,7 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
           <div className="grid md:grid-cols-4 gap-10 mb-12">
             <div>
               <div className="mb-6">
-                <img src="/LogoHeaderBlanco.svg" alt="Rodeo" className="h-6 w-auto" />
+                <img src="/RODEO.LogoHeaderBlanco.svg" alt="Rodeo" className="h-6 w-auto" />
               </div>
               <p className="text-sm leading-relaxed text-gray-600">
                 Plataforma de gestión ganadera con IA y pastoreo holístico para el productor latinoamericano.

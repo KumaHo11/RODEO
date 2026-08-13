@@ -10,13 +10,13 @@ export const metadata: Metadata = {
 
 const pressReleases = [
   { date: 'Marzo 2026', title: 'Rodeo lanza versión 2.0 con arquitectura Offline-First completa e integración de IA Gemini Pro Vision para análisis de pasturas.', tag: 'PRODUCTO' },
-  { date: 'Noviembre 2025', title: 'Rodeo supera los 10.000 productores activos en LATAM y anuncia expansión a México y Bolivia.', tag: 'EMPRESA' },
+  { date: 'Noviembre 2025', title: 'Rodeo supera los 800 productores activos en LATAM y anuncia expansión a México y Bolivia.', tag: 'EMPRESA' },
   { date: 'Agosto 2025', title: 'Rodeo integra el módulo de huella de carbono MRV, permitiendo a los productores acceder al mercado de bonos de carbono.', tag: 'SOSTENIBILIDAD' },
   { date: 'Abril 2025', title: 'Rodeo lanza el Planificador Holístico con metodología Savory, el primer software de pastoreo rotativo calibrado con IA en Latinoamérica.', tag: 'PRODUCTO' },
 ]
 
 const keyStats = [
-  { value: '12.000+', label: 'Productores activos' },
+  { value: '800+', label: 'Productores activos' },
   { value: '2.4M ha', label: 'Hectáreas gestionadas' },
   { value: '6 países', label: 'Presencia en LATAM' },
   { value: '+34%', label: 'Aumento de carga animal promedio' },
