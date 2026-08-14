@@ -44,7 +44,7 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-            <Image src="/LogoHeaderVerde_1.svg" alt="RODEO" width={259} height={56} className="h-full w-full object-contain object-left" priority />
+            <Image src="/RODEO.LogoHeader.svg" alt="RODEO" width={259} height={56} className="h-full w-full object-contain object-left" priority />
           </Link>
 
           <div className="hidden lg:flex items-center gap-8">
