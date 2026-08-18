@@ -7,12 +7,19 @@ import { OfflineManager } from '@/components/OfflineManager'
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
 import { Toaster } from 'sonner'
 
-const inter = Inter({ subsets: ['latin'], preload: false })
+const inter = Inter({ 
+  subsets: ['latin'], 
+  display: 'swap',
+  variable: '--font-inter'
+})
 
 import { GA_MEASUREMENT_ID } from '@/lib/analytics'
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://rodeoagtech.com'),
+  alternates: {
+    canonical: './',
+  },
   title: 'RODEO — Gestión Ganadera Regenerativa',
   description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rodeos, pastoreo rotacional y bitácora de campo con IA.',
   keywords: ['ganadería regenerativa', 'ganadería holística', 'agtech', 'pastoreo rotacional', 'software ganadero', 'gestión de potreros', 'RODEO'],
@@ -103,7 +110,7 @@ export default function RootLayout({
           </>
         )}
       </head>
-      <body className={`${inter.className} overflow-x-hidden`}>
+      <body className={`${inter.variable} ${inter.className} font-sans overflow-x-hidden`}>
         {/* Global Native Splash Screen (Immediately visible, removed by AuthProvider) */}
         <div 
           id="global-native-splash" 

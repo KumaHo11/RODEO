@@ -1,17 +1,25 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Antenna, ShieldCheck, ScanLine, Leaf } from 'lucide-react'
 import Image from 'next/image'
 
 const footerLinks = {
   Producto: [
-    { label: 'IA Materia Seca',       href: '/producto/ia-materia-seca' },
-    { label: 'Bitácora de Voz',        href: '/producto/bitacora-de-voz' },
-    { label: 'Gestión de Hacienda',    href: '/producto/gestion-de-hacienda' },
-    { label: 'Planificador Holístico', href: '/producto/planificador-holistico' },
-    { label: 'Modo Offline',           href: '/producto/modo-offline' },
+    { label: 'IA materia seca',          href: '/producto/ia-materia-seca' },
+    { label: 'Bitácora de voz',           href: '/producto/bitacora-de-voz' },
+    { label: 'Gestión de hacienda',       href: '/producto/gestion-de-hacienda' },
+    { label: 'Planificador holístico',    href: '/producto/planificador-holistico' },
+    { label: 'Calculadora ganadera',      href: '/producto/calculadora-ganadera' },
+    { label: 'Modo offline',              href: '/producto/modo-offline' },
+    { label: 'MRV satelital Sentinel-2',  href: '/producto/mrv-satelital' },
+    { label: 'Deforestation Guard EUDR',  href: '/producto/deforestation-guard' },
+    { label: 'Compliance Dashboard',      href: '/producto/compliance' },
+    { label: 'Registro RFID + animales',  href: '/producto/registro-rfid' },
+    { label: 'Huella de carbono IPCC',    href: '/producto/huella-carbono' },
+    { label: 'API B2B corporativa',       href: '/producto/api-b2b' },
   ],
   Empresa: [
     { label: 'Sobre Rodeo',     href: '/empresa/sobre-rodeo' },
@@ -24,11 +32,34 @@ const footerLinks = {
     { label: 'Contacto',           href: '/soporte/contacto' },
     { label: 'Estado del servicio',href: '/soporte/estado-del-servicio' },
   ],
+  Normativas: [
+    { label: 'EUDR 2023/1115',        href: '/normativas/eudr' },
+    { label: 'EOV · Savory Institute', href: '/normativas/eov' },
+    { label: 'GRSB Standard',         href: '/normativas/grsb' },
+    { label: 'IPCC Tier 1 / AR6',     href: '/normativas/ipcc' },
+    { label: 'Verra VM0026',          href: '/normativas/verra' },
+    { label: 'CORSIA Fase 1',         href: '/normativas/corsia' },
+  ],
+  Mercado: [
+    { label: 'Qué es el MRV digital',   href: '/mercado/mrv-digital' },
+    { label: 'Prima del 217% por MRV',   href: '/mercado/prima-mrv' },
+    { label: 'Elegibilidad CORSIA',      href: '/mercado/corsia' },
+    { label: 'NBS voluntario',           href: '/mercado/nbs-voluntario' },
+    { label: 'SBTi insetting Scope 3',   href: '/mercado/sbti-insetting' },
+    { label: 'Mercado argentino',        href: '/mercado/argentina' },
+  ],
 }
 
+
 function FooterLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen]   = useState(false)
+
+  // Scroll to top on every route change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [pathname])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
@@ -50,8 +81,9 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
           <div className="hidden lg:flex items-center gap-8">
             {[
               { label: 'Producto', href: '/landing#producto' },
+              { label: 'MRV & Carbono', href: '/landing#mrv' },
               { label: 'Precios',  href: '/landing#precios' },
-              { label: 'Cómo Funciona', href: '/landing#como-funciona' },
+              { label: 'Cómo funciona', href: '/landing#como-funciona' },
               { label: 'Testimonios', href: '/landing#testimonios' },
             ].map(item => (
               <Link key={item.label} href={item.href}
@@ -84,8 +116,9 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
           <div className="lg:hidden bg-white border-t border-gray-100 px-6 py-4 space-y-1">
             {[
               { label: 'Producto', href: '/landing#producto' },
+              { label: 'MRV & Carbono', href: '/landing#mrv' },
               { label: 'Precios',  href: '/landing#precios' },
-              { label: 'Cómo Funciona', href: '/landing#como-funciona' },
+              { label: 'Cómo funciona', href: '/landing#como-funciona' },
               { label: 'Testimonios', href: '/landing#testimonios' },
             ].map(item => (
               <Link key={item.label} href={item.href} onClick={() => setMenuOpen(false)}
@@ -130,17 +163,103 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
         </div>
       </section>
 
+      {/* MÓDULOS EXPLICADOS */}
+      <section className="py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-1.5 border border-gray-200 text-gray-500 text-xs font-bold tracking-widest px-3 py-1.5 rounded-full mb-5">
+              MÓDULOS LATIFUNDIO
+            </div>
+            <h2 className="text-3xl font-black text-gray-950 mb-3">MRV Digital: el negocio del dato verificable</h2>
+            <p className="text-gray-500 max-w-2xl mx-auto">Cada módulo resuelve un problema real del productor ganadero y abre una puerta al mercado de carbono.</p>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {[
+              {
+                iconName: 'Antenna',
+                title: 'MRV Satelital',
+                href: '/mrv/satelital',
+                problem: 'Sin datos, tu campo no existe para el mercado de carbono.',
+                solution: 'Sentinel-2 calcula 10 índices semanales por potrero: NDVI, BSI, SOC, Humedad y más.',
+                economic: 'Prima del 217% en el precio del crédito vs. campos sin MRV.',
+                norma: 'EUDR · GRSB · EOV',
+              },
+              {
+                iconName: 'ShieldCheck',
+                title: 'Deforestation Guard',
+                href: '/mrv/deforestation-guard',
+                problem: 'Un campo deforestado post-2020 no puede vender créditos ni exportar carne a Europa.',
+                solution: 'Verificación automática contra Global Forest Watch. Alerta inmediata si hay riesgo de incumplimiento EUDR.',
+                economic: 'Evita multas de hasta EUR 4% de facturación bajo EUDR 2023/1115.',
+                norma: 'EUDR 2023/1115',
+              },
+              {
+                iconName: 'ScanLine',
+                title: 'Registro RFID',
+                href: '/mrv/registro-rfid',
+                problem: 'Sin trazabilidad individual, no podés probar qué animal estuvo en qué potrero ni cuánto emitió.',
+                solution: 'RFID + bitácora digital. Compatible con Gallagher HR5 y Allflex. 100% offline en el campo.',
+                economic: 'Habilita insetting Scope 3: frigoríficos y exportadores pagan por la trazabilidad de tu rodeo.',
+                norma: 'SBTi · GRSB',
+              },
+              {
+                iconName: 'Leaf',
+                title: 'Huella de Carbono',
+                href: '/mrv/huella-carbono',
+                problem: 'Sin calcular tu balance de carbono no sabés si tu campo es sumidero o emisor, ni cuánto vale.',
+                solution: 'IPCC Tier 1: CH₄ entérico + N₂O estiércol vs. secuestro SOC. Balance neto en tCO₂e por potrero.',
+                economic: 'Primer paso para certificar créditos bajo Verra VM0026. A 15-33 USD/t, un campo de 500 ha vale USD 4.000-18.000/año.',
+                norma: 'IPCC 2006 · Verra VM0026',
+              },
+            ].map((item, i) => {
+              const icons: Record<string, any> = { Antenna, ShieldCheck, ScanLine, Leaf }
+              const Icon = icons[item.iconName]
+              return (
+                <Link key={i} href={item.href} className="bg-white border border-gray-200 rounded-2xl p-6 hover:border-green-200 hover:shadow-md transition-all group">
+                  <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center mb-4">
+                    <Icon className="w-5 h-5 text-green-600" />
+                  </div>
+                  <h3 className="font-black text-gray-950 text-base mb-3 group-hover:text-green-700 transition-colors">{item.title}</h3>
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <div className="text-[10px] font-black text-gray-400 tracking-widest mb-1">EL PROBLEMA</div>
+                      <p className="text-gray-600 leading-relaxed">{item.problem}</p>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-black text-gray-400 tracking-widest mb-1">CÓMO LO RESUELVE RODEO</div>
+                      <p className="text-gray-600 leading-relaxed">{item.solution}</p>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-black text-gray-400 tracking-widest mb-1">VALOR ECONÓMICO</div>
+                      <p className="font-bold text-green-700 leading-relaxed">{item.economic}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-gray-100">
+                    <span className="text-[9px] font-black text-gray-400 tracking-wider">{item.norma}</span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* FOOTER */}
       <footer className="bg-gray-950 text-gray-500 py-16">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="grid md:grid-cols-4 gap-10 mb-12">
-            <div>
+          <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-8 mb-12">
+            <div className="lg:col-span-1">
               <div className="mb-6">
                 <img src="/RODEO.LogoHeaderBlanco.svg" alt="Rodeo" className="h-6 w-auto" />
               </div>
               <p className="text-sm leading-relaxed text-gray-600">
-                Plataforma de gestión ganadera con IA y pastoreo holístico para el productor latinoamericano.
+                Plataforma MRV ganadera con IA y pastoreo holístico. Monitoreo satelital, registro RFID, compliance EUDR y huella de carbono para el productor latinoamericano.
               </p>
+              <div className="flex flex-wrap gap-1.5 mt-4">
+                {['EUDR', 'EOV', 'GRSB', 'IPCC Tier 1'].map(n => (
+                  <span key={n} className="text-[9px] font-black text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full tracking-wider">{n}</span>
+                ))}
+              </div>
             </div>
 
             {Object.entries(footerLinks).map(([title, links]) => (
