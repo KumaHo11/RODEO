@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   output: "standalone", // Required for Cloud Run Docker deployment
   // Packages that must NOT be bundled — they use Node.js internals incompatible with
   // the Next.js server bundler. Adding them here keeps them as external node_modules.
-  serverExternalPackages: ['resend'],
+  serverExternalPackages: ['resend', '@react-pdf/renderer'],
   turbopack: {},
   images: {
     remotePatterns: [
