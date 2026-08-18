@@ -13,6 +13,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/admin/plans':       { title: 'Planes de Suscripción',    subtitle: 'Precios, features y pasarelas de pago' },
   '/admin/audit-logs':  { title: 'Registro de Auditoría',   subtitle: 'Historial de acciones administrativas' },
   '/admin/config':      { title: 'Configuración',            subtitle: 'API Keys y parámetros del sistema' },
+  '/admin/features':    { title: 'Feature Flags',            subtitle: 'Activación global de módulos' },
 }
 
 interface AdminHeaderProps {

@@ -1,14 +1,8 @@
-require('dotenv').config({ path: 'frontend/.env.local' });
 const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-async function test() {
-  try {
-    const res = await pool.query("SELECT email, created_at FROM profiles ORDER BY created_at DESC LIMIT 5");
-    console.log('Recent Profiles:', res.rows);
-  } catch(e) {
-    console.error(e);
-  } finally {
-    pool.end();
-  }
+const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/rodeo' });
+async function run() {
+  const res = await pool.query("SELECT COUNT(*) FROM climate_adjustment_snapshots");
+  console.log("Count:", res.rows[0]);
+  process.exit(0);
 }
-test();
+run();

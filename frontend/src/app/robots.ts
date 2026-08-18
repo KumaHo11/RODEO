@@ -5,7 +5,16 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/admin/', '/dashboard/', '/api/'],
+      disallow: [
+        '/admin/',
+        '/dashboard/',
+        '/api/',
+        '/auth/',
+        '/onboarding/',
+        '/terms-accept/',
+        '/guest-setup/',
+        '/logo-preview/',
+      ],
     },
     sitemap: 'https://rodeoagtech.com/sitemap.xml',
   }

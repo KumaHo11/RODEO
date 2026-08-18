@@ -42,6 +42,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard':              'Panel principal',
   '/dashboard/mi-campo':     'Potreros',
   '/dashboard/herds':        'Rodeos',
+  '/dashboard/animals':      'Animales',
   '/dashboard/agenda':       'Agenda',
   '/dashboard/clima':        'Clima',
   '/dashboard/grazing':      'Planificador',
@@ -53,6 +54,8 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard/tareas':       'Tareas',
   '/dashboard/guest-setup':  'Configuración de cuenta',
   '/dashboard/calculadora':  'Calculadora',
+  '/dashboard/metrics':      'Métricas Satelitales',
+  '/dashboard/metrics/carbon': 'Huella de Carbono',
 }
 
 // ── Layout ─────────────────────────────────────────────────────────────────────

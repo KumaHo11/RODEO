@@ -2,8 +2,8 @@
 
 import {
   LayoutDashboard, CalendarDays, Lightbulb, NotebookPen,
-  Users, CheckSquare, Fence, Calendar, Cloud, BookOpen, Leaf, MessageCircle, CreditCard,
-  Calculator
+  Users, CheckSquare, Fence, Calendar, Cloud, BookOpen, Leaf, MessageCircle, CreditCard, Beef,
+  Calculator, FlaskConical
 } from 'lucide-react'
 import { IconoRodeos } from '@/components/icons/IconoRodeos'
 
@@ -35,6 +35,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: 'Potreros', href: '/dashboard/mi-campo',  icon: Fence,        permissionKey: 'mi_campo'    },
       { name: 'Rodeos',   href: '/dashboard/herds',     icon: IconoRodeos,  permissionKey: 'rebanhos'    },
+      { name: 'Animales', href: '/dashboard/animals',   icon: Beef,         permissionKey: 'animal_registry' },
       { name: 'Agenda',   href: '/dashboard/agenda',    icon: CalendarDays, permissionKey: 'agenda'      },
       { name: 'Bitácora', href: '/dashboard/bitacora', icon: BookOpen, permissionKey: 'bitacora' },
       { name: 'Clima',    href: '/dashboard/clima',    icon: Cloud,    permissionKey: 'clima'    },
@@ -51,9 +52,18 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'INTELIGENCIA',
     items: [
-      { name: 'Insights',      href: '/dashboard/insights',    icon: Lightbulb,  permissionKey: 'insights'     },
-      { name: 'Carbono',       href: '/dashboard/carbono',     icon: Leaf,        permissionKey: 'carbono'      },
-      { name: 'Calculadora',   href: '/dashboard/calculadora', icon: Calculator,  permissionKey: 'calculadora'  },
+      { name: 'Metrics',       href: '/dashboard/metrics',    icon: FlaskConical, permissionKey: 'metrics'      },
+      { name: 'Huella de Carbono', href: '/dashboard/metrics/carbon', icon: Leaf, permissionKey: 'metrics_module' },
+      { name: 'Insights',      href: '/dashboard/insights',   icon: Lightbulb,    permissionKey: 'insights'     },
+      { name: 'Calculadora',   href: '/dashboard/calculadora',icon: Calculator,   permissionKey: 'calculadora'  },
+    ],
+  },
+  {
+    label: 'EMPRESA',
+    items: [
+      { name: 'Report Builder', href: '/dashboard/metrics/reports', icon: NotebookPen, permissionKey: 'metrics' },
+      { name: 'Marketplace',    href: '/dashboard/metrics/marketplace', icon: Cloud, permissionKey: 'api_access' },
+      { name: 'API Docs',       href: '/dashboard/metrics/api-docs', icon: FlaskConical, permissionKey: 'api_access' },
     ],
   },
 ]
@@ -64,7 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
 export const ALL_NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap(g => g.items)
 
 /** Mobile bottom nav: up to 5 priority items */
-export const MOBILE_NAV_KEYS = ['dashboard', 'mi_campo', 'clima', 'planificador', 'insights']
+export const MOBILE_NAV_KEYS = ['dashboard', 'mi_campo', 'clima', 'planificador', 'metrics']
 
 /**
  * Map route → permission key for middleware checks.
@@ -72,6 +82,7 @@ export const MOBILE_NAV_KEYS = ['dashboard', 'mi_campo', 'clima', 'planificador'
 export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/mi-campo':  'mi_campo',
   '/dashboard/herds':     'rebanhos',
+  '/dashboard/animals':   'animal_registry',
   '/dashboard/agenda':    'agenda',
   '/dashboard/clima':     'clima',
   '/dashboard/grazing':   'planificador',
@@ -79,5 +90,9 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/bitacora/bandeja':  'bitacora',
   '/dashboard/insights':  'insights',
   '/dashboard/tareas':    'tareas',
-  '/dashboard/carbono':   'carbono',
+  '/dashboard/metrics/carbon': 'metrics_module',
+  '/dashboard/metrics':   'metrics',
+  '/dashboard/metrics/reports': 'metrics',
+  '/dashboard/metrics/marketplace': 'api_access',
+  '/dashboard/metrics/api-docs': 'api_access',
 }
