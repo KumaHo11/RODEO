@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const paddockInfo = await serviceQuery<{ org_id: string, geojson: any }>(`
-      SELECT p.organization_id AS org_id, ST_AsGeoJSON(p.geom)::json AS geojson
+      SELECT p.org_id AS org_id, ST_AsGeoJSON(p.geom)::json AS geojson
       FROM paddocks p
       WHERE p.id = $1 AND p.geom IS NOT NULL
     `, [paddockId])

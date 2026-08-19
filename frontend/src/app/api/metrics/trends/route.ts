@@ -68,14 +68,20 @@ export async function GET(req: NextRequest) {
       if (paddockId) params.push(paddockId)
     }
 
-    const trends = await serviceQuery<{
-      metric_type:     string
-      avg_value:       string
-      pct_change:      string | null
-      trend_direction: string
-      data_points:     number
-      period_start:    string
-    }>(query, params)
+    let trends: any[] = []
+    try {
+      trends = await serviceQuery<{
+        metric_type:     string
+        avg_value:       string
+        pct_change:      string | null
+        trend_direction: string
+        data_points:     number
+        period_start:    string
+      }>(query, params)
+    } catch (e: any) {
+      if (!e.message?.includes('does not exist')) throw e
+      console.warn('[/api/metrics/trends] metric_trends table not found')
+    }
 
     return NextResponse.json({ trends })
   } catch (err: any) {

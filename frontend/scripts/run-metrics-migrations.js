@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 /**
- * RODEO — Migration runner v22 + v23 (usa DO $$ para ejecutar SQL completo)
- * Aplica v22_metrics_module.sql y v23_animals.sql a la DB activa.
+ * RODEO — Migration runner v22 + v23 + v25 (usa DO $$ para ejecutar SQL completo)
+ * Aplica v22_metrics_module.sql, v23_animals.sql y v25_carbon_accounting.sql a la DB activa.
  */
 const { Pool } = require('pg')
 const fs = require('fs')
 const path = require('path')
+
+// Accept URL from CLI arg (like full_schema_migration.js) or env var
+if (process.argv[2]) {
+  process.env.DATABASE_URL_SERVICE = process.argv[2]
+}
 
 // Auto-load .env.local solo si DATABASE_URL no está ya en el entorno
 if (!process.env.DATABASE_URL && !process.env.DATABASE_URL_SERVICE) {
@@ -35,6 +40,7 @@ const pool = new Pool({
 const MIGRATIONS = [
   path.resolve(__dirname, '../../v22_metrics_module.sql'),
   path.resolve(__dirname, '../../v23_animals.sql'),
+  path.resolve(__dirname, '../../v25_carbon_accounting.sql'),
 ]
 
 async function runMigration(client, filePath) {
@@ -100,7 +106,7 @@ async function main() {
     const { rows: preCheck } = await client.query(`
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public'
-        AND table_name IN ('metric_snapshots','metric_trends','metric_subscriptions','deforestation_checks','animals','animal_events')
+        AND table_name IN ('metric_snapshots','metric_trends','metric_subscriptions','deforestation_checks','animals','animal_events','carbon_estimates')
     `)
     if (preCheck.length > 0) {
       console.log(`\nℹ️  Tablas ya existentes: ${preCheck.map(r=>r.table_name).join(', ')}`)
@@ -126,7 +132,7 @@ async function main() {
     `)
 
     const created = newTables.map(r => r.table_name)
-    const expected = ['metric_snapshots', 'metric_trends', 'metric_subscriptions', 'deforestation_checks', 'animals', 'animal_events']
+    const expected = ['metric_snapshots', 'metric_trends', 'metric_subscriptions', 'deforestation_checks', 'animals', 'animal_events', 'carbon_estimates']
 
     console.log('\n📋 Tablas verificadas post-migration:')
     for (const t of expected) {
@@ -134,7 +140,7 @@ async function main() {
     }
 
     if (created.length === expected.length) {
-      console.log('\n🎉 Migrations v22 y v23 aplicadas correctamente!')
+      console.log('\n🎉 Migrations v22, v23 y v25 aplicadas correctamente!')
     } else {
       console.log('\n⚠️  Algunas tablas no se crearon — revisá los errores arriba')
       process.exit(1)

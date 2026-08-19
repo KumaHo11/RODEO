@@ -49,9 +49,8 @@ export default function TimeMachinePage() {
     if (!selectedPaddock) return
     setIsBackfilling(true)
     try {
-      const res = await fetch('/api/metrics/backfill', {
+      const res = await apiFetch('/api/metrics/backfill', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paddock_id: selectedPaddock, year_from: 2020 }),
       })
       const data = await res.json()

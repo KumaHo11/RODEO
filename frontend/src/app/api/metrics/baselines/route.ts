@@ -29,20 +29,26 @@ export async function GET(req: NextRequest) {
     const paddockId = req.nextUrl.searchParams.get('paddock_id')
 
     // Baseline = average of snapshots from Nov 2020 – Jan 2021 (EUDR reference period)
-    const baselines = await serviceQuery<{
-      metric_type: string
-      value:       string
-    }>(`
-      SELECT
-        metric_type,
-        AVG(value)::text AS value
-      FROM metric_snapshots
-      WHERE org_id = $1
-        AND capture_date BETWEEN '2020-11-01' AND '2021-01-31'
-        AND source != 'estimated'
-        ${paddockId ? 'AND paddock_id = $2' : ''}
-      GROUP BY metric_type
-    `, [profile.organization_id, ...(paddockId ? [paddockId] : [])])
+    let baselines: any[] = []
+    try {
+      baselines = await serviceQuery<{
+        metric_type: string
+        value:       string
+      }>(`
+        SELECT
+          metric_type,
+          AVG(value)::text AS value
+        FROM metric_snapshots
+        WHERE org_id = $1
+          AND capture_date BETWEEN '2020-11-01' AND '2021-01-31'
+          AND source != 'estimated'
+          ${paddockId ? 'AND paddock_id = $2' : ''}
+        GROUP BY metric_type
+      `, [profile.organization_id, ...(paddockId ? [paddockId] : [])])
+    } catch (e: any) {
+      if (!e.message?.includes('does not exist')) throw e
+      console.warn('[/api/metrics/baselines] metric_snapshots table not found')
+    }
 
     return NextResponse.json({ baselines })
   } catch (err: any) {

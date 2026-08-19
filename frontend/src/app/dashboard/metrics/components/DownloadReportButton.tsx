@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { FileText, Download, Loader2, CheckCircle } from 'lucide-react'
+import { apiFetch } from '@/lib/apiFetch'
 
 interface Props {
   orgId: string
@@ -23,7 +24,7 @@ export function DownloadReportButton({ orgId, orgName = 'Estancia', className = 
       setStatus('loading')
       setFileSize(null)
 
-      const res = await fetch(`/api/reports/mrv?org_id=${encodeURIComponent(orgId)}`)
+      const res = await apiFetch(`/api/reports/mrv?org_id=${encodeURIComponent(orgId)}`)
 
       if (!res.ok) {
         const err = await res.text()

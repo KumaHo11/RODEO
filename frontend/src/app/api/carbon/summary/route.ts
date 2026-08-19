@@ -13,46 +13,54 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const year = searchParams.get('year') || new Date().getFullYear().toString()
 
-    // Aggregate by farm
-    const summaryRes = await query<{
-      total_gross_tco2e: number,
-      total_sequestration_tco2e: number,
-      net_balance_tco2e: number
-    }>(
-      `SELECT 
-        SUM(gross_emissions_tco2e) as total_gross_tco2e,
-        SUM(soc_sequestration_tco2e) as total_sequestration_tco2e,
-        SUM(net_balance_tco2e) as net_balance_tco2e
-       FROM carbon_estimates
-       WHERE org_id = $1 AND EXTRACT(YEAR FROM period_month) = $2`,
-      [auth.orgId, year]
-    )
+    let summaryRes: any[] = []
+    let paddocksRes: any[] = []
 
-    // Aggregate by paddock
-    const paddocksRes = await query<{
-      paddock_id: string,
-      name: string,
-      area_ha: number,
-      avg_head_count: number,
-      gross_tco2e: number,
-      sequestration_tco2e: number,
-      net_balance_tco2e: number
-    }>(
-      `SELECT 
-        ce.paddock_id,
-        p.name,
-        AVG(ce.paddock_ha) as area_ha,
-        AVG(ce.head_count) as avg_head_count,
-        SUM(ce.gross_emissions_tco2e) as gross_tco2e,
-        SUM(ce.soc_sequestration_tco2e) as sequestration_tco2e,
-        SUM(ce.net_balance_tco2e) as net_balance_tco2e
-       FROM carbon_estimates ce
-       JOIN paddocks p ON p.id = ce.paddock_id
-       WHERE ce.org_id = $1 AND EXTRACT(YEAR FROM ce.period_month) = $2
-       GROUP BY ce.paddock_id, p.name
-       ORDER BY net_balance_tco2e ASC`,
-      [auth.orgId, year]
-    )
+    try {
+      // Aggregate by farm
+      summaryRes = await query<{
+        total_gross_tco2e: number,
+        total_sequestration_tco2e: number,
+        net_balance_tco2e: number
+      }>(
+        `SELECT 
+          SUM(gross_emissions_tco2e) as total_gross_tco2e,
+          SUM(soc_sequestration_tco2e) as total_sequestration_tco2e,
+          SUM(net_balance_tco2e) as net_balance_tco2e
+         FROM carbon_estimates
+         WHERE org_id = $1 AND EXTRACT(YEAR FROM period_month) = $2`,
+        [auth.orgId, year]
+      )
+
+      // Aggregate by paddock
+      paddocksRes = await query<{
+        paddock_id: string,
+        name: string,
+        area_ha: number,
+        avg_head_count: number,
+        gross_tco2e: number,
+        sequestration_tco2e: number,
+        net_balance_tco2e: number
+      }>(
+        `SELECT 
+          ce.paddock_id,
+          p.name,
+          AVG(ce.paddock_ha) as area_ha,
+          AVG(ce.head_count) as avg_head_count,
+          SUM(ce.gross_emissions_tco2e) as gross_tco2e,
+          SUM(ce.soc_sequestration_tco2e) as sequestration_tco2e,
+          SUM(ce.net_balance_tco2e) as net_balance_tco2e
+         FROM carbon_estimates ce
+         JOIN paddocks p ON p.id = ce.paddock_id
+         WHERE ce.org_id = $1 AND EXTRACT(YEAR FROM ce.period_month) = $2
+         GROUP BY ce.paddock_id, p.name
+         ORDER BY net_balance_tco2e ASC`,
+        [auth.orgId, year]
+      )
+    } catch (e: any) {
+      if (!e.message?.includes('does not exist')) throw e
+      console.warn('[carbon/summary] carbon_estimates table not found — returning empty data')
+    }
 
     const summary = summaryRes[0] || {
       total_gross_tco2e: 0,

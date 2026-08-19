@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
           WHERE ms.paddock_id = p.id AND ms.metric_type = 'NDVI'
         ) AS last_snapshot_date
       FROM paddocks p
-      JOIN organizations o ON p.organization_id = o.id
+      JOIN organizations o ON p.org_id = o.id
       JOIN subscriptions_plans sp ON o.subscription_plan_id = sp.id
       WHERE sp.slug = ANY($1::text[])
         AND p.geom IS NOT NULL

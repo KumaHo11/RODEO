@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { apiFetch } from '@/lib/apiFetch'
 
 export interface PaddockCarbon {
   paddock_id: string
@@ -27,7 +28,7 @@ export function useCarbonBalance(year: string) {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`/api/carbon/summary?year=${year}`)
+      const res = await apiFetch(`/api/carbon/summary?year=${year}`)
       if (!res.ok) throw new Error('Failed to load carbon summary')
       const data = await res.json()
       setSummary(data)

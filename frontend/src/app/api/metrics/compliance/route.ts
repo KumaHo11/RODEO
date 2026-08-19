@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { query } from '@/lib/db'
+import { serviceQuery } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     const orgId = auth.orgId
 
     // 1. Fetch Paddocks
-    const paddocks: any[] = await query(
+    const paddocks: any[] = await serviceQuery(
       'SELECT id, name, geom FROM paddocks WHERE org_id = $1',
       [orgId]
     )
@@ -27,39 +27,60 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // 2. Fetch Latest Snapshots
-    const snapshots: any[] = await query(`
-      SELECT DISTINCT ON (paddock_id, metric_type) 
-        paddock_id, metric_type, value, capture_date
-      FROM metric_snapshots
-      WHERE org_id = $1
-      ORDER BY paddock_id, metric_type, capture_date DESC
-    `, [orgId])
+    // 2. Fetch Latest Snapshots (resilient to missing v22 tables)
+    let snapshots: any[] = []
+    try {
+      snapshots = await serviceQuery(`
+        SELECT DISTINCT ON (paddock_id, metric_type) 
+          paddock_id, metric_type, value, capture_date
+        FROM metric_snapshots
+        WHERE org_id = $1
+        ORDER BY paddock_id, metric_type, capture_date DESC
+      `, [orgId])
+    } catch (e: any) {
+      if (!e.message?.includes('does not exist')) throw e
+      console.warn('[compliance] metric_snapshots table not found — returning empty data')
+    }
 
     // 3. Fetch Trends
-    const trends: any[] = await query(`
-      SELECT DISTINCT ON (paddock_id, metric_type)
-        paddock_id, metric_type, pct_change
-      FROM metric_trends
-      WHERE org_id = $1 AND period = 'monthly'
-      ORDER BY paddock_id, metric_type, period_start DESC
-    `, [orgId])
+    let trends: any[] = []
+    try {
+      trends = await serviceQuery(`
+        SELECT DISTINCT ON (paddock_id, metric_type)
+          paddock_id, metric_type, pct_change
+        FROM metric_trends
+        WHERE org_id = $1 AND period = 'monthly'
+        ORDER BY paddock_id, metric_type, period_start DESC
+      `, [orgId])
+    } catch (e: any) {
+      if (!e.message?.includes('does not exist')) throw e
+    }
 
     // 4. Fetch Baselines (2020-11-01 to 2021-01-31)
-    const baselines: any[] = await query(`
-      SELECT paddock_id, metric_type, AVG(value) as baseline
-      FROM metric_snapshots
-      WHERE org_id = $1 AND capture_date BETWEEN '2020-11-01' AND '2021-01-31'
-      GROUP BY paddock_id, metric_type
-    `, [orgId])
+    let baselines: any[] = []
+    try {
+      baselines = await serviceQuery(`
+        SELECT paddock_id, metric_type, AVG(value) as baseline
+        FROM metric_snapshots
+        WHERE org_id = $1 AND capture_date BETWEEN '2020-11-01' AND '2021-01-31'
+        GROUP BY paddock_id, metric_type
+      `, [orgId])
+    } catch (e: any) {
+      if (!e.message?.includes('does not exist')) throw e
+    }
 
     // 5. Fetch Deforestation Checks
-    const deforestation: any[] = await query(`
-      SELECT DISTINCT ON (paddock_id) paddock_id, status
-      FROM deforestation_checks
-      WHERE org_id = $1
-      ORDER BY paddock_id, checked_at DESC
-    `, [orgId])
+    let deforestation: any[] = []
+    try {
+      deforestation = await serviceQuery(`
+        SELECT DISTINCT ON (paddock_id) paddock_id, status
+        FROM deforestation_checks
+        WHERE org_id = $1
+        ORDER BY paddock_id, checked_at DESC
+      `, [orgId])
+    } catch (e: any) {
+      if (!e.message?.includes('does not exist')) throw e
+    }
 
     // Pre-process data by paddock
     const paddockData = new Map<string, any>()

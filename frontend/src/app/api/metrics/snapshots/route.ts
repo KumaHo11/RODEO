@@ -34,23 +34,29 @@ export async function GET(req: NextRequest) {
     const paddockId = req.nextUrl.searchParams.get('paddock_id')
 
     // Latest snapshot per metric_type (most recent capture_date)
-    const snapshots = await serviceQuery<{
-      metric_type:  string
-      value:        string
-      unit:         string
-      capture_date: string
-      source:       string
-      confidence:   string
-      paddock_id:   string | null
-    }>(`
-      SELECT DISTINCT ON (metric_type)
-        metric_type, value::text, unit, capture_date::text, source, confidence,
-        paddock_id
-      FROM metric_snapshots
-      WHERE org_id = $1
-        ${paddockId ? 'AND paddock_id = $2' : ''}
-      ORDER BY metric_type, capture_date DESC
-    `, [profile.organization_id, ...(paddockId ? [paddockId] : [])])
+    let snapshots: any[] = []
+    try {
+      snapshots = await serviceQuery<{
+        metric_type:  string
+        value:        string
+        unit:         string
+        capture_date: string
+        source:       string
+        confidence:   string
+        paddock_id:   string | null
+      }>(`
+        SELECT DISTINCT ON (metric_type)
+          metric_type, value::text, unit, capture_date::text, source, confidence,
+          paddock_id
+        FROM metric_snapshots
+        WHERE org_id = $1
+          ${paddockId ? 'AND paddock_id = $2' : ''}
+        ORDER BY metric_type, capture_date DESC
+      `, [profile.organization_id, ...(paddockId ? [paddockId] : [])])
+    } catch (e: any) {
+      if (!e.message?.includes('does not exist')) throw e
+      console.warn('[/api/metrics/snapshots] metric_snapshots table not found')
+    }
 
     return NextResponse.json({ snapshots, paddockId: paddockId || null })
   } catch (err: any) {
