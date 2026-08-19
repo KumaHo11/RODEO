@@ -278,11 +278,8 @@ export default function TimeMachinePage() {
         clearInterval(timerRef.current!)
         return
       }
-      if (data.partial) {
-        setTimeout(handleBackfill, 5000)
-        return
-      }
-      // Backfill dispatched successfully — start polling
+      // Backend accepted and is processing in background via after()
+      // Start polling for results
       startPolling(selectedPaddock)
     } catch (err) {
       console.error(err)

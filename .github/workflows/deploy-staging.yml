@@ -160,6 +160,7 @@ jobs:
             --project=${{ env.PROJECT_ID }} \
             --allow-unauthenticated \
             --port=3000 \
+            --timeout=300 \
             --memory=1Gi \
             --cpu=1 \
             --min-instances=0 \

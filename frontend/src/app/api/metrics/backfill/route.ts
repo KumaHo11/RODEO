@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { after } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { checkFeatureAccess } from '@/lib/plan-limits'
+import { processBackfill } from '@/lib/metrics/backfill-processor'
 
 /**
  * POST /api/metrics/backfill
- * Dispara el backfill histórico para un potrero desde la UI.
- * Responde inmediatamente. Usa after() para que el proceso corra aunque
- * el usuario navegue a otra pantalla (sobrevive en Cloud Run).
+ *
+ * Triggers historical metrics generation for a paddock.
+ * Responds immediately with 200. Uses after() to run the heavy
+ * processing directly (no HTTP self-call) so it survives navigation
+ * and runs within Cloud Run's 300s timeout.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -31,34 +34,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'paddock_id requerido' }, { status: 400 })
     }
 
-    const cronSecret = process.env.CRON_SECRET
-    if (!cronSecret) {
-      return NextResponse.json(
-        { error: 'CRON_SECRET no configurado en el servidor' },
-        { status: 500 }
-      )
-    }
-
-    const baseUrl =
-      process.env.NEXTAUTH_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      'http://localhost:3000'
-
-    const backfillUrl = `${baseUrl}/api/cron/metrics-backfill?paddock_id=${paddock_id}&year_from=${year_from}`
-
-    // ✅ after() keeps the process alive in Cloud Run after the response is sent.
-    // Without this, navigating away kills the background fetch (CPU throttled).
+    // Run processing directly in after() — no HTTP self-call.
+    // This runs in the same process, inheriting Cloud Run's 300s timeout.
     after(async () => {
       try {
-        console.log(`[backfill] Starting background job: paddock=${paddock_id} year_from=${year_from}`)
-        const res = await fetch(backfillUrl, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${cronSecret}` },
-        })
-        const text = await res.text()
-        console.log(`[backfill] Job done: status=${res.status} | ${text.substring(0, 200)}`)
+        console.log(`[backfill] Starting: paddock=${paddock_id} year_from=${year_from}`)
+        const result = await processBackfill(paddock_id, year_from)
+        console.log(`[backfill] Complete:`, JSON.stringify(result))
       } catch (err: any) {
-        console.error('[backfill] Background error:', err?.message)
+        console.error('[backfill] Error:', err?.message || err)
       }
     })
 
