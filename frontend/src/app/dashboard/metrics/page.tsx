@@ -72,7 +72,7 @@ export default function MetricsDashboardPage() {
         <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center mx-auto">
           <FlaskConical className="w-6 h-6 text-green-600" />
         </div>
-        <h2 className="text-xl font-black text-gray-950">RODEO Metrics</h2>
+        <h2 className="text-xl font-black text-gray-950">Observatorio Satelital</h2>
         <p className="text-gray-500 text-sm max-w-md">
           El módulo de MRV satelital está disponible en los planes <strong>Holístico</strong> y superiores.
           Accedé a 16 métricas automáticas, compliance EUDR, y reportes MRV.
@@ -90,7 +90,7 @@ export default function MetricsDashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-gray-950">
-            RODEO Metrics
+            Observatorio Satelital
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Monitoreo, Reporte y Verificación satelital automático · Sentinel-2 / Sentinel-1

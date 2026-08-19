@@ -17,7 +17,9 @@ const TITILER_URL      = process.env.TITILER_URL || 'https://titiler.xyz'
 const EARTH_SEARCH_URL = 'https://earth-search.aws.element84.com/v1/search'
 
 // ─── Batch size: process N months in parallel ────────────────────────────────
-const BATCH_SIZE = 4
+const BATCH_SIZE = 8
+// Wall-clock guard: stop 30s before Cloud Run kills at 300s
+const MAX_WALL_MS = 260_000
 
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -81,9 +83,19 @@ export async function GET(req: NextRequest) {
   let inserted = 0
   let skipped  = 0
   const errors: string[] = []
+  const startTime = Date.now()
 
   // ── 4. Process in parallel batches ───────────────────────────────────────
+  let batchIndex = 0
+  let timedOut = false
   for (let i = 0; i < pending.length; i += BATCH_SIZE) {
+    // Stop before Cloud Run timeout kills the process
+    if (Date.now() - startTime > MAX_WALL_MS) {
+      timedOut = true
+      console.log(`[backfill] Wall-clock limit reached at batch ${batchIndex}. Stopping gracefully.`)
+      break
+    }
+    batchIndex++
     const batch = pending.slice(i, i + BATCH_SIZE)
     await Promise.all(batch.map(async (dateStr) => {
       try {
@@ -113,15 +125,20 @@ export async function GET(req: NextRequest) {
         errors.push(`${dateStr}: ${err?.message || 'error'}`)
         skipped++
       }
-    }))
+    }))    
   }
+
+  const remaining = pending.length - (batchIndex * BATCH_SIZE)
+  console.log(`[backfill] Done: inserted=${inserted} skipped=${skipped} batches=${batchIndex} timedOut=${timedOut}`)
 
   console.log(`[backfill] Done: inserted=${inserted} skipped=${skipped} errors=${errors.length}`)
 
   return NextResponse.json({
     ok: true,
-    processed_months: pending.length,
+    processed_months: batchIndex * BATCH_SIZE,
     processed_paddocks: 1,
+    partial: timedOut,
+    remaining: timedOut ? Math.max(0, pending.length - batchIndex * BATCH_SIZE) : 0,
     inserted,
     skipped,
     errors: errors.length > 0 ? errors.slice(0, 10) : undefined,

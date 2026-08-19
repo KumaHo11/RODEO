@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Clock, Activity, TrendingUp, AlertTriangle, Satellite, Leaf, RefreshCw, CheckCircle2, BellRing, X } from 'lucide-react'
+import { ArrowLeft, Clock, Activity, TrendingUp, AlertTriangle, Leaf, Droplets, RefreshCw, X, Bell } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/apiFetch'
 import { useTimeMachine } from '../hooks/useTimeMachine'
@@ -55,7 +55,7 @@ function SnapshotCard({ point, metricType, isBaseline, isLatest, index }: Snapsh
       <div style={{ height: 3, background: color }} />
       <div className="relative h-24 flex items-center justify-center overflow-hidden"
         style={{ background: `linear-gradient(135deg, ${color}18 0%, ${color}06 100%)` }}>
-        <Satellite className="w-7 h-7 opacity-15" style={{ color }} />
+        <Leaf className="w-7 h-7 opacity-15" style={{ color }} />
         {isBaseline && (
           <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700">
             Baseline
@@ -140,7 +140,7 @@ function BackfillLoader({
           <div className="absolute inset-0 rounded-full border-4 border-t-green-600 border-r-green-300"
             style={{ animation: 'spin 1.2s linear infinite' }} />
           <div className="absolute inset-0 flex items-center justify-center">
-            <Satellite className="w-8 h-8 text-green-600" />
+            <Leaf className="w-8 h-8 text-green-600" />
           </div>
         </div>
 
@@ -174,7 +174,7 @@ function BackfillLoader({
           onClick={onMinimize}
           className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
         >
-          <BellRing className="w-4 h-4" />
+          <Bell className="w-4 h-4" />
           Continuar en segundo plano · Te avisamos al terminar
         </button>
       </div>
@@ -276,6 +276,10 @@ export default function TimeMachinePage() {
         setIsBackfilling(false)
         setShowOverlay(false)
         clearInterval(timerRef.current!)
+        return
+      }
+      if (data.partial) {
+        setTimeout(handleBackfill, 5000)
         return
       }
       // Backfill dispatched successfully — start polling
@@ -392,7 +396,7 @@ export default function TimeMachinePage() {
           /* ── Empty state ─────────────────────────────────────────────── */
           <div className="flex flex-col items-center gap-5 py-14 px-6 text-center bg-gradient-to-b from-gray-50 to-white rounded-3xl border border-dashed border-gray-200">
             <div className="w-18 h-18 w-[72px] h-[72px] rounded-full bg-green-50 flex items-center justify-center">
-              <Satellite className="w-9 h-9 text-green-500" />
+              <Leaf className="w-9 h-9 text-green-500" />
             </div>
             <div>
               <p className="text-base font-bold text-gray-800 mb-1">Sin historial para {selectedPaddockName}</p>
@@ -407,7 +411,7 @@ export default function TimeMachinePage() {
             </div>
             <button onClick={handleBackfill}
               className="flex items-center gap-2 px-7 py-3.5 bg-green-600 text-white text-sm font-bold rounded-2xl hover:bg-green-700 active:scale-95 transition-all shadow-md shadow-green-200">
-              <Satellite className="w-4 h-4" />
+              <Leaf className="w-4 h-4" />
               Generar Historial (Backfill)
             </button>
             <p className="text-[11px] text-gray-400">Solo disponible para plan Holístico y Latifundio</p>
@@ -455,7 +459,7 @@ export default function TimeMachinePage() {
                   <p className="text-[11px] text-gray-400 mt-0.5">{monthlyData.length} mediciones</p>
                 </div>
                 <span className="flex items-center gap-1.5 text-[11px] font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <Activity className="w-3.5 h-3.5" />
                   {monthlyData.length} meses
                 </span>
               </div>

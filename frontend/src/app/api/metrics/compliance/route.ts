@@ -42,18 +42,27 @@ export async function GET(req: NextRequest) {
       console.warn('[compliance] metric_snapshots table not found — returning empty data')
     }
 
-    // 3. Fetch Trends
-    let trends: any[] = []
+    // 3. Compute trends inline from metric_snapshots (last 2 data points per paddock+metric)
+    let trendRows: any[] = []
     try {
-      trends = await serviceQuery(`
-        SELECT DISTINCT ON (paddock_id, metric_type)
-          paddock_id, metric_type, pct_change
-        FROM metric_trends
-        WHERE org_id = $1 AND period = 'monthly'
-        ORDER BY paddock_id, metric_type, period_start DESC
+      trendRows = await serviceQuery(`
+        WITH ranked AS (
+          SELECT paddock_id, metric_type, value, capture_date,
+            ROW_NUMBER() OVER (PARTITION BY paddock_id, metric_type ORDER BY capture_date DESC) AS rn
+          FROM metric_snapshots
+          WHERE org_id = $1
+        ),
+        latest AS (SELECT paddock_id, metric_type, value FROM ranked WHERE rn = 1),
+        prev   AS (SELECT paddock_id, metric_type, value FROM ranked WHERE rn = 2)
+        SELECT l.paddock_id, l.metric_type,
+          CASE WHEN p.value IS NOT NULL AND p.value != 0
+            THEN ROUND(((l.value - p.value) / p.value * 100)::numeric, 2)
+            ELSE 0
+          END AS pct_change
+        FROM latest l LEFT JOIN prev p USING (paddock_id, metric_type)
       `, [orgId])
     } catch (e: any) {
-      if (!e.message?.includes('does not exist')) throw e
+      if (!e.message?.includes('does not exist')) console.warn('[compliance] trends calc error:', e.message)
     }
 
     // 4. Fetch Baselines (2020-11-01 to 2021-01-31)
@@ -99,7 +108,7 @@ export async function GET(req: NextRequest) {
     for (const s of snapshots) {
       if (paddockData.has(s.paddock_id)) paddockData.get(s.paddock_id).snapshots[s.metric_type] = s
     }
-    for (const t of trends) {
+    for (const t of trendRows) {
       if (paddockData.has(t.paddock_id)) paddockData.get(t.paddock_id).trends[t.metric_type] = t
     }
     for (const b of baselines) {
