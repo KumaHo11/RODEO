@@ -295,7 +295,7 @@ export default function TimeMachinePage() {
       {/* Full-screen loading overlay */}
       {isBackfilling && <BackfillLoader paddockName={selectedPaddockName} />}
 
-      <div className="p-4 md:p-6 space-y-5" style={{ fontFamily: 'var(--font-inter), Inter, sans-serif' }}>
+      <div className="space-y-6" style={{ fontFamily: 'var(--font-inter), Inter, sans-serif' }}>
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between gap-4">
           <div>

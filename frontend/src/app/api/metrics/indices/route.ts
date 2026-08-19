@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { checkFeatureAccess } from '@/lib/plan-limits'
-import { computeAllIndices, type MetricType, type BandValues } from '@/lib/metrics/indices'
+import { computeAllIndices, estimateSOC, computeCompactionProxy, type MetricType, type BandValues } from '@/lib/metrics/indices'
 
 const EARTH_SEARCH_URL = 'https://earth-search.aws.element84.com/v1/search'
 // URL de la instancia privada de TiTiler en Google Cloud Run (se configura en el .env)
@@ -137,6 +137,23 @@ export async function POST(req: NextRequest) {
 
     let indices = computeAllIndices(bands)
 
+    // Compute derived composite indices from Sentinel-2 bands
+    const ndviResult  = indices.find(i => i.metricType === 'NDVI')
+    const bsiResult   = indices.find(i => i.metricType === 'BSI')
+    const saviResult  = indices.find(i => i.metricType === 'SAVI')
+    const fcoverResult = indices.find(i => i.metricType === 'FCOVER')
+    const ndmiResult  = indices.find(i => i.metricType === 'NDMI')
+
+    if (ndviResult && bsiResult && saviResult && fcoverResult && ndmiResult) {
+      const socVal = estimateSOC({ ndvi: ndviResult.value, bsi: bsiResult.value, savi: saviResult.value, fcover: fcoverResult.value, ndmi: ndmiResult.value })
+      indices.push({ metricType: 'SOC_ESTIMATED', value: Number(socVal.toFixed(4)), unit: 'index', confidence: 'MEDIUM' })
+      const compVal = computeCompactionProxy({ bsi: bsiResult.value, ndvi: ndviResult.value, fcover: fcoverResult.value, ndmi: ndmiResult.value })
+      indices.push({ metricType: 'COMPACTION_PROXY', value: Number(compVal.toFixed(4)), unit: 'index', confidence: 'MEDIUM' })
+      // SOIL_MOISTURE proxy from NDMI (correlates with surface moisture)
+      const smProxy = Math.max(0, Math.min(1, (ndmiResult.value + 0.5) / 1.0))
+      indices.push({ metricType: 'SOIL_MOISTURE', value: Number(smProxy.toFixed(4)), unit: 'index', confidence: 'MEDIUM' })
+    }
+
     // Filter to requested_indices subset if specified
     if (Array.isArray(requested_indices) && requested_indices.length > 0) {
       const requested = new Set<string>(requested_indices)
@@ -218,22 +235,39 @@ async function fetchBandStats(
   }
 }
 
-// Deterministic fallback based on paddock_id seed — consistent per paddock, includes estimated indices
+// Deterministic fallback — returns ALL indices with consistent estimated values per paddock
 function computeDeterministicFallback(seed: string, reason: string = 'unknown') {
   let hash = 0
   for (let i = 0; i < seed.length; i++) {
     hash = ((hash << 5) - hash) + seed.charCodeAt(i)
     hash |= 0
   }
-  const normalized = (Math.abs(hash) % 1000) / 1000
-  const ndvi = Number((0.35 + normalized * 0.45).toFixed(4))
+  const n = (Math.abs(hash) % 1000) / 1000  // 0..1 normalized
+  const ndvi   = Number((0.35 + n * 0.45).toFixed(4))          // 0.35–0.80
+  const evi    = Number((0.20 + n * 0.35).toFixed(4))          // 0.20–0.55
+  const savi   = Number((0.30 + n * 0.40).toFixed(4))          // 0.30–0.70
+  const fcover = Number(Math.max(0, Math.min(1, (ndvi - 0.1) / 0.7)).toFixed(4))
+  const ndmi   = Number((-0.10 + n * 0.40).toFixed(4))         // -0.10 – 0.30
+  const bsi    = Number((0.05 + (1 - n) * 0.20).toFixed(4))    // 0.05–0.25
+  const specHet = Number((0.10 + n * 0.30).toFixed(4))
+  const soc    = Number(estimateSOC({ ndvi, bsi, savi, fcover, ndmi }).toFixed(4))
+  const soilM  = Number(Math.max(0, Math.min(1, (ndmi + 0.5))).toFixed(4))
+  const compac = Number(computeCompactionProxy({ bsi, ndvi, fcover, ndmi }).toFixed(4))
 
   console.warn(`[METRICS] Returning ESTIMATED data for seed=${seed} reason=${reason}`)
 
   return {
     indices: [
-      { metricType: 'NDVI', value: ndvi, unit: 'index', confidence: 'ESTIMATED' },
-      { metricType: 'FCOVER', value: Number(Math.max(0, Math.min(1, (ndvi - 0.1) / 0.7)).toFixed(4)), unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'NDVI',                 value: ndvi,    unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'EVI',                  value: evi,     unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'SAVI',                 value: savi,    unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'FCOVER',               value: fcover,  unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'NDMI',                 value: ndmi,    unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'BSI',                  value: bsi,     unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'SPECTRAL_HETEROGENEITY', value: specHet, unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'SOC_ESTIMATED',        value: soc,     unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'SOIL_MOISTURE',        value: soilM,   unit: 'index', confidence: 'ESTIMATED' },
+      { metricType: 'COMPACTION_PROXY',     value: compac,  unit: 'index', confidence: 'ESTIMATED' },
     ],
     captureDate: new Date().toISOString().split('T')[0],
     source: 'estimated',
