@@ -7,6 +7,7 @@ import { checkFeatureAccess } from '@/lib/plan-limits'
  * Dispara el backfill histórico para un potrero específico desde la UI.
  * Protegido por sesión de usuario (no requiere CRON_SECRET).
  * Solo disponible para HOLISTICO+ (metrics_module).
+ * Responde inmediatamente con 202 y corre el backfill en background.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -31,7 +32,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'paddock_id requerido' }, { status: 400 })
     }
 
-    // Llamar al cron de backfill internamente con el CRON_SECRET del servidor
     const cronSecret = process.env.CRON_SECRET
     if (!cronSecret) {
       return NextResponse.json(
@@ -47,38 +47,25 @@ export async function POST(req: NextRequest) {
 
     const backfillUrl = `${baseUrl}/api/cron/metrics-backfill?paddock_id=${paddock_id}&year_from=${year_from}`
 
-    const backfillRes = await fetch(backfillUrl, {
+    // 🔥 Fire-and-forget: dispatch without awaiting — prevents 408 timeout
+    // The cron will run in background and populate metric_snapshots
+    fetch(backfillUrl, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${cronSecret}`,
       },
-      // No esperamos a que termine — timeout de 25s (límite de Cloud Run de respuesta)
-      signal: AbortSignal.timeout(25_000),
+    }).catch((err) => {
+      console.error('[/api/metrics/backfill] Background cron error:', err?.message)
     })
 
-    if (!backfillRes.ok) {
-      const errText = await backfillRes.text()
-      return NextResponse.json(
-        { error: 'Error en el backfill', details: errText },
-        { status: 502 }
-      )
-    }
-
-    const result = await backfillRes.json()
+    // Respond immediately so the client doesn't timeout
     return NextResponse.json({
       ok: true,
-      message: `Backfill iniciado para potrero ${paddock_id}`,
-      ...result,
+      background: true,
+      message: `Backfill iniciado en segundo plano para potrero ${paddock_id}. Los datos aparecerán en 2-5 minutos.`,
     })
+
   } catch (err: any) {
-    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
-      // El backfill sigue corriendo en background — esto es OK
-      return NextResponse.json({
-        ok: true,
-        message: 'Backfill iniciado en background. Los datos estarán disponibles en unos minutos.',
-        background: true,
-      })
-    }
     console.error('[/api/metrics/backfill]', err)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }

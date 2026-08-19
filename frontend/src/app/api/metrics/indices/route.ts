@@ -9,22 +9,30 @@ const TITILER_URL = process.env.TITILER_URL || 'https://titiler.xyz'
 
 export async function POST(req: NextRequest) {
   try {
-    // Auth Check
+    // Auth Check — accept either Firebase token OR internal CRON_SECRET
     const authHeader = req.headers.get('authorization') || ''
     const token = authHeader.replace('Bearer ', '').trim()
     if (!token) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const decoded = await verifyFirebaseToken(token)
-    if (!decoded) return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
+    const CRON_SECRET = process.env.CRON_SECRET
+    const isCronCall = CRON_SECRET && token === CRON_SECRET
 
-    // Plan check — prefer metrics_module flag, fall back to ndvi_access for backward compat
-    const hasMetricsAccess = await checkFeatureAccess(decoded.uid, 'metrics_module')
-    const hasNdviAccess = hasMetricsAccess || await checkFeatureAccess(decoded.uid, 'ndvi_access')
-    if (!hasNdviAccess) {
-      return NextResponse.json({ error: 'Tu plan no incluye el módulo de métricas satelitales' }, { status: 403 })
+    let decoded: { uid: string } | null = null
+    if (!isCronCall) {
+      decoded = await verifyFirebaseToken(token)
+      if (!decoded) return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
+
+      // Plan check for user calls only (cron already has implicit access)
+      const hasMetricsAccess = await checkFeatureAccess(decoded.uid, 'metrics_module')
+      const hasNdviAccess = hasMetricsAccess || await checkFeatureAccess(decoded.uid, 'ndvi_access')
+      if (!hasNdviAccess) {
+        return NextResponse.json({ error: 'Tu plan no incluye el módulo de métricas satelitales' }, { status: 403 })
+      }
     }
+    // isCronCall = true → skip Firebase verification and plan check (internal service call)
 
-    const { geojson, paddock_id, requested_indices } = await req.json()
+
+    const { geojson, paddock_id, requested_indices, capture_date } = await req.json()
 
     if (!geojson) {
       return NextResponse.json({ error: 'GeoJSON polygon required' }, { status: 400 })
@@ -33,15 +41,27 @@ export async function POST(req: NextRequest) {
     // Normalize GeoJSON to a geometry object
     const geometry = geojson.type === 'Feature' ? geojson.geometry : geojson
 
-    console.log(`[METRICS] Starting for paddock=${paddock_id || 'unknown'} | TITILER_URL=${TITILER_URL}`)
+    console.log(`[METRICS] Starting for paddock=${paddock_id || 'unknown'} date=${capture_date || 'latest'} | TITILER_URL=${TITILER_URL}`)
 
-    // -- STEP 1: Find latest cloud-free Sentinel-2 scene --
+    // -- STEP 1: Find cloud-free Sentinel-2 scene (filter by month if capture_date provided) --
+    // Build temporal range: if capture_date = "2023-05-01", search within 2023-05 only
+    let datetime: string | undefined
+    if (capture_date) {
+      const d = new Date(capture_date)
+      const y = d.getUTCFullYear()
+      const m = d.getUTCMonth()
+      const monthStart = new Date(Date.UTC(y, m, 1)).toISOString()
+      const monthEnd   = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59)).toISOString()
+      datetime = `${monthStart}/${monthEnd}`
+    }
+
     const stacResponse = await fetch(EARTH_SEARCH_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         collections: ['sentinel-2-c1-l2a', 'sentinel-2-l2a'],
         intersects: geometry,
+        ...(datetime ? { datetime } : {}),
         query: {
           'eo:cloud_cover': { lt: 25 },
         },
