@@ -65,12 +65,14 @@ export async function GET(req: NextRequest) {
           trend_direction: string
           data_points: number
           period_start: string
+          scene_id: string | null
         }>(`
           WITH ordered AS (
             SELECT
               metric_type,
               value,
               capture_date,
+              scene_id,
               LAG(value) OVER (PARTITION BY metric_type ORDER BY capture_date) AS prev_value
             FROM metric_snapshots
             WHERE ${whereClause}
@@ -90,7 +92,8 @@ export async function GET(req: NextRequest) {
               ELSE 'stable'
             END AS trend_direction,
             1 AS data_points,
-            capture_date::text AS period_start
+            capture_date::text AS period_start,
+            scene_id
           FROM ordered
           ORDER BY capture_date ${orderDir}
           LIMIT $${idx}

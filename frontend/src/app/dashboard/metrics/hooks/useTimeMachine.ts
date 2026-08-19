@@ -5,6 +5,7 @@ export interface MonthlyPoint {
   month: string
   value: number
   period_month: string
+  scene_id: string | null
 }
 
 export function useTimeMachine(paddockId: string | null, metricType: string) {
@@ -45,6 +46,7 @@ export function useTimeMachine(paddockId: string | null, metricType: string) {
             month: date.toLocaleDateString('es-AR', { month: 'short', year: 'numeric' }),
             value: parseFloat(t.avg_value),
             period_month: t.period_start,
+            scene_id: t.scene_id || null,
           }
         })
 
@@ -75,3 +77,4 @@ export function useTimeMachine(paddockId: string | null, metricType: string) {
 
   return { monthlyData, baseline, loading, error }
 }
+
