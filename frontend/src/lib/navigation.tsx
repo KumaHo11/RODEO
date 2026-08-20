@@ -3,7 +3,7 @@
 import {
   LayoutDashboard, CalendarDays, Lightbulb, NotebookPen,
   Users, CheckSquare, Fence, Calendar, Cloud, BookOpen, Leaf, MessageCircle, CreditCard, Beef,
-  Calculator, FlaskConical
+  Calculator, FlaskConical, ShieldCheck
 } from 'lucide-react'
 import { IconoRodeos } from '@/components/icons/IconoRodeos'
 
@@ -52,10 +52,11 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'INTELIGENCIA',
     items: [
-      { name: 'Metrics',       href: '/dashboard/metrics',    icon: FlaskConical, permissionKey: 'metrics'      },
-      { name: 'Huella de Carbono', href: '/dashboard/metrics/carbon', icon: Leaf, permissionKey: 'metrics_module' },
-      { name: 'Insights',      href: '/dashboard/insights',   icon: Lightbulb,    permissionKey: 'insights'     },
-      { name: 'Calculadora',   href: '/dashboard/calculadora',icon: Calculator,   permissionKey: 'calculadora'  },
+      { name: 'Metrics',           href: '/dashboard/metrics',    icon: FlaskConical,  permissionKey: 'metrics'        },
+      { name: 'Huella de Carbono', href: '/dashboard/metrics/carbon', icon: Leaf,      permissionKey: 'metrics_module' },
+      { name: 'EUDR',              href: '/dashboard/eudr',       icon: ShieldCheck,   permissionKey: 'metrics'        },
+      { name: 'Insights',          href: '/dashboard/insights',   icon: Lightbulb,     permissionKey: 'insights'       },
+      { name: 'Calculadora',       href: '/dashboard/calculadora',icon: Calculator,    permissionKey: 'calculadora'    },
     ],
   },
   {
@@ -95,4 +96,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/metrics/reports': 'metrics',
   '/dashboard/metrics/marketplace': 'api_access',
   '/dashboard/metrics/api-docs': 'api_access',
+  '/dashboard/eudr':             'metrics',
+  '/dashboard/eudr/documentos':  'metrics',
+  '/dashboard/eudr/insumos':     'metrics',
+  '/dashboard/eudr/exportar':    'metrics',
 }

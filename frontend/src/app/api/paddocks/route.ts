@@ -18,9 +18,14 @@ export async function GET(req: NextRequest) {
          p.estimated_adh, p.dry_matter_kg_ha, p.current_ndvi,
          p.previous_dry_matter_kg_ha, p.previous_ndvi_date, p.technical_data,
          p.created_at, p.updated_at,
+         -- EUDR GIS metadata (populated by v26 trigger)
+         p.eudr_area_ha,
+         p.eudr_geom_type,
+         p.eudr_validated_at,
          ST_AsGeoJSON(p.geom)::json AS boundary,
          ST_AsGeoJSON(p.geom)::json AS geometry,
-         (SELECT MAX(recorded_at) FROM biological_monitoring bm WHERE bm.paddock_id = p.id) as last_monitoring_date
+         (SELECT MAX(recorded_at) FROM biological_monitoring bm WHERE bm.paddock_id = p.id) as last_monitoring_date,
+         (SELECT status FROM deforestation_checks dc WHERE dc.paddock_id = p.id ORDER BY checked_at DESC LIMIT 1) as deforestation_status
        FROM paddocks p
        WHERE p.org_id = $1
        ORDER BY p.name ASC`,

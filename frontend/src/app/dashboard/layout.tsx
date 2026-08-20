@@ -56,6 +56,10 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard/calculadora':  'Calculadora',
   '/dashboard/metrics':      'Métricas Satelitales',
   '/dashboard/metrics/carbon': 'Huella de Carbono',
+  '/dashboard/eudr':              'Cumplimiento EUDR',
+  '/dashboard/eudr/documentos':   'Bóveda Documental EUDR',
+  '/dashboard/eudr/insumos':      'Trazabilidad de Insumos',
+  '/dashboard/eudr/exportar':     'Exportar DDS / TRACES-NT',
 }
 
 // ── Layout ─────────────────────────────────────────────────────────────────────
