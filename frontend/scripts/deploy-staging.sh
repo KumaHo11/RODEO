@@ -72,8 +72,8 @@ def q(v): return json.dumps(str(v))
 lines = [
   f'NODE_ENV: production',
   f'NEXT_PUBLIC_APP_URL: {q("$STAGING_URL")}',
-  f'DATABASE_URL: {q(os.environ.get("DATABASE_URL",""))}',
-  f'DATABASE_URL_SERVICE: {q(os.environ.get("DATABASE_URL_SERVICE",""))}',
+  f'DATABASE_URL: {q("postgresql://rodeo_app:rodeo_app_staging_pass_123@/rodeo?host=/cloudsql/rodeo-app-fac50:southamerica-east1:rodeo-db-preprod")}',
+  f'DATABASE_URL_SERVICE: {q("postgresql://rodeo_service:rodeo_svc_staging_pass_123@/rodeo?host=/cloudsql/rodeo-app-fac50:southamerica-east1:rodeo-db-preprod")}',
   f'FIREBASE_ADMIN_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
   f'FIREBASE_ADMIN_IMPERSONATE_SA: {q(os.environ.get("FIREBASE_ADMIN_IMPERSONATE_SA",""))}',
   f'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: {q(os.environ.get("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",""))}',
