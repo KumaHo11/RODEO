@@ -128,13 +128,13 @@ export async function GET(req: NextRequest) {
     for (const [id, pd] of paddockData.entries()) {
       if (pd.hasGeom) paddocksWithGeom++
 
-      const ndviSnapshot = pd.snapshots['NDVI']?.value
-      const ndviTrend = pd.trends['NDVI']?.pct_change || 0
-      const ndviBaseline = pd.baselines['NDVI']
-      const fcoverSnapshot = pd.snapshots['FCOVER']?.value
-      const fcoverTrend = pd.trends['FCOVER']?.pct_change || 0
-      const specHetSnapshot = pd.snapshots['SPECTRAL_HETEROGENEITY']?.value
-      const bsiSnapshot = pd.snapshots['BSI']?.value
+      const ndviSnapshot   = pd.snapshots['NDVI']        ? parseFloat(pd.snapshots['NDVI'].value)        : undefined
+      const ndviTrend      = parseFloat(pd.trends['NDVI']?.pct_change   ?? 0)
+      const ndviBaseline   = pd.baselines['NDVI']         ? parseFloat(pd.baselines['NDVI'])              : undefined
+      const fcoverSnapshot = pd.snapshots['FCOVER']       ? parseFloat(pd.snapshots['FCOVER'].value)       : undefined
+      const fcoverTrend    = parseFloat(pd.trends['FCOVER']?.pct_change ?? 0)
+      const specHetSnapshot= pd.snapshots['SPECTRAL_HETEROGENEITY'] ? parseFloat(pd.snapshots['SPECTRAL_HETEROGENEITY'].value) : undefined
+      const bsiSnapshot    = pd.snapshots['BSI']          ? parseFloat(pd.snapshots['BSI'].value)          : undefined
       const isDeforested = pd.deforestationStatus === 'DEFORESTED'
       const statusLabel = isDeforested ? '🚨 Alerta' : pd.deforestationStatus === 'CLEAN' ? '✅ Limpio' : '❓ Desconocido'
       
@@ -163,10 +163,10 @@ export async function GET(req: NextRequest) {
       paddocksDetail.push({
         id: pd.id,
         name: pd.name,
-        ndvi: ndviSnapshot ? ndviSnapshot.toFixed(2) : '—',
+        ndvi: ndviSnapshot !== undefined ? ndviSnapshot.toFixed(2) : '—',
         ndviTrend: ndviTrend,
         deforest: statusLabel,
-        fCover: fcoverSnapshot ? fcoverSnapshot.toFixed(2) : '—',
+        fCover: fcoverSnapshot !== undefined ? fcoverSnapshot.toFixed(2) : '—',
         eudr: eudrScore,
         eov: eovScore
       })
