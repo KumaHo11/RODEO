@@ -154,9 +154,9 @@ export async function GET(req: NextRequest) {
       )
 
       const eovScore = (
-        ((ndviBaseline && ndviSnapshot > ndviBaseline * 1.05) ? 25 : 0) +
-        ((specHetSnapshot || 0) > 0.1 ? 25 : 0) +
-        ((bsiSnapshot || 0) < -0.05 ? 25 : 0) +
+        ((ndviBaseline !== undefined && ndviSnapshot !== undefined && ndviSnapshot > ndviBaseline * 1.05) ? 25 : 0) +
+        ((specHetSnapshot ?? 0) > 0.1 ? 25 : 0) +
+        ((bsiSnapshot ?? 0) < -0.05 ? 25 : 0) +
         (fcoverTrend > 0 ? 25 : 0)
       )
 
@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
       if (isDeforested) {
         recommendations.push({ paddockId: pd.id, paddockName: pd.name, level: 'URGENTE', message: `Alerta de deforestación detectada en ${pd.name}. Revisar imágenes satelitales inmediatamente.` })
       }
-      if (ndviBaseline && ndviSnapshot < ndviBaseline) {
+      if (ndviBaseline !== undefined && ndviSnapshot !== undefined && ndviSnapshot < ndviBaseline) {
         recommendations.push({ paddockId: pd.id, paddockName: pd.name, level: 'ADVERTENCIA', message: `Caída de NDVI en ${pd.name} respecto a la línea base de 2020.` })
       }
       if (fcoverSnapshot !== undefined && fcoverSnapshot < 0.2) {
