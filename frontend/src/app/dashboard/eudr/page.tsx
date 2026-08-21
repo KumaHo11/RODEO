@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import Link from 'next/link'
@@ -327,17 +327,18 @@ export default function EUDRDashboardPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
 
-          {/* Botón: Analizar todos los pendientes */}
+          {/* Botón: Verificar deforestación en potreros sin análisis */}
           {pendingCount > 0 && (
             <button
               onClick={handleRunAllChecks}
               disabled={checkingAll}
+              title="Consulta GFW + NDVI/BSI satelital para detectar deforestación post-31/12/2020 en cada potrero pendiente"
               className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors disabled:opacity-60"
             >
               <ScanLine className={clsx('w-3.5 h-3.5', checkingAll && 'animate-pulse')} />
               {checkingAll && checkProgress
-                ? `Analizando... ${checkProgress.done}/${checkProgress.total}`
-                : `Analizar ${pendingCount} pendiente${pendingCount !== 1 ? 's' : ''}`
+                ? `Verificando... ${checkProgress.done}/${checkProgress.total}`
+                : `Verificar deforestación (${pendingCount} sin analizar)`
               }
             </button>
           )}
@@ -475,9 +476,8 @@ export default function EUDRDashboardPage() {
               </thead>
               <tbody>
                 {(validation?.paddocks ?? []).map(p => (
-                  <>
+                  <Fragment key={p.paddock_id}>
                     <tr
-                      key={p.paddock_id}
                       className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors"
                     >
                       <td className="px-4 py-2.5 font-bold text-gray-800">{p.paddock_name}</td>
@@ -515,12 +515,13 @@ export default function EUDRDashboardPage() {
                             <AlertTriangle className="w-3.5 h-3.5" /> En riesgo
                           </span>
                         ) : (
-                          // PENDING o sin check: mostrar botón de análisis
+                          // Sin análisis todavía — botón para correr verificación satelital
                           <button
                             onClick={() => handleCheckPaddock(p.paddock_id)}
+                            title="Consultar GFW + NDVI/BSI para detectar deforestación post-2020"
                             className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-[10px] font-bold transition-colors"
                           >
-                            <ScanLine className="w-3.5 h-3.5" /> Analizar
+                            <ScanLine className="w-3.5 h-3.5" /> Verificar ahora
                           </button>
                         )}
                       </td>
@@ -559,7 +560,7 @@ export default function EUDRDashboardPage() {
 
                     {/* Panel de evidencia satelital (expandible) */}
                     {expandedPaddock === p.paddock_id && paddockGeoms[p.paddock_id] && (
-                      <tr key={`${p.paddock_id}-sat`}>
+                      <tr>
                         <td colSpan={6} className="px-4 pb-4">
                           <SatelliteEvidencePanel
                             paddock={p}
@@ -568,7 +569,7 @@ export default function EUDRDashboardPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
 
                 {(validation?.paddocks ?? []).length === 0 && (
