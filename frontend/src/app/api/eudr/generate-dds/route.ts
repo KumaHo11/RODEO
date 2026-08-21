@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Resolve paddocks used by the specified herds (or all herds if none specified)
     let paddockQuery = `
-      SELECT DISTINCT
+      SELECT DISTINCT ON (p.id)
         p.id, p.name, p.area_ha, p.eudr_area_ha, p.eudr_geom_type,
         ST_AsGeoJSON(
           CASE WHEN p.eudr_geom_type = 'POINT' THEN ST_Centroid(p.geom) ELSE p.geom END

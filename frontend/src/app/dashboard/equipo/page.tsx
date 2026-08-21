@@ -412,8 +412,8 @@ export default function EquipoPage() {
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-950">Equipo</h1>
-          <p className="text-sm text-gray-500 font-medium mt-1">Gestión de miembros y permisos</p>
+          <h1 className="text-2xl font-black text-gray-950">Equipo</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Gestión de miembros y permisos</p>
         </div>
         {isOwner && (
           <Button className="tour-nuevo-miembro shrink-0" onClick={() => setModalOpen(true)} leftIcon={<Plus className="w-4 h-4" />}>

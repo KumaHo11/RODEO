@@ -5,7 +5,7 @@
  * Muestra: valor actual, tendencia vs período anterior, sparkline, badge de normativa.
  */
 
-import { TrendingUp, TrendingDown, Minus, Satellite, CloudOff } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Satellite, CloudOff, Leaf, Droplets, Sun, CloudRain, Layers, ShieldCheck, Zap, BarChart2, Calendar, RefreshCw, Beef, Circle } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,29 +47,29 @@ export interface MetricCardProps {
 
 const METRIC_META: Record<MetricType, {
   label:     string
-  emoji:     string
+  icon:      React.ElementType
   decimals:  number
   // Higher = good (NDVI, NDMI, fCover) | lower = good (BSI, drought) | neutral
   polarity:  'higher_better' | 'lower_better' | 'neutral'
   normative: string[]
   description: string
 }> = {
-  NDVI:                  { label: 'NDVI', emoji: '🌱', decimals: 3, polarity: 'higher_better', normative: ['EUDR','GRSB','Verra'], description: 'Vigor fotosintético' },
-  EVI:                   { label: 'EVI',  emoji: '🌿', decimals: 3, polarity: 'higher_better', normative: ['GRSB','EOV'],         description: 'Vigor corregido suelo/atmósfera' },
-  SAVI:                  { label: 'SAVI', emoji: '🌾', decimals: 3, polarity: 'higher_better', normative: ['EOV Savory'],         description: 'Biomasa en zonas escasas' },
-  FCOVER:                { label: 'fCover',emoji: '🟢', decimals: 3, polarity: 'higher_better', normative: ['EOV Savory'],        description: '% cobertura vegetal' },
-  NDMI:                  { label: 'NDMI', emoji: '💧', decimals: 3, polarity: 'higher_better', normative: ['ISO 14046','EOV'],    description: 'Estrés hídrico vegetación' },
-  SOIL_MOISTURE:         { label: 'Humedad SAR', emoji: '🌊', decimals: 3, polarity: 'higher_better',   normative: ['EU SR'],       description: 'Humedad suelo (SAR)' },
-  DROUGHT_INDEX:         { label: 'Índice Sequía', emoji: '☀️', decimals: 2, polarity: 'lower_better',  normative: ['GRSB'],        description: 'Nivel de estrés hídrico' },
-  PRECIPITATION:         { label: 'Precipitación', emoji: '🌧️', decimals: 0, polarity: 'neutral',       normative: ['EOV Savory'],  description: 'Lluvia acumulada (mm)' },
-  BSI:                   { label: 'BSI', emoji: '🌍', decimals: 3, polarity: 'lower_better',  normative: ['EUDR'],                description: 'Suelo desnudo (degradación)' },
-  DEFORESTATION_GUARD:   { label: 'Guard. Defor.', emoji: '🛡️', decimals: 2, polarity: 'lower_better', normative: ['EUDR'],        description: 'Cambio cobertura post-2020' },
-  COMPACTION_PROXY:      { label: 'Compactación', emoji: '⚡', decimals: 2, polarity: 'lower_better',  normative: ['GRSB'],         description: 'Riesgo de Compactación' },
-  SPECTRAL_HETEROGENEITY:{ label: 'Biodiversidad', emoji: '🦎', decimals: 3, polarity: 'higher_better', normative: ['EOV Savory'],  description: 'Proxy diversidad vegetal' },
-  PHENOLOGY:             { label: 'Fenología', emoji: '📅', decimals: 2, polarity: 'higher_better', normative: ['EOV Savory'],     description: 'Duración temporada crecimiento' },
-  OCCUPATION_REST_RATIO: { label: 'Ocup./Desc.', emoji: '🔄', decimals: 1, polarity: 'neutral',       normative: ['EOV','GRSB'],   description: 'Ratio ocupación/descanso' },
-  BIOMASS:               { label: 'Biomasa', emoji: '🐄', decimals: 0, polarity: 'higher_better', normative: ['EOV Savory'],       description: 'Materia seca estimada (kg/ha)' },
-  SOC_ESTIMATED:         { label: 'Carbono Suelo', emoji: '🌑', decimals: 2, polarity: 'higher_better', normative: ['EOV'],         description: 'Carbono Orgánico Estimado' },
+  NDVI:                  { label: 'NDVI',         icon: Leaf,        decimals: 3, polarity: 'higher_better', normative: ['EUDR','GRSB','Verra'], description: 'Vigor fotosintético' },
+  EVI:                   { label: 'EVI',           icon: Leaf,        decimals: 3, polarity: 'higher_better', normative: ['GRSB','EOV'],         description: 'Vigor corregido suelo/atmósfera' },
+  SAVI:                  { label: 'SAVI',          icon: Leaf,        decimals: 3, polarity: 'higher_better', normative: ['EOV Savory'],         description: 'Biomasa en zonas escasas' },
+  FCOVER:                { label: 'fCover',        icon: Circle,      decimals: 3, polarity: 'higher_better', normative: ['EOV Savory'],         description: '% cobertura vegetal' },
+  NDMI:                  { label: 'NDMI',          icon: Droplets,    decimals: 3, polarity: 'higher_better', normative: ['ISO 14046','EOV'],    description: 'Estrés hídrico vegetación' },
+  SOIL_MOISTURE:         { label: 'Humedad SAR',   icon: Droplets,    decimals: 3, polarity: 'higher_better', normative: ['EU SR'],              description: 'Humedad suelo (SAR)' },
+  DROUGHT_INDEX:         { label: 'Índice Sequía', icon: Sun,         decimals: 2, polarity: 'lower_better',  normative: ['GRSB'],              description: 'Nivel de estrés hídrico' },
+  PRECIPITATION:         { label: 'Precipitación', icon: CloudRain,   decimals: 0, polarity: 'neutral',       normative: ['EOV Savory'],        description: 'Lluvia acumulada (mm)' },
+  BSI:                   { label: 'BSI',           icon: Layers,      decimals: 3, polarity: 'lower_better',  normative: ['EUDR'],              description: 'Suelo desnudo (degradación)' },
+  DEFORESTATION_GUARD:   { label: 'Guard. Defor.', icon: ShieldCheck, decimals: 2, polarity: 'lower_better',  normative: ['EUDR'],              description: 'Cambio cobertura post-2020' },
+  COMPACTION_PROXY:      { label: 'Compactación',  icon: Zap,         decimals: 2, polarity: 'lower_better',  normative: ['GRSB'],              description: 'Riesgo de Compactación' },
+  SPECTRAL_HETEROGENEITY:{ label: 'Biodiversidad', icon: BarChart2,   decimals: 3, polarity: 'higher_better', normative: ['EOV Savory'],        description: 'Proxy diversidad vegetal' },
+  PHENOLOGY:             { label: 'Fenología',     icon: Calendar,    decimals: 2, polarity: 'higher_better', normative: ['EOV Savory'],        description: 'Duración temporada crecimiento' },
+  OCCUPATION_REST_RATIO: { label: 'Ocup./Desc.',   icon: RefreshCw,   decimals: 1, polarity: 'neutral',       normative: ['EOV','GRSB'],        description: 'Ratio ocupación/descanso' },
+  BIOMASS:               { label: 'Biomasa',       icon: Beef,        decimals: 0, polarity: 'higher_better', normative: ['EOV Savory'],        description: 'Materia seca estimada (kg/ha)' },
+  SOC_ESTIMATED:         { label: 'Carbono Suelo', icon: Layers,      decimals: 2, polarity: 'higher_better', normative: ['EOV'],               description: 'Carbono Orgánico Estimado' },
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -113,6 +113,8 @@ export function MetricCard({ metricType, snapshot, trend, baselineValue, classNa
     : direction === 'improving'            ? TrendingUp
     :                                        TrendingDown
 
+  const MetricIcon = meta.icon
+
   return (
     <button
       onClick={onClick}
@@ -126,7 +128,7 @@ export function MetricCard({ metricType, snapshot, trend, baselineValue, classNa
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-1.5">
-          <span className="text-xl leading-none">{meta.emoji}</span>
+          <MetricIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
           <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{meta.label}</span>
         </div>
         {/* Source badge */}

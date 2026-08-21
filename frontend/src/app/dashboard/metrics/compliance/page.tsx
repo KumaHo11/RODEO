@@ -3,7 +3,7 @@
 import { useCompliance } from '../hooks/useCompliance'
 import { usePlan } from '@/hooks/usePlan'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle, Info, RefreshCw, ClipboardCheck } from 'lucide-react'
+import { AlertTriangle, CheckCircle, CheckCircle2, XCircle, Info, RefreshCw, ClipboardCheck } from 'lucide-react'
 import { DownloadReportButton } from '../components/DownloadReportButton'
 
 function getStatusColor(score: number) {
@@ -79,7 +79,7 @@ export default function ComplianceDashboardPage() {
           {/* EUDR */}
           <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm flex flex-col gap-3">
             <div className="flex justify-between items-center">
-              <span className="font-black text-lg">🇪🇺 EUDR</span>
+              <span className="font-black text-base text-gray-900">EUDR</span>
               <span className="text-2xl font-black tabular-nums">{eudr.total}%</span>
             </div>
             
@@ -96,16 +96,16 @@ export default function ComplianceDashboardPage() {
 
             <p className="text-xs text-gray-500">Evalúa deforestación post-2020 y estabilidad de vegetación.</p>
             <div className="mt-auto pt-4 flex flex-col gap-1 text-xs">
-              <div className="flex justify-between"><span>Sin deforestación</span> <span>{eudr.breakdown.no_deforestation.met ? '✅' : '❌'}</span></div>
-              <div className="flex justify-between"><span>NDVI estable</span> <span>{eudr.breakdown.ndvi_stable.met ? '✅' : '❌'}</span></div>
-              <div className="flex justify-between"><span>Trazabilidad</span> <span>{eudr.breakdown.traceability.met ? '✅' : '❌'}</span></div>
+              <div className="flex justify-between items-center"><span>Sin deforestación</span> {eudr.breakdown.no_deforestation.met ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}</div>
+              <div className="flex justify-between items-center"><span>NDVI estable</span> {eudr.breakdown.ndvi_stable.met ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}</div>
+              <div className="flex justify-between items-center"><span>Trazabilidad</span> {eudr.breakdown.traceability.met ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}</div>
             </div>
           </div>
 
           {/* EOV */}
           <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm flex flex-col gap-3">
             <div className="flex justify-between items-center">
-              <span className="font-black text-lg">🌱 EOV Savory</span>
+              <span className="font-black text-base text-gray-900">EOV Savory</span>
               <span className="text-2xl font-black tabular-nums">{eov.total}%</span>
             </div>
             
@@ -122,16 +122,16 @@ export default function ComplianceDashboardPage() {
 
             <p className="text-xs text-gray-500">Evalúa regeneración ecológica y salud del suelo.</p>
             <div className="mt-auto pt-4 flex flex-col gap-1 text-xs">
-              <div className="flex justify-between"><span>NDVI mejorando</span> <span>{eov.breakdown.ndvi_improving.met ? '✅' : '❌'}</span></div>
-              <div className="flex justify-between"><span>Heterogeneidad espectral</span> <span>{eov.breakdown.spectral_heterogeneity.met ? '✅' : '❌'}</span></div>
-              <div className="flex justify-between"><span>BSI bajo</span> <span>{eov.breakdown.bsi_low.met ? '✅' : '❌'}</span></div>
+              <div className="flex justify-between items-center"><span>NDVI mejorando</span> {eov.breakdown.ndvi_improving.met ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}</div>
+              <div className="flex justify-between items-center"><span>Heterogeneidad espectral</span> {eov.breakdown.spectral_heterogeneity.met ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}</div>
+              <div className="flex justify-between items-center"><span>BSI bajo</span> {eov.breakdown.bsi_low.met ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}</div>
             </div>
           </div>
 
           {/* GRSB */}
           <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm flex flex-col gap-3">
             <div className="flex justify-between items-center">
-              <span className="font-black text-lg">🐄 GRSB</span>
+              <span className="font-black text-base text-gray-900">GRSB</span>
               <span className="text-2xl font-black tabular-nums">{grsb.total}%</span>
             </div>
             
@@ -148,9 +148,9 @@ export default function ComplianceDashboardPage() {
 
             <p className="text-xs text-gray-500">Global Roundtable for Sustainable Beef (Principios 2024).</p>
             <div className="mt-auto pt-4 flex flex-col gap-1 text-xs">
-              <div className="flex justify-between"><span>NDVI estable</span> <span>{grsb.breakdown.ndvi_stable.met ? '✅' : '❌'}</span></div>
-              <div className="flex justify-between"><span>Sin deforestación</span> <span>{grsb.breakdown.no_deforestation.met ? '✅' : '❌'}</span></div>
-              <div className="flex justify-between"><span>Datos satelitales</span> <span>{grsb.breakdown.data_coverage.met ? '✅' : '❌'}</span></div>
+              <div className="flex justify-between items-center"><span>NDVI estable</span> {grsb.breakdown.ndvi_stable.met ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}</div>
+              <div className="flex justify-between items-center"><span>Sin deforestación</span> {grsb.breakdown.no_deforestation.met ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}</div>
+              <div className="flex justify-between items-center"><span>Datos satelitales</span> {grsb.breakdown.data_coverage.met ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}</div>
             </div>
           </div>
         </div>

@@ -115,24 +115,21 @@ export default function InsumosPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="p-6 space-y-6">
+      {/* Encabezado */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
-            <Package className="w-5 h-5 text-violet-500" />
-            Trazabilidad de Insumos
-          </h1>
+          <h1 className="text-2xl font-black text-gray-950">Trazabilidad de insumos</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Registrá lotes de soja, maíz y suplementos. EUDR exige verificar que la dieta del rodeo sea libre de deforestación.
           </p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-violet-600 text-white rounded-xl hover:bg-violet-700 transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors shadow-sm shadow-green-200"
         >
-          <Plus className="w-3.5 h-3.5" />
-          Nuevo Lote
+          <Plus className="w-4 h-4" />
+          Nuevo lote
         </button>
       </div>
 
@@ -162,7 +159,7 @@ export default function InsumosPage() {
       {showForm && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-black text-gray-900">Nuevo Lote de Insumo</h2>
+            <h2 className="text-sm font-black text-gray-900">Nuevo lote de insumo</h2>
             <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -205,8 +202,9 @@ export default function InsumosPage() {
                   onChange={e => setForm(p => ({ ...p, eudr_compliant: e.target.checked }))}
                   className="w-4 h-4 rounded text-green-600 accent-green-600" />
                 <div>
-                  <p className="text-sm font-black text-gray-800">
-                    ✅ El proveedor certifica que este insumo es libre de deforestación
+                  <p className="text-sm font-black text-gray-800 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                    El proveedor certifica que este insumo es libre de deforestación
                   </p>
                   <p className="text-[10px] text-gray-500 mt-0.5">
                     Requerido si el commodity proviene de regiones con riesgo de deforestación (Cerrado, Chaco, etc.)

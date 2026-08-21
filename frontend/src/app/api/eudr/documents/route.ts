@@ -88,6 +88,9 @@ export async function POST(req: NextRequest) {
     // (Real SHA-256 should be computed client-side from the file bytes before upload)
     const file_hash = crypto.createHash('sha256').update(file_url + (file_name ?? '')).digest('hex')
 
+    // Normalize optional date/text fields: empty strings must be null for PostgreSQL DATE columns
+    const nullIfEmpty = (v: any) => (v === '' || v === undefined || v === null) ? null : v
+
     const result = await serviceMutate(`
       INSERT INTO eudr_documents
         (org_id, doc_type, file_url, file_name, file_hash, file_size_bytes,
@@ -96,10 +99,10 @@ export async function POST(req: NextRequest) {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,false,NOW(),NOW())
       RETURNING id
     `, [
-      auth.orgId, doc_type, file_url, file_name ?? null, file_hash,
-      file_size_bytes ?? null, paddock_id ?? null,
-      issued_date ?? null, expiry_date ?? null,
-      issuer ?? null, reference_number ?? null, notes ?? null,
+      auth.orgId, doc_type, file_url, nullIfEmpty(file_name), file_hash,
+      nullIfEmpty(file_size_bytes), nullIfEmpty(paddock_id),
+      nullIfEmpty(issued_date), nullIfEmpty(expiry_date),
+      nullIfEmpty(issuer), nullIfEmpty(reference_number), nullIfEmpty(notes),
     ])
 
     return NextResponse.json({ id: result.rows[0]?.id }, { status: 201 })

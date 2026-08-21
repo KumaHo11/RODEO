@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import { FileText, Plus, Check, AlertTriangle, Upload, X, Shield, ExternalLink, Clock } from 'lucide-react'
+import { FileText, Plus, Check, AlertTriangle, Upload, X, Shield, ExternalLink, Clock, MapPin } from 'lucide-react'
 import clsx from 'clsx'
 
 const DOC_TYPES: Record<string, string> = {
@@ -143,24 +143,21 @@ export default function DocumentosPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="p-6 space-y-6">
+      {/* Encabezado */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-blue-500" />
-            Bóveda Documental EUDR
-          </h1>
+          <h1 className="text-2xl font-black text-gray-950">Bóveda documental EUDR</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Títulos, permisos, certificados y guías de traslado requeridos por el Reglamento UE 2023/1115.
           </p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors shadow-sm shadow-green-200"
         >
-          <Plus className="w-3.5 h-3.5" />
-          Agregar Documento
+          <Plus className="w-4 h-4" />
+          Agregar documento
         </button>
       </div>
 
@@ -168,7 +165,7 @@ export default function DocumentosPage() {
       {showForm && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-black text-gray-900">Nuevo Documento</h2>
+            <h2 className="text-sm font-black text-gray-900">Nuevo documento</h2>
             <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
               <X className="w-4 h-4" />
             </button>
@@ -265,7 +262,9 @@ export default function DocumentosPage() {
                     {DOC_TYPES[doc.doc_type] ?? doc.doc_type}
                   </span>
                   {doc.paddock_name && (
-                    <p className="text-[10px] text-gray-400 mt-1">📍 {doc.paddock_name}</p>
+                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                      <MapPin className="w-2.5 h-2.5" />{doc.paddock_name}
+                    </p>
                   )}
                 </div>
                 {doc.verified ? (
@@ -314,7 +313,7 @@ export default function DocumentosPage() {
                       : 'text-green-600 hover:bg-green-50'
                   )}
                 >
-                  {doc.verified ? 'Desmarcar' : '✓ Verificar'}
+                  {doc.verified ? 'Desmarcar' : 'Verificar'}
                 </button>
               </div>
             </div>

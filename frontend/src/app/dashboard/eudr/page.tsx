@@ -148,28 +148,22 @@ export default function EUDRDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="p-6 space-y-6">
+      {/* Encabezado */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <ShieldCheck className="w-6 h-6 text-green-600" />
-            <h1 className="text-2xl font-black text-gray-900">Cumplimiento EUDR</h1>
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700 tracking-wider">
-              UE 2023/1115
-            </span>
-          </div>
-          <p className="text-sm text-gray-500">
-            Reglamento de la UE sobre Deforestación. Gestión de Due Diligence Statements (DDS).
+          <h1 className="text-2xl font-black text-gray-950">Cumplimiento EUDR</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Reglamento UE 2023/1115 · Declaraciones de diligencia debida (DDS)
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={load}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            <RefreshCw className={clsx('w-3.5 h-3.5', refreshing && 'animate-spin')} />
+            <RefreshCw className={clsx('w-4 h-4', refreshing && 'animate-spin')} />
             Actualizar
           </button>
           <button
@@ -177,13 +171,13 @@ export default function EUDRDashboardPage() {
             disabled={generatingDDS || !s?.ready_for_dds}
             title={!s?.ready_for_dds ? 'Todos los potreros deben estar LIMPIOS para generar la DDS' : undefined}
             className={clsx(
-              'flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl transition-all',
+              'flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all shadow-sm',
               s?.ready_for_dds
-                ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm shadow-green-200'
+                ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-200'
                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             )}
           >
-            <FileText className="w-3.5 h-3.5" />
+            <FileText className="w-4 h-4" />
             {generatingDDS ? 'Generando...' : 'Generar DDS + PDF'}
           </button>
         </div>
@@ -197,50 +191,53 @@ export default function EUDRDashboardPage() {
       )}
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {/* EUDR Score */}
-        <div className={clsx('col-span-2 sm:col-span-1 p-4 rounded-2xl border', scoreBg)}>
-          <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-1">Score EUDR</p>
-          <p className={clsx('text-4xl font-black', scoreColor)}>{eudrScore}<span className="text-lg">%</span></p>
-          <p className="text-xs text-gray-500 mt-1">
+        <div className={clsx('col-span-2 sm:col-span-1 p-6 rounded-2xl border shadow-sm', scoreBg)}>
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Score EUDR</h3>
+          <div className={clsx('text-3xl font-black tabular-nums', scoreColor)}>
+            {eudrScore}<span className="text-lg font-normal text-gray-500">%</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
             {eudrScore >= 80 ? 'Listo para DDS' : eudrScore >= 50 ? 'Requiere mejoras' : 'No apto aún'}
           </p>
         </div>
 
         {/* Potreros */}
-        <div className="p-4 rounded-2xl border border-gray-200 bg-white">
-          <div className="flex items-center justify-between mb-2">
-            <MapPin className="w-4 h-4 text-green-500" />
-            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Potreros</span>
+        <div className="p-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Potreros</h3>
+          <div className="text-3xl font-black text-gray-950 tabular-nums">
+            {s?.clean ?? 0}<span className="text-lg font-normal text-gray-500">/{s?.total_paddocks ?? 0}</span>
           </div>
-          <p className="text-2xl font-black text-gray-900">{s?.clean ?? 0}<span className="text-sm text-gray-400">/{s?.total_paddocks ?? 0}</span></p>
-          <p className="text-[11px] text-gray-500 mt-0.5">Limpios de deforestación</p>
+          <p className="text-xs text-gray-500 mt-2">Limpios de deforestación</p>
           {(s?.deforested ?? 0) > 0 && (
-            <p className="text-[10px] font-black text-red-600 mt-1">⚠ {s?.deforested} con alerta</p>
+            <p className="text-[10px] font-black text-red-600 mt-1 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" /> {s?.deforested} con alerta
+            </p>
           )}
         </div>
 
         {/* Documentos */}
-        <div className="p-4 rounded-2xl border border-gray-200 bg-white">
-          <div className="flex items-center justify-between mb-2">
-            <FileText className="w-4 h-4 text-blue-500" />
-            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Documentos</span>
+        <div className="p-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Documentos</h3>
+          <div className="text-3xl font-black text-gray-950 tabular-nums">
+            {docsStats?.total ?? 0}
           </div>
-          <p className="text-2xl font-black text-gray-900">{docsStats?.total ?? 0}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">{docsStats?.verified ?? 0} verificados</p>
+          <p className="text-xs text-gray-500 mt-2">{docsStats?.verified ?? 0} verificados</p>
           {(docsStats?.expiring_soon ?? 0) > 0 && (
-            <p className="text-[10px] font-black text-amber-600 mt-1">⚠ {docsStats?.expiring_soon} por vencer</p>
+            <p className="text-[10px] font-black text-amber-600 mt-1 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" /> {docsStats?.expiring_soon} por vencer
+            </p>
           )}
         </div>
 
         {/* Insumos */}
-        <div className="p-4 rounded-2xl border border-gray-200 bg-white">
-          <div className="flex items-center justify-between mb-2">
-            <Package className="w-4 h-4 text-violet-500" />
-            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Insumos</span>
+        <div className="p-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Insumos</h3>
+          <div className="text-3xl font-black text-gray-950 tabular-nums">
+            {feedStats?.compliance_rate ?? 0}<span className="text-lg font-normal text-gray-500">%</span>
           </div>
-          <p className="text-2xl font-black text-gray-900">{feedStats?.compliance_rate ?? 0}<span className="text-sm text-gray-400">%</span></p>
-          <p className="text-[11px] text-gray-500 mt-0.5">{feedStats?.compliant ?? 0}/{feedStats?.total ?? 0} certificados EUDR</p>
+          <p className="text-xs text-gray-500 mt-2">{feedStats?.compliant ?? 0}/{feedStats?.total ?? 0} certificados</p>
         </div>
       </div>
 
@@ -252,13 +249,16 @@ export default function EUDRDashboardPage() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-gray-400" />
-              <h2 className="text-sm font-black text-gray-900">Validación de Potreros</h2>
+              <h2 className="text-sm font-black text-gray-900">Validación de potreros</h2>
             </div>
             <span className={clsx(
-              'text-[10px] font-black px-2.5 py-1 rounded-full',
+              'text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1',
               s?.ready_for_dds ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
             )}>
-              {s?.ready_for_dds ? '✅ Listo para DDS' : '⚠ Pendiente'}
+              {s?.ready_for_dds
+                ? <><CheckCircle2 className="w-3 h-3" /> Listo para DDS</>
+                : <><AlertTriangle className="w-3 h-3" /> Pendiente</>
+              }
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -287,8 +287,8 @@ export default function EUDRDashboardPage() {
                         p.eudr_geom_type === 'MISSING' ? 'bg-red-100 text-red-600' :
                         'bg-amber-100 text-amber-700'
                       )}>
-                        {p.eudr_geom_type === 'MISSING' ? '⚠ Sin geometría' :
-                         p.eudr_geom_type === 'INVALID' ? '❌ Inválida' :
+                        {p.eudr_geom_type === 'MISSING' ? <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Sin geometría</span> :
+                         p.eudr_geom_type === 'INVALID' ? <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Inválida</span> :
                          p.eudr_geom_type}
                       </span>
                     </td>
@@ -339,7 +339,7 @@ export default function EUDRDashboardPage() {
 
           {/* Quick actions */}
           <div className="bg-white rounded-2xl border border-gray-200 p-5">
-            <h2 className="text-sm font-black text-gray-900 mb-3">Acciones Rápidas</h2>
+            <h2 className="text-sm font-black text-gray-900 mb-3">Acciones rápidas</h2>
             <div className="space-y-2">
               <Link
                 href="/dashboard/eudr/documentos"
@@ -445,7 +445,7 @@ export default function EUDRDashboardPage() {
 
       {/* Compliance checklist */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <h2 className="text-sm font-black text-gray-900 mb-4">Checklist de Cumplimiento EUDR</h2>
+        <h2 className="text-sm font-black text-gray-900 mb-4">Checklist de cumplimiento EUDR</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             {

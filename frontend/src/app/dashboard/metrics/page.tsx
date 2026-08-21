@@ -12,7 +12,7 @@
  */
 
 import { useState } from 'react'
-import { RefreshCw, Satellite, Calendar, Lock, AlertTriangle, FlaskConical, Leaf, Droplets, Layers, TreePine } from 'lucide-react'
+import { RefreshCw, Satellite, Calendar, AlertTriangle, FlaskConical, Leaf, Droplets, Layers, TreePine, CheckCircle2, Clock } from 'lucide-react'
 import { MetricCard, type MetricType } from './components/MetricCard'
 import { useMetrics } from './hooks/useMetrics'
 import { usePlan } from '@/hooks/usePlan'
@@ -125,17 +125,19 @@ export default function MetricsDashboardPage() {
       </div>
 
       {/* Compliance summary strip */}
-      <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs items-center">
-        <span className="font-semibold text-gray-600">Normativas:</span>
+      <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs items-center">
+        <span className="font-semibold text-gray-500">Normativas:</span>
         {['EUDR', 'EOV Savory', 'GRSB', 'Verra', 'ISO 14046'].map(norm => (
-          <span key={norm} className="flex items-center gap-1 text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-200 font-medium">
-            ✓ {norm}
+          <span key={norm} className="flex items-center gap-1 text-green-700 bg-green-50 px-2 py-0.5 rounded-full font-medium">
+            <CheckCircle2 className="w-3 h-3" />
+            {norm}
           </span>
         ))}
-        <div className="ml-auto flex items-center gap-4">
+        <div className="ml-auto flex items-center gap-3">
           <DownloadReportButton orgId="user-org-id" />
-          <Link href="/dashboard/metrics/compliance" className="flex items-center gap-1 text-green-600 hover:underline font-medium bg-green-50 px-3 py-1 rounded-full border border-green-200">
-            → Ver Compliance Dashboard
+          <Link href="/dashboard/metrics/compliance" className="flex items-center gap-1.5 text-green-700 hover:text-green-800 font-semibold transition-colors">
+            Ver Compliance
+            <span aria-hidden>→</span>
           </Link>
         </div>
       </div>
@@ -152,15 +154,17 @@ export default function MetricsDashboardPage() {
       {/* Empty state — no metrics yet */}
       {!loading && !error && Object.keys(snapshots).length === 0 && (
         <div className="flex flex-col items-center gap-4 py-16 text-center">
-          <span className="text-5xl">🛰️</span>
+          <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+            <Satellite className="w-7 h-7 text-gray-400" />
+          </div>
           <div>
             <p className="font-semibold text-gray-700">No hay métricas disponibles aún</p>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-gray-400 mt-1 max-w-sm">
               Las métricas se calculan automáticamente para todos los potreros con polígono satelital.
               Verificá que tus potreros tengan geometría definida en Mi Campo.
             </p>
           </div>
-          <Link href="/dashboard/mi-campo" className="text-sm text-green-600 hover:underline font-medium">
+          <Link href="/dashboard/mi-campo" className="text-sm font-semibold text-green-700 hover:text-green-800 transition-colors">
             Ir a Mi Campo → Definir polígonos
           </Link>
         </div>
@@ -223,33 +227,37 @@ export default function MetricsDashboardPage() {
       })}
 
       {/* Carbon Dashboard CTA */}
-      <Link href="/dashboard/metrics/carbon" className="flex items-center justify-between p-4 bg-gradient-to-r from-green-50 to-green-50 rounded-2xl border border-green-200 hover:border-green-300 transition-colors group mb-4">
+      <Link href="/dashboard/metrics/carbon" className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100 hover:border-green-200 transition-colors group mb-2">
         <div className="flex items-center gap-3">
-          <span className="text-2xl group-hover:scale-110 transition-transform">🌿</span>
+          <div className="w-9 h-9 rounded-lg bg-white border border-green-100 flex items-center justify-center shrink-0">
+            <Leaf className="w-4 h-4 text-green-600" />
+          </div>
           <div>
-            <p className="font-bold text-green-900">Huella de Carbono — Emisiones vs Secuestro</p>
+            <p className="font-semibold text-green-900">Huella de Carbono — Emisiones vs Secuestro</p>
             <p className="text-sm text-green-600">
               Cálculo de emisiones IPCC Tier 1 y remociones con proxy SOC para estimar tu balance neto.
             </p>
           </div>
         </div>
-        <span className="text-sm font-semibold text-green-600 bg-white px-4 py-2 rounded-xl border border-green-200 shadow-sm group-hover:bg-green-50">
+        <span className="text-sm font-semibold text-green-700 group-hover:text-green-800 flex items-center gap-1">
           Calcular →
         </span>
       </Link>
 
       {/* Time Machine CTA — Phase 2 */}
-      <Link href="/dashboard/metrics/time-machine" className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 hover:border-blue-300 transition-colors group">
+      <Link href="/dashboard/metrics/time-machine" className="flex items-center justify-between p-4 bg-blue-50 rounded-xl border border-blue-100 hover:border-blue-200 transition-colors group">
         <div className="flex items-center gap-3">
-          <span className="text-2xl group-hover:scale-110 transition-transform">⏰</span>
+          <div className="w-9 h-9 rounded-lg bg-white border border-blue-100 flex items-center justify-center shrink-0">
+            <Clock className="w-4 h-4 text-blue-600" />
+          </div>
           <div>
-            <p className="font-bold text-blue-900">Time Machine — Análisis Histórico 2020→Hoy</p>
+            <p className="font-semibold text-blue-900">Time Machine — Análisis Histórico 2020→Hoy</p>
             <p className="text-sm text-blue-600">
               Visualizá cómo evolucionó cada métrica desde la fecha de corte EUDR (31/12/2020).
             </p>
           </div>
         </div>
-        <span className="text-sm font-semibold text-blue-600 bg-white px-4 py-2 rounded-xl border border-blue-200 shadow-sm group-hover:bg-blue-50">
+        <span className="text-sm font-semibold text-blue-700 group-hover:text-blue-800 flex items-center gap-1">
           Explorar →
         </span>
       </Link>

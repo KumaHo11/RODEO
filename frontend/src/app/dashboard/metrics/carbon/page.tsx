@@ -131,12 +131,12 @@ export default function CarbonDashboardPage() {
                         {p.net_balance_tco2e > 0 ? '+' : ''}{p.net_balance_tco2e.toFixed(1)}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
                           isSink 
-                            ? 'bg-green-50 text-green-700 border border-green-200' 
-                            : 'bg-red-50 text-red-700 border border-red-200'
+                            ? 'bg-green-50 text-green-700' 
+                            : 'bg-red-50 text-red-700'
                         }`}>
-                          {isSink ? 'SUMIDERO 💚' : 'EMISOR 🔴'}
+                          {isSink ? 'Sumidero' : 'Emisor'}
                         </span>
                       </td>
                     </tr>

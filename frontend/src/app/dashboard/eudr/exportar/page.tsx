@@ -122,20 +122,17 @@ export default function ExportarPage() {
   })[s] ?? 'bg-gray-100 text-gray-600'
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="p-6 space-y-6">
+      {/* Encabezado */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-green-500" />
-            Exportar DDS / TRACES-NT
-          </h1>
+          <h1 className="text-2xl font-black text-gray-950">Exportar DDS / TRACES-NT</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Generá y exportá Due Diligence Statements en los formatos requeridos por la UE y plataformas sectoriales.
+            Generá y exportá declaraciones de diligencia debida en los formatos requeridos por la UE y plataformas sectoriales.
           </p>
         </div>
-        <button onClick={load} disabled={loading} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-          <RefreshCw className={clsx('w-3.5 h-3.5', loading && 'animate-spin')} />
+        <button onClick={load} disabled={loading} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+          <RefreshCw className={clsx('w-4 h-4', loading && 'animate-spin')} />
           Actualizar
         </button>
       </div>
@@ -162,7 +159,7 @@ export default function ExportarPage() {
           </button>
           {lastDDS && (
             <div className="mt-3 p-3 bg-green-50 rounded-xl text-[10px] text-green-700">
-              <p className="font-black">DDS generada ✅</p>
+              <p className="flex items-center gap-1.5 font-black"><CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> DDS generada</p>
               <p className="mt-1 font-mono break-all">{lastDDS.payload_hash?.slice(0, 32)}...</p>
               <button onClick={() => copyHash(lastDDS.payload_hash)} className="mt-1 flex items-center gap-1 text-green-600 hover:text-green-800">
                 <Copy className="w-2.5 h-2.5" /> {copied ? 'Copiado!' : 'Copiar hash'}

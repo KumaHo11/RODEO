@@ -89,6 +89,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'feed_type y received_date son requeridos' }, { status: 400 })
     }
 
+    // Normalize optional date/text fields: empty strings must be null for PostgreSQL DATE columns
+    const nullIfEmpty = (v: any) => (v === '' || v === undefined || v === null) ? null : v
+
     const result = await serviceMutate(`
       INSERT INTO feed_batches
         (org_id, feed_type, supplier_name, supplier_cuit, supplier_country,
@@ -97,13 +100,13 @@ export async function POST(req: NextRequest) {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::uuid[],$14::uuid[],$15,NOW())
       RETURNING id
     `, [
-      auth.orgId, feed_type, supplier_name ?? null, supplier_cuit ?? null,
-      supplier_country, eudr_compliant, compliance_cert_url ?? null,
-      invoice_url ?? null, lot_number ?? null, quantity_kg ?? null,
-      received_date, expiry_date ?? null,
+      auth.orgId, feed_type, nullIfEmpty(supplier_name), nullIfEmpty(supplier_cuit),
+      supplier_country, eudr_compliant, nullIfEmpty(compliance_cert_url),
+      nullIfEmpty(invoice_url), nullIfEmpty(lot_number), nullIfEmpty(quantity_kg),
+      received_date, nullIfEmpty(expiry_date),
       herd_ids?.length > 0 ? herd_ids : null,
       paddock_ids?.length > 0 ? paddock_ids : null,
-      notes ?? null,
+      nullIfEmpty(notes),
     ])
 
     return NextResponse.json({ id: result.rows[0]?.id }, { status: 201 })
