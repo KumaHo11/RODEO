@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { query, mutate } from '@/lib/db'
+import { query, serviceMutate } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     // Sanitizar fecha de nacimiento — string vacío → null para evitar error de PostgreSQL
     const safeBirthDate = birth_date && String(birth_date).trim() !== '' ? birth_date : null
 
-    const result = await mutate(
+    const result = await serviceMutate(
       `INSERT INTO animals (
         org_id, rfid_code, visual_tag, name, sex, breed, birth_date,
         mother_id, father_id, current_paddock_id, current_herd_id, notes, status

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { query, queryOne, mutate } from '@/lib/db'
+import { query, queryOne, serviceMutate } from '@/lib/db'
 
 export async function GET(
   req: NextRequest,
@@ -84,7 +84,7 @@ export async function PATCH(
       RETURNING *
     `
 
-    const result = await mutate(sql, values)
+    const result = await serviceMutate(sql, values)
     if (!result.rows || result.rows.length === 0) {
       return NextResponse.json({ error: 'Animal no encontrado' }, { status: 404 })
     }
@@ -108,7 +108,7 @@ export async function DELETE(
     const body = await req.json().catch(() => ({}))
     const status = body.status === 'MUERTO' ? 'MUERTO' : 'VENDIDO'
 
-    const result = await mutate(
+    const result = await serviceMutate(
       `UPDATE animals 
        SET status = $1, updated_at = NOW() 
        WHERE id = $2 AND org_id = $3 

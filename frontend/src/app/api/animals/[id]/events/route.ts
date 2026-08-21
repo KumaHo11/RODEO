@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { query, mutate } from '@/lib/db'
+import { query, serviceMutate } from '@/lib/db'
 
 export async function GET(
   req: NextRequest,
@@ -46,29 +46,17 @@ export async function POST(
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
     }
 
-    // Insert the event — recorded_by is nullable, so profileId can be undefined
-    const result = await mutate(
-      `INSERT INTO animal_events (
-        org_id, animal_id, event_type, event_date, details, 
-        location, photo_urls, recorded_by, source, device_info
-      ) VALUES (
-        $1, $2, $3, $4, $5, 
-        ${location ? 'ST_SetSRID(ST_MakePoint($6, $7), 4326)' : 'NULL'}, 
-        $8, $9, $10, $11
-      ) RETURNING *`,
-      [
-        auth.orgId,
-        id,
-        event_type,
-        event_date,
-        details || {},
-        ...(location ? [location.lng, location.lat] : []),
-        photo_urls || null,
-        auth.profileId || null,  // nullable — may not be set in all auth contexts
-        source || 'APP',
-        device_info || null
-      ]
-    )
+    const sql = location 
+      ? `INSERT INTO animal_events (org_id, animal_id, event_type, event_date, details, location, photo_urls, recorded_by, source, device_info) 
+         VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326), $8, $9, $10, $11) RETURNING *`
+      : `INSERT INTO animal_events (org_id, animal_id, event_type, event_date, details, location, photo_urls, recorded_by, source, device_info) 
+         VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9) RETURNING *`;
+
+    const paramsArray = location
+      ? [auth.orgId, id, event_type, event_date, details || {}, location.lng, location.lat, photo_urls || null, auth.profileId || null, source || 'APP', device_info || null]
+      : [auth.orgId, id, event_type, event_date, details || {}, photo_urls || null, auth.profileId || null, source || 'APP', device_info || null];
+
+    const result = await serviceMutate(sql, paramsArray)
 
     return NextResponse.json({ event: result.rows ? result.rows[0] : null }, { status: 201 })
   } catch (err: any) {
