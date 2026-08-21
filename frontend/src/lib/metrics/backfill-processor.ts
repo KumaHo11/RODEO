@@ -39,7 +39,7 @@ export interface BackfillResult {
  */
 export async function processBackfill(
   paddockId: string,
-  yearFrom: number = 2019,
+  yearFrom: number = 2020,
   yearTo?: number,
 ): Promise<BackfillResult> {
   const effectiveYearTo = yearTo ?? new Date().getFullYear()

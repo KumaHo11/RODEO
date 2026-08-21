@@ -15,8 +15,9 @@ export function TimeChart({ data, baseline, metricType }: TimeChartProps) {
   const isEVI = metricType === 'EVI'
   
   return (
-    <div className="w-full h-[300px]">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="w-full h-[300px] overflow-x-auto overflow-y-hidden">
+      <div style={{ minWidth: Math.max(800, data.length * 20), height: '100%' }}>
+        <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
           <XAxis 
@@ -56,6 +57,7 @@ export function TimeChart({ data, baseline, metricType }: TimeChartProps) {
           />
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }

@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
               headers: { 'Content-Type': 'application/json', 'x-api-key': gfwApiKey },
               body: JSON.stringify({ 
                 geometry: polygon, 
-                filters: [{ field: 'umd_tree_cover_loss__year', operator: 'greater_than', value: 2019 }] 
+                filters: [{ field: 'umd_tree_cover_loss__year', operator: 'greater_than', value: 2020 }] 
               })
             }
           )
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       const baselineRes = await serviceQuery(`
         SELECT AVG(value) as ndvi_baseline FROM metric_snapshots
         WHERE paddock_id = $1 AND metric_type = 'NDVI' 
-        AND capture_date BETWEEN '2019-01-01' AND '2021-06-01'
+        AND capture_date BETWEEN '2020-11-01' AND '2021-01-31'
       `, [paddock_id])
 
       const currentRes = await serviceQuery(`

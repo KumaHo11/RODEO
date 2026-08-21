@@ -4,7 +4,7 @@ import React from 'react';
 import { useBluetoothRFID } from '@/hooks/useBluetoothRFID';
 import { useRFIDOfflineQueue } from '@/hooks/useRFIDOfflineQueue';
 import { RFIDImporter } from '@/components/RFIDImporter';
-import { Bluetooth } from 'lucide-react';
+import { Bluetooth, AlertTriangle, RefreshCw, Check, ClipboardList } from 'lucide-react';
 
 export default function RFIDScanPage() {
   const {
@@ -44,8 +44,9 @@ export default function RFIDScanPage() {
           </div>
 
           {!isSupported && (
-            <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-              ⚠️ Web Bluetooth no está soportado en este navegador. Usa la importación USB.
+            <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              Web Bluetooth no está soportado en este navegador. Usa la importación USB.
             </div>
           )}
 
@@ -80,10 +81,13 @@ export default function RFIDScanPage() {
       {/* Queue Offline */}
       {pendingCount > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex justify-between items-center">
-          <div>
-            <span className="font-semibold text-amber-800">🔄 Pendientes de sync: {pendingCount}</span>
-            <p className="text-sm text-amber-700">Lecturas guardadas localmente.</p>
-          </div>
+            <div>
+              <div className="flex items-center gap-2 font-semibold text-amber-800">
+                <RefreshCw className="w-4 h-4" />
+                Pendientes de sync: {pendingCount}
+              </div>
+              <p className="text-sm text-amber-700">Lecturas guardadas localmente.</p>
+            </div>
           <button
             onClick={syncAll}
             disabled={!isOnline}
@@ -96,7 +100,10 @@ export default function RFIDScanPage() {
 
       {/* Historial de sesión */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">📋 Lecturas de esta sesión ({scanHistory.length})</h3>
+        <div className="flex items-center gap-2 font-semibold text-gray-900 mb-4">
+          <ClipboardList className="w-4 h-4 text-gray-500" />
+          Lecturas de esta sesión ({scanHistory.length})
+        </div>
         
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -124,9 +131,13 @@ export default function RFIDScanPage() {
                   </td>
                   <td className="py-3 text-sm">
                     {scan.animal ? (
-                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">✅ Sync</span>
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        <Check className="w-3 h-3" /> Sync
+                      </span>
                     ) : (
-                      <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">⚠️ Nuevo</span>
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                        <AlertTriangle className="w-3 h-3" /> Nuevo
+                      </span>
                     )}
                   </td>
                 </tr>

@@ -84,33 +84,36 @@ export async function GET(req: NextRequest) {
     const { minx, miny, maxx, maxy } = paddock
     const bbox = `${(minx - BUFFER).toFixed(6)},${(miny - BUFFER).toFixed(6)},${(maxx + BUFFER).toFixed(6)},${(maxy + BUFFER).toFixed(6)}`
 
-    // Earth Search STAC item URL
-    const stacItemUrl = encodeURIComponent(
-      `${EARTH_SEARCH_BASE}/collections/${SENTINEL2_COLLECTION}/items/${sceneId}`
-    )
+    // Try both collections (new and old) because sceneId doesn't specify which one it belongs to
+    const collections = ['sentinel-2-c1-l2a', 'sentinel-2-l2a']
+    let tiResponse: Response | null = null
 
-    // TiTiler STAC crop endpoint — returns PNG with true-color RGB
-    // rescale=0,3000 maps typical Sentinel-2 L2A surface reflectance (0–10000 range) to 0–255
-    const tiTilerUrl = `${TITILER_BASE_URL}/stac/crop/${bbox}.png` +
-      `?url=${stacItemUrl}` +
-      `&assets=visual` +          // "visual" is the pre-built TCI (True Color Image) asset
-      `&width=${width}` +
-      `&height=${height}` +
-      `&rescale=0,3000` +
-      `&resampling=bilinear`
+    for (const collection of collections) {
+      const stacItemUrl = encodeURIComponent(
+        `${EARTH_SEARCH_BASE}/collections/${collection}/items/${sceneId}`
+      )
 
-    // ── Fetch from TiTiler ────────────────────────────────────────────────────
-    const tiResponse = await fetch(tiTilerUrl, {
-      signal: AbortSignal.timeout(20_000),
-    })
+      const tiTilerUrl = `${TITILER_BASE_URL}/stac/crop/${bbox}.png` +
+        `?url=${stacItemUrl}` +
+        `&assets=visual` +
+        `&width=${width}` +
+        `&height=${height}` +
+        `&resampling=bilinear`
 
-    if (!tiResponse.ok) {
+      tiResponse = await fetch(tiTilerUrl, {
+        signal: AbortSignal.timeout(20_000),
+      })
+
+      if (tiResponse.ok) break
+    }
+
+    if (!tiResponse || !tiResponse.ok) {
       // TiTiler returns 404 when the scene doesn't have the requested asset
       // or 500 when the scene is unavailable — both cases fall back to gradient in UI
-      console.warn(`[satellite-image] TiTiler returned ${tiResponse.status} for scene ${sceneId}`)
+      console.warn(`[satellite-image] TiTiler returned ${tiResponse?.status} for scene ${sceneId}`)
       return NextResponse.json(
-        { error: `TiTiler error: ${tiResponse.status}` },
-        { status: tiResponse.status === 404 ? 404 : 502 }
+        { error: `TiTiler error: ${tiResponse?.status}` },
+        { status: tiResponse?.status === 404 ? 404 : 502 }
       )
     }
 

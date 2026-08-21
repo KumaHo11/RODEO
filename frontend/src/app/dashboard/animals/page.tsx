@@ -6,10 +6,12 @@ import { Plus, Search, ChevronRight, PawPrint } from 'lucide-react'
 import { useAnimals } from './hooks/useAnimals'
 import { usePlan } from '@/hooks/usePlan'
 import { AnimalCSVImporter } from './AnimalCSVImporter'
+import { CreateAnimalModal } from './components/CreateAnimalModal'
 
 export default function AnimalsPage() {
   const [filterStatus, setFilterStatus] = useState('Todos')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm]     = useState('')
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
   const { hasFeature } = usePlan()
 
   const { animals, loading, refetch } = useAnimals({
@@ -78,7 +80,10 @@ export default function AnimalsPage() {
 
           <div className="flex items-center gap-3 shrink-0">
             <AnimalCSVImporter onSuccess={refetch} />
-            <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm shadow-green-200 flex items-center gap-2">
+            <button
+              onClick={() => setIsCreateOpen(true)}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm shadow-green-200 flex items-center gap-2"
+            >
               <Plus className="w-4 h-4" />
               Nuevo animal
             </button>
@@ -188,6 +193,12 @@ export default function AnimalsPage() {
           </div>
         </div>
       </div>
+
+      <CreateAnimalModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreated={() => { refetch() }}
+      />
     </div>
   )
 }

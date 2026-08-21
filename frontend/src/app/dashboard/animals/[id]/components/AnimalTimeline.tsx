@@ -2,7 +2,7 @@
 
 import {
   Baby, Scale, Syringe, HeartHandshake, MapPin, 
-  DollarSign, Wifi, FileText, Beef
+  DollarSign, Wifi, FileText
 } from 'lucide-react'
 
 const ICONS: Record<string, { icon: any, color: string, bg: string }> = {
@@ -10,7 +10,7 @@ const ICONS: Record<string, { icon: any, color: string, bg: string }> = {
   PESAJE: { icon: Scale, color: 'text-blue-600', bg: 'bg-blue-50 border border-blue-100' },
   VACUNACION: { icon: Syringe, color: 'text-amber-600', bg: 'bg-amber-50 border border-amber-100' },
   TRATAMIENTO: { icon: Syringe, color: 'text-amber-600', bg: 'bg-amber-50 border border-amber-100' },
-  PARTO: { icon: Beef, color: 'text-emerald-600', bg: 'bg-emerald-50 border border-emerald-100' },
+  PARTO:       { icon: Baby,        color: 'text-pink-600',   bg: 'bg-pink-50 border border-pink-100' },
   MOVIMIENTO: { icon: MapPin, color: 'text-gray-600', bg: 'bg-gray-50 border border-gray-200' },
   VENTA: { icon: DollarSign, color: 'text-red-600', bg: 'bg-red-50 border border-red-100' },
   FAENA: { icon: DollarSign, color: 'text-red-600', bg: 'bg-red-50 border border-red-100' },

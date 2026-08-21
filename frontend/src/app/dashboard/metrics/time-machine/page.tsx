@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Clock, Activity, TrendingUp, AlertTriangle, Leaf,
   Droplets, RefreshCw, X, Bell, ShieldCheck, ShieldAlert,
-  Download, FileText, TreePine,
+  Download, FileText, TreePine, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/apiFetch'
@@ -417,7 +417,7 @@ function BackfillLoader({
 }: { paddockName: string; elapsed: number; onMinimize: () => void }) {
   const phases = [
     'Conectando con satélites Sentinel-2…',
-    'Buscando imágenes históricas 2019–2021…',
+    'Buscando imágenes históricas 2020–2021…',
     'Procesando 2022–2023 · Calculando NDVI, EVI, SAVI…',
     'Procesando 2024–2025 · Calculando humedad y suelo…',
     'Finalizando · Guardando snapshots en la base de datos…',
@@ -439,7 +439,7 @@ function BackfillLoader({
         <div>
           <p className="text-[11px] font-bold uppercase tracking-widest text-green-600 mb-1">Generando Historial</p>
           <h2 className="text-xl font-bold text-gray-900">{paddockName}</h2>
-          <p className="text-sm text-gray-400 mt-1">~90 imágenes satelitales desde 2019</p>
+          <p className="text-sm text-gray-400 mt-1">~72 imágenes satelitales desde 2020</p>
         </div>
         <div className="w-full">
           <div className="flex justify-between text-[11px] font-medium text-gray-400 mb-2">
@@ -478,6 +478,8 @@ export default function TimeMachinePage() {
   const [selectedPaddock, setSelectedPaddock] = useState<string | null>(null)
   const [selectedMetric, setSelectedMetric]   = useState<string>('NDVI')
   const [sliderIndex, setSliderIndex]         = useState(0)
+  const [snapshotPage, setSnapshotPage]       = useState(1)
+  const ITEMS_PER_PAGE = 12
 
   // Backfill state
   const [isBackfilling, setIsBackfilling] = useState(false)
@@ -519,6 +521,7 @@ export default function TimeMachinePage() {
   useEffect(() => {
     if (monthlyData.length > 0) setSliderIndex(monthlyData.length - 1)
     else setSliderIndex(0)
+    setSnapshotPage(1) // Reset pagination when metric or paddock changes
   }, [monthlyData])
 
   // ── Polling ─────────────────────────────────────────────────────────────────
@@ -568,7 +571,7 @@ export default function TimeMachinePage() {
     try {
       const res  = await apiFetch('/api/metrics/backfill', {
         method: 'POST',
-        body: JSON.stringify({ paddock_id: selectedPaddock, year_from: 2019 }),
+        body: JSON.stringify({ paddock_id: selectedPaddock, year_from: 2020 }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -612,6 +615,9 @@ export default function TimeMachinePage() {
   const hasData = multiData.length > 0 || monthlyData.length > 0
   const isLoadingAny = loading || multiLoading
 
+  const totalSnapshotPages = Math.ceil(multiData.length / ITEMS_PER_PAGE)
+  const paginatedSnapshots = multiData.slice((snapshotPage - 1) * ITEMS_PER_PAGE, snapshotPage * ITEMS_PER_PAGE)
+
   return (
     <>
       {showOverlay && isBackfilling && (
@@ -628,7 +634,7 @@ export default function TimeMachinePage() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">Evolución histórica</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Análisis retrospectivo desde 2019 · EUDR · Sentinel-2
+              Análisis retrospectivo desde 2020 · EUDR · Sentinel-2
             </p>
           </div>
           <Link href="/dashboard/metrics"
@@ -702,7 +708,7 @@ export default function TimeMachinePage() {
             <div>
               <p className="text-base font-bold text-gray-800 mb-1">Sin historial para {selectedPaddockName}</p>
               <p className="text-sm text-gray-500 max-w-xs mx-auto leading-relaxed">
-                Generá ~90 snapshots satelitales mensuales desde 2019. El proceso corre en paralelo y tarda 3–5 minutos.
+                Generá ~72 snapshots satelitales mensuales desde 2020. El proceso corre en paralelo y tarda 3–5 minutos.
               </p>
             </div>
             <div className="flex gap-2 flex-wrap justify-center">
@@ -724,7 +730,7 @@ export default function TimeMachinePage() {
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-1">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" /> Baseline 2019
+                  <Clock className="w-3.5 h-3.5" /> Baseline 2020
                 </span>
                 <span className="text-2xl font-bold text-gray-900 tabular-nums">
                   {baseline !== null ? baseline.toFixed(3) : '—'}
@@ -748,7 +754,7 @@ export default function TimeMachinePage() {
                   style={{ color: pctChange >= 0 ? '#16a34a' : '#dc2626' }}>
                   {pctChange > 0 ? '+' : ''}{pctChange.toFixed(1)}%
                 </span>
-                <span className="text-[11px] text-gray-400">vs. baseline 2019</span>
+                <span className="text-[11px] text-gray-400">vs. baseline 2020</span>
               </div>
             </div>
 
@@ -796,18 +802,43 @@ export default function TimeMachinePage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {multiData.map((point, idx) => (
+                {paginatedSnapshots.map((point, idx) => (
                   <SnapshotCard
                     key={point.period_month}
                     point={point}
                     geojson={selectedGeojson}
                     paddockId={selectedPaddock || ''}
-                    isBaseline={idx === 0}
-                    isLatest={idx === multiData.length - 1}
+                    isBaseline={snapshotPage === 1 && idx === 0}
+                    isLatest={snapshotPage === totalSnapshotPages && idx === paginatedSnapshots.length - 1}
                     index={idx}
                   />
                 ))}
               </div>
+              
+              {/* Pagination Controls */}
+              {totalSnapshotPages > 1 && (
+                <div className="flex items-center justify-between mt-4 bg-white px-4 py-2 rounded-xl border border-gray-100 shadow-sm">
+                  <span className="text-xs font-medium text-gray-500">
+                    Página {snapshotPage} de {totalSnapshotPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setSnapshotPage(p => Math.max(1, p - 1))}
+                      disabled={snapshotPage === 1}
+                      className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => setSnapshotPage(p => Math.min(totalSnapshotPages, p + 1))}
+                      disabled={snapshotPage === totalSnapshotPages}
+                      className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : null}

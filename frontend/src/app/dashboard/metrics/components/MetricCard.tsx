@@ -5,7 +5,8 @@
  * Muestra: valor actual, tendencia vs período anterior, sparkline, badge de normativa.
  */
 
-import { TrendingUp, TrendingDown, Minus, Satellite, CloudOff, Leaf, Droplets, Sun, CloudRain, Layers, ShieldCheck, Zap, BarChart2, Calendar, RefreshCw, Beef, Circle } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Satellite, CloudOff, Leaf, Droplets, Sun, CloudRain, Layers, ShieldCheck, Zap, BarChart2, Calendar, RefreshCw, Sprout, Circle } from 'lucide-react'
+
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ const METRIC_META: Record<MetricType, {
   SPECTRAL_HETEROGENEITY:{ label: 'Biodiversidad', icon: BarChart2,   decimals: 3, polarity: 'higher_better', normative: ['EOV Savory'],        description: 'Proxy diversidad vegetal' },
   PHENOLOGY:             { label: 'Fenología',     icon: Calendar,    decimals: 2, polarity: 'higher_better', normative: ['EOV Savory'],        description: 'Duración temporada crecimiento' },
   OCCUPATION_REST_RATIO: { label: 'Ocup./Desc.',   icon: RefreshCw,   decimals: 1, polarity: 'neutral',       normative: ['EOV','GRSB'],        description: 'Ratio ocupación/descanso' },
-  BIOMASS:               { label: 'Biomasa',       icon: Beef,        decimals: 0, polarity: 'higher_better', normative: ['EOV Savory'],        description: 'Materia seca estimada (kg/ha)' },
+  BIOMASS:               { label: 'Biomasa',       icon: Sprout,      decimals: 0, polarity: 'higher_better', normative: ['EOV Savory'],        description: 'Materia seca estimada (kg/ha)' },
   SOC_ESTIMATED:         { label: 'Carbono Suelo', icon: Layers,      decimals: 2, polarity: 'higher_better', normative: ['EOV'],               description: 'Carbono Orgánico Estimado' },
 }
 

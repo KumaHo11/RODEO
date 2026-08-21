@@ -46,7 +46,7 @@ export async function POST(
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
     }
 
-    // Insert the event
+    // Insert the event — recorded_by is nullable, so profileId can be undefined
     const result = await mutate(
       `INSERT INTO animal_events (
         org_id, animal_id, event_type, event_date, details, 
@@ -64,7 +64,7 @@ export async function POST(
         details || {},
         ...(location ? [location.lng, location.lat] : []),
         photo_urls || null,
-        auth.profileId,
+        auth.profileId || null,  // nullable — may not be set in all auth contexts
         source || 'APP',
         device_info || null
       ]
@@ -73,6 +73,6 @@ export async function POST(
     return NextResponse.json({ event: result.rows ? result.rows[0] : null }, { status: 201 })
   } catch (err: any) {
     console.error('POST /api/animals/[id]/events error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message ?? 'Error desconocido' }, { status: 500 })
   }
 }

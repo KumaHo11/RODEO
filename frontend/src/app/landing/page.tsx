@@ -7,8 +7,9 @@ import {
   Map, Footprints, CalendarDays, Mic, Target, TrendingUp, Sprout,
   ArrowRight, Check, X, ChevronDown, ChevronLeft, ChevronRight, Building2, CheckCircle2,
   Camera, WifiOff, Brain, BarChart3, Zap, Shield, Loader2, CloudRain, Leaf,
-  Satellite, ShieldCheck, Beef
+  Satellite, ShieldCheck, PawPrint
 , Antenna, ClipboardCheck} from 'lucide-react'
+
 import RodeoLogo from '@/components/RodeoLogo'
 import { FormulasTab } from '@/app/dashboard/calculadora/components/FormulasTab'
 import { event } from '@/lib/analytics'
@@ -240,7 +241,7 @@ export default function LandingPage() {
       accent: 'from-red-700 to-orange-800',
     },
     {
-      Icon: Beef,
+      Icon: PawPrint,
       tag: 'NUEVO · LATIFUNDIO',  
       title: 'Registro RFID + Trazabilidad individual',
       subtitle: 'Del potrero al mercado, sin perder el hilo',

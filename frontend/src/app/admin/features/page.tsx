@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import PageShell from '../components/PageShell'
-import { Satellite, ClipboardList, Beef, Leaf } from 'lucide-react'
+import { Satellite, ClipboardList, PawPrint, Leaf } from 'lucide-react'
+
 
 const FEATURES = [
   {
@@ -26,7 +27,7 @@ const FEATURES = [
   },
   {
     group: 'Registro Animal',
-    icon: Beef,
+    icon: PawPrint,
     items: [
       { key: 'animal_registry', label: 'Registro individual de animales + RFID', desc: 'Trazabilidad individual, bitácora de vida, importación CSV (Allflex/Gallagher).' },
       { key: 'rfid_bluetooth', label: 'Escaneo RFID Bluetooth', desc: 'Lectura Web Bluetooth para lectores Gallagher HR5, Tru-Test SRS2. Modo offline con cola de sync.' },

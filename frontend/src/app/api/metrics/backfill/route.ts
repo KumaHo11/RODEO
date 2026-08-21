@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}))
-    const { paddock_id, year_from = 2019 } = body
+    const { paddock_id, year_from = 2020 } = body
 
     if (!paddock_id) {
       return NextResponse.json({ error: 'paddock_id requerido' }, { status: 400 })

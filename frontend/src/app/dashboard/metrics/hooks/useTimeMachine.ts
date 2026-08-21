@@ -29,7 +29,7 @@ export function useTimeMachine(paddockId: string | null, metricType: string) {
 
       try {
         const [trendsRes, baselinesRes] = await Promise.all([
-          apiFetch(`/api/metrics/trends?paddock_id=${paddockId}&metric_type=${metricType}&limit=60&order=asc`),
+          apiFetch(`/api/metrics/trends?paddock_id=${paddockId}&metric_type=${metricType}&limit=84&order=asc`),
           apiFetch(`/api/metrics/baselines?paddock_id=${paddockId}`)
         ])
 

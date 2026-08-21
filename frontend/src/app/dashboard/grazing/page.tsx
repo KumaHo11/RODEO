@@ -66,7 +66,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
 const getSeason = () => {
   const m = new Date().getMonth() + 1
   if (m >= 4 && m < 10) return { name: 'Otoño/Invierno', type: 'Temporada cerrada', icon: '', color: 'bg-amber-100 text-gray-700' }
-  return { name: 'Primavera/Verano', type: 'Temporada abierta', icon: '🌱', color: 'bg-green-100 text-green-700' }
+  return { name: 'Primavera/Verano', type: 'Temporada abierta', icon: '', color: 'bg-green-100 text-green-700' }
 }
 
 // Safe date string normalizer — handles null, undefined, JS Date objects, and ISO strings
@@ -3833,7 +3833,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             {/* Header — zona de peligro */}
             <div className="px-6 pt-6 pb-4 text-center">
               <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-3">
-                <span className="text-2xl">⚠️</span>
+                <AlertTriangle className="w-7 h-7 text-red-600" />
               </div>
               <h3 className="text-xl font-black text-gray-950 mb-1">Sin pasto suficiente</h3>
               <p className="text-sm text-gray-500 font-medium leading-relaxed">
@@ -3866,7 +3866,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                 }}
                 className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2"
               >
-                ⚠️ Entiendo el riesgo — continuar igual
+                Entiendo el riesgo — continuar igual
               </button>
               <button
                 onClick={() => setOvergrazingRisk(null)}

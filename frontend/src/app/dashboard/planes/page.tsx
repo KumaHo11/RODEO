@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { usePlan } from '@/hooks/usePlan'
 import { apiFetch } from '@/lib/apiFetch'
-import { Check, Sparkles, Zap, Crown, Building2, Loader2, ArrowRight, Star } from 'lucide-react'
+import { Check, Sparkles, Zap, Crown, Building2, Loader2, ArrowRight, Star, Satellite, TreePine, ClipboardCheck, FileText, Tag, Leaf, Map, ShoppingBag } from 'lucide-react'
 import { toast } from 'sonner'
 import { MercadoPagoBrick } from '@/components/MercadoPagoBrick'
 import { Modal } from '@/design-system/molecules/Modal'
@@ -398,24 +398,29 @@ export default function PlanesPage() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {[
-              { icon: '🛰️', title: 'MRV Satelital completo', desc: '10 índices Sentinel-2 + SAR semanales por potrero. Time Machine desde 2020.' },
-              { icon: '🌲', title: 'Deforestation Guard', desc: 'Global Forest Watch + NDVI heurístico. Alerta EUDR en tiempo real, overlay en mapa.' },
-              { icon: '📋', title: 'Compliance Dashboard', desc: 'Scores EUDR / EOV Savory / GRSB por potrero. Semáforo de cumplimiento normativo.' },
-              { icon: '📄', title: 'Reportes MRV PDF', desc: 'PDF auditable con hash SHA256. 5 secciones: portada, métricas, deforestación, GRSB, declaración.' },
-              { icon: '🐄', title: 'Registro RFID Individual', desc: 'Allflex y Gallagher. Bitácora de vida por animal. Bluetooth offline. CSV import.' },
-              { icon: '🌿', title: 'Huella de Carbono', desc: 'IPCC Tier 1: CH₄ + N₂O vs. SOC proxy. Balance neto tCO₂e por potrero y estancia.' },
-              { icon: '🗺️', title: 'Importación KML/KMZ/SHP', desc: 'Importá polígonos desde Google Earth, QGIS o cualquier GIS. También disponible en plan Brote.' },
-              { icon: '🏪', title: 'Marketplace de datos', desc: 'Otorgá acceso API a certificadoras, compradores o auditores. Control total de permisos.' },
-              { icon: '⚡', title: 'API B2B v2', desc: 'Endpoints autenticados con SHA256. CORS habilitado. OpenAPI spec pública.' },
-            ].map((item, i) => (
+              { icon: Satellite,       title: 'MRV Satelital completo',     desc: '10 índices Sentinel-2 + SAR semanales por potrero. Time Machine desde 2020.' },
+              { icon: TreePine,        title: 'Deforestation Guard',         desc: 'Global Forest Watch + NDVI heurístico. Alerta EUDR en tiempo real, overlay en mapa.' },
+              { icon: ClipboardCheck,  title: 'Compliance Dashboard',        desc: 'Scores EUDR / EOV Savory / GRSB por potrero. Semáforo de cumplimiento normativo.' },
+              { icon: FileText,        title: 'Reportes MRV PDF',            desc: 'PDF auditable con hash SHA256. 5 secciones: portada, métricas, deforestación, GRSB, declaración.' },
+              { icon: Tag,             title: 'Registro RFID Individual',    desc: 'Allflex y Gallagher. Bitácora de vida por animal. Bluetooth offline. CSV import.' },
+              { icon: Leaf,            title: 'Huella de Carbono',           desc: 'IPCC Tier 1: CH₄ + N₂O vs. SOC proxy. Balance neto tCO₂e por potrero y estancia.' },
+              { icon: Map,             title: 'Importación KML/KMZ/SHP',     desc: 'Importá polígonos desde Google Earth, QGIS o cualquier GIS. También disponible en plan Brote.' },
+              { icon: ShoppingBag,     title: 'Marketplace de datos',        desc: 'Otorgá acceso API a certificadoras, compradores o auditores. Control total de permisos.' },
+              { icon: Zap,             title: 'API B2B v2',                  desc: 'Endpoints autenticados con SHA256. CORS habilitado. OpenAPI spec pública.' },
+            ].map((item, i) => {
+              const ItemIcon = item.icon
+              return (
               <div key={i} className="flex items-start gap-3 bg-white/5 rounded-xl p-4">
-                <span className="text-xl flex-shrink-0">{item.icon}</span>
+                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <ItemIcon className="w-4 h-4 text-gray-300" />
+                </div>
                 <div>
                   <div className="font-bold text-white text-sm mb-1">{item.title}</div>
                   <div className="text-gray-500 text-xs leading-relaxed">{item.desc}</div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Normativas row */}

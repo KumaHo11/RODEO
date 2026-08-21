@@ -8,7 +8,7 @@ export const maxDuration = 300
 const CRON_SECRET = process.env.CRON_SECRET
 
 /**
- * GET /api/cron/metrics-backfill?paddock_id=xxx&year_from=2019
+ * GET /api/cron/metrics-backfill?paddock_id=xxx&year_from=2020
  *
  * Thin wrapper for Cloud Scheduler. Auth via CRON_SECRET.
  * All processing logic lives in backfill-processor.ts.
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   }
 
   const paddockId   = req.nextUrl.searchParams.get('paddock_id')
-  const yearFromStr = req.nextUrl.searchParams.get('year_from') || '2019'
+  const yearFromStr = req.nextUrl.searchParams.get('year_from') || '2020'
   const yearToStr   = req.nextUrl.searchParams.get('year_to')
 
   if (!paddockId) {
