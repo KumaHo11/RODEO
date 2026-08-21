@@ -233,6 +233,6 @@ export async function POST(req: NextRequest) {
     }, { status: 201 })
   } catch (err: any) {
     console.error('[POST /api/eudr/generate-dds]', err)
-    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
   }
 }

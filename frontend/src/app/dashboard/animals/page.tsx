@@ -2,16 +2,17 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { PawPrint, Plus, Upload, Search, ChevronRight } from 'lucide-react'
+import { Plus, Search, ChevronRight, PawPrint } from 'lucide-react'
 import { useAnimals } from './hooks/useAnimals'
 import { usePlan } from '@/hooks/usePlan'
+import { AnimalCSVImporter } from './AnimalCSVImporter'
 
 export default function AnimalsPage() {
   const [filterStatus, setFilterStatus] = useState('Todos')
   const [searchTerm, setSearchTerm] = useState('')
   const { hasFeature } = usePlan()
 
-  const { animals, loading } = useAnimals({
+  const { animals, loading, refetch } = useAnimals({
     status: filterStatus,
     search: searchTerm,
   })
@@ -76,10 +77,7 @@ export default function AnimalsPage() {
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            <button className="border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-2 text-sm">
-              <Upload className="w-4 h-4" />
-              Importar CSV
-            </button>
+            <AnimalCSVImporter onSuccess={refetch} />
             <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm shadow-green-200 flex items-center gap-2">
               <Plus className="w-4 h-4" />
               Nuevo animal

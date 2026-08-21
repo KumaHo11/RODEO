@@ -32,7 +32,7 @@ export async function GET(
     return NextResponse.json({ animal })
   } catch (err: any) {
     console.error('GET /api/animals/[id] error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }
 
@@ -92,7 +92,7 @@ export async function PATCH(
     return NextResponse.json({ animal: result.rows[0] })
   } catch (err: any) {
     console.error('PATCH /api/animals/[id] error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }
 
@@ -123,6 +123,6 @@ export async function DELETE(
     return NextResponse.json({ success: true, animal: result.rows[0] })
   } catch (err: any) {
     console.error('DELETE /api/animals/[id] error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }

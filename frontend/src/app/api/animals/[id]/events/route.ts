@@ -24,7 +24,7 @@ export async function GET(
     return NextResponse.json({ events })
   } catch (err: any) {
     console.error('GET /api/animals/[id]/events error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }
 
@@ -73,6 +73,6 @@ export async function POST(
     return NextResponse.json({ event: result.rows ? result.rows[0] : null }, { status: 201 })
   } catch (err: any) {
     console.error('POST /api/animals/[id]/events error:', err)
-    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
   }
 }

@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ animals: result })
   } catch (err: any) {
     console.error('GET /api/animals error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }
 
@@ -56,11 +56,27 @@ export async function POST(req: NextRequest) {
     const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const body = await req.json()
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: 'Payload JSON inválido' }, { status: 400 })
+    }
+
     const {
       rfid_code, visual_tag, name, sex, breed, birth_date,
       mother_id, father_id, current_paddock_id, current_herd_id, notes
     } = body
+
+    // Al menos un identificador es requerido
+    if (!rfid_code && !visual_tag && !name) {
+      return NextResponse.json({
+        error: 'Se requiere al menos un identificador: RFID (rfid_code), caravana (visual_tag) o nombre (name)',
+      }, { status: 400 })
+    }
+
+    // Sanitizar fecha de nacimiento — string vacío → null para evitar error de PostgreSQL
+    const safeBirthDate = birth_date && String(birth_date).trim() !== '' ? birth_date : null
 
     const result = await mutate(
       `INSERT INTO animals (
@@ -75,7 +91,7 @@ export async function POST(req: NextRequest) {
         name || null,
         sex || null,
         breed || null,
-        birth_date || null,
+        safeBirthDate,
         mother_id || null,
         father_id || null,
         current_paddock_id || null,
@@ -88,6 +104,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ animal: newAnimal }, { status: 201 })
   } catch (err: any) {
     console.error('POST /api/animals error:', err)
-    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
+    return NextResponse.json({
+      error: 'Error interno del servidor',
+      detail: err?.message ?? 'Error desconocido',
+    }, { status: 500 })
   }
 }

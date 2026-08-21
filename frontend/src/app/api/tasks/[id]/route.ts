@@ -54,7 +54,7 @@ export async function PATCH(
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('PATCH /api/tasks/[id] error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }
 
@@ -74,6 +74,6 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('DELETE /api/tasks/[id] error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }

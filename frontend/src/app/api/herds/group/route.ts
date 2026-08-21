@@ -58,6 +58,6 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true, grupo_manejo_id: grupoId, grupo_manejo_nombre: nombre })
   } catch (err: any) {
     console.error('PATCH /api/herds/group error:', err)
-    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
   }
 }

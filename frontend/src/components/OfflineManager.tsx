@@ -108,7 +108,7 @@ export function addToOfflineQueue(item: {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function OfflineManager({ children }: { children?: React.ReactNode }) {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const [isOffline, setIsOffline]   = useState(false)
   const [isSyncing, setIsSyncing]   = useState(false)
   const [pendingCount, setPending]  = useState(0)
@@ -166,6 +166,24 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
     // Contar pendientes iniciales
     refreshPendingCount()
   }, [user, getToken, refreshPendingCount])
+
+  // ── Auth expired listener ─────────────────────────────────────────────────
+  // Cuando apiFetch o prefetch reciben un 401, forzamos logout limpio
+  useEffect(() => {
+    const handleAuthExpired = async (ev: Event) => {
+      const detail = (ev as CustomEvent).detail ?? {}
+      console.warn('[OfflineManager] Session expired, forcing sign-out', detail)
+      try {
+        await signOut()
+      } catch { /* ignore sign-out errors */ }
+      // Redirigir al login limpiamente
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login'
+      }
+    }
+    window.addEventListener('rodeo_auth_expired', handleAuthExpired)
+    return () => window.removeEventListener('rodeo_auth_expired', handleAuthExpired)
+  }, [signOut])
 
   // ── Listeners ─────────────────────────────────────────────────────────────
   useEffect(() => {

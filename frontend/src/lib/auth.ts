@@ -41,10 +41,18 @@ export async function requireAuth(req: NextRequest): Promise<AuthContext | null>
     return cached.data
   }
 
-  const profile = await serviceQueryOne<{ id: string; organization_id: string; system_role: string }>(
-    'SELECT id, organization_id, system_role FROM profiles WHERE firebase_uid = $1',
-    [uid]
-  )
+  let profile: { id: string; organization_id: string; system_role: string } | null = null
+  try {
+    profile = await serviceQueryOne<{ id: string; organization_id: string; system_role: string }>(
+      'SELECT id, organization_id, system_role FROM profiles WHERE firebase_uid = $1',
+      [uid]
+    )
+  } catch (dbErr: any) {
+    console.error('[requireAuth] DB error fetching profile for uid:', uid, dbErr?.message ?? dbErr)
+    // Limpiar caché corrupto (si existía entrada previa)
+    profileCache.delete(uid)
+    return null
+  }
 
   if (!profile) return null
 

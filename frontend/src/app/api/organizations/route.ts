@@ -13,12 +13,18 @@ export const dynamic = 'force-dynamic'
 async function getOrgId(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim() || ''
   if (!token) return null
-  const decoded = await verifyFirebaseToken(token)
+  const decoded = await verifyFirebaseToken(token).catch(() => null)
   if (!decoded) return null
-  const profile = await serviceQueryOne<{ organization_id: string }>(
-    'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
-    [decoded.uid]
-  )
+  let profile: { organization_id: string } | null = null
+  try {
+    profile = await serviceQueryOne<{ organization_id: string }>(
+      'SELECT organization_id FROM profiles WHERE firebase_uid = $1',
+      [decoded.uid]
+    )
+  } catch (dbErr: any) {
+    console.error('[organizations] DB error in getOrgId:', dbErr?.message)
+    return null
+  }
   if (!profile?.organization_id) return null
   return { orgId: profile.organization_id, uid: decoded.uid }
 }
@@ -44,7 +50,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ organization: org })
   } catch (err: any) {
     console.error('GET /api/organizations error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
   }
 }
 
@@ -87,6 +93,6 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('PATCH /api/organizations error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
   }
 }
