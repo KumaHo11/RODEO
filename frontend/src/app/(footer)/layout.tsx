@@ -264,7 +264,7 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
 
             {Object.entries(footerLinks).map(([title, links]) => (
               <div key={title}>
-                <div className="text-[10px] font-black text-gray-400 tracking-widest mb-4">{title.toUpperCase()}</div>
+                <div className="text-sm font-semibold text-gray-200 mb-4">{title}</div>
                 <div className="space-y-2.5">
                   {links.map(link => (
                     <Link key={link.href} href={link.href}

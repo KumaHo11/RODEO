@@ -1206,7 +1206,7 @@ export default function LandingPage() {
               ]},
             ].map((col, i) => (
               <div key={i}>
-                <div className="text-[10px] font-black text-gray-400 tracking-widest mb-4">{col.title.toUpperCase()}</div>
+                <div className="text-sm font-semibold text-gray-200 mb-4">{col.title}</div>
                 <div className="space-y-2.5">
                   {col.links.map(link => (
                     <Link key={link.href} href={link.href} className="block text-sm text-gray-600 hover:text-gray-200 transition-colors">{link.label}</Link>
