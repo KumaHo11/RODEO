@@ -194,6 +194,24 @@ export default function EquipoPage() {
   const load = useCallback(async () => {
     if (!user) return
     setLoading(true)
+
+    // ── Paso 1: IndexedDB inmediata (offline-first) ──────────────────────
+    try {
+      const { dbGetAll } = await import('@/lib/offline/db')
+      const [localMembers, localInvitations] = await Promise.all([
+        dbGetAll('team_members'),
+        dbGetAll('invitations'),
+      ])
+      if (localMembers.length > 0) {
+        setMembers(localMembers)
+        setLoading(false)
+      }
+      if (localInvitations.length > 0) {
+        setInvitations(localInvitations)
+      }
+    } catch { /* ignore — IDB not available (SSR) */ }
+
+    // ── Paso 2: API en background ─────────────────────────────────────────
     const [teamRes, orgRes, rolesRes] = await Promise.all([
       apiFetch('/api/team'),
       apiFetch('/api/organizations'),
@@ -207,14 +225,33 @@ export default function EquipoPage() {
     if (orgData) setOrgName(orgData.name || '')
     setCustomRoles(rolesData)
 
-    const me = teamData.members?.find((m: any) => m.firebase_uid === user.uid)
+    const freshMembers     = teamData.members     || []
+    const freshInvitations = teamData.invitations || []
+
+    const me = freshMembers.find((m: any) => m.firebase_uid === user.uid)
     setOwnerName(
       me ? `${me.first_name || ''} ${me.last_name || ''}`.trim() || user.email || 'Propietario'
          : user.email || 'Propietario'
     )
 
-    setMembers(teamData.members || [])
-    setInvitations(teamData.invitations || [])
+    setMembers(freshMembers)
+    setInvitations(freshInvitations)
+
+    // ── Paso 3: Actualizar IndexedDB con datos frescos ────────────────────
+    if (freshMembers.length > 0 || freshInvitations.length > 0) {
+      try {
+        const { dbUpsertMany } = await import('@/lib/offline/db')
+        await Promise.all([
+          freshMembers.length > 0
+            ? dbUpsertMany('team_members', freshMembers).catch(() => {})
+            : Promise.resolve(),
+          freshInvitations.length > 0
+            ? dbUpsertMany('invitations', freshInvitations).catch(() => {})
+            : Promise.resolve(),
+        ])
+      } catch { /* ignore */ }
+    }
+
     setLoading(false)
   }, [user])
 

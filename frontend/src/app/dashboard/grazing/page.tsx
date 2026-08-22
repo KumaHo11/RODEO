@@ -1125,6 +1125,13 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         }))
       } catch (err) {}
 
+      // ── Persistir planes en IndexedDB para acceso offline ─────────────
+      if (plData.length > 0) {
+        import('@/lib/offline/db').then(({ dbUpsertMany }) => {
+          dbUpsertMany('grazing_plans', plData).catch(() => {})
+        })
+      }
+
       if (wDataRes) {
         setWeather(wDataRes)
       }
@@ -1432,35 +1439,73 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         }
       }
 
-      // ── Save main plan ──
+      // ── Save main plan (offline-first via Outbox) ────────────────────────
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
+      const { enqueue } = await import('@/lib/offline/outbox')
+
       if (formData.id) {
-        await apiFetch(`/api/grazing-plans/${formData.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        // ── Optimistic local update ───────────────────────────────────────
+        const optimisticPlan = { ...formData, ...payload, id: formData.id, updated_at: Date.now() }
+        setPlans(prev => prev.map(p => p.id === formData.id ? { ...p, ...payload } : p))
+        import('@/lib/offline/db').then(({ dbUpsert }) => {
+          dbUpsert('grazing_plans', optimisticPlan).catch(() => {})
+        })
+
+        await enqueue({
+          type: 'grazing_plan_update',
+          url: `/api/grazing-plans/${formData.id}`,
+          method: 'PATCH',
+          body: payload,
+        })
       } else {
-        await apiFetch('/api/grazing-plans', { method: 'POST', body: JSON.stringify(payload) })
+        const tempId = `pending-${Date.now()}`
+        const optimisticPlan = { ...payload, id: tempId, status: payload.status || 'PLANNED', updated_at: Date.now() }
+        setPlans(prev => [optimisticPlan, ...prev])
+        import('@/lib/offline/db').then(({ dbUpsert }) => {
+          dbUpsert('grazing_plans', optimisticPlan).catch(() => {})
+        })
+
+        await enqueue({
+          type: 'grazing_plan_create',
+          url: '/api/grazing-plans',
+          method: 'POST',
+          body: payload,
+          localData: { store: 'grazing_plans', data: optimisticPlan },
+        })
       }
 
       // ── Apply cascade updates to sibling plans ──
       if (cascadeUpdates.length > 0) {
         await Promise.all(
           cascadeUpdates.map(u =>
-            apiFetch(`/api/grazing-plans/${u.id}`, {
+            enqueue({
+              type: 'grazing_plan_update',
+              url: `/api/grazing-plans/${u.id}`,
               method: 'PATCH',
-              body: JSON.stringify({ entry_date: u.entry_date, exit_date: u.exit_date }),
+              body: { entry_date: u.entry_date, exit_date: u.exit_date },
             })
           )
         )
+        setPlans(prev => prev.map(p => {
+          const cu = cascadeUpdates.find(u => u.id === p.id)
+          return cu ? { ...p, entry_date: cu.entry_date, exit_date: cu.exit_date } : p
+        }))
       }
 
       // Update paddock status
       if (payload.status === 'ACTIVE') {
-        await apiFetch(`/api/paddocks/${formData.paddock_id}`, { method: 'PATCH', body: JSON.stringify({ current_status: 'GRAZING' }) })
+        enqueue({ type: 'paddock_status', url: `/api/paddocks/${formData.paddock_id}`, method: 'PATCH', body: { current_status: 'GRAZING' } })
       } else if (payload.status === 'COMPLETED') {
-        await apiFetch(`/api/paddocks/${formData.paddock_id}`, { method: 'PATCH', body: JSON.stringify({ current_status: 'RESTING' }) })
+        enqueue({ type: 'paddock_status', url: `/api/paddocks/${formData.paddock_id}`, method: 'PATCH', body: { current_status: 'RESTING' } })
       }
 
       // Notify user about cascade if it happened
       if (cascadeUpdates.length > 0) {
-        console.info(`[Cascade] Updated ${cascadeUpdates.length} sibling plans in cycle ${cycleId}`)
+        console.info(`[Cascade] Queued ${cascadeUpdates.length} sibling plan updates in cycle ${cycleId}`)
+      }
+
+      if (isOffline) {
+        toast.info('Sin conexión — los cambios se guardarán al reconectar.', { duration: 4000 })
       }
     } catch (err) {
       console.error('handleSave error:', err)
@@ -1468,34 +1513,36 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     } finally {
       setIsModalOpen(false)
       setSaving(false)
-      loadData()
+      if (navigator.onLine) loadData()
     }
   }
 
 
-  // Move a block by drag → update dates optimistically
+  // Move a block by drag → update dates optimistically (offline-first)
   const handleBlockMove = useCallback(async (planId: string, newEntry: string, newExit: string, planContext?: any) => {
     const isLocked = planContext?.is_locked;
-    
+
+    const updateBody = isLocked
+      ? { adjusted_entry_date: newEntry, adjusted_exit_date: newExit }
+      : { entry_date: newEntry, exit_date: newExit };
+
+    // Optimistic UI update
     setPlans(prev => prev.map(p => {
       if (p.id === planId) {
-        if (isLocked) {
-          return { ...p, adjusted_entry_date: newEntry, adjusted_exit_date: newExit }
-        } else {
-          return { ...p, entry_date: newEntry, exit_date: newExit }
-        }
+        return isLocked
+          ? { ...p, adjusted_entry_date: newEntry, adjusted_exit_date: newExit }
+          : { ...p, entry_date: newEntry, exit_date: newExit }
       }
       return p
     }))
-    
-    // persist async
-    const updateBody = isLocked 
-      ? { adjusted_entry_date: newEntry, adjusted_exit_date: newExit }
-      : { entry_date: newEntry, exit_date: newExit };
-      
-    await apiFetch(`/api/grazing-plans/${planId}`, {
+
+    // Persist via outbox (works offline)
+    const { enqueue } = await import('@/lib/offline/outbox')
+    await enqueue({
+      type: 'grazing_plan_move',
+      url: `/api/grazing-plans/${planId}`,
       method: 'PATCH',
-      body: JSON.stringify(updateBody),
+      body: updateBody,
     })
   }, [])
 
