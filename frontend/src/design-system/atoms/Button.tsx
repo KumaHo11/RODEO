@@ -22,11 +22,11 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const VARIANTS: Record<NonNullable<ButtonProps['variant']>, string> = {
-  primary:   'bg-green-600 text-white hover:bg-green-700 shadow-sm shadow-green-200/50',
-  secondary: 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-  outline:   'border border-gray-200 text-gray-500 hover:bg-gray-50',
-  ghost:     'bg-transparent text-gray-400 hover:bg-gray-50',
-  danger:    'bg-red-50 text-red-500 hover:bg-red-100',
+  primary:   'bg-[var(--color-brand-vibrant)] text-[var(--color-surface-light)] hover:bg-[var(--color-brand-primary)] font-display font-bold shadow-sm',
+  secondary: 'bg-transparent border-[1.5px] border-[var(--color-brand-primary)] text-[var(--color-brand-primary)] hover:bg-[var(--color-surface-muted)]',
+  outline:   'border border-[var(--color-border-default)] text-[var(--color-earth-neutral)] hover:bg-[var(--color-surface-muted)]',
+  ghost:     'bg-transparent text-[var(--color-earth-neutral)] hover:bg-[var(--color-surface-muted)]',
+  danger:    'bg-[var(--color-status-error-bg)] text-[var(--color-status-error)] hover:bg-[var(--color-status-error-bg)]/80',
 };
 
 const SIZES: Record<NonNullable<ButtonProps['size']>, string> = {

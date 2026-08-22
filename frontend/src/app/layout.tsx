@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Montserrat } from 'next/font/google'
 import Script from 'next/script'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
@@ -7,12 +7,26 @@ import { OfflineManager } from '@/components/OfflineManager'
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
 import { Toaster } from 'sonner'
 
-const inter = Inter({ subsets: ['latin'], preload: false })
+const inter = Inter({ 
+  subsets: ['latin'], 
+  display: 'swap',
+  variable: '--font-inter'
+})
+
+const montserrat = Montserrat({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-display',
+  weight: ['600', '700', '800']
+})
 
 import { GA_MEASUREMENT_ID } from '@/lib/analytics'
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://rodeoagtech.com'),
+  alternates: {
+    canonical: './',
+  },
   title: 'RODEO — Gestión Ganadera Regenerativa',
   description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rodeos, pastoreo rotacional y bitácora de campo con IA.',
   keywords: ['ganadería regenerativa', 'ganadería holística', 'agtech', 'pastoreo rotacional', 'software ganadero', 'gestión de potreros', 'RODEO'],
@@ -103,7 +117,7 @@ export default function RootLayout({
           </>
         )}
       </head>
-      <body className={`${inter.className} overflow-x-hidden`}>
+      <body className={`${inter.variable} ${montserrat.variable} ${inter.className} font-sans overflow-x-hidden`}>
         {/* Global Native Splash Screen (Immediately visible, removed by AuthProvider) */}
         <div 
           id="global-native-splash" 
