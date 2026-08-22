@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
       const notes = row['notes']?.trim() || null
 
       try {
-        await pool.query(
+        const res = await pool.query(
           `INSERT INTO animals (
               org_id, visual_tag, rfid_code, name, sex, breed,
               birth_date, notes, status, created_at, updated_at
@@ -186,7 +186,11 @@ export async function POST(req: NextRequest) {
            ON CONFLICT DO NOTHING`,
           [auth.orgId, visual_tag, rfid_code, name, sex, breed, birth_date, notes]
         )
-        inserted.push(identifier)
+        if (res.rowCount === 0) {
+          errors.push({ row: rowNum, identifier, reason: 'El animal fue omitido (posible RFID duplicado u otro conflicto de restricción)' })
+        } else {
+          inserted.push(identifier)
+        }
       } catch (rowErr: any) {
         const reason = rowErr?.message ?? 'Error de base de datos'
         errors.push({ row: rowNum, identifier, reason })

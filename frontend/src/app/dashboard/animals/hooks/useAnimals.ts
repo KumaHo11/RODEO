@@ -19,7 +19,8 @@ export function useAnimals(params: { status?: string, herd_id?: string, search?:
       if (params.search) searchParams.append('search', params.search)
 
       const res = await fetch(`/api/animals?${searchParams.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
       })
       
       if (!res.ok) throw new Error('Failed to fetch animals')
