@@ -59,7 +59,7 @@ export default function SobreRodeo() {
                 { year: '2022', event: 'Fundación del equipo y primeros 6 meses de investigación en campo.', Icon: Sprout },
                 { year: '2023', event: 'Lanzamiento de la versión Beta con los primeros 150 productores piloto en Argentina y Uruguay.', Icon: Zap },
                 { year: '2024', event: 'Expansión a Brasil, Paraguay y Colombia. Integración del motor de IA Gemini para análisis de materia seca.', Icon: Globe },
-                { year: '2025', event: 'Superamos los 10.000 usuarios activos. Lanzamiento del Planificador Holístico con metodología Savory.', Icon: Heart },
+                { year: '2025', event: 'Más de 800 establecimientos activos. Lanzamiento del Planificador Holístico con metodología Savory.', Icon: Heart },
                 { year: '2026', event: 'Versión 2.0 con arquitectura Offline-First completa y módulo de huella de carbono para bonos MRV.', Icon: Sprout },
               ].map(({ year, event, Icon }, i) => (
                 <div key={i} className="flex gap-4">
