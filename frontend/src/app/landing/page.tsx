@@ -11,6 +11,7 @@ import {
 import RodeoLogo from '@/components/RodeoLogo'
 import { FormulasTab } from '@/app/dashboard/calculadora/components/FormulasTab'
 import { event } from '@/lib/analytics'
+import { IconoRodeos } from '@/components/icons/IconoRodeos'
 
 interface ApiPlan {
   id: string; name: string; slug: string; description: string
@@ -176,7 +177,7 @@ export default function LandingPage() {
       accent: 'from-green-700 to-emerald-800',
     },
     {
-      Icon: Footprints,
+      Icon: IconoRodeos,
       tag: 'CORE',
       title: 'Gestión de hacienda',
       subtitle: 'Tu inventario al día, siempre',
@@ -220,15 +221,6 @@ export default function LandingPage() {
       stats: [{ label: 'Pronóstico', value: 'Ajuste dinámico' }, { label: 'Alertas', value: 'Automáticas' }],
       accent: 'from-cyan-600 to-blue-700',
     },
-    {
-      Icon: Leaf,
-      tag: 'FUTURO · SOSTENIBILIDAD',
-      title: 'Captura de Carbono',
-      subtitle: 'Potencial de carbono en tu campo',
-      description: 'Trazá y calculá la captura posible de carbono en el suelo mediante el manejo regenerativo. Herramientas de seguimiento para preparar tu campo de cara a las certificaciones de bonos verdes.',
-      stats: [{ label: 'Seguimiento', value: 'MRV' }, { label: 'Impacto', value: 'Regenerativo' }],
-      accent: 'from-green-700 to-emerald-800',
-    },
   ]
 
   // Map API plans to display format
@@ -244,14 +236,14 @@ export default function LandingPage() {
   const PLAN_META: Record<string, { cta: string; ctaStyle: string; icon: string }> = {
     brote:       { cta: 'Empezar gratis',         ctaStyle: 'border border-gray-300 text-gray-700 hover:bg-gray-50',                                         icon: '🌱' },
     planificador:{ cta: 'Comenzar prueba gratis',  ctaStyle: 'border border-green-600 text-green-700 hover:bg-green-50',                                      icon: '🚜' },
-    holistico:   { cta: 'Elegir Holístico',        ctaStyle: 'bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-600/30',                       icon: '🌿' },
+    holistico:   { cta: 'Elegir Holístico',        ctaStyle: 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/30',                       icon: '🌿' },
     latifundio:  { cta: 'Hablar con ventas →',     ctaStyle: 'bg-white text-gray-950 hover:bg-gray-100 font-black',                                           icon: '🌍' },
   }
   const BASE_FEATURES: Record<string, string[]> = {
     brote:        ['Mapeo de hasta 20 potreros', 'Gestión de hacienda (1 rodeo)', 'Bitácora de campo básica', 'Cálculo estático de Carga Animal'],
     planificador: ['Potreros y rodeos ilimitados', 'Planificador Gantt de pastoreo', 'Cálculo dinámico Carga Animal vs Receptividad', 'Alertas de sanidad e infraestructura'],
     holistico:    ['Todo lo del Plan Planificador', 'Planificación forrajera Savory', 'Integración satelital NDVI', 'Motor predictivo Bio-Económico (ADA)'],
-    latifundio:   ['Todo lo del Plan Holístico', 'Dashboard multi-establecimientos', 'Integración con balanzas y ERPs', 'Soporte prioritario dedicado'],
+    latifundio:   ['Todo lo del Plan Holístico', 'Dashboard multi-establecimientos', 'Soporte prioritario dedicado'],
   }
   const getEnabledFeatures = (plan: ApiPlan) => {
     const base = BASE_FEATURES[plan.slug] || ['Cartografía digital de potreros', 'Gestión de hacienda', 'Bitácora de campo']
@@ -259,6 +251,7 @@ export default function LandingPage() {
       .filter(f => f.flag_type === 'boolean' && f.flag_value === true)
       .map(f => FLAG_LABELS[f.flag_key] || f.label)
       .filter((label): label is string => typeof label === 'string' && label.length > 0)
+      .filter(label => label !== 'Acceso API corporativa' && label !== 'Módulo de Carbono y bonos (MRV)')
       .filter(label => !base.some(b => b.toLowerCase().includes(label.toLowerCase().split(' ')[0])))
     return [...base, ...extras]
   }
@@ -781,8 +774,8 @@ export default function LandingPage() {
                     }`}>
 
                     {isPopular && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-white text-[10px] font-black px-4 py-1.5 rounded-full tracking-widest whitespace-nowrap">
-                        ⭐ MEJOR VALOR
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full tracking-widest whitespace-nowrap">
+                        MEJOR VALOR
                       </div>
                     )}
 
