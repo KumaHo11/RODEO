@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Montserrat } from 'next/font/google'
 import Script from 'next/script'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
@@ -11,6 +11,13 @@ const inter = Inter({
   subsets: ['latin'], 
   display: 'swap',
   variable: '--font-inter'
+})
+
+const montserrat = Montserrat({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-display',
+  weight: ['600', '700', '800']
 })
 
 import { GA_MEASUREMENT_ID } from '@/lib/analytics'
@@ -110,7 +117,7 @@ export default function RootLayout({
           </>
         )}
       </head>
-      <body className={`${inter.variable} ${inter.className} font-sans overflow-x-hidden`}>
+      <body className={`${inter.variable} ${montserrat.variable} ${inter.className} font-sans overflow-x-hidden`}>
         {/* Global Native Splash Screen (Immediately visible, removed by AuthProvider) */}
         <div 
           id="global-native-splash" 

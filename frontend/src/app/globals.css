@@ -1,66 +1,34 @@
 @import "tailwindcss";
+@import "../design-system/tokens/tokens.css";
 @import "leaflet/dist/leaflet.css";
 @import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #111827; /* gray-900 */
-
-  /* ── Rodeo Design Tokens (Atomic Design System) ── */
+@theme inline {
+  --font-sans: var(--font-inter), 'Inter', Helvetica, Arial, sans-serif;
+  --font-display: var(--font-display), 'Montserrat', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   
-  /* Core Colors */
-  --color-primary:       #16a34a; /* Rodeo Green (600) */
-  --color-primary-dark:  #15803d; /* 700 */
-  --color-primary-light: #bbf7d0; /* 200 */
-  --color-secondary:     #2563eb; /* Rodeo Blue (600) - Usado para perímetros */
+  --color-brand-primary: var(--color-brand-primary);
+  --color-brand-vibrant: var(--color-brand-vibrant);
+  --color-brand-dark: var(--color-brand-dark);
+  --color-earth-neutral: var(--color-earth-neutral);
+  --color-surface-light: var(--color-surface-light);
+  --color-text-main: var(--color-text-main);
   
-  /* Surface / Backgrounds */
-  --color-bg-base:       #ffffff;
-  --color-bg-subtle:     #f9fafb; /* gray-50 */
-  --color-bg-muted:      #f3f4f6; /* gray-100 */
-
-  /* Borders */
-  --color-border-default: #e5e7eb; /* gray-200 */
-  --color-border-subtle:  #f3f4f6; /* gray-100 */
-
-  /* Typography */
-  --color-text-main:      #111827; /* gray-900 */
-  --color-text-sub:       #4b5563; /* gray-600 */
-  --color-text-muted:     #9ca3af; /* gray-400 */
-  --color-text-placeholder: #d1d5db;
-
-  /* Semantic / Operational */
-  --signal-ok:         #16a34a;
-  --signal-warning:    #d97706;
-  --signal-critical:   #dc2626;
-
-  /* NDVI */
-  --ndvi-optimal:      #16a34a;
-  --ndvi-good:         #65a30d;
-  --ndvi-fair:         #ca8a04;
-  --ndvi-low:          #dc2626;
-
-  /* Layout Tokens */
-  --radius-card:       16px;
-  --radius-button:     12px;
-  --radius-input:      12px;
-  --radius-badge:      999px;
-
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --color-status-success: var(--color-status-success);
+  --color-status-warning: var(--color-status-warning);
+  --color-status-error: var(--color-status-error);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter), Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+:root {
+  --background: var(--color-surface-light);
+  --foreground: var(--color-text-main);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #ffffff;
-    --foreground: #111827;
+    --background: var(--color-brand-dark);
+    --foreground: var(--color-surface-light);
   }
 }
 

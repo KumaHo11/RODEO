@@ -13,53 +13,21 @@
 :root {
   /* ── 1. PRIMITIVE TOKENS ─────────────────────────────────────────── */
 
-  /* Green scale */
-  --green-50:  #f0fdf4;
-  --green-100: #dcfce7;
-  --green-200: #bbf7d0;
-  --green-500: #22c55e;
-  --green-600: #16a34a;
-  --green-700: #15803d;
-  --green-800: #166534;
+  /* Brand Core Palette */
+  --color-brand-primary:   #008234; /* Verde institucional base */
+  --color-brand-vibrant:   #00A73D; /* Verde vibrante interactivo */
+  --color-brand-dark:      #111D34; /* Azul marino profundo */
+  --color-earth-neutral:   #787661; /* Tono tierra/oliva */
+  --color-surface-light:   #FEFFF9; /* Blanco cálido */
+  --color-text-main:       #262628; /* Gris carbón */
+  --color-surface-muted:   #F7F7F2; /* Workspace background */
 
-  /* Gray scale */
-  --gray-50:  #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
-  --gray-950: #030712;
-
-  /* Amber scale */
-  --amber-50:  #fffbeb;
-  --amber-100: #fef3c7;
-  --amber-500: #f59e0b;
-  --amber-600: #d97706;
-  --amber-700: #b45309;
-  --amber-900: #78350f;
-
-  /* Red scale */
-  --red-50:  #fef2f2;
-  --red-100: #fee2e2;
-  --red-300: #fca5a5;
-  --red-500: #ef4444;
-  --red-700: #b91c1c;
-
-  /* Blue scale */
-  --blue-50:  #eff6ff;
-  --blue-100: #dbeafe;
-  --blue-500: #3b82f6;
-  --blue-600: #2563eb;
-
-  /* Violet scale */
-  --violet-50:  #f5f3ff;
-  --violet-100: #ede9fe;
-  --violet-600: #7c3aed;
-  --violet-800: #5b21b6;
+  /* Status / Feedback Colors */
+  --color-status-success:  #00A73D;
+  --color-status-warning:  #D97706;
+  --color-status-warning-bg: #FEF3C7;
+  --color-status-error:    #DC2626;
+  --color-status-error-bg: #FEE2E2;
 
   /* Typography scale */
   --font-10: 10px;
@@ -91,7 +59,7 @@
   /* Shadows */
   --shadow-sm:      0 1px 2px 0 rgb(0 0 0 / 0.04);
   --shadow-md:      0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.06);
-  --shadow-green:   0 1px 3px 0 rgb(22 163 74 / 0.2);
+  --shadow-green:   0 1px 3px 0 rgb(0 167 61 / 0.2);
   --shadow-modal:   0 25px 50px -12px rgb(0 0 0 / 0.25);
 
   /* Transitions */
@@ -103,38 +71,31 @@
   /* ── 2. SEMANTIC TOKENS ── */
 
   /* Brand */
-  --color-brand:        var(--green-600);
-  --color-brand-dark:   var(--green-700);
-  --color-brand-light:  var(--green-50);
-  --color-brand-muted:  var(--green-200);
+  --color-brand:        var(--color-brand-primary);
+  --color-brand-hover:  var(--color-brand-vibrant);
+  --color-brand-dark-bg:var(--color-brand-dark);
+  --color-brand-light:  var(--color-surface-light);
 
   /* Backgrounds */
-  --color-bg-base:      #ffffff;
-  --color-bg-subtle:    var(--gray-50);
-  --color-bg-muted:     var(--gray-100);
-  --color-bg-overlay:   rgba(0, 0, 0, 0.45);
+  --color-bg-base:      var(--color-surface-light);
+  --color-bg-subtle:    var(--color-surface-muted);
+  --color-bg-overlay:   rgba(17, 29, 52, 0.6); /* Using dark brand with opacity */
 
   /* Borders */
-  --color-border-default: var(--gray-100);
-  --color-border-input:   var(--gray-200);
-  --color-border-focus:   var(--green-500);
+  --color-border-default: #EBE9E1;
+  --color-border-subtle:  #E8E7DF;
+  --color-border-focus:   var(--color-brand-vibrant);
 
   /* Text */
-  --color-text-main:    var(--gray-950);
-  --color-text-body:    var(--gray-800);
-  --color-text-sub:     var(--gray-500);
-  --color-text-muted:   var(--gray-400);
-  --color-text-inverse: #ffffff;
+  --color-text-body:    var(--color-text-main);
+  --color-text-sub:     var(--color-earth-neutral);
+  --color-text-inverse: var(--color-surface-light);
 
   /* Feedback */
-  --color-success:      var(--green-600);
-  --color-success-bg:   var(--green-50);
-  --color-warning:      var(--amber-600);
-  --color-warning-bg:   var(--amber-50);
-  --color-danger:       var(--red-500);
-  --color-danger-bg:    var(--red-50);
-  --color-info:         var(--blue-600);
-  --color-info-bg:      var(--blue-50);
+  --color-success:      var(--color-status-success);
+  --color-warning:      var(--color-status-warning);
+  --color-danger:       var(--color-status-error);
+  --color-info:         var(--color-brand-dark);
 
 
   /* ── 3. COMPONENT TOKENS ── */
@@ -145,31 +106,31 @@
   --btn-transition:   var(--transition-base);
 
   /* Input */
-  --input-bg:         var(--gray-50);
-  --input-border:     var(--gray-200);
+  --input-bg:         var(--color-surface-light);
+  --input-border:     var(--color-border-default);
   --input-radius:     12px;
   --input-font-size:  var(--font-sm);
   --input-font-weight: 700;
-  --input-color:      var(--gray-800);
-  --input-placeholder: var(--gray-300);
+  --input-color:      var(--color-text-main);
+  --input-placeholder: var(--color-earth-neutral);
 
   /* Card */
-  --card-bg:          #ffffff;
-  --card-border:      var(--gray-100);
+  --card-bg:          var(--color-surface-light);
+  --card-border:      var(--color-border-default);
   --card-radius:      16px;
   --card-shadow:      var(--shadow-sm);
   --card-padding:     24px;
 
   /* Label */
-  --label-size:       10px;
-  --label-weight:     900;    /* font-black */
-  --label-color:      var(--gray-400);
-  --label-tracking:   0.08em;
+  --label-size:       11px;
+  --label-weight:     700;
+  --label-color:      var(--color-earth-neutral);
+  --label-tracking:   0.05em;
 
   /* Badge / Tag */
   --badge-radius:     var(--radius-full);
-  --badge-font-size:  9px;
-  --badge-font-weight: 900;
+  --badge-font-size:  10px;
+  --badge-font-weight: 700;
   --badge-padding:    2px 8px;
 
   /* Modal */
@@ -178,6 +139,6 @@
   --modal-max-w:      448px;
 
   /* Toggle */
-  --toggle-on-bg:     var(--green-500);
-  --toggle-off-bg:    var(--gray-200);
+  --toggle-on-bg:     var(--color-brand-vibrant);
+  --toggle-off-bg:    var(--color-border-default);
 }

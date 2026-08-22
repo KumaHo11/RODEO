@@ -30,6 +30,9 @@ export default function ServiceWorkerRegistrar() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!('serviceWorker' in navigator)) return
+    
+    // Disable SW on localhost to prevent caching issues during development
+    if (window.location.hostname === 'localhost') return
 
     const register = async () => {
       try {

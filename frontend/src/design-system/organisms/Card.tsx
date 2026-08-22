@@ -41,7 +41,7 @@ export function Card({
   return (
     <div
       className={twMerge(
-        'relative bg-white border border-gray-100 rounded-2xl overflow-hidden transition-all',
+        'relative bg-[var(--color-surface-light)] border border-[var(--color-border-default)] rounded-2xl overflow-hidden transition-all',
         elevated ? 'shadow-md' : 'shadow-sm',
         PADDINGS[padding],
         className
@@ -88,12 +88,12 @@ export function CardHeader({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {icon && (
-            <div className="text-gray-400 shrink-0" aria-hidden="true">
+            <div className="text-[var(--color-earth-neutral)] shrink-0" aria-hidden="true">
               {icon}
             </div>
           )}
           <h3 className={twMerge(
-            'text-[10px] font-black text-gray-400',
+            'text-[11px] font-bold text-[var(--color-earth-neutral)]',
             uppercase && 'uppercase tracking-widest'
           )}>
             {title}
@@ -104,7 +104,7 @@ export function CardHeader({
         )}
       </div>
       {subtitle && (
-        <p className="text-sm font-bold text-gray-900 mt-1">
+        <p className="text-sm font-bold text-[var(--color-text-main)] mt-1">
           {subtitle}
         </p>
       )}
@@ -127,7 +127,7 @@ export function CardSection({
     <div
       className={twMerge(
         'py-4',
-        !noBorder && 'border-t border-gray-50',
+        !noBorder && 'border-t border-[var(--color-border-subtle)]',
         className
       )}
       {...props}
@@ -146,7 +146,7 @@ export function CardFooter({
   return (
     <div
       className={twMerge(
-        'flex items-center justify-end gap-3 pt-4 mt-4 border-t border-gray-100',
+        'flex items-center justify-end gap-3 pt-4 mt-4 border-t border-[var(--color-border-default)]',
         className
       )}
       {...props}
