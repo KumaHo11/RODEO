@@ -24,9 +24,6 @@ import { GA_MEASUREMENT_ID } from '@/lib/analytics'
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://rodeoagtech.com'),
-  alternates: {
-    canonical: './',
-  },
   title: 'RODEO — Gestión Ganadera Regenerativa',
   description: 'Plataforma AgTech para ganadería holística y regenerativa. Gestión de potreros, rodeos, pastoreo rotacional y bitácora de campo con IA.',
   keywords: ['ganadería regenerativa', 'ganadería holística', 'agtech', 'pastoreo rotacional', 'software ganadero', 'gestión de potreros', 'RODEO'],
