@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { queryOne } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Términos de Uso | Rodeo AgTech',
   description: 'Términos y condiciones de uso de la plataforma Rodeo AgTech. Conocé tus derechos y obligaciones como usuario de la plataforma de gestión ganadera.',

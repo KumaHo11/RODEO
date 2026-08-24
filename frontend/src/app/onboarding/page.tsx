@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { useRouter } from 'next/navigation'
 import { Check, Loader2, X, Leaf, MapPin, PenLine } from 'lucide-react'
 import Image from 'next/image'
+import RodeoLogo from '@/components/RodeoLogo'
 import type { ParsedKmlFeature } from '@/lib/kmlParser'
 
 // Lazy-load the singleton map (never unmounts while step 1 or 2 is active)
@@ -232,7 +233,7 @@ function OnboardingWizard() {
       {/* -- Header -- */}
       {!isCompleting && (
       <header className="bg-white border-b border-gray-100 px-4 md:px-6 py-2.5 md:py-4 shadow-sm z-30 flex items-center justify-between shrink-0">
-        <Image src="/LogoHeaderVerde_1.svg" alt="RODEO" width={120} height={26} className="h-6 md:h-7 w-auto object-contain object-left mb-1" priority />
+        <RodeoLogo size="lg" className="mb-1" />
         <div className="hidden sm:block">
           <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Configuración inicial</p>
         </div>

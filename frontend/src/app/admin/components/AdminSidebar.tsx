@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 
 import Image from 'next/image'
+import RodeoLogo from '@/components/RodeoLogo'
 
 import { ToggleLeft } from 'lucide-react'
 
@@ -46,7 +47,7 @@ export default function AdminSidebar() {
       <div className={`flex items-center px-4 h-16 border-b border-gray-100 ${collapsed ? 'justify-center' : ''}`}>
         {!collapsed ? (
           <Link href="/admin/dashboard" className="flex flex-col justify-center mt-1">
-            <Image src="/LogoHeaderVerde_1.svg" alt="RODEO" width={120} height={26} className="h-6 w-auto object-contain object-left mb-1" priority />
+            <RodeoLogo size="md" className="mb-1" />
             <div className="text-[9px] text-green-700 font-bold tracking-widest leading-none ml-1">SUPER ADMIN</div>
           </Link>
         ) : (

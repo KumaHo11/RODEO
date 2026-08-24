@@ -22,7 +22,6 @@ const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 const PRECACHE_URLS = [
   '/manifest.json',
   '/FaviconFondoVerde.svg',
-  '/LogoHeaderVerde_1.svg',
   '/LogoInstallapp.svg',
   '/icons/icon-180.png',
   '/icons/icon-192.png',
