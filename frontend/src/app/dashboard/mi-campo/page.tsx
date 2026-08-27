@@ -835,6 +835,7 @@ function KmlPolygonActionModal({
 }) {
   const [mode, setMode] = useState<'choose' | 'create' | 'assign'>('choose')
   const [name, setName] = useState(feature.name || '')
+  const [msHa, setMsHa] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -854,6 +855,7 @@ function KmlPolygonActionModal({
           area_ha: feature.area_ha,
           boundary: feature.geojson,
           current_status: 'RESTING',
+          dry_matter_kg_ha: msHa !== '' ? Number(msHa) : undefined,
         }),
       })
       if (res.ok) {
@@ -944,6 +946,18 @@ function KmlPolygonActionModal({
                   placeholder="Ej. Lote Norte"
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-green-500 outline-none"
                   autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 block">Forraje disponible <span className="font-normal normal-case opacity-70">(kg MS/ha)</span></label>
+                <input
+                  type="number"
+                  min="0"
+                  step="50"
+                  value={msHa}
+                  onChange={e => setMsHa(e.target.value)}
+                  placeholder="Ej. 1500"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-green-500 outline-none"
                 />
               </div>
               <div className="bg-cyan-50 border border-cyan-100 rounded-xl px-3 py-2 flex items-center justify-between">
@@ -1247,17 +1261,6 @@ function FieldSetupModalInline({
               </p>
             )}
           </div>
-
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
-            <div className="relative flex justify-center"><span className="px-2 bg-white text-xs text-gray-400">o dibujá el límite</span></div>
-          </div>
-
-          <button type="button" onClick={onDrawBoundary}
-            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-all">
-            <Plus className="w-4 h-4" /> Dibujar límite del campo en el mapa
-          </button>
         </div>
 
         {/* Footer */}
