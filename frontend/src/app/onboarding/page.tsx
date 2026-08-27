@@ -280,7 +280,7 @@ function OnboardingWizard() {
                     transition={{ duration: 0.28, ease: 'easeOut' }}
                     className="absolute inset-0 flex flex-col overflow-y-auto"
                   >
-                    <Step1Panel onKmlFeaturesLoaded={handleKmlAutoAccept} />
+                    <Step1Panel />
                   </motion.div>
                 )}
                 {step === 2 && (
