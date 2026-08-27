@@ -57,7 +57,7 @@ export interface OnboardingMapSingletonProps {
   location: { lat: number; lng: number; address?: string } | null
   onLocationChange: (lat: number, lng: number) => void
   // Draw mode
-  drawPhase: 'field' | 'paddock'     // what are we drawing?
+  drawPhase: 'paddock'               // what are we drawing?
   paddockCount: number               // for color cycling
   onShapeDrawn: (shape: DrawnShape) => void
   onMidDraw: (areaHa: number | null) => void
@@ -188,12 +188,8 @@ function MapController({
       const geojson = layer.toGeoJSON()
       const area_ha = parseFloat((turfArea(geojson) / 10000).toFixed(2))
 
-      if (drawPhaseRef.current === 'field') {
-        layer.setStyle({ color: '#1d4ed8', fillColor: '#3b82f6', fillOpacity: 0.08, weight: 2.5, dashArray: '8, 6' })
-      } else {
-        const color = PADDOCK_COLORS[paddockRef.current % PADDOCK_COLORS.length]
-        layer.setStyle({ color, fillColor: color, fillOpacity: 0.35, weight: 2, dashArray: undefined })
-      }
+      const color = PADDOCK_COLORS[paddockRef.current % PADDOCK_COLORS.length]
+      layer.setStyle({ color, fillColor: color, fillOpacity: 0.35, weight: 2, dashArray: undefined })
 
       const layerId = (layer as any)._leaflet_id
 
@@ -331,22 +327,13 @@ export default function OnboardingMapSingleton(props: OnboardingMapSingletonProp
         </div>
       )}
 
-      {props.mode === 'draw' && props.drawPhase === 'field' && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1200] pointer-events-none">
-          <div className="flex items-center gap-2 px-4 py-2 bg-blue-600/90 backdrop-blur-sm border border-blue-400/50 text-white rounded-2xl shadow-lg">
-            <div className="w-2 h-2 rounded-full bg-blue-200 animate-pulse shrink-0" />
-            <p className="text-xs font-black">Hacé clic para empezar a dibujar el borde de tu campo</p>
-          </div>
-        </div>
-      )}
-
       {props.mode === 'draw' && props.drawPhase === 'paddock' && (
         <>
           {/* Context hint */}
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1200] pointer-events-none">
             <div className="flex items-center gap-2 px-4 py-2 bg-green-600/90 backdrop-blur-sm border border-green-400/50 text-white rounded-2xl shadow-lg">
               <div className="w-2 h-2 rounded-full bg-green-200 animate-pulse shrink-0" />
-              <p className="text-xs font-black">Dibujá potreros dentro del perímetro</p>
+              <p className="text-xs font-black">Dibujá potreros</p>
             </div>
           </div>
 

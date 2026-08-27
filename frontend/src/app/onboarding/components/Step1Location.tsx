@@ -4,7 +4,7 @@ import React, { useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useOnboarding } from '../OnboardingContext'
 import { useAuth } from '@/components/AuthProvider'
-import { Search, Loader2, ArrowRight, MapPin, Building2, Navigation, Upload, LocateFixed, X, Crosshair } from 'lucide-react'
+import { Search, Loader2, ArrowRight, MapPin, Building2, Navigation, LocateFixed, X, Crosshair } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 type Step1LiveMapProps = {
@@ -22,40 +22,6 @@ const Step1LiveMap = dynamic<Step1LiveMapProps>(() => import('./Step1LiveMap'), 
   ),
 })
 
-// ─────────────────────────────────────────────────────────────────
-// KML/GeoJSON parser — returns { lat, lng, address }
-// ─────────────────────────────────────────────────────────────────
-async function parseSpatialFile(file: File): Promise<{ lat: number; lng: number; address: string } | null> {
-  const text = await file.text()
-  const name = file.name.toLowerCase()
-
-  try {
-    if (name.endsWith('.geojson') || name.endsWith('.json')) {
-      const gj = JSON.parse(text)
-      const coords = gj.features?.[0]?.geometry?.coordinates?.[0]?.[0]
-        ?? gj.geometry?.coordinates?.[0]?.[0]
-        ?? null
-      if (coords && coords.length >= 2) {
-        const lng = coords[0], lat = coords[1]
-        return { lat, lng, address: `Importado desde ${file.name}` }
-      }
-    }
-
-    if (name.endsWith('.kml')) {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(text, 'text/xml')
-      const coords = doc.querySelector('coordinates')?.textContent?.trim().split(/\s+/)[0]
-      if (coords) {
-        const [lng, lat] = coords.split(',').map(Number)
-        if (!isNaN(lat) && !isNaN(lng)) {
-          return { lat, lng, address: `Importado desde ${file.name}` }
-        }
-      }
-    }
-  } catch {}
-
-  return null
-}
 
 export default function Step1Location() {
   const { data, updateData, nextStep } = useOnboarding()
@@ -67,11 +33,10 @@ export default function Step1Location() {
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [showSugg,    setShowSugg]    = useState(false)
 
-  // Input mode: 'search' | 'coords' | 'file'
-  const [inputMode, setInputMode] = useState<'search' | 'coords' | 'file'>('search')
+  // Input mode: 'search' | 'coords'
+  const [inputMode, setInputMode] = useState<'search' | 'coords'>('search')
   const [latInput, setLatInput]   = useState(data.location?.lat?.toString() || '')
   const [lngInput, setLngInput]   = useState(data.location?.lng?.toString() || '')
-  const [fileError, setFileError] = useState('')
   const [geolocating, setGeolocating] = useState(false)
 
   // ── Nominatim autocomplete ─────────────────────────────────────
@@ -165,21 +130,6 @@ export default function Step1Location() {
     updateData({ location: { lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` } })
   }
 
-  // ── File upload (KML / GeoJSON) ────────────────────────────────
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFileError('')
-    const file = e.target.files?.[0]
-    if (!file) return
-    const result = await parseSpatialFile(file)
-    if (result) {
-      updateData({ location: result })
-      setInputMode('search')
-      setSearchQuery(result.address)
-    } else {
-      setFileError('No se pudo leer el archivo. Asegurate de que es un .kml o .geojson válido.')
-    }
-    e.target.value = ''
-  }
 
   const isValid = !!(data.fieldName.trim() && data.location)
 
@@ -224,7 +174,6 @@ export default function Step1Location() {
               {[
                 { id: 'search', icon: Search,     label: 'Buscar'      },
                 { id: 'coords', icon: Crosshair,  label: 'Coordenadas' },
-                { id: 'file',   icon: Upload,     label: 'KML/GeoJSON' },
               ].map(m => (
                 <button
                   key={m.id}
@@ -337,27 +286,7 @@ export default function Step1Location() {
                 </motion.div>
               )}
 
-              {/* ── FILE MODE ────────────────────────────────── */}
-              {inputMode === 'file' && (
-                <motion.div key="file" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
-                  <label className="flex flex-col items-center justify-center gap-3 py-8 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-all group">
-                    <Upload className="w-6 h-6 text-gray-300 group-hover:text-green-500 transition-colors" />
-                    <div className="text-center">
-                      <p className="text-xs font-black text-gray-500 group-hover:text-green-700 transition-colors">Subir archivo .kml o .geojson</p>
-                      <p className="text-[10px] text-gray-400 font-normal mt-0.5">El sistema extrae la ubicación central automáticamente</p>
-                    </div>
-                    <input type="file" accept=".kml,.geojson,.json" className="hidden" onChange={handleFile} />
-                  </label>
-                  {fileError && (
-                    <p className="text-[10px] text-red-500 font-bold flex items-center gap-1.5">
-                      <X className="w-3 h-3 shrink-0" /> {fileError}
-                    </p>
-                  )}
-                  <p className="text-[10px] text-gray-400 font-normal text-center">
-                    KML es el formato estándar de Google Earth y muchos GPS agrícolas.
-                  </p>
-                </motion.div>
-              )}
+
             </AnimatePresence>
 
             {/* Location confirmation chip */}
