@@ -61,6 +61,7 @@
     "@types/react-dom": "^19",
     "@types/react-joyride": "^2.0.2",
     "@types/shapefile": "^0.6.4",
+    "@types/shpjs": "^3.4.7",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
