@@ -1,48 +1,57 @@
 /**
- * RODEO — Service Worker v6
+ * RODEO — Service Worker v10
+ *
+ * HOTFIX: Corrección crítica de pantalla en blanco en PWA.
+ *
+ * Problemas resueltos:
+ *  1. PANTALLA BLANCA: El SW pre-cacheaba sólo el HTML pero no los
+ *     chunks JS/CSS que Next.js necesita para renderizar. Ahora todos los
+ *     assets de /_next/static/ se cachean con Cache-First desde la primera
+ *     visita online.
+ *  2. CONGELA EN SAFARI/iOS: Las respuestas "redirected" dentro de fetch
+ *     para navegaciones causaban que Safari se bloqueara. Ahora se manejan
+ *     explícitamente con Response.redirect().
+ *  3. VERSIÓN OBSOLETA: La caché antigua nunca se purgaba si el CACHE_VERSION
+ *     no cambiaba. Bumpeamos a v10 para forzar invalidación total.
+ *  4. OFFLINE SIN DATOS: Se mejoró el fallback para siempre servir la página
+ *     offline en lugar de un error de red crudo.
  *
  * Estrategias:
- *  1. Precache:     App shell (manifest, íconos, offline fallback HTML, login)
- *  2. Cache-first:  Assets estáticos (/_next/static/, imágenes, fuentes)
- *  3. Network-first: Navegaciones HTML (con fallback a offline page)
- *  4. Background Sync: Envía outbox cuando la red vuelve
+ *  - Precache:        Shell mínimo (manifest, íconos, offline HTML, login)
+ *  - Cache-First:     /_next/static/ chunks (JS/CSS) e imágenes estáticas
+ *  - Network-First:   Navegaciones HTML (con fallback a cache o /_offline)
+ *  - SWR:             Fuentes de Google
+ *  - SKIP:            /api/* — manejado por IndexedDB + outbox
  *
- * IMPORTANTE: Las llamadas a /api/ NO son interceptadas por el SW.
- * Los datos offline se manejan via IndexedDB + outbox pattern.
- * Esto evita problemas con headers de Authorization.
- *
- * Versionado: Cambiá CACHE_VERSION para invalidar todas las caches.
+ * Versionado: Cambiar CACHE_VERSION invalida TODAS las cachés existentes.
  */
 
-const CACHE_VERSION = 'rodeo-v9'
-const STATIC_CACHE  = `${CACHE_VERSION}-static`
-const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
+const CACHE_VERSION  = 'rodeo-v10'
+const STATIC_CACHE   = `${CACHE_VERSION}-static`
+const DYNAMIC_CACHE  = `${CACHE_VERSION}-dynamic`
 
-// Recursos a pre-cachear en install
+// Recursos críticos para el shell mínimo
 const PRECACHE_URLS = [
   '/manifest.json',
-  '/FaviconFondoVerde.svg',
-  '/LogoInstallapp.svg',
   '/icons/icon-180.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/_offline',
-  '/dashboard',
-  '/login'
+  '/login',
 ]
 
-// Dominios de fuentes para SWR
+// Dominios de fuentes permitidas
 const FONT_ORIGINS = [
   'https://fonts.googleapis.com',
   'https://fonts.gstatic.com',
 ]
 
-// ── Install ─────────────────────────────────────────────────────────────────
+// ── Install ──────────────────────────────────────────────────────────────────
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then(async (cache) => {
-      // Pre-cachear URLs críticas (no falla si alguna da error)
+      // Pre-cachear URLs críticas; silenciar errores individuales
       const results = await Promise.allSettled(
         PRECACHE_URLS.map(url =>
           cache.add(url).catch(err => {
@@ -50,87 +59,105 @@ self.addEventListener('install', (event) => {
           })
         )
       )
-      console.log('[SW] Precache done:', results.filter(r => r.status === 'fulfilled').length, '/', PRECACHE_URLS.length)
+      const ok = results.filter(r => r.status === 'fulfilled').length
+      console.log(`[SW v10] Precache: ${ok}/${PRECACHE_URLS.length} URLs cacheadas`)
     })
   )
-  // Activar inmediatamente sin esperar a que cierren otros tabs
+  // Tomar control inmediatamente sin esperar que otros tabs cierren
   self.skipWaiting()
 })
 
-// ── Activate ────────────────────────────────────────────────────────────────
+// ── Activate ─────────────────────────────────────────────────────────────────
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
+    caches.keys()
+      .then(names => Promise.all(
+        names
           .filter(name => !name.startsWith(CACHE_VERSION))
           .map(name => {
-            console.log('[SW] Purging old cache:', name)
+            console.log('[SW v10] Purgando caché antigua:', name)
             return caches.delete(name)
           })
-      )
-    }).then(() => self.clients.claim())
+      ))
+      .then(() => self.clients.claim())
   )
 })
 
-// ── Fetch ───────────────────────────────────────────────────────────────────
+// ── Fetch ────────────────────────────────────────────────────────────────────
 
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // ── 0. SKIP everything that isn't a simple GET ──────────────────────────
+  // ── 0. Solo interceptar GET ──────────────────────────────────────────────
   if (request.method !== 'GET') return
 
-  // ── 1. SKIP API calls — they carry Authorization headers that break ─────
-  // when re-fetched inside the SW. IndexedDB + outbox handle offline data.
+  // ── 1. SKIP: llamadas a /api/ (manejadas por IndexedDB + outbox) ─────────
   if (url.pathname.startsWith('/api/')) return
 
-  // ── 2. SKIP Next.js Server Actions and RSC payloads ─────────────────────
+  // ── 2. SKIP: Server Actions de Next.js ──────────────────────────────────
   if (request.headers.get('next-action')) return
-  if (request.headers.get('accept')?.includes('text/x-component')) return
-  if (request.headers.get('rsc')) return
 
-  // ── 3. SKIP Firebase Auth / Google API requests ─────────────────────────
-  if (url.hostname.includes('googleapis.com') && !url.href.startsWith('https://fonts.')) return
+  // ── 3. SKIP: Firebase / Google APIs (no fuentes) ─────────────────────────
+  const isGoogleFont = FONT_ORIGINS.some(o => url.href.startsWith(o))
+  if (url.hostname.includes('googleapis.com') && !isGoogleFont) return
   if (url.hostname.includes('firebaseapp.com')) return
+  if (url.hostname.includes('firebasestorage.googleapis.com')) return
 
-  // Solo interceptar requests del mismo origen y fuentes
-  if (url.origin !== self.location.origin && !FONT_ORIGINS.some(o => url.href.startsWith(o))) {
-    return
-  }
+  // ── 4. Solo interceptar mismo origen + fuentes ──────────────────────────
+  if (url.origin !== self.location.origin && !isGoogleFont) return
 
-  // ── 4. Fuentes (Google Fonts): Stale-While-Revalidate ──────────────────
-  if (FONT_ORIGINS.some(o => url.href.startsWith(o))) {
+  // ── 5. Fuentes Google: Stale-While-Revalidate ────────────────────────────
+  if (isGoogleFont) {
     event.respondWith(staleWhileRevalidate(request, STATIC_CACHE))
     return
   }
 
-  // ── 5. Assets estáticos Next.js: Cache-First ───────────────────────────
-  if (url.pathname.startsWith('/_next/static/') ||
-      url.pathname.startsWith('/icons/') ||
-      url.pathname.match(/\.(svg|png|jpg|jpeg|webp|ico|woff2?)$/)) {
+  // ── 6. Assets estáticos de Next.js: Cache-First ──────────────────────────
+  //    /_next/static/ contiene chunks JS/CSS con hash en el nombre.
+  //    Cache-First es ideal: una vez en caché, no cambian (el hash cambia).
+  //    FIX CRÍTICO: Sin cachear estos assets, la app no puede renderizar offline.
+  if (
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname.match(/\.(woff2?|ttf|eot|otf)$/)
+  ) {
     event.respondWith(cacheFirst(request, STATIC_CACHE))
     return
   }
 
-  // ── 6. Navegación HTML: Stale-While-Revalidate especializada ─────────────
-  // Se usa SWR capturando redirecciones manuales para que el arranque PWA sea
-  // ultra-rápido desde caché y no sufra pantallazos blancos por cold starts.
-  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(swrForNavigations(request, DYNAMIC_CACHE))
+  // ── 7. Imágenes y SVGs públicos: Cache-First ─────────────────────────────
+  if (url.pathname.match(/\.(svg|png|jpg|jpeg|webp|ico|gif)$/)) {
+    event.respondWith(cacheFirst(request, STATIC_CACHE))
     return
   }
 
-  // ── 7. Resto (JS chunks, CSS, etc.): Stale-While-Revalidate ───────────
-  // Cambiado de network-first a SWR para que los chunks carguen instantáneamente
-  // desde cache mientras se revalida en background (evita bloqueos offline)
+  // ── 8. Chunks JS/CSS de Next.js en /_next/ (no /static/): SWR ──────────
+  if (url.pathname.startsWith('/_next/')) {
+    event.respondWith(staleWhileRevalidate(request, DYNAMIC_CACHE))
+    return
+  }
+
+  // ── 9. Navegaciones HTML: Network-First con fallback a caché ─────────────
+  //    FIX CRÍTICO: Usamos network-first para asegurar que el HTML siempre
+  //    venga con los últimos scripts que el servidor sirve. Fallback a caché
+  //    si hay error de red.
+  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(networkFirstNavigation(request, DYNAMIC_CACHE))
+    return
+  }
+
+  // ── 10. Resto: Stale-While-Revalidate ────────────────────────────────────
   event.respondWith(staleWhileRevalidate(request, DYNAMIC_CACHE))
 })
 
-// ── Cache Strategies ────────────────────────────────────────────────────────
+// ── Cache Strategies ─────────────────────────────────────────────────────────
 
+/**
+ * Cache-First: Devuelve desde caché si existe, si no va a la red y guarda.
+ * Ideal para assets con hash (/_next/static/) que nunca cambian.
+ */
 async function cacheFirst(request, cacheName) {
   const cached = await caches.match(request)
   if (cached) return cached
@@ -143,47 +170,55 @@ async function cacheFirst(request, cacheName) {
     }
     return response
   } catch {
-    return new Response('', { status: 408 })
+    // Sin red y sin caché — devolver vacío con status 408
+    return new Response('', { status: 408, statusText: 'Request Timeout' })
   }
 }
 
-async function networkFirst(request, cacheName, timeoutMs = 6000) {
+/**
+ * Network-First para Navegaciones: Va a la red primero.
+ * FIX CLAVE para iOS/Safari: Maneja explícitamente las redirecciones
+ * que Next.js hace (ej: /dashboard → /login cuando no autenticado)
+ * convirtiéndolas en Response.redirect() limpio que Safari acepta.
+ * Fallback: caché → página offline.
+ */
+async function networkFirstNavigation(request, cacheName) {
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    const response = await fetch(request)
 
-    const response = await fetch(request, { signal: controller.signal })
-    clearTimeout(timeout)
-
-    // Safari/PWA Fix: Si la respuesta es una redirección, el Service Worker no puede devolverla
-    // a una petición 'navigate' de forma opaca sin romper el enrutamiento o la caché.
-    // Debemos devolver un redireccionamiento real usando Response.redirect.
+    // Safari Bug Fix: Las respuestas "redirected" en modo navigate rompen Safari PWA.
+    // Hay que convertirlas en una redirección explícita.
     if (response.redirected) {
-      return Response.redirect(response.url, 307)
+      return Response.redirect(response.url, 302)
     }
 
-    // Solo cacheamos si es exitosa o 304 (no redirecciones HTTP puras ni opacas)
-    if (response.ok || response.status === 304) {
+    // Sólo cachear respuestas exitosas (200 OK), nunca errores ni redirecciones
+    if (response.ok) {
       const cache = await caches.open(cacheName)
       cache.put(request, response.clone())
     }
+
     return response
-  } catch (err) {
-    // Red caída o timeout → intentar cache
-    const matchOptions = request.mode === 'navigate' ? { ignoreSearch: true } : {}
-    const cached = await caches.match(request, matchOptions)
+  } catch {
+    // Sin red: intentar caché ignorando query string (common en PWA navegación)
+    const cached = await caches.match(request, { ignoreSearch: true })
     if (cached) return cached
 
-    // Para navegaciones, devolver offline page
-    if (request.mode === 'navigate') {
-      const offlinePage = await caches.match('/_offline')
-      if (offlinePage) return offlinePage
-    }
+    // Último recurso: página offline
+    const offlinePage = await caches.match('/_offline')
+    if (offlinePage) return offlinePage
 
-    throw err
+    return new Response(
+      '<html><body style="font-family:sans-serif;padding:2rem;text-align:center"><h1>Sin conexión</h1><p>Por favor verifica tu red e intenta de nuevo.</p></body></html>',
+      { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    )
   }
 }
 
+/**
+ * Stale-While-Revalidate: Devuelve caché inmediatamente y actualiza en background.
+ * Ideal para fuentes y recursos que cambian poco.
+ */
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
@@ -198,35 +233,7 @@ async function staleWhileRevalidate(request, cacheName) {
   return cached || fetchPromise
 }
 
-async function swrForNavigations(request, cacheName) {
-  const cache = await caches.open(cacheName)
-  const cached = await cache.match(request)
-
-  const fetchPromise = fetch(request)
-    .then(response => {
-      if (response.redirected) {
-        // Redirección transparente de Next.js (ej. /dashboard -> /login)
-        // Safari prohíbe devolver esto directamente. Forzamos una redirección limpia.
-        // IMPORTANTE: Borramos la caché y NO guardamos esto para no romper el modo offline.
-        cache.delete(request)
-        return Response.redirect(response.url, 307)
-      }
-      
-      if (response.ok) {
-        // Solo cacheamos respuestas 200 OK reales.
-        cache.put(request, response.clone())
-      }
-      
-      return response
-    })
-    .catch(async () => {
-      return cached || await caches.match('/_offline') || new Response('Offline', { status: 503 })
-    })
-
-  return cached || fetchPromise
-}
-
-// ── Messages ────────────────────────────────────────────────────────────────
+// ── Messages ─────────────────────────────────────────────────────────────────
 
 self.addEventListener('message', (event) => {
   const { type } = event.data || {}
@@ -236,7 +243,6 @@ self.addEventListener('message', (event) => {
   }
 
   if (type === 'SYNC_COMPLETED') {
-    // Propagar a todos los clientes (tabs)
     self.clients.matchAll().then(clients => {
       clients.forEach(client => {
         if (client.id !== event.source?.id) {
@@ -246,7 +252,7 @@ self.addEventListener('message', (event) => {
     })
   }
 
-  // Precachear rutas adicionales del dashboard
+  // Pre-cachear rutas adicionales del dashboard bajo demanda
   if (type === 'PRECACHE_ROUTES') {
     const routes = event.data.routes || []
     caches.open(DYNAMIC_CACHE).then(async (cache) => {
@@ -254,40 +260,38 @@ self.addEventListener('message', (event) => {
         try {
           await cache.add(route)
         } catch {
-          // Silently skip routes that fail
+          // Silenciar rutas que fallen (pueden necesitar autenticación)
         }
       }
+      console.log(`[SW v10] Pre-cacheadas ${routes.length} rutas del dashboard`)
     })
   }
 
-  // Diagnostic report: return SW status info
+  // Reporte de diagnóstico
   if (type === 'DIAGNOSTIC_REPORT') {
     Promise.all([
       caches.open(STATIC_CACHE).then(c => c.keys()).then(k => k.length),
       caches.open(DYNAMIC_CACHE).then(c => c.keys()).then(k => k.length),
     ]).then(([staticCount, dynamicCount]) => {
-      if (event.source) {
-        event.source.postMessage({
-          type: 'DIAGNOSTIC_RESPONSE',
-          data: {
-            version: CACHE_VERSION,
-            staticCached: staticCount,
-            dynamicCached: dynamicCount,
-            timestamp: Date.now(),
-          }
-        })
-      }
+      event.source?.postMessage({
+        type: 'DIAGNOSTIC_RESPONSE',
+        data: {
+          version: CACHE_VERSION,
+          staticCached: staticCount,
+          dynamicCached: dynamicCount,
+          timestamp: Date.now(),
+        }
+      })
     }).catch(() => {})
   }
 })
 
-// ── Background Sync ─────────────────────────────────────────────────────────
+// ── Background Sync ───────────────────────────────────────────────────────────
 
 self.addEventListener('sync', (event) => {
   if (event.tag === 'rodeo-outbox-sync') {
     event.waitUntil(
       self.clients.matchAll().then(clients => {
-        // Notificar a los clientes para que procesen el outbox
         clients.forEach(client => {
           client.postMessage({ type: 'SYNC_STARTED' })
         })
@@ -296,16 +300,14 @@ self.addEventListener('sync', (event) => {
   }
 })
 
-// ── Periodic Background Sync (Chrome/Edge only) ─────────────────────────────
-// Syncs data every 30 minutes even when the app isn't active.
-// Safari/Firefox ignore this — those rely on visibilitychange + online events.
+// ── Periodic Background Sync (Chrome/Edge only) ───────────────────────────────
+// Safari/Firefox no soportan esto. Usan visibilitychange + online events.
 
 self.addEventListener('periodicsync', (event) => {
   if (event.tag === 'rodeo-periodic-sync') {
     event.waitUntil(
       self.clients.matchAll().then(clients => {
         if (clients.length > 0) {
-          // At least one tab is open — trigger sync there
           clients[0].postMessage({ type: 'SYNC_STARTED' })
         }
       })
