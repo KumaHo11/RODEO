@@ -404,8 +404,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Logo + collapse toggle */}
           <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-gray-100">
             {sidebarOpen && (
-              <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-                <RodeoLogo size="lg" />
+              <Link href="/landing" className="flex items-center h-full justify-start">
+                <img src="/RODEO.LogoHeader.svg" alt="RODEO" style={{ width: 250, height: 50 }} className="object-contain" />
               </Link>
             )}
             <button
@@ -471,8 +471,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-72 bg-white flex flex-col shadow-2xl">
             <div className="flex h-14 items-center justify-between px-4 border-b border-gray-100">
-              <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-                <RodeoLogo size="lg" />
+              <Link href="/landing" className="flex items-center h-full justify-start">
+                <img src="/RODEO.LogoHeader.svg" alt="RODEO" style={{ width: 250, height: 50 }} className="object-contain" />
               </Link>
               <button onClick={() => setMobileMenuOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500">
                 <X className="w-4 h-4" />

@@ -59,19 +59,11 @@ export default function RodeoLogo({
       aria-label="RODEO – Ganadería Regenerativa"
     >
       {/* ── Brand name ─────────────────────────────── */}
-      <span
-        style={{
-          fontFamily: font,
-          fontWeight: 800,
-          fontSize: namePx,
-          letterSpacing: '0.04em',
-          color: nameColor,
-          lineHeight: 1,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        RODEO
-      </span>
+      <img
+        src={isDark ? '/RODEO.LogoHeaderBlanco.svg' : '/RODEO.LogoHeader.svg'}
+        alt="RODEO"
+        style={{ height: namePx, width: 'auto', display: 'block' }}
+      />
 
       {/* ── Tagline ─────────────────────────────────── */}
       {showTagline && (
