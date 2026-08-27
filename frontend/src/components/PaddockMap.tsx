@@ -14,6 +14,9 @@ import { toast } from 'sonner'
 import { Lock, Upload, Map, Search, Plus, Link2, X, Check, Loader2, AlertTriangle } from 'lucide-react'
 import { parseKmlFile } from '@/lib/kmlParser'
 import type { ParsedKmlFeature } from '@/lib/kmlParser'
+import PolygonFileImporter from '@/components/PolygonFileImporter'
+import DeforestationBadge from '@/components/DeforestationBadge'
+import { useDeforestationGuard } from '@/hooks/useDeforestationGuard'
 
 const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png'
 const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png'
@@ -475,6 +478,9 @@ function KmlActionModal({
 export default function PaddockMap() {
   const { user } = useAuth()
   const { hasFeature } = usePlan()
+  
+  const isDeforestationGuardEnabled = hasFeature('deforestation_guard')
+  const { getStatusForPaddock } = useDeforestationGuard(isDeforestationGuardEnabled)
 
   const [geoData, setGeoData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -562,6 +568,46 @@ export default function PaddockMap() {
   }, [user])
 
   useEffect(() => { fetchPaddocks() }, [fetchPaddocks])
+
+  // Re-apply styles when deforestation statuses change
+  useEffect(() => {
+    if (!isDeforestationGuardEnabled || !geoData?.features) return
+    
+    geoData.features.forEach((feature: any) => {
+      const id = feature.properties?.id
+      const layer = paddockLayersRef.current[id]
+      if (layer && feature.properties) {
+        const { status, is_active } = feature.properties
+        const isActive = is_active !== false
+        let color = !isActive ? '#9ca3af' : status === 'GRAZING' ? '#f97316' : '#16a34a'
+        let fillColor = color
+        let fillOpacity = isActive ? 0.45 : 0.15
+
+        const defStatus = getStatusForPaddock(id)
+        if (defStatus?.status === 'DEFORESTED') {
+          color = '#dc2626'
+          fillColor = '#fca5a5'
+          fillOpacity = 0.6
+        } else if (defStatus?.status === 'AT_RISK') {
+          color = '#f97316'
+          fillColor = '#fed7aa'
+          fillOpacity = 0.5
+        } else if (defStatus?.status === 'CLEAN') {
+          color = '#16a34a'
+          fillColor = 'transparent'
+          fillOpacity = 0
+        }
+
+        layer.setStyle({
+          color,
+          fillColor,
+          fillOpacity,
+          weight: isActive ? 2 : 1.5,
+          dashArray: isActive ? undefined : '6,4'
+        })
+      }
+    })
+  }, [getStatusForPaddock, isDeforestationGuardEnabled, geoData])
 
   // ─── Draw new paddock ───────────────────────────────────────────────────────
   const handlePaddockDrawn = (geojson: any, layer: any) => {
@@ -667,13 +713,32 @@ export default function PaddockMap() {
     if (!feature.properties) return
     const { name, status, id, is_active } = feature.properties
 
-    // Color legend: inactive=gray dashed, grazing=orange, resting=green
     const isActive = is_active !== false
-    const fillColor = !isActive ? '#9ca3af' : status === 'GRAZING' ? '#f97316' : '#16a34a'
+    let color = !isActive ? '#9ca3af' : status === 'GRAZING' ? '#f97316' : '#16a34a'
+    let fillColor = color
+    let fillOpacity = isActive ? 0.45 : 0.15
+
+    if (isDeforestationGuardEnabled) {
+      const defStatus = getStatusForPaddock(id)
+      if (defStatus?.status === 'DEFORESTED') {
+        color = '#dc2626'
+        fillColor = '#fca5a5'
+        fillOpacity = 0.6
+      } else if (defStatus?.status === 'AT_RISK') {
+        color = '#f97316'
+        fillColor = '#fed7aa'
+        fillOpacity = 0.5
+      } else if (defStatus?.status === 'CLEAN') {
+        color = '#16a34a'
+        fillColor = 'transparent' // solo borde verde sutil
+        fillOpacity = 0
+      }
+    }
+
     layer.setStyle({
-      color: fillColor,
+      color,
       fillColor,
-      fillOpacity: isActive ? 0.45 : 0.15,
+      fillOpacity,
       weight: isActive ? 2 : 1.5,
       dashArray: isActive ? undefined : '6,4'
     })
@@ -720,7 +785,7 @@ export default function PaddockMap() {
           }`}
         >
           <Upload className="w-3 h-3" />
-          Importar KML
+          Importar archivos
           {kmlFeatures.length > 0 && (
             <span className="ml-1 bg-cyan-200 text-cyan-900 text-[9px] font-black px-1.5 py-0.5 rounded-full">
               {kmlFeatures.length}
@@ -733,6 +798,37 @@ export default function PaddockMap() {
       {mapTab === 'kml' && (
         <div className="absolute top-14 right-4 z-[1001] bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl shadow-md p-3 w-72">
           <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">Importar polígonos</p>
+
+          {/* ── Universal importer (KML / KMZ / SHP / GeoJSON) ── */}
+          {/* TODO: integrate PolygonFileImporter here — wire onImport to open KmlActionModal-style flow */}
+          <PolygonFileImporter
+            onImport={(feature) => {
+              // Reuse the KML modal flow: wrap the imported Feature as a ParsedKmlFeature
+              const areaHa = area(feature) / 10000
+              const name: string =
+                (feature.properties?.name as string) ||
+                (feature.properties?.Name as string) ||
+                'Polígono importado'
+              const syntheticFeat: ParsedKmlFeature = {
+                name,
+                geojson: feature.geometry as any,
+                area_ha: areaHa,
+              }
+              // Load the single feature so the map overlay renders it and the
+              // action modal opens on click
+              setKmlFeatures([syntheticFeat])
+              setKmlAccepted(new Set())
+              setKmlModalFeature({ feat: syntheticFeat, idx: 0 })
+            }}
+            className="mb-3"
+          />
+
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1 h-px bg-gray-100" />
+            <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">o sólo KML</span>
+            <div className="flex-1 h-px bg-gray-100" />
+          </div>
+
           <button
             onClick={() => kmlFileRef.current?.click()}
             disabled={kmlLoading}
@@ -923,6 +1019,8 @@ export default function PaddockMap() {
               )}
             </div>
 
+
+
             {/* NDVI */}
             {selectedPaddock.current_ndvi && (
               <div className="relative">
@@ -944,6 +1042,17 @@ export default function PaddockMap() {
                 )}
               </div>
             )}
+            
+            {/* Deforestation Guard Badge */}
+            {isDeforestationGuardEnabled && (
+              <div className="mt-3 bg-gray-50 border border-gray-100 rounded-lg p-3 flex flex-col gap-2">
+                <p className="text-[9px] font-black text-gray-500 uppercase">Estado Deforestación EUDR</p>
+                <div>
+                  <DeforestationBadge paddockId={selectedPaddock.id} />
+                </div>
+              </div>
+            )}
+
 
             {/* Edit polygon */}
             <button

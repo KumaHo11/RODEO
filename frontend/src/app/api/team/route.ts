@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ members, invitations })
   } catch (err: any) {
     console.error('GET /api/team error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }
 
@@ -74,6 +74,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('DELETE /api/team error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }

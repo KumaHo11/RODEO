@@ -4,7 +4,13 @@
 # Asegurarse de que el script se ejecute desde la raíz del proyecto
 
 ROOT_DIR=$(pwd)
-echo "🚀 Iniciando entorno RODEO en $ROOT_DIR..."
+# 0. Cloud SQL Auth Proxy (PostgreSQL en localhost:5432)
+if ! lsof -i :5432 > /dev/null 2>&1; then
+    echo "📂 Iniciando Cloud SQL Auth Proxy en localhost:5432..."
+    "$ROOT_DIR/start_proxy_staging.sh" &
+else
+    echo "ℹ️ Cloud SQL Proxy ya se encuentra corriendo en el puerto 5432."
+fi
 
 # 1. Frontend
 echo "📂 Iniciando Frontend en localhost:3000..."

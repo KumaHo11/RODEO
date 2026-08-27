@@ -39,21 +39,41 @@ async function markFetched(storeKey: string): Promise<void> {
   await metaSet(`prefetch_ts_${storeKey}`, Date.now())
 }
 
-async function safeFetch(url: string, token: string): Promise<any | null> {
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15_000) // 15s
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: 'same-origin',
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-    if (!res.ok) return null
-    return res.json()
-  } catch {
-    return null
+/** Error especial para abortar el prefetch cuando la sesión es inválida */
+class AuthExpiredError extends Error {
+  constructor() { super('AuthExpired'); this.name = 'AuthExpiredError' }
+}
+
+async function safeFetch(url: string, token: string, retries = 2): Promise<any | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15_000) // 15s
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'same-origin',
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+
+      // 401 → sesión expirada: abortar toda la sincronización
+      if (res.status === 401) {
+        throw new AuthExpiredError()
+      }
+
+      if (!res.ok) return null
+      return res.json()
+    } catch (err: any) {
+      if (err instanceof AuthExpiredError) throw err   // propagar sin reintentar
+
+      const isLastAttempt = attempt === retries
+      if (isLastAttempt) return null   // error de red / timeout — silencioso
+
+      // Backoff exponencial: 500ms primer reintento, 1000ms segundo
+      await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt)))
+    }
   }
+  return null
 }
 
 // ── Main prefetch ─────────────────────────────────────────────────────────────
@@ -73,7 +93,7 @@ export async function prefetchAll(token: string): Promise<void> {
 
   try {
     // Ejecutamos en paralelo para ser rápidos, pero con límite
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       prefetchPaddocks(token),
       prefetchHerds(token),
       prefetchFarmEvents(token),
@@ -83,6 +103,21 @@ export async function prefetchAll(token: string): Promise<void> {
       prefetchGrazingPlans(token),
       prefetchTeam(token),
     ])
+
+    // Detectar si alguna promesa falló por sesión expirada (401)
+    const authExpired = results.some(
+      r => r.status === 'rejected' && r.reason?.name === 'AuthExpiredError'
+    )
+
+    if (authExpired) {
+      console.warn('[prefetch] Session expired (401) — aborting prefetch and notifying app')
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('rodeo_auth_expired', {
+          detail: { source: 'prefetch' }
+        }))
+      }
+      return
+    }
 
     console.log('[prefetch] Done.')
     // Notificar a la app que los datos están listos

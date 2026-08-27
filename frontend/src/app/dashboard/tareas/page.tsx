@@ -333,8 +333,8 @@ function TareasContent({ user }: { user: any }) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-950">Tareas</h1>
-          <p className="text-sm text-gray-500 font-medium mt-1">Gestión y seguimiento de tareas del equipo</p>
+          <h1 className="text-2xl font-black text-gray-950">Tareas</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Gestión y seguimiento de tareas del equipo</p>
           <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit mt-3">
             {[
               { label: 'Pendientes', count: pendingCount },

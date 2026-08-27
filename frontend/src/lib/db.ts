@@ -74,7 +74,31 @@ function createPoolFromUrl(connectionString: string): Pool {
     return new Pool()
   }
 
-  // Extraer partes de la URL para evitar errores de encoding con caracteres especiales
+  // Detectar formato Unix socket: postgresql://user:pass@/dbname?host=/cloudsql/...
+  // Este formato falla en `new URL()` porque no tiene hostname.
+  const socketMatch = connectionString.match(
+    /^postgresql?:\/\/([^:]+):([^@]*)@\/([^?]+)\?host=(.+)$/
+  )
+
+  if (socketMatch) {
+    const [, user, password, database, socketPath] = socketMatch
+    const pool = new Pool({
+      user,
+      password: decodeURIComponent(password),
+      database,
+      host: socketPath,   // pg acepta path Unix como host
+      ssl: false,          // Unix socket no usa SSL
+      max: parseInt(process.env.DB_POOL_MAX || '5'),
+      min: parseInt(process.env.DB_POOL_MIN || '1'),
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+      statement_timeout: 30000,
+    })
+    pool.on('error', (err) => { console.error('DB Pool error:', err) })
+    return pool
+  }
+
+  // Formato TCP estándar: postgresql://user:pass@host:port/dbname
   const url = new URL(connectionString.replace('postgresql://', 'http://'))
   const socketHost = url.searchParams.get('host')
 

@@ -207,7 +207,7 @@ export default function CalculadoraPage() {
 
       {/* ── Encabezado ───────────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-3xl font-black tracking-tight text-gray-950">Calculadora</h1>
+        <h1 className="text-2xl font-black text-gray-950">Calculadora</h1>
         <p className="text-sm text-gray-400 mt-1 max-w-2xl">
           Simulación de carga animal y autonomía forrajera en tiempo real,
           más herramientas de cálculo técnico para EV, balance hídrico y gestión del pastoreo.

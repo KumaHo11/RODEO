@@ -48,6 +48,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ deleted: result.rowCount ?? 0 })
   } catch (err: any) {
     console.error('DELETE /api/grazing-plans/bulk-delete error:', err)
-    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
   }
 }

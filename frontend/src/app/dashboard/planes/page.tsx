@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { usePlan } from '@/hooks/usePlan'
 import { apiFetch } from '@/lib/apiFetch'
-import { Check, Sparkles, Zap, Crown, Building2, Loader2, ArrowRight, Star } from 'lucide-react'
+import { Check, Sparkles, Zap, Crown, Building2, Loader2, ArrowRight, Star, Satellite, TreePine, ClipboardCheck, FileText, Tag, Leaf, Map, ShoppingBag } from 'lucide-react'
 import { toast } from 'sonner'
 import { MercadoPagoBrick } from '@/components/MercadoPagoBrick'
 import { Modal } from '@/design-system/molecules/Modal'
@@ -58,6 +58,16 @@ const FLAG_LABELS: Record<string, string> = {
   offline_mode:     'Modo sin conexión (app offline)',
   ndvi_access:      'NDVI satelital (Sentinel Hub)',
   api_access:       'Acceso a API corporativa',
+  metrics_module:       'MRV Satelital — 10 índices Sentinel-2',
+  deforestation_guard:  'Deforestation Guard EUDR 2023/1115',
+  animal_registry:      'Registro individual + RFID (Allflex/Gallagher)',
+  carbon_accounting:    'Huella de Carbono IPCC Tier 1 (tCO₂e/potrero)',
+  mrv_reports:          'Reportes PDF MRV con hash SHA256',
+  compliance_dashboard: 'Compliance Dashboard EUDR / EOV / GRSB',
+  time_machine:         'Time Machine histórico 2020→hoy',
+  alert_engine:         'Alertas automáticas NDVI/BSI/Deforestación',
+  rfid_bluetooth:       'Escaneo RFID Bluetooth (offline)',
+  polygon_import:       'Importación KML / KMZ / SHP',
 }
 
 function PlanCard({
@@ -369,6 +379,70 @@ export default function PlanesPage() {
           ))}
         </div>
       )}
+
+      {/* LATIFUNDIO EXPANDED SECTION */}
+      <div className="max-w-6xl mx-auto px-4 mt-12">
+        <div className="bg-gray-950 rounded-3xl p-8 lg:p-12 text-white">
+          <div className="flex items-start gap-4 mb-8">
+            <div className="w-12 h-12 bg-green-600/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <Crown className="w-6 h-6 text-green-400" />
+            </div>
+            <div>
+              <div className="text-xs font-black text-green-400 tracking-widest mb-1">PLAN LATIFUNDIO · MRV COMPLETO</div>
+              <h3 className="text-2xl font-black text-white mb-2">Todo lo que incluye LATIFUNDIO</h3>
+              <p className="text-gray-400 text-sm max-w-2xl">
+                Fases 1-6 del módulo MRV + trazabilidad animal + mercado de carbono. Para operaciones ganaderas que quieren participar del mercado de carbono con datos verificables.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {[
+              { icon: Satellite,       title: 'MRV Satelital completo',     desc: '10 índices Sentinel-2 + SAR semanales por potrero. Time Machine desde 2020.' },
+              { icon: TreePine,        title: 'Deforestation Guard',         desc: 'Global Forest Watch + NDVI heurístico. Alerta EUDR en tiempo real, overlay en mapa.' },
+              { icon: ClipboardCheck,  title: 'Compliance Dashboard',        desc: 'Scores EUDR / EOV Savory / GRSB por potrero. Semáforo de cumplimiento normativo.' },
+              { icon: FileText,        title: 'Reportes MRV PDF',            desc: 'PDF auditable con hash SHA256. 5 secciones: portada, métricas, deforestación, GRSB, declaración.' },
+              { icon: Tag,             title: 'Registro RFID Individual',    desc: 'Allflex y Gallagher. Bitácora de vida por animal. Bluetooth offline. CSV import.' },
+              { icon: Leaf,            title: 'Huella de Carbono',           desc: 'IPCC Tier 1: CH₄ + N₂O vs. SOC proxy. Balance neto tCO₂e por potrero y estancia.' },
+              { icon: Map,             title: 'Importación KML/KMZ/SHP',     desc: 'Importá polígonos desde Google Earth, QGIS o cualquier GIS. También disponible en plan Brote.' },
+              { icon: ShoppingBag,     title: 'Marketplace de datos',        desc: 'Otorgá acceso API a certificadoras, compradores o auditores. Control total de permisos.' },
+              { icon: Zap,             title: 'API B2B v2',                  desc: 'Endpoints autenticados con SHA256. CORS habilitado. OpenAPI spec pública.' },
+            ].map((item, i) => {
+              const ItemIcon = item.icon
+              return (
+              <div key={i} className="flex items-start gap-3 bg-white/5 rounded-xl p-4">
+                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <ItemIcon className="w-4 h-4 text-gray-300" />
+                </div>
+                <div>
+                  <div className="font-bold text-white text-sm mb-1">{item.title}</div>
+                  <div className="text-gray-500 text-xs leading-relaxed">{item.desc}</div>
+                </div>
+              </div>
+              )
+            })}
+          </div>
+
+          {/* Normativas row */}
+          <div className="border-t border-white/10 pt-6 mb-6">
+            <div className="text-[10px] font-black text-gray-500 tracking-widest mb-3">NORMATIVAS CUBIERTAS</div>
+            <div className="flex flex-wrap gap-2">
+              {['EUDR 2023/1115', 'EOV · Savory Institute', 'GRSB Standard', 'IPCC 2006 Tier 1', 'GWP100 AR6', 'Verra VM0026 (ref.)', 'CORSIA elegibilidad'].map(n => (
+                <span key={n} className="text-xs font-semibold text-gray-400 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">{n}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* CTA */}
+          <a
+            href={`mailto:ventas@rodeoagtech.com?subject=Consulta%20Plan%20Latifundio`}
+            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-black px-8 py-3.5 rounded-xl text-sm transition-all"
+          >
+            Hablar con el equipo de ventas
+            <ArrowRight className="w-4 h-4" />
+          </a>
+        </div>
+      </div>
 
       {/* Footer note */}
       <p className="text-center text-xs text-gray-400 mt-10 font-medium px-4">

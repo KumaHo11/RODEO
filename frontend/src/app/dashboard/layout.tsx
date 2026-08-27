@@ -42,6 +42,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard':              'Panel principal',
   '/dashboard/mi-campo':     'Potreros',
   '/dashboard/herds':        'Rodeos',
+  '/dashboard/animals':      'Animales',
   '/dashboard/agenda':       'Agenda',
   '/dashboard/clima':        'Clima',
   '/dashboard/grazing':      'Planificador',
@@ -53,6 +54,15 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard/tareas':       'Tareas',
   '/dashboard/guest-setup':  'Configuración de cuenta',
   '/dashboard/calculadora':  'Calculadora',
+  '/dashboard/metrics':               'Métricas satelitales',
+  '/dashboard/metrics/carbon':         'Huella de Carbono',
+  '/dashboard/metrics/reports':        'Constructor de informes',
+  '/dashboard/metrics/marketplace':    'Mercado de datos B2B',
+  '/dashboard/metrics/api-docs':       'Documentación API B2B',
+  '/dashboard/eudr':                   'Cumplimiento EUDR',
+  '/dashboard/eudr/documentos':        'Bóveda documental EUDR',
+  '/dashboard/eudr/insumos':           'Trazabilidad de insumos',
+  '/dashboard/eudr/exportar':          'Exportar DDS / TRACES-NT',
 }
 
 // ── Layout ─────────────────────────────────────────────────────────────────────
