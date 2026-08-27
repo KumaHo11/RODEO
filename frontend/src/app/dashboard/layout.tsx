@@ -569,7 +569,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {(profile?.plan_status === 'trialing' && (() => {
               const daysLeft = Math.max(0, (profile.plan_trial_days || 45) - Math.floor((Date.now() - new Date(profile.org_created_at || Date.now()).getTime()) / (1000 * 60 * 60 * 24)));
               
-              if (daysLeft <= 0 && (profile.plan_price || 0) > 0) return false;
+              if (daysLeft <= 0 && ((profile as any).plan_price || 0) > 0) return false;
               
               return (
                 <span className="hidden md:flex items-center text-[11px] font-bold text-gray-500 mr-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
