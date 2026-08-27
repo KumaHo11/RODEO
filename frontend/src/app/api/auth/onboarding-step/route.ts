@@ -45,13 +45,13 @@ export async function PATCH(req: NextRequest) {
           }
         }
 
-        // Save location geometry separately — if it fails, name is already saved
+        // Save location geometry and label separately — if it fails, name is already saved
         if (location) {
           try {
             const locGeom = { type: 'Point', coordinates: [location.lng, location.lat] }
             await serviceMutate(
-              `UPDATE organizations SET location = ST_SetSRID(ST_GeomFromGeoJSON($1), 4326), updated_at = NOW() WHERE id = $2`,
-              [JSON.stringify(locGeom), orgId]
+              `UPDATE organizations SET location = ST_SetSRID(ST_GeomFromGeoJSON($1), 4326), location_label = $2, updated_at = NOW() WHERE id = $3`,
+              [JSON.stringify(locGeom), location.display_name || '', orgId]
             )
           } catch (locErr: any) {
             console.error('onboarding-step: location geometry update failed:', locErr.message)

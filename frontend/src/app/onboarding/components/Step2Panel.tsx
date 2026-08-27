@@ -9,10 +9,8 @@
  *
  * This panel shows only:
  *  1. If KML paddocks already loaded → green success card + optional reimport
- *  2. "¿Querés demarcar el área total?" question (optional perimeter)
- *  3. Draft confirm / field confirmed state
- *  4. Paddock list (rename + forraje)
- *  5. Next / Skip CTAs (always enabled)
+ *  2. Paddock list (rename + forraje)
+ *  3. Next / Skip CTAs (always enabled)
  */
 
 import React, { useState } from 'react'
@@ -39,14 +37,9 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
   const { data, updateData, nextStep, prevStep } = useOnboarding()
   const { user } = useAuth()
 
-  const draftShape = (data as any)._draftShape ?? null
-  const [draftName, setDraftName] = useState(data.fieldName || '')
   const kmlFileRef = React.useRef<HTMLInputElement>(null)
   const [kmlLoading, setKmlLoading] = useState(false)
   const [kmlError, setKmlError] = useState<string | null>(null)
-
-  // Whether the user opted in to drawing the field perimeter manually
-  const [showDrawPerimeter, setShowDrawPerimeter] = useState(false)
 
   const handleKmlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -60,31 +53,7 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
     onKmlParsed?.(result.features)
   }
 
-  const hasField    = !!data.fieldBoundary
-  const hasDraft    = !!draftShape && !hasField
   const hasPaddocks = data.paddocks.length > 0
-
-  // Confirm drawn perimeter
-  const confirmField = () => {
-    if (!draftShape || !draftName.trim()) return
-    updateData({
-      fieldLayerId:    draftShape.id,
-      fieldBoundary:   draftShape.geojson,
-      fieldBoundaryHa: draftShape.area_ha,
-      totalArea:       draftShape.area_ha,
-      fieldName:       draftName.trim(),
-      _draftShape:     null,
-    } as any)
-  }
-
-  const cancelField = () => {
-    draftShape?.layer?.remove?.()
-    updateData({ _draftShape: null } as any)
-  }
-
-  const resetField = () => {
-    updateData({ fieldBoundary: null, fieldBoundaryHa: 0, paddocks: [], totalArea: 0, _draftShape: null } as any)
-  }
 
   const removePaddock = (idx: number) => {
     const updated = data.paddocks.filter((_, i) => i !== idx)
@@ -116,8 +85,16 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
   }
 
   const handleNext = async () => {
-    const isSkip = !hasField && !hasPaddocks
-    updateData({ skippedMap: isSkip })
+    const isSkip = !hasPaddocks
+    
+    // Sum area from all paddocks
+    const totalHa = data.paddocks.reduce((s, p) => s + p.area_ha, 0)
+    updateData({ 
+      skippedMap: isSkip,
+      totalArea: totalHa,
+      fieldBoundaryHa: totalHa 
+    } as any)
+    
     if (isSkip) {
       import('@/lib/analytics').then(({ event }) => {
         event({ action: 'onboarding_skip', category: 'onboarding', step_number: 2, skipped_fields: ['map', 'paddocks'] })
@@ -127,7 +104,7 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
     nextStep()
   }
 
-  const tourSteps: Step[] = [
+  const tourSteps = [
     {
       target: '.tour-herramientas-potreros',
       title: 'Crear Potreros',
@@ -140,12 +117,6 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
       title: 'Herramientas de Dibujo',
       content: 'Usá esta barra para trazar polígonos, editarlos o borrarlos. El área se calcula automáticamente.',
       placement: 'auto' as const,
-    },
-    {
-      target: '.tour-perimetro-campo',
-      title: 'Demarcar tu Campo (Opcional)',
-      content: 'Si querés, también podés dibujar el perímetro exterior total de tu establecimiento.',
-      placement: 'bottom' as const,
     }
   ]
 
@@ -199,7 +170,7 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
         )}
 
         {/* ── B) Empty state — no paddocks ── */}
-        {!hasPaddocks && !hasDraft && !hasField && (
+        {!hasPaddocks && (
           <div className="space-y-3">
             {/* Alert */}
             <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5">
@@ -217,128 +188,39 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
             </div>
 
             {/* KML import or draw hint */}
-            <div className="tour-herramientas-potreros border-2 border-dashed border-gray-100 rounded-2xl py-5 md:py-7 flex flex-col items-center gap-3 text-center px-4">
-              <PenLine className="w-6 h-6 md:w-7 md:h-7 text-gray-200" />
-              <div>
+            <div className="tour-herramientas-potreros">
+              {/* Draw hint */}
+              <div className="flex flex-col items-center text-center gap-1.5 mb-5 mt-2">
+                <PenLine className="w-5 h-5 text-gray-300" />
                 <p className="text-xs font-bold text-gray-400">Dibujá los potreros en el mapa</p>
-                <p className="text-[10px] text-gray-300 font-normal mt-0.5">Usá las herramientas del mapa <span className="hidden md:inline">→</span><span className="md:hidden">↓</span></p>
+                <p className="text-[10px] text-gray-300 font-normal">Usá las herramientas del mapa <span className="hidden md:inline">→</span><span className="md:hidden">↓</span></p>
               </div>
-              <div className="flex flex-col items-center gap-1.5">
-                <span className="text-[9px] text-gray-300 font-bold uppercase tracking-widest">O si ya tenés el archivo</span>
-                <button
-                  onClick={() => kmlFileRef.current?.click()}
-                  disabled={kmlLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-50 text-cyan-700 border border-cyan-200 text-[10px] font-bold rounded-lg hover:bg-cyan-100 transition-colors disabled:opacity-50"
-                >
-                  {kmlLoading
-                    ? <><Loader2 className="w-3 h-3 animate-spin" /> Procesando...</>
-                    : <><Map className="w-3 h-3" /> Cargar potreros desde KML</>}
-                </button>
-                {kmlError && <p className="text-[10px] text-red-600 font-bold">{kmlError}</p>}
+              
+              <div className="flex items-center gap-3 mb-5">
+                <div className="h-px bg-gray-100 flex-1"></div>
+                <span className="text-[9px] text-gray-300 font-bold uppercase tracking-widest">O Subí tu archivo</span>
+                <div className="h-px bg-gray-100 flex-1"></div>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* ── C) Optional: demarcar área total del campo ── */}
-        {/* Only show if the user has not already drawn/confirmed the field */}
-        {!hasField && !hasDraft && (
-          <div className="tour-perimetro-campo rounded-2xl border border-gray-100 bg-gray-50 p-3.5">
-            <div className="flex items-start gap-2.5">
-              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-blue-100">
-                <Info className="w-3 h-3 text-blue-500" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs font-black text-gray-700">¿Querés demarcar el área total de tu campo?</p>
-                <p className="text-[10px] text-gray-500 font-normal mt-0.5 leading-relaxed">
-                  {hasPaddocks
-                    ? 'Con los potreros ya tenemos lo necesario. El perímetro total del campo es opcional.'
-                    : 'Podés dibujar el contorno completo del campo en el mapa usando la herramienta de dibujo.'}
-                </p>
-                {!showDrawPerimeter && (
-                  <button
-                    onClick={() => setShowDrawPerimeter(true)}
-                    className="mt-2 flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold rounded-lg hover:bg-blue-100 transition-colors"
-                  >
-                    <PenLine className="w-3 h-3" /> Sí, quiero dibujarlo
-                  </button>
-                )}
-                {showDrawPerimeter && (
-                  <p className="mt-1.5 text-[10px] text-blue-500 font-normal">
-                    Hacé clic en el mapa para trazar el perímetro del campo.
-                    {midDrawArea !== null && (
-                      <span className="ml-1.5 font-black text-blue-600">
-                        <Ruler className="w-2.5 h-2.5 inline mb-0.5 mr-0.5" />
-                        {midDrawArea.toFixed(1)} ha en progreso...
-                      </span>
-                    )}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── D) Draft confirmation card ── */}
-        {hasDraft && (
-          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            className="p-4 rounded-2xl border bg-amber-50 border-amber-200">
-            <p className="text-xs font-black text-amber-700">Perímetro dibujado</p>
-            <p className="text-[10px] text-amber-600 font-normal mt-0.5">{draftShape.area_ha.toFixed(1)} ha · Confirmá para guardar</p>
-            <div className="mt-2.5 space-y-2">
-              <input
-                type="text" value={draftName} onChange={e => setDraftName(e.target.value)}
-                placeholder="Nombre del campo"
-                className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-amber-400 outline-none font-medium placeholder:text-gray-300"
-              />
-              <div className="flex gap-2">
-                <button onClick={confirmField} disabled={!draftName.trim()}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-green-600 text-white text-[10px] font-black rounded-lg hover:bg-green-700 transition-all disabled:opacity-30">
-                  <CheckCircle2 className="w-3 h-3" /> Confirmar perímetro
-                </button>
-                <button onClick={cancelField}
-                  className="px-3 py-1.5 border border-gray-200 text-gray-500 text-[10px] font-bold rounded-lg hover:bg-gray-50 transition-all">
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── E) Field confirmed ── */}
-        {hasField && (
-          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            className="flex items-start gap-2.5 p-3.5 rounded-2xl border bg-green-50 border-green-200">
-            <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-green-500 text-white">
-              <CheckCircle2 className="w-3 h-3" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs font-black text-green-700">Perímetro confirmado</p>
-              <p className="text-[10px] text-green-600 font-normal mt-0.5">
-                {data.fieldBoundaryHa.toFixed(1)} ha · {data.fieldName}
-              </p>
-              <button onClick={resetField} className="mt-1.5 flex items-center gap-1 text-[10px] font-bold text-red-400 hover:text-red-600 transition-colors">
-                <RefreshCw className="w-2.5 h-2.5" /> Redibujar
+              {/* Big File Upload Button */}
+              <button
+                onClick={() => kmlFileRef.current?.click()}
+                disabled={kmlLoading}
+                className="w-full flex flex-col items-center justify-center gap-3 py-8 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-gray-50 group-hover:bg-green-50 border border-gray-100 group-hover:border-green-200 flex items-center justify-center transition-all">
+                  {kmlLoading ? <Loader2 className="w-6 h-6 animate-spin text-green-500" /> : <Map className="w-6 h-6 text-gray-300 group-hover:text-green-500 transition-colors" />}
+                </div>
+                <div className="text-center space-y-1 px-4">
+                  <p className="text-sm font-black text-gray-600 group-hover:text-green-700 transition-colors">Cargar potreros (KML/Qgis)</p>
+                  <p className="text-[10px] text-gray-400 font-normal">Soporta .kml, .kmz, .zip (shapefile) y .geojson</p>
+                </div>
               </button>
+              {kmlError && <p className="text-[10px] text-red-500 font-bold flex items-center justify-center gap-1.5 mt-3"><AlertTriangle className="w-3 h-3 shrink-0" />{kmlError}</p>}
             </div>
-          </motion.div>
-        )}
-
-        {/* ── F) Paddock import button (after field confirmed) ── */}
-        {hasField && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => kmlFileRef.current?.click()}
-              disabled={kmlLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-50 border border-cyan-200 text-cyan-700 text-[10px] font-bold rounded-lg hover:bg-cyan-100 transition-colors disabled:opacity-50"
-            >
-              {kmlLoading
-                ? <><Loader2 className="w-3 h-3 animate-spin" /> Procesando KML...</>
-                : <><Map className="w-3 h-3" /> Importar potreros (KML)</>}
-            </button>
-            {kmlError && <p className="text-[10px] text-red-600 font-bold">{kmlError}</p>}
           </div>
         )}
+
 
         {/* ── G) Paddocks list ── */}
         <AnimatePresence>
@@ -392,7 +274,7 @@ export default function Step2Panel({ midDrawArea, onKmlParsed }: Props) {
           )}
         </AnimatePresence>
 
-        <input type="file" ref={kmlFileRef} accept=".kml" className="hidden" onChange={handleKmlUpload} />
+        <input type="file" ref={kmlFileRef} accept=".kml,.kmz,.zip,.geojson,.json" className="hidden" onChange={handleKmlUpload} />
         </div>{/* end card */}
       </div>
 

@@ -80,17 +80,12 @@ function OnboardingWizard() {
   const [paddockModalForraje, setPaddockModalForraje] = useState<string>('')
 
   const handleShapeDrawn = useCallback((shape: DrawnShape) => {
-    if (fieldBoundaryRef.current) {
-      // Already has field → open paddock naming modal
-      const nextName = `Potrero ${paddocksLenRef.current + 1}`
-      setPendingShape(shape)
-      setPaddockModalName(nextName)
-      setPaddockModalForraje('')
-    } else {
-      // First shape → field boundary draft
-      updateData({ _draftShape: shape } as any)
-    }
-  }, [updateData])
+    // Open paddock naming modal
+    const nextName = `Potrero ${paddocksLenRef.current + 1}`
+    setPendingShape(shape)
+    setPaddockModalName(nextName)
+    setPaddockModalForraje('')
+  }, [])
 
   // ─── KML state ─────────────────────────────────────────────────────────────
   const [kmlFeatures, setKmlFeatures] = useState<ParsedKmlFeature[]>([])
@@ -200,28 +195,20 @@ function OnboardingWizard() {
   }, [])
 
   const handleShapeEdited = useCallback((layerId: number, geojson: any, area_ha: number) => {
-    if ((data as any).fieldLayerId === layerId) {
-      updateData({ fieldBoundary: geojson, fieldBoundaryHa: area_ha } as any)
-    } else {
-      const updated = data.paddocks.map((p: any) =>
-        p.layerId === layerId ? { ...p, geojson, area_ha } : p
-      )
-      updateData({ paddocks: updated, totalArea: parseFloat(updated.reduce((s: any, p: any) => s + p.area_ha, 0).toFixed(2)) })
-    }
+    const updated = data.paddocks.map((p: any) =>
+      p.layerId === layerId ? { ...p, geojson, area_ha } : p
+    )
+    updateData({ paddocks: updated, totalArea: parseFloat(updated.reduce((s: any, p: any) => s + p.area_ha, 0).toFixed(2)) })
   }, [data, updateData])
 
   const handleShapeRemoved = useCallback((layerId: number) => {
-    if ((data as any).fieldLayerId === layerId) {
-      updateData({ fieldBoundary: null, fieldBoundaryHa: 0, fieldLayerId: null, paddocks: [], totalArea: 0 } as any)
-    } else {
-      const updated = data.paddocks.filter((p: any) => p.layerId !== layerId)
-      updateData({ paddocks: updated, totalArea: parseFloat(updated.reduce((s: any, p: any) => s + p.area_ha, 0).toFixed(2)) })
-    }
+    const updated = data.paddocks.filter((p: any) => p.layerId !== layerId)
+    updateData({ paddocks: updated, totalArea: parseFloat(updated.reduce((s: any, p: any) => s + p.area_ha, 0).toFixed(2)) })
   }, [data, updateData])
 
   // Map mode depends on step
   const mapMode = step === 1 ? 'locate' : 'draw'
-  const drawPhase = data.fieldBoundary ? 'paddock' : 'field'
+  const drawPhase = 'paddock'
 
   const showMap = step === 1 || step === 2
 
@@ -305,7 +292,7 @@ function OnboardingWizard() {
                     transition={{ duration: 0.28, ease: 'easeOut' }}
                     className="absolute inset-0 flex flex-col overflow-hidden"
                   >
-                    <Step2Panel midDrawArea={midDrawArea} onKmlParsed={handleKmlParsed} />
+                    <Step2Panel midDrawArea={midDrawArea} onKmlParsed={handleKmlAutoAccept} />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -331,13 +318,9 @@ function OnboardingWizard() {
               {/* Mid-draw floating badge */}
               {step === 2 && midDrawArea !== null && !pendingShape && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1200] pointer-events-none">
-                  <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl shadow-lg backdrop-blur-sm border ${
-                    drawPhase === 'field'
-                      ? 'bg-blue-600/90 border-blue-400/50 text-white'
-                      : 'bg-green-600/90 border-green-400/50 text-white'
-                  }`}>
+                  <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl shadow-lg backdrop-blur-sm border bg-green-600/90 border-green-400/50 text-white`}>
                     <p className="text-sm font-black">{midDrawArea.toFixed(1)} <span className="text-xs font-bold opacity-80">ha</span></p>
-                    <p className="text-[10px] font-normal opacity-70">{drawPhase === 'field' ? '· perímetro campo' : '· potrero'}</p>
+                    <p className="text-[10px] font-normal opacity-70">· potrero</p>
                   </div>
                 </div>
               )}

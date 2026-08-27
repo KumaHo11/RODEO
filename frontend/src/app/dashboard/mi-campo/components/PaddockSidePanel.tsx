@@ -381,10 +381,10 @@ export default function PaddockSidePanel({
                 className="flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-50 rounded-lg border border-indigo-200 hover:bg-indigo-100 disabled:opacity-50 transition-all"
                 title="Importar potreros desde KML"
               >
-                {kmlImporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} KML
+                {kmlImporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} <span className="truncate">Subir</span>
               </button>
-              <input ref={kmlInputRef} type="file" accept=".kml" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleKmlImport(f); e.target.value = '' }} />
+              <input ref={kmlInputRef} type="file" accept=".kml,.kmz,.zip,.geojson,.json" className="hidden"
+                onChange={async (e) => { const file = e.target.files?.[0]; if (file) await handleKmlImport(file); e.target.value = '' }} />
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-300" />
                 <input type="text" placeholder="Buscar…" value={search} onChange={e => setSearch(e.target.value)}

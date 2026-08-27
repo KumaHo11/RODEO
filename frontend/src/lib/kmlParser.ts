@@ -6,6 +6,8 @@
  */
 import { kml as kmlToGeoJSON } from '@tmcw/togeojson'
 import { area as turfArea } from '@turf/area'
+import JSZip from 'jszip'
+import shp from 'shpjs'
 
 export interface ParsedKmlFeature {
   /** Name from the KML <name> tag of the Placemark */
@@ -50,6 +52,51 @@ function strip2DGeometry(geom: any): any {
   return geom
 }
 
+// ─── processGeoJSONFeatures ──────────────────────────────────────────────────
+
+function processGeoJSONFeatures(geojsonFeatures: any[]): KmlParseResult {
+  const features: ParsedKmlFeature[] = []
+
+  if (!Array.isArray(geojsonFeatures) || geojsonFeatures.length === 0) {
+    return {
+      features: [],
+      error: 'El archivo no contiene elementos válidos.',
+    }
+  }
+
+  for (const feature of geojsonFeatures) {
+    const geom = feature.geometry
+    if (!geom) continue
+    if (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon') continue
+
+    // Strip Z dimension before storing — PostgreSQL column is 2D only
+    const geom2D = strip2DGeometry(geom)
+    const area_ha = parseFloat(
+      (turfArea({ type: 'Feature', geometry: geom2D, properties: {} }) / 10000).toFixed(2)
+    )
+    const name: string =
+      feature.properties?.name ||
+      feature.properties?.Name ||
+      feature.properties?.NOM_OBJ ||
+      `Polígono ${features.length + 1}`
+
+    // Store plain 2D Geometry (not the full Feature) so callers can pass it
+    // directly to the backend as `geojson` or `boundary`.
+    features.push({ name, geojson: geom2D, area_ha })
+  }
+
+  if (features.length === 0) {
+    return {
+      features: [],
+      error:
+        'El archivo no contiene polígonos. ' +
+        'Solo se soportan geometrías de tipo Polygon / MultiPolygon.',
+    }
+  }
+
+  return { features }
+}
+
 // ─── parseKmlText ────────────────────────────────────────────────────────────
 
 /**
@@ -74,45 +121,7 @@ export function parseKmlText(text: string): KmlParseResult {
     // Convert KML Document → GeoJSON FeatureCollection
     const geojson = kmlToGeoJSON(doc)
 
-    if (!geojson || !Array.isArray(geojson.features) || geojson.features.length === 0) {
-      return {
-        features: [],
-        error: 'El archivo KML no contiene elementos válidos.',
-      }
-    }
-
-    const features: ParsedKmlFeature[] = []
-
-    for (const feature of geojson.features) {
-      const geom = feature.geometry
-      if (!geom) continue
-      if (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon') continue
-
-      // Strip Z dimension before storing — PostgreSQL column is 2D only
-      const geom2D = strip2DGeometry(geom)
-      const area_ha = parseFloat(
-        (turfArea({ type: 'Feature', geometry: geom2D, properties: {} }) / 10000).toFixed(2)
-      )
-      const name: string =
-        feature.properties?.name ||
-        feature.properties?.Name ||
-        `Polígono ${features.length + 1}`
-
-      // Store plain 2D Geometry (not the full Feature) so callers can pass it
-      // directly to the backend as `geojson` or `boundary`.
-      features.push({ name, geojson: geom2D, area_ha })
-    }
-
-    if (features.length === 0) {
-      return {
-        features: [],
-        error:
-          'El archivo KML no contiene polígonos. ' +
-          'Solo se soportan geometrías de tipo Polygon / MultiPolygon.',
-      }
-    }
-
-    return { features }
+    return processGeoJSONFeatures(geojson.features || [])
   } catch (err: any) {
     return {
       features: [],
@@ -125,22 +134,49 @@ export function parseKmlText(text: string): KmlParseResult {
 
 /**
  * Reads a File object and resolves with a KmlParseResult.
- * Handles file-reading errors separately.
+ * Handles .kml, .kmz, .zip (shapefile), and .geojson/.json
  */
-export function parseKmlFile(file: File): Promise<KmlParseResult> {
-  return new Promise((resolve) => {
-    if (!file.name.toLowerCase().endsWith('.kml')) {
-      resolve({ features: [], error: 'El archivo debe tener extensión .kml' })
-      return
+export async function parseKmlFile(file: File): Promise<KmlParseResult> {
+  const name = file.name.toLowerCase()
+  if (!name.endsWith('.kml') && !name.endsWith('.kmz') && !name.endsWith('.zip') && !name.endsWith('.geojson') && !name.endsWith('.json')) {
+    return { features: [], error: 'El archivo debe tener extensión .kml, .kmz, .zip o .geojson' }
+  }
+
+  try {
+    if (name.endsWith('.kmz')) {
+      const arrayBuffer = await file.arrayBuffer()
+      const zip = await JSZip.loadAsync(arrayBuffer)
+      const kmlFile = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith('.kml'))
+      if (!kmlFile) {
+        return { features: [], error: 'El archivo KMZ no contiene ningún archivo KML válido.' }
+      }
+      const text = await kmlFile.async('text')
+      return parseKmlText(text)
     }
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const text = e.target?.result as string
-      resolve(parseKmlText(text))
+
+    if (name.endsWith('.zip')) {
+      const arrayBuffer = await file.arrayBuffer()
+      const geojson: any = await shp(arrayBuffer)
+      let features: any[] = []
+      if (Array.isArray(geojson)) {
+        geojson.forEach(g => { if (g.features) features = features.concat(g.features) })
+      } else if (geojson.features) {
+        features = geojson.features
+      }
+      return processGeoJSONFeatures(features)
     }
-    reader.onerror = () => {
-      resolve({ features: [], error: 'No se pudo leer el archivo.' })
+
+    if (name.endsWith('.geojson') || name.endsWith('.json')) {
+      const text = await file.text()
+      const geojson = JSON.parse(text)
+      const features = geojson.features || (geojson.type === 'Feature' ? [geojson] : [])
+      return processGeoJSONFeatures(features)
     }
-    reader.readAsText(file)
-  })
+
+    // Default: KML
+    const text = await file.text()
+    return parseKmlText(text)
+  } catch (err: any) {
+    return { features: [], error: `Error al procesar el archivo: ${err?.message ?? 'Error desconocido'}` }
+  }
 }
