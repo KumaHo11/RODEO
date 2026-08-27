@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('PATCH /api/notifications error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }
 
@@ -115,6 +115,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ deleted: result.rowCount })
   } catch (err: any) {
     console.error('DELETE /api/notifications error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }

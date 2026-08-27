@@ -630,8 +630,8 @@ export default function ClimaPage() {
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-black text-gray-950">Clima</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Clima</h1>
+          <p className="text-sm font-semibold text-gray-500 mt-1">
             {orgName ? `${orgName} · ` : ''}Condiciones actuales · Ajuste por potrero y rodeo · Historial
           </p>
         </div>

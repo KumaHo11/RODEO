@@ -20,17 +20,6 @@ export type FeatureKey =
   | 'clima'                 // Módulo clima
   | 'map'                   // Mapa de campo
   | 'climate_adjustment'    // Ajuste Clima (NDVI × lluvia × sequía)
-  // ── Metrics Module (v22) ────────────────────────────────────────────────────
-  | 'metrics_module'        // Dashboard métricas satelitales (NDVI, EVI, SAVI, NDMI, BSI, fCover)
-  | 'deforestation_guard'   // EUDR deforestation detection + map overlay
-  | 'animal_registry'       // Registro animal individual + RFID/Bluetooth (v23)
-  | 'polygon_import'
-  | 'time_machine'
-  | 'compliance_dashboard'
-  | 'mrv_reports'
-  | 'alert_engine'
-  | 'rfid_bluetooth'
-  | 'carbon_accounting'
 
 // ─── Mapeo plan-slug → PlanType ────────────────────────────────────────────
 const SLUG_TO_PLAN: Record<string, PlanType> = {
@@ -62,16 +51,6 @@ const PLAN_DEFAULTS: Record<PlanType, Record<FeatureKey, boolean>> = {
     clima:                true,
     map:                  true,
     climate_adjustment:   false,
-    metrics_module:       false,
-    deforestation_guard:  false,
-    animal_registry:      false,
-    polygon_import:       true,
-    time_machine:         false,
-    compliance_dashboard: false,
-    mrv_reports:          false,
-    alert_engine:         false,
-    rfid_bluetooth:       false,
-    carbon_accounting:    false,
   },
   PLANIFICADOR: {
     ndvi_access:          false,
@@ -88,16 +67,6 @@ const PLAN_DEFAULTS: Record<PlanType, Record<FeatureKey, boolean>> = {
     clima:                true,
     map:                  true,
     climate_adjustment:   true,
-    metrics_module:       false,
-    deforestation_guard:  false,
-    animal_registry:      false,
-    polygon_import:       true,
-    time_machine:         false,
-    compliance_dashboard: false,
-    mrv_reports:          false,
-    alert_engine:         false,
-    rfid_bluetooth:       false,
-    carbon_accounting:    false,
   },
   HOLISTICO: {
     ndvi_access:          false,  // requiere Sentinel Hub contratado
@@ -114,16 +83,6 @@ const PLAN_DEFAULTS: Record<PlanType, Record<FeatureKey, boolean>> = {
     clima:                true,
     map:                  true,
     climate_adjustment:   true,
-    metrics_module:       true,   // ✅ Metrics desde HOLISTICO
-    deforestation_guard:  true,   // ✅ EUDR Deforestation Guard
-    animal_registry:      false,  // Requiere LATIFUNDIO+
-    polygon_import:       true,
-    time_machine:         false,
-    compliance_dashboard: false,
-    mrv_reports:          false,
-    alert_engine:         false,
-    rfid_bluetooth:       false,
-    carbon_accounting:    false,
   },
   LATIFUNDIO: {
     ndvi_access:          true,
@@ -140,16 +99,6 @@ const PLAN_DEFAULTS: Record<PlanType, Record<FeatureKey, boolean>> = {
     clima:                true,
     map:                  true,
     climate_adjustment:   true,
-    metrics_module:       true,   // ✅ Metrics completo
-    deforestation_guard:  true,   // ✅ EUDR completo
-    animal_registry:      true,   // ✅ Animales individuales + RFID
-    polygon_import:       true,
-    time_machine:         true,
-    compliance_dashboard: true,
-    mrv_reports:          true,
-    alert_engine:         true,
-    rfid_bluetooth:       true,
-    carbon_accounting:    true,
   },
 }
 

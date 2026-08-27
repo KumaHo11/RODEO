@@ -62,7 +62,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
 const getSeason = () => {
   const m = new Date().getMonth() + 1
   if (m >= 4 && m < 10) return { name: 'Otoño/Invierno', type: 'Temporada cerrada', icon: '', color: 'bg-amber-100 text-gray-700' }
-  return { name: 'Primavera/Verano', type: 'Temporada abierta', icon: '', color: 'bg-green-100 text-green-700' }
+  return { name: 'Primavera/Verano', type: 'Temporada abierta', icon: '🌱', color: 'bg-green-100 text-green-700' }
 }
 
 // Safe date string normalizer — handles null, undefined, JS Date objects, and ISO strings
@@ -1227,7 +1227,7 @@ function InteractiveGantt({
                           }}
                         >
                           <span className="inline-flex items-center gap-1 bg-red-600 text-white text-[9px] font-black px-2 py-1 rounded-lg shadow-lg whitespace-nowrap">
-                            <AlertTriangle className="w-2.5 h-2.5 shrink-0" /> Sin pasto — Riesgo de sobrepastoreo
+                            ⚠️ Sin pasto — Riesgo de sobrepastoreo
                           </span>
                         </div>
                       )}
@@ -1574,10 +1574,10 @@ function InteractiveGantt({
                        const t2Bor = isOverdue ? T2_OVD_BOR : isActiveNow ? T2_ACT_BOR : T2_BORDER
                        const t2Pat = isOverdue ? T2_OVD_PAT : isActiveNow ? T2_ACT_PAT : T2_PAT
                        const t2Title = isOverdue
-                         ? 'PLAN VENCIDO — Fecha superada sin completar'
+                         ? '⚠️ PLAN VENCIDO — Fecha superada sin completar'
                          : isActiveNow
-                         ? 'EN PASTOREO — Plan en curso'
-                         : (plan.is_locked ? 'PLAN MODIFICABLE' : 'PLAN MODIFICABLE')
+                         ? '🟢 EN PASTOREO — Plan en curso'
+                         : (plan.is_locked ? '✏️ PLAN MODIFICABLE' : '✏️ PLAN MODIFICABLE')
 
                        renderBlocks.push(
                          createBlock(

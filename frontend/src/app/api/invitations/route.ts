@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ invitation })
   } catch (err) {
     console.error('GET /api/invitations error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }
 
@@ -123,6 +123,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: result.rows[0]?.id, token, inviteLink }, { status: 201 })
   } catch (err: any) {
     console.error('POST /api/invitations error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }

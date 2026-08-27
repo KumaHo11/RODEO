@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ plans })
   } catch (err: any) {
     console.error('GET /api/grazing-plans error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }
 
@@ -120,6 +120,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: newPlanId }, { status: 201 })
   } catch (err: any) {
     console.error('POST /api/grazing-plans error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }

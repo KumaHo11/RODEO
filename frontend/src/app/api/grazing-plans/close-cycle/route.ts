@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (err: any) {
     console.error('POST /api/grazing-plans/close-cycle error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }
 
@@ -120,6 +120,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ cycles: grouped })
   } catch (err: any) {
     console.error('GET /api/grazing-plans/close-cycle error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }

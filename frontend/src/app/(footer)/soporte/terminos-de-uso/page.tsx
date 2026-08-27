@@ -10,14 +10,9 @@ export const metadata: Metadata = {
 }
 
 export default async function TerminosDeUso() {
-  let activeVersion: { content: string, version_number: string } | null = null
-  try {
-    activeVersion = await queryOne<{ content: string, version_number: string }>(
-      `SELECT content, version_number FROM terms_and_conditions_versions WHERE is_active = true LIMIT 1`
-    )
-  } catch {
-    // Graceful fallback during static build when DB is unavailable
-  }
+  const activeVersion = await queryOne<{ content: string, version_number: string }>(
+    `SELECT content, version_number FROM terms_and_conditions_versions WHERE is_active = true LIMIT 1`
+  )
 
   return (
     <>

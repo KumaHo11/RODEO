@@ -74,7 +74,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('PATCH /api/team/[id] error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }
 
@@ -106,6 +106,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('DELETE /api/team/[id] error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }

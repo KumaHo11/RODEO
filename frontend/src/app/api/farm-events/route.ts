@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ events: normalized })
   } catch (err: any) {
     console.error('GET /api/farm-events error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }
 
@@ -178,6 +178,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id }, { status: 201 })
   } catch (err: any) {
     console.error('POST /api/farm-events error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }

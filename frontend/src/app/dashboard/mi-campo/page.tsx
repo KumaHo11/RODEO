@@ -510,9 +510,8 @@ export default function MiCampoPage() {
     setSetupFieldModal(true)
   }
 
-  const validNdviData = Object.values(ndviData).filter(d => d.averageNdvi != null)
-  const avgNdvi = validNdviData.length > 0
-    ? validNdviData.reduce((sum, d) => sum + d.averageNdvi, 0) / validNdviData.length
+  const avgNdvi = Object.values(ndviData).length > 0
+    ? Object.values(ndviData).reduce((sum, d) => sum + d.averageNdvi, 0) / Object.values(ndviData).length
     : null
 
   // Field image from org — auto-switch to image view when available
