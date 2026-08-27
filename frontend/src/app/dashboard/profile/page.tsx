@@ -443,11 +443,12 @@ export default function ProfilePage() {
 
       {/* === FACTURACIÓN TAB === */}
       {activeTab === 'facturacion' && billingData && (() => {
+        const isEffectivelyActive = billingData.plan_status === 'active' || (billingData.plan_status === 'trialing' && billingData.plan_price > 0 && Math.max(0, (billingData.plan_trial_days || 45) - Math.floor((Date.now() - new Date(billingData.org_created_at).getTime()) / (1000 * 60 * 60 * 24))) <= 0)
         const isActive = billingData.plan_status === 'active' || billingData.plan_status === 'trialing'
-        const statusText = billingData.plan_status === 'trialing' ? 'Prueba Gratuita' : (billingData.plan_status === 'active' ? 'Activo' : 'Inactivo')
+        const statusText = isEffectivelyActive ? 'Activo' : (billingData.plan_status === 'trialing' ? 'Prueba Gratuita' : 'Inactivo')
         
         let trialInfo = null
-        if (billingData.plan_status === 'trialing') {
+        if (billingData.plan_status === 'trialing' && !isEffectivelyActive) {
             const createdDate = new Date(billingData.org_created_at)
             const daysSinceCreation = Math.floor((Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24))
             const totalTrialDays = billingData.plan_trial_days || 45
