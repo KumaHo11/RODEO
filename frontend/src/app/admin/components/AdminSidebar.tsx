@@ -7,8 +7,6 @@ import { useState } from 'react'
 import Image from 'next/image'
 import RodeoLogo from '@/components/RodeoLogo'
 
-import { ToggleLeft } from 'lucide-react'
-
 const NAV_ITEMS = [
   {
     group: 'PANEL',
@@ -30,7 +28,6 @@ const NAV_ITEMS = [
     items: [
       { href: '/admin/audit-logs', label: 'Auditoría'     },
       { href: '/admin/config',     label: 'Configuración' },
-      { href: '/admin/features',   label: 'Feature Flags', icon: ToggleLeft },
       { href: '/admin/terms',      label: 'Términos'      },
     ],
   },
@@ -83,7 +80,6 @@ export default function AdminSidebar() {
                     <span className="text-[11px] font-black text-gray-400">{item.label.charAt(0)}</span>
                   ) : (
                     <>
-                      {item.icon && <item.icon className="w-4 h-4 mr-1 opacity-70" />}
                       <span className="flex-1">{item.label}</span>
                       {active && <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />}
                     </>

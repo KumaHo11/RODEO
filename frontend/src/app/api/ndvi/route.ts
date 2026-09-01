@@ -1,36 +1,14 @@
-/**
- * POST /api/ndvi
- *
- * Calcula NDVI real vía Sentinel-2 (Earth Search STAC + TiTiler).
- *
- * FIX v27-EUDR — Correcciones:
- *   ❌ ANTES: Sin filtro temporal → siempre retorna la escena MÁS RECIENTE
- *   ✅ AHORA: Acepta month/year o start_date/end_date para consultas históricas EUDR
- *
- *   ❌ ANTES: cloud_cover < 25 fijo → falla en el Chaco Norte (nuboso en verano)
- *   ✅ AHORA: Fallback progresivo 25 → 40 → 60 → 80% hasta encontrar una escena válida
- *
- *   ❌ ANTES: computeDetministicNdvi() retorna 0.35-0.80 (enmascara deforestación)
- *   ✅ AHORA: Si no hay escenas, retorna { averageNdvi: null, source: 'no_data' }
- *             (la UI mostrará "Sin datos" en lugar de un valor ficticio verde)
- *
- *   ❌ ANTES: Solo buscaba en 'sentinel-2-c1-l2a' y 'sentinel-2-l2a'
- *   ✅ AHORA: Intenta ambas colecciones en paralelo para mayor cobertura
- */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { checkFeatureAccess } from '@/lib/plan-limits'
 
 const EARTH_SEARCH_URL = 'https://earth-search.aws.element84.com/v1/search'
-const TITILER_URL      = process.env.TITILER_URL || 'https://titiler.xyz'
-
-// Fallback progresivo para zonas tropicales / subtropicales como el Chaco Norte
-// donde el 90% del verano tiene > 25% de nubosidad
-const CLOUD_COVER_THRESHOLDS = [25, 40, 60, 80] as const
+// URL de la instancia privada de TiTiler en Google Cloud Run (se configura en el .env)
+const TITILER_URL = process.env.TITILER_URL || 'https://titiler.xyz'
 
 export async function POST(req: NextRequest) {
   try {
-    // ── Auth ───────────────────────────────────────────────────────────────
+    // Auth Check
     const authHeader = req.headers.get('authorization') || ''
     const token = authHeader.replace('Bearer ', '').trim()
     if (!token) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
@@ -38,224 +16,172 @@ export async function POST(req: NextRequest) {
     const decoded = await verifyFirebaseToken(token)
     if (!decoded) return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
 
+    // Plan check
     const hasAccess = await checkFeatureAccess(decoded.uid, 'ndvi_access')
     if (!hasAccess) {
       return NextResponse.json({ error: 'Tu plan no incluye análisis satelital NDVI' }, { status: 403 })
     }
 
-    const { geojson, paddock_id, start_date, end_date, month, year } = await req.json()
+    const { geojson, paddock_id } = await req.json()
 
     if (!geojson) {
       return NextResponse.json({ error: 'GeoJSON polygon required' }, { status: 400 })
     }
 
+    // Normalize GeoJSON to a geometry object
     const geometry = geojson.type === 'Feature' ? geojson.geometry : geojson
 
-    // ── Construir rango temporal ────────────────────────────────────────────
-    let dateFrom: string
-    let dateTo: string
+    console.log(`[NDVI] ▶ Starting for paddock=${paddock_id || 'unknown'} | TITILER_URL=${TITILER_URL}`)
 
-    if (month && year) {
-      // Auditoría EUDR mensual: calcular primer/último día del mes
-      const m = parseInt(String(month))
-      const y = parseInt(String(year))
-      const lastDay = new Date(y, m, 0).getDate()
-      dateFrom = `${y}-${String(m).padStart(2, '0')}-01`
-      dateTo   = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-    } else if (start_date && end_date) {
-      dateFrom = start_date
-      dateTo   = end_date
-    } else {
-      // Default: últimos 60 días (modo operativo actual)
-      const now = new Date()
-      dateTo   = now.toISOString().split('T')[0]
-      now.setDate(now.getDate() - 60)
-      dateFrom = now.toISOString().split('T')[0]
+    // ── STEP 1: Find latest cloud-free Sentinel-2 scene ──────────────────────
+    const stacResponse = await fetch(EARTH_SEARCH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        collections: ['sentinel-2-c1-l2a', 'sentinel-2-l2a'],
+        intersects: geometry,
+        query: {
+          'eo:cloud_cover': { lt: 25 },
+        },
+        limit: 5,
+        sortby: [{ field: 'properties.datetime', direction: 'desc' }],
+      }),
+    })
+
+    if (!stacResponse.ok) {
+      console.error(`[NDVI] ✗ STEP 1 failed: Earth Search returned ${stacResponse.status}`)
+      throw new Error(`Earth Search error: ${stacResponse.status}`)
     }
 
-    console.log(`[NDVI] ▶ paddock=${paddock_id ?? 'unknown'} period=${dateFrom}→${dateTo} TITILER=${TITILER_URL}`)
+    const stacData = await stacResponse.json()
+    const items = stacData.features
 
-    // ── STEP 1: Buscar escena Sentinel-2 con fallback de nubosidad ─────────
-    let bestScene: any = null
-    let usedCloudThreshold = 0
-
-    for (const maxCloud of CLOUD_COVER_THRESHOLDS) {
-      const stacResponse = await fetch(EARTH_SEARCH_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          collections: ['sentinel-2-c1-l2a', 'sentinel-2-l2a'],
-          intersects:  geometry,
-          // FIX: filtro temporal explícito para consultas históricas EUDR
-          datetime: `${dateFrom}T00:00:00Z/${dateTo}T23:59:59Z`,
-          query: { 'eo:cloud_cover': { lt: maxCloud } },
-          limit: 10,
-          // Ordenar ascendente (primero) para obtener la escena más temprana del período
-          // (útil para detectar cuándo ocurrió el desmonte)
-          sortby: [{ field: 'properties.datetime', direction: 'asc' }],
-        }),
-      })
-
-      if (!stacResponse.ok) {
-        console.error(`[NDVI] ✗ STEP 1: Earth Search ${stacResponse.status}`)
-        break
-      }
-
-      const stacData = await stacResponse.json()
-      const items: any[] = stacData.features ?? []
-
-      if (items.length > 0) {
-        // De las escenas disponibles, elegir la de MENOR nubosidad
-        items.sort((a, b) =>
-          (a.properties?.['eo:cloud_cover'] ?? 99) - (b.properties?.['eo:cloud_cover'] ?? 99)
-        )
-        bestScene = items[0]
-        usedCloudThreshold = maxCloud
-        console.log(`[NDVI] ✓ STEP 1: ${items.length} escenas encontradas (cloud<${maxCloud}%), usando ${bestScene.id} (cloud:${bestScene.properties?.['eo:cloud_cover']}%)`)
-        break
-      }
-
-      console.warn(`[NDVI] ⚠ STEP 1: Sin escenas (cloud<${maxCloud}%) para ${dateFrom}→${dateTo}, probando threshold mayor...`)
+    if (!items || items.length === 0) {
+      console.warn(`[NDVI] ⚠ STEP 1: No cloud-free scenes found for paddock=${paddock_id}`)
+      // Fallback: if no scene found (very cloudy period), return deterministic mock
+      return NextResponse.json(computeDetministicNdvi(paddock_id || 'default', 'no_scenes'))
     }
 
-    // ── Sin escenas disponibles → retornar null explícito (NO mock) ─────────
-    // La UI debe mostrar "Sin datos" en lugar de un NDVI ficticio verde
-    if (!bestScene) {
-      console.warn(`[NDVI] ⚠ Sin escenas Sentinel-2 disponibles para paddock=${paddock_id} en ${dateFrom}→${dateTo}`)
-      return NextResponse.json({
-        averageNdvi:   null,
-        source:        'no_data',
-        reason:        'no_scenes',
-        message:       `Sin imágenes Sentinel-2 disponibles para el período ${dateFrom} a ${dateTo} en esta área`,
-        dateFrom,
-        dateTo,
-        paddock_id,
-      })
-    }
+    console.log(`[NDVI] ✓ STEP 1: Found ${items.length} scenes, using ${items[0].id} (cloud: ${items[0].properties?.['eo:cloud_cover']}%)`)
 
-    // ── STEP 2: Obtener URLs de bandas B04 (Red) y B08 (NIR) ──────────────
-    const redUrl = bestScene.assets?.red?.href  || bestScene.assets?.B04?.href
-    const nirUrl = bestScene.assets?.nir?.href  || bestScene.assets?.B08?.href
+    // ── STEP 2: Get Sentinel-2 band URLs ─────────────────────────────────────
+    const scene = items[0]
+    const redUrl = scene.assets?.red?.href || scene.assets?.B04?.href
+    const nirUrl = scene.assets?.nir?.href || scene.assets?.B08?.href
 
     if (!redUrl || !nirUrl) {
-      console.warn(`[NDVI] ⚠ STEP 2: URLs de bandas no encontradas | assets: ${Object.keys(bestScene.assets ?? {}).join(', ')}`)
-      return NextResponse.json({
-        averageNdvi: null,
-        source:      'no_data',
-        reason:      'missing_bands',
-        message:     'Las bandas Red/NIR no están disponibles para esta escena',
-        scene_id:    bestScene.id,
-        dateFrom,
-        dateTo,
-      })
+      console.warn(`[NDVI] ⚠ STEP 2: Band URLs missing — red=${!!redUrl} nir=${!!nirUrl} | Available assets: ${Object.keys(scene.assets || {}).join(', ')}`)
+      return NextResponse.json(computeDetministicNdvi(paddock_id || 'default', 'missing_bands'))
     }
 
-    // ── STEP 3: Estadísticas de banda vía TiTiler ─────────────────────────
-    const featureGeoJSON = { type: 'Feature' as const, geometry, properties: {} }
+    console.log(`[NDVI] ✓ STEP 2: Band URLs found`)
 
+    const featureGeoJSON = {
+      type: 'Feature' as const,
+      geometry,
+      properties: {},
+    }
+
+    // ── STEP 3: Get band statistics via TiTiler ──────────────────────────────
     const [redStats, nirStats] = await Promise.all([
       fetchBandStats(redUrl, featureGeoJSON),
       fetchBandStats(nirUrl, featureGeoJSON),
     ])
 
     if (!redStats || !nirStats) {
-      console.warn(`[NDVI] ⚠ STEP 3: TiTiler stats fallaron — red=${!!redStats} nir=${!!nirStats}`)
-      return NextResponse.json({
-        averageNdvi: null,
-        source:      'no_data',
-        reason:      'titiler_failed',
-        message:     'Error al procesar estadísticas de banda en TiTiler',
-        scene_id:    bestScene.id,
-        dateFrom,
-        dateTo,
-      })
+      console.warn(`[NDVI] ⚠ STEP 3: TiTiler stats failed — red=${!!redStats} nir=${!!nirStats} | TiTiler URL: ${TITILER_URL}`)
+      return NextResponse.json(computeDetministicNdvi(paddock_id || 'default', 'titiler_failed'))
     }
 
-    // ── STEP 4: Calcular NDVI ──────────────────────────────────────────────
-    // Sentinel-2 L2A: valores en reflectancia × 10000
+    console.log(`[NDVI] ✓ STEP 3: TiTiler stats — red.mean=${redStats.mean} nir.mean=${nirStats.mean}`)
+
+    // ── STEP 4: Compute NDVI ─────────────────────────────────────────────────
+    // Sentinel-2 L2A values are in reflectance * 10000
     const red = redStats.mean
     const nir = nirStats.mean
 
     if (red === 0 && nir === 0) {
-      console.warn(`[NDVI] ⚠ STEP 4: Ambas bandas = 0 — posible área sin datos`)
-      return NextResponse.json({
-        averageNdvi: null,
-        source:      'no_data',
-        reason:      'zero_bands',
-        message:     'Las bandas retornan cero — posible área sin cobertura o error de enmascaramiento',
-        dateFrom, dateTo,
-      })
+      console.warn(`[NDVI] ⚠ STEP 4: Both bands are 0 — possible data issue`)
+      return NextResponse.json(computeDetministicNdvi(paddock_id || 'default', 'zero_bands'))
     }
 
-    const ndvi        = (nir - red) / (nir + red)
+    const ndvi = (nir - red) / (nir + red)
     const ndviClamped = Math.max(-1, Math.min(1, ndvi))
 
-    // Estimación de materia seca calibrada para Chaco (no Pampa)
-    // NDVI 0.55 → ~2000 Kg MS/Ha (bosque chaqueño denso)
-    // NDVI 0.30 → ~800 Kg MS/Ha  (bosque chaqueño abierto / pastizal)
-    // NDVI 0.15 → ~200 Kg MS/Ha  (suelo desnudo / desmonte)
-    const dryMatterKgHa = ndviClamped >= 0.30
-      ? Math.round(800 + ((ndviClamped - 0.30) / 0.40) * 1200)
-      : Math.round(50  + ((ndviClamped - 0.05) / 0.25) * 750)
+    // Estimate dry matter from NDVI (heuristic calibrated for Pampas)
+    // NDVI 0.8 → ~3000 Kg MS/Ha, NDVI 0.2 → ~500 Kg MS/Ha
+    const dryMatterKgHa = Math.round(500 + Math.max(0, (ndviClamped - 0.2) / 0.6) * 2500)
 
-    const grazableAreaPct = ndviClamped > 0.30 ? 90
-                          : ndviClamped > 0.15 ? 72
-                          : 40
+    // Grazable area: exclude areas with NDVI < 0.1 (water, bare soil)
+    const grazableAreaPct = ndviClamped > 0.3 ? 92 : ndviClamped > 0.15 ? 78 : 60
 
-    const captureDate = bestScene.properties?.datetime?.split('T')[0]
-      || new Date().toISOString().split('T')[0]
+    const captureDate = scene.properties?.datetime?.split('T')[0] || new Date().toISOString().split('T')[0]
 
-    console.log(`[NDVI] ✓ NDVI=${ndviClamped.toFixed(3)} DM=${dryMatterKgHa}kg/ha scene=${bestScene.id} cloud=${usedCloudThreshold}% date=${captureDate}`)
+    console.log(`[NDVI] ✓ STEP 4: REAL NDVI=${ndviClamped.toFixed(3)} DM=${dryMatterKgHa} kg/ha scene=${scene.id} date=${captureDate}`)
 
     return NextResponse.json({
-      averageNdvi:                    Number(ndviClamped.toFixed(3)),
+      averageNdvi: Number(ndviClamped.toFixed(3)),
       grazableAreaPct,
-      estimatedAvailableDryMatterHa:  dryMatterKgHa,
+      estimatedAvailableDryMatterHa: dryMatterKgHa,
       captureDate,
-      dateFrom,
-      dateTo,
-      source:       'sentinel-2-l2a',
-      sceneId:      bestScene.id,
-      cloudCover:   bestScene.properties?.['eo:cloud_cover'] ?? 0,
-      cloudThresholdUsed: usedCloudThreshold,
-      paddock_id,
+      source: 'sentinel-2-l2a',
+      sceneId: scene.id,
+      cloudCover: scene.properties?.['eo:cloud_cover'] || 0,
     })
-
-  } catch (error: any) {
+  } catch (error) {
     console.error('[NDVI] ✗ Fatal error:', error)
-    // Retornar null (no mock) para que la UI muestre "Sin datos"
-    return NextResponse.json({
-      averageNdvi: null,
-      source:      'no_data',
-      reason:      'fatal_error',
-      message:     'Error interno procesando la imagen satelital',
-    }, { status: 500 })
+    // Graceful fallback
+    return NextResponse.json(computeDetministicNdvi('fallback', 'fatal_error'))
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: estadísticas de banda vía TiTiler /cog/statistics
-// ─────────────────────────────────────────────────────────────────────────────
 async function fetchBandStats(cogUrl: string, featureGeoJSON: object): Promise<{ mean: number } | null> {
   try {
     const url = `${TITILER_URL}/cog/statistics?url=${encodeURIComponent(cogUrl)}`
     const res = await fetch(url, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(featureGeoJSON),
-      signal:  AbortSignal.timeout(12000),
+      body: JSON.stringify(featureGeoJSON),
+      signal: AbortSignal.timeout(12000),
     })
 
     if (!res.ok) {
-      console.warn(`[NDVI] ⚠ TiTiler ${res.status} para ${url.substring(0, 80)}...`)
+      console.warn(`[NDVI] ⚠ TiTiler returned ${res.status} for ${url.substring(0, 80)}...`)
       return null
     }
-
     const data = await res.json()
+
+    // TiTiler returns { b1: { mean, ... } }
     const bandKey = Object.keys(data)[0]
     return data[bandKey] ? { mean: data[bandKey].mean } : null
   } catch (err: any) {
     console.warn(`[NDVI] ⚠ TiTiler fetch error: ${err.message}`)
     return null
+  }
+}
+
+// Deterministic mock based on paddock_id seed (consistent per paddock)
+// Now includes a 'reason' field to help diagnose why real data wasn't available
+function computeDetministicNdvi(seed: string, reason: string = 'unknown') {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(i)
+    hash |= 0
+  }
+  const normalized = (Math.abs(hash) % 1000) / 1000
+  const ndvi = Number((0.35 + normalized * 0.45).toFixed(3))
+  const dryMatterKgHa = Math.round(600 + normalized * 2000)
+
+  console.warn(`[NDVI] ⚠ Returning ESTIMATED data for seed=${seed} reason=${reason}`)
+
+  return {
+    averageNdvi: ndvi,
+    grazableAreaPct: 88 + Math.round(normalized * 10),
+    estimatedAvailableDryMatterHa: dryMatterKgHa,
+    captureDate: new Date().toISOString().split('T')[0],
+    source: 'estimated',
+    estimatedReason: reason,
+    sceneId: null,
+    cloudCover: null,
   }
 }

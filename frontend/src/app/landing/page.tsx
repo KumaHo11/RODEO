@@ -7,9 +7,7 @@ import {
   Map, Footprints, CalendarDays, Mic, Target, TrendingUp, Sprout,
   ArrowRight, Check, X, ChevronDown, ChevronLeft, ChevronRight, Building2, CheckCircle2,
   Camera, WifiOff, Brain, BarChart3, Zap, Shield, Loader2, CloudRain, Leaf,
-  Satellite, ShieldCheck, PawPrint
-, Antenna, ClipboardCheck} from 'lucide-react'
-
+} from 'lucide-react'
 import RodeoLogo from '@/components/RodeoLogo'
 import { FormulasTab } from '@/app/dashboard/calculadora/components/FormulasTab'
 import { event } from '@/lib/analytics'
@@ -223,63 +221,17 @@ export default function LandingPage() {
       stats: [{ label: 'Pronóstico', value: 'Ajuste dinámico' }, { label: 'Alertas', value: 'Automáticas' }],
       accent: 'from-cyan-600 to-blue-700',
     },
-    {
-      Icon: Satellite,
-      tag: 'NUEVO · LATIFUNDIO',
-      title: 'MRV Satelital — 10 índices Sentinel-2',
-      subtitle: 'Monitoreo, Reporte y Verificación automático',
-      description: 'Sentinel-2 y Sentinel-1 SAR calculan semanalmente NDVI, EVI, SAVI, fCover, NDMI, BSI, Humedad de suelo, SOC estimado y Compactación para cada potrero con polígono. Todo automático, con histórico desde 2020 y reportes PDF con hash SHA256 verificable.',
-      stats: [{ label: 'Satélites', value: 'S-2 + S-1 SAR' }, { label: 'Índices', value: '10 automáticos' }],
-      accent: 'from-blue-700 to-indigo-900',
-    },
-    {
-      Icon: ShieldCheck,
-      tag: 'NUEVO · LATIFUNDIO',
-      title: 'Deforestation Guard — EUDR 2023/1115',
-      subtitle: 'Elegibilidad de carbono verificada desde 2020',
-      description: 'Verificación automática contra Global Forest Watch de si hubo deforestación en tu campo post-31/12/2020. Requerimiento obligatorio para acceder a CORSIA, NBS voluntario y SBTi insetting. Los potreros se pintan en rojo/naranja/verde según su estatus EUDR directamente en el mapa.',
-      stats: [{ label: 'Fecha corte', value: '31/12/2020' }, { label: 'Norma', value: 'EUDR 2023/1115' }],
-      accent: 'from-red-700 to-orange-800',
-    },
-    {
-      Icon: PawPrint,
-      tag: 'NUEVO · LATIFUNDIO',  
-      title: 'Registro RFID + Trazabilidad individual',
-      subtitle: 'Del potrero al mercado, sin perder el hilo',
-      description: 'Registrá cada animal con caravana electrónica y RFID. Lectura Web Bluetooth compatible con lectores Gallagher HR5 y Tru-Test SRS2 — los más usados en Argentina. Importación CSV de Allflex. Bitácora de vida completa: pesajes, vacunas, pariciones, movimientos. Modo offline con cola de sincronización.',
-      stats: [{ label: 'Lectores', value: 'Gallagher · Allflex' }, { label: 'Modo', value: '100% Offline' }],
-      accent: 'from-amber-700 to-orange-800',
-    },
-    {
-      Icon: Leaf,
-      tag: 'NUEVO · LATIFUNDIO',
-      title: 'Huella de Carbono — IPCC Tier 1',
-      subtitle: 'Cada potrero, su balance de carbono',
-      description: 'Calculá las emisiones de CH₄ entérico y N₂O estiércol de tu hacienda y el secuestro de carbono del suelo (SOC) estimado por Sentinel-2. Balance neto en tCO₂e por potrero y por estancia. Metodología IPCC 2006, GWP100 AR6. Primer paso para certificar créditos de carbono voluntarios.',
-      stats: [{ label: 'Metodología', value: 'IPCC Tier 1' }, { label: 'GWP100', value: 'AR6 (CH₄=27.9)' }],
-      accent: 'from-green-700 to-emerald-900',
-    },
   ]
 
   // Map API plans to display format
   const FLAG_LABELS: Record<string, string> = {
     ndvi_access:      'Integración NDVI satelital',
-    ai_insights:      'IA materia seca por foto (Gemini)',
-    offline_mode:     'Modo offline + sincronización diferida',
+    ai_insights:      'IA Materia Seca por foto (Gemini)',
+    offline_mode:     'Modo Offline + sincronización diferida',
     voice_bitacora:   'Bitácora de voz con transcripción IA',
     advanced_reports: 'Reportes avanzados de producción',
     api_access:       'Acceso API corporativa',
     carbon_module:    'Módulo de Carbono y bonos (MRV)',
-    metrics_module:       'MRV Satelital — 10 índices Sentinel-2',
-    deforestation_guard:  'Deforestation Guard EUDR 2023/1115',
-    animal_registry:      'Registro individual de animales + RFID (Allflex/Gallagher)',
-    carbon_accounting:    'Huella de carbono IPCC Tier 1 (tCO₂e/potrero)',
-    mrv_reports:          'Reportes PDF MRV con hash SHA256 verificable',
-    compliance_dashboard: 'Compliance Dashboard EUDR / EOV / GRSB',
-    time_machine:         'Time Machine histórico 2020→hoy (backfill Sentinel-2)',
-    alert_engine:         'Alertas automáticas NDVI/BSI/Deforestación',
-    rfid_bluetooth:       'Escaneo RFID Bluetooth (modo offline)',
-    polygon_import:       'Importación de polígonos KML / KMZ / SHP',
   }
   const PLAN_META: Record<string, { cta: string; ctaStyle: string; icon: string }> = {
     brote:       { cta: 'Empezar gratis',         ctaStyle: 'border border-gray-300 text-gray-700 hover:bg-gray-50',                                         icon: '🌱' },
@@ -291,17 +243,7 @@ export default function LandingPage() {
     brote:        ['Mapeo de hasta 20 potreros', 'Gestión de hacienda (1 rodeo)', 'Bitácora de campo básica', 'Cálculo estático de Carga Animal'],
     planificador: ['Potreros y rodeos ilimitados', 'Planificador Gantt de pastoreo', 'Cálculo dinámico Carga Animal vs Receptividad', 'Alertas de sanidad e infraestructura'],
     holistico:    ['Todo lo del Plan Planificador', 'Planificación forrajera Savory', 'Integración satelital NDVI', 'Motor predictivo Bio-Económico (ADA)'],
-    latifundio: [
-      'Todo lo del Plan Holístico',
-      'MRV Satelital automático — 10 índices Sentinel-2',
-      'Deforestation Guard EUDR 2023/1115 (2020 baseline)',
-      'Dashboard Compliance EUDR / EOV Savory / GRSB',
-      'Huella de carbono IPCC Tier 1 (tCO₂e por potrero)',
-      'Reportes MRV PDF con hash SHA256 verificable',
-      'Registro individual RFID + Bitácora animal (Gallagher/Allflex)',
-      'Importación KML / KMZ / SHP de polígonos',
-      'API B2B v2 + Marketplace de datos satelitales',
-    ],
+    latifundio:   ['Todo lo del Plan Holístico', 'Dashboard multi-establecimientos', 'Soporte prioritario dedicado'],
   }
   const getEnabledFeatures = (plan: ApiPlan) => {
     const base = BASE_FEATURES[plan.slug] || ['Cartografía digital de potreros', 'Gestión de hacienda', 'Bitácora de campo']
@@ -359,9 +301,8 @@ export default function LandingPage() {
           <div className="hidden lg:flex items-center gap-8">
             {[
               { label: 'Producto', href: '#producto' },
-              { label: 'MRV & Carbono', href: '#mrv' },
               { label: 'Precios', href: '#precios' },
-              { label: 'Cómo funciona', href: '#como-funciona' },
+              { label: 'Cómo Funciona', href: '#como-funciona' },
               { label: 'Testimonios', href: '#testimonios' },
             ].map(item => (
               <a key={item.label} href={item.href}
@@ -396,9 +337,8 @@ export default function LandingPage() {
           <div className="lg:hidden bg-white border-t border-gray-100 px-6 py-4 space-y-1">
             {[
               { label: 'Producto', href: '#producto' },
-              { label: 'MRV & Carbono', href: '#mrv' },
               { label: 'Precios', href: '#precios' },
-              { label: 'Cómo funciona', href: '#como-funciona' },
+              { label: 'Cómo Funciona', href: '#como-funciona' },
               { label: 'Testimonios', href: '#testimonios' },
             ].map(item => (
               <a key={item.label} href={item.href} onClick={() => setMenuOpen(false)}
@@ -725,162 +665,6 @@ export default function LandingPage() {
       </TrackedSection>
 
 
-      {/* ── MRV LATIFUNDIO MODULE ── */}
-      <TrackedSection sectionName="mrv" id="mrv" className="py-24 bg-gray-950 text-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-1.5 border border-white/10 text-gray-500 text-xs font-bold tracking-widest px-3 py-1.5 rounded-full mb-6">
-              LATIFUNDIO · MRV DIGITAL
-            </div>
-            <h2 className="text-3xl lg:text-4xl font-black mb-4">
-              Tu campo monitorea, reporta y verifica.
-              <span className="text-green-400"> Solo.</span>
-            </h2>
-            <p className="text-gray-500 text-base max-w-2xl mx-auto">
-              El mercado de carbono no paga por "tener un campo regenerativo". Paga por
-              <strong className="text-gray-300"> demostrar con datos verificables que mejora</strong>.
-              Rodeo LATIFUNDIO es la infraestructura MRV que hace esa demostración posible.
-            </p>
-          </div>
-
-          {/* 3-column modules */}
-          <div className="grid md:grid-cols-3 gap-6 mb-16">
-            {[
-              {
-                Icon: Antenna,
-                title: '10 índices satelitales',
-                sub: 'Sentinel-2 L2A + SAR',
-                desc: 'NDVI, EVI, SAVI, BSI, fCover, NDMI, Humedad SAR, SOC estimado, Compactación, Heterogeneidad espectral. Actualizados semanalmente por potrero.',
-                badges: ['Sentinel-2', 'Sentinel-1 SAR'],
-              },
-              {
-                Icon: ClipboardCheck,
-                title: 'Compliance automatizado',
-                sub: 'EUDR / EOV / GRSB',
-                desc: 'Deforestation Guard (2020 baseline), score de cumplimiento por potrero, alertas automáticas. El reporte PDF incluye hash SHA256 — inmutable y auditable.',
-                badges: ['EUDR 2023/1115', 'EOV Savory', 'GRSB'],
-              },
-              {
-                Icon: Leaf,
-                title: 'Balance de carbono',
-                sub: 'IPCC Tier 1 · GWP AR6',
-                desc: 'Emisiones ganaderas (CH₄ entérico + N₂O estiércol) vs. secuestro SOC satelital. Balance neto en tCO₂e por potrero y por estancia. Primer paso para certificar créditos.',
-                badges: ['IPCC 2006', 'GWP100 AR6'],
-              },
-            ].map((item, i) => (
-              <div key={i} className="bg-white/5 border border-white/8 rounded-2xl p-7">
-                <div className="w-10 h-10 bg-green-600/20 rounded-xl flex items-center justify-center mb-4">
-                  <item.Icon className="w-6 h-6 text-green-400" />
-                </div>
-                <h3 className="text-lg font-black mb-1">{item.title}</h3>
-                <p className="text-green-400 text-xs font-bold mb-4">{item.sub}</p>
-                <p className="text-gray-500 text-sm leading-relaxed mb-5">{item.desc}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {item.badges.map(b => (
-                    <span key={b} className="text-[10px] font-black text-gray-400 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full tracking-wider">{b}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* LATIFUNDIO CTA */}
-          <div className="bg-gradient-to-r from-green-900/50 to-emerald-900/30 border border-green-500/20 rounded-2xl p-8 flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div>
-              <div className="text-xs font-black text-green-400 tracking-widest mb-2">EXCLUSIVO PLAN LATIFUNDIO</div>
-              <h3 className="text-xl font-black text-white mb-2">¿Tu campo tiene más de 500 ha?</h3>
-              <p className="text-gray-400 text-sm max-w-lg">
-                El módulo MRV completo está diseñado para operaciones que quieren participar del mercado de carbono, cumplir con trazabilidad europea y documentar el valor regenerativo de su campo.
-              </p>
-            </div>
-            <a
-              href="mailto:ventas@rodeoagtech.com?subject=Consulta%20Plan%20Latifundio%20MRV"
-              className="flex-shrink-0 inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-black px-8 py-3.5 rounded-xl text-sm transition-all whitespace-nowrap"
-            >
-              Hablar con ventas
-              <ArrowRight className="w-4 h-4" />
-            </a>
-          </div>
-        </div>
-      </TrackedSection>
-
-
-      {/* ── CARBON MARKET VALUE SECTION ── */}
-      <TrackedSection sectionName="mercado" id="mercado" className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-14">
-            <SectionLabel>MERCADO DE CARBONO</SectionLabel>
-            <h2 className="text-4xl lg:text-5xl font-black text-gray-950 mb-4">
-              La tonelada monitoreada<br />
-              vale <span className="text-green-600">3× más</span> que la tonelada sin datos.
-            </h2>
-            <p className="text-base text-gray-500 max-w-2xl mx-auto">
-              Prima documentada del 217% para créditos con metodologías modernas de MRV.
-              Rodeo posiciona tu campo exactamente en el eslabón más rentable de la cadena de carbono.
-            </p>
-          </div>
-
-          {/* Escalera de precios */}
-          <div className="bg-gray-50 rounded-2xl border border-gray-200 p-8 mb-12">
-            <div className="text-xs font-black text-gray-400 tracking-widest mb-6">ESCALERA DE PRECIOS 2026 · USD/tCO₂e</div>
-            <div className="flex flex-col gap-2">
-              {[
-                { label: 'Crédito genérico sin MRV', price: 7,  color: 'bg-gray-200', width: '13%', note: '' },
-                { label: 'NBS voluntario con MRV', price: 15, color: 'bg-green-200', width: '28%', note: '✓ RODEO habilita' },
-                { label: 'NBS voluntario premium',  price: 24, color: 'bg-green-400', width: '45%', note: '✓ RODEO habilita' },
-                { label: 'CORSIA mediana',           price: 33, color: 'bg-emerald-500', width: '62%', note: '+ carta soberana' },
-                { label: 'Licitación 6.2 Singapur',  price: 41, color: 'bg-emerald-600', width: '78%', note: '+ acuerdo bilateral' },
-                { label: 'CORSIA techo 2030',         price: 53, color: 'bg-green-700', width: '100%', note: '' },
-              ].map((row, i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <div className="w-52 text-xs font-medium text-gray-600 text-right flex-shrink-0">{row.label}</div>
-                  <div className="flex-1 bg-gray-100 rounded-full h-7 relative">
-                    <div className={`absolute inset-y-0 left-0 ${row.color} rounded-full transition-all flex items-center justify-end pr-3`} style={{ width: row.width }}>
-                      <span className="text-xs font-black text-white">USD {row.price}</span>
-                    </div>
-                  </div>
-                  {row.note && (
-                    <div className="w-40 text-[10px] font-bold text-green-700 flex-shrink-0">{row.note}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-gray-400 mt-4">Fuente: GMF Nature Based Solutions & The Carbon Sink · Agosto 2026</p>
-          </div>
-
-          {/* 3 stat cards */}
-          <div className="grid md:grid-cols-3 gap-5">
-            {[
-              {
-                value: '+217%',
-                label: 'Prima por MRV moderno',
-                desc: 'Los créditos con metodologías satelitales documentadas valen 3.17× más que créditos genéricos del mismo activo.',
-                color: 'text-green-600',
-              },
-              {
-                value: '50-70%',
-                label: 'Menos costo de verificación',
-                desc: 'El MRV digital reduce los costos de auditoría externa. Un auditor que normalmente cobra USD 50k ahora corre en APIs.',
-                color: 'text-blue-600',
-              },
-              {
-                value: 'USD 0',
-                label: 'Exposición al precio de carbono',
-                desc: 'RODEO cobra por tonelada monitoreada, no por tonelada vendida. Ganás aunque el mercado voluntario baje.',
-                color: 'text-emerald-600',
-              },
-            ].map((stat, i) => (
-              <div key={i} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                <div className={`text-4xl font-black mb-2 ${stat.color}`}>{stat.value}</div>
-                <div className="font-bold text-gray-900 mb-2">{stat.label}</div>
-                <p className="text-sm text-gray-500 leading-relaxed">{stat.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </TrackedSection>
-
-
       {/* ── HOW IT WORKS ── */}
       <TrackedSection sectionName="como_funciona" id="como-funciona" className="py-24 bg-white">
         <div className="max-w-5xl mx-auto px-6">
@@ -1124,7 +908,7 @@ export default function LandingPage() {
 
         <div className="max-w-3xl mx-auto px-6 text-center relative z-10">
           <h2 className="text-4xl lg:text-5xl font-black text-white leading-tight mb-5">
-            Regístrate gratis y probá<br />el Planificador holístico.
+            Regístrate gratis y probá<br />el Planificador Holístico.
           </h2>
           <p className="text-green-100 text-base mb-10 max-w-md mx-auto">
             Sumáte a más de 800 productores que ya digitalizaron su campo con Rodeo. Gratis para empezar, sin tarjeta de crédito.
@@ -1145,85 +929,58 @@ export default function LandingPage() {
 
 
       {/* ── FOOTER ── */}
-      <footer className="bg-gray-950 text-gray-500 py-16">
+      <footer className="bg-gray-950 text-gray-300 py-16">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-8 mb-12">
-            <div className="lg:col-span-1">
+          <div className="grid md:grid-cols-4 gap-10 mb-12">
+            <div>
               <div className="mb-6">
                 <img src="/RODEO.LogoHeaderBlanco.svg" alt="Rodeo" className="h-6 w-auto" />
               </div>
-              <p className="text-sm leading-relaxed text-gray-600">
-                Plataforma MRV ganadera con IA y pastoreo holístico. Monitoreo satelital, registro RFID, compliance EUDR y huella de carbono para el productor latinoamericano.
+              <p className="text-sm leading-relaxed text-gray-400">
+                Plataforma de gestión ganadera con IA y pastoreo holístico para el productor latinoamericano.
               </p>
-              <div className="flex flex-wrap gap-1.5 mt-4">
-                {['EUDR', 'EOV', 'GRSB', 'IPCC Tier 1'].map(n => (
-                  <span key={n} className="text-[9px] font-black text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full tracking-wider">{n}</span>
-                ))}
-              </div>
             </div>
 
             {[
               { title: 'Producto', links: [
-                { label: 'IA materia seca',          href: '/producto/ia-materia-seca' },
-                { label: 'Bitácora de voz',           href: '/producto/bitacora-de-voz' },
-                { label: 'Gestión de hacienda',       href: '/producto/gestion-de-hacienda' },
-                { label: 'Planificador holístico',    href: '/producto/planificador-holistico' },
-                { label: 'Calculadora ganadera',      href: '/producto/calculadora-ganadera' },
-                { label: 'Modo offline',              href: '/producto/modo-offline' },
-                { label: 'MRV satelital Sentinel-2',  href: '/producto/mrv-satelital' },
-                { label: 'Deforestation Guard EUDR',  href: '/producto/deforestation-guard' },
-                { label: 'Compliance Dashboard',      href: '/producto/compliance' },
-                { label: 'Registro RFID + animales',  href: '/producto/registro-rfid' },
-                { label: 'Huella de carbono IPCC',    href: '/producto/huella-carbono' },
-                { label: 'API B2B corporativa',       href: '/producto/api-b2b' },
+                { label: 'IA Materia Seca',       href: '/producto/ia-materia-seca' },
+                { label: 'Bitácora de Voz',        href: '/producto/bitacora-de-voz' },
+                { label: 'Gestión de Hacienda',    href: '/producto/gestion-de-hacienda' },
+                { label: 'Planificador Holístico', href: '/producto/planificador-holistico' },
+                { label: 'Calculadora Ganadera',   href: '/producto/calculadora-ganadera' },
+                { label: 'Modo Offline',           href: '/producto/modo-offline' },
               ]},
               { title: 'Empresa', links: [
-                { label: 'Sobre Rodeo',     href: '/empresa/sobre-rodeo' },
-                { label: 'Blog',            href: '/blog' },
-                { label: 'Prensa',          href: '/empresa/prensa' },
-                { label: 'Casos de éxito',  href: '/empresa/casos-de-exito' },
+                { label: 'Sobre Rodeo',    href: '/empresa/sobre-rodeo' },
+                { label: 'Blog',           href: '/blog' },
+                { label: 'Prensa',         href: '/empresa/prensa' },
+                { label: 'Casos de éxito', href: '/empresa/casos-de-exito' },
               ]},
               { title: 'Soporte', links: [
-                { label: 'Centro de ayuda',    href: '/soporte/centro-de-ayuda' },
-                { label: 'Contacto',           href: '/soporte/contacto' },
-                { label: 'Estado del servicio',href: '/soporte/estado-del-servicio' },
-              ]},
-              { title: 'Normativas', links: [
-                { label: 'EUDR 2023/1115',        href: '/normativas/eudr' },
-                { label: 'EOV · Savory Institute', href: '/normativas/eov' },
-                { label: 'GRSB Standard',         href: '/normativas/grsb' },
-                { label: 'IPCC Tier 1 / AR6',     href: '/normativas/ipcc' },
-                { label: 'Verra VM0026',          href: '/normativas/verra' },
-                { label: 'CORSIA Fase 1',         href: '/normativas/corsia' },
-              ]},
-              { title: 'Mercado', links: [
-                { label: 'Qué es el MRV digital',   href: '/mercado/mrv-digital' },
-                { label: 'Prima del 217% por MRV',   href: '/mercado/prima-mrv' },
-                { label: 'Elegibilidad CORSIA',      href: '/mercado/corsia' },
-                { label: 'NBS voluntario',           href: '/mercado/nbs-voluntario' },
-                { label: 'SBTi insetting Scope 3',   href: '/mercado/sbti-insetting' },
-                { label: 'Mercado argentino',        href: '/mercado/argentina' },
+                { label: 'Centro de ayuda',     href: '/soporte/centro-de-ayuda' },
+                { label: 'Contacto',            href: '/soporte/contacto' },
+                { label: 'Estado del servicio', href: '/soporte/estado-del-servicio' },
               ]},
             ].map((col, i) => (
               <div key={i}>
-                <div className="text-sm font-semibold text-gray-200 mb-4">{col.title}</div>
+                <div className="text-[10px] font-black text-gray-400 tracking-widest mb-4">{col.title.toUpperCase()}</div>
                 <div className="space-y-2.5">
                   {col.links.map(link => (
-                    <Link key={link.href} href={link.href} className="block text-sm text-gray-600 hover:text-gray-200 transition-colors">{link.label}</Link>
+                    <a key={link.href} href={link.href} className="block text-sm text-gray-400 hover:text-white transition-colors">{link.label}</a>
                   ))}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-gray-700">© 2026 Rodeo AgTech. Hecho en Argentina para toda LATAM.</div>
+          <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="text-sm text-gray-500">© 2026 Rodeo AgTech. Hecho en Argentina para toda LATAM.</div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5 text-xs text-gray-700">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                 Todos los sistemas operativos
               </div>
-              <div className="text-xs text-gray-700 tracking-wider">ARG · URU · BRA · PAR · COL · CHI</div>
+              <div className="text-xs text-gray-500 tracking-wider">ARG · URU · BRA · PAR · COL · CHI</div>
             </div>
           </div>
         </div>

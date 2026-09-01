@@ -25,7 +25,7 @@ export async function apiFetch(url: string, options?: RequestInit & { timeout?: 
   }
 
   try {
-    const res = await fetch(url, {
+    return await fetch(url, {
       ...options,
       signal: controller.signal,
       headers: {
@@ -34,16 +34,6 @@ export async function apiFetch(url: string, options?: RequestInit & { timeout?: 
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     })
-
-    // Si el servidor indica sesión expirada/inválida, notificar a la app
-    // para que limpie el estado local y redirija al login.
-    if (res.status === 401 && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('rodeo_auth_expired', {
-        detail: { url, status: 401 }
-      }))
-    }
-
-    return res
   } catch (err: any) {
     if (err.name === 'AbortError' || err.message === 'TimeoutError') {
       console.warn(`[apiFetch] Timeout fetching ${url}`)

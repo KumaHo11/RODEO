@@ -39,6 +39,6 @@ export async function DELETE(
     return NextResponse.json({ deleted: true })
   } catch (err: any) {
     console.error('DELETE /api/movements/[id] error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }

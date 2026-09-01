@@ -124,6 +124,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(insights)
   } catch (err: unknown) {
     console.error('[GET /api/weather/insights]', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }

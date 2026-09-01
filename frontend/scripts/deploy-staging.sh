@@ -11,7 +11,7 @@ REGION="southamerica-east1"
 SERVICE_NAME="rodeo-staging"
 REGISTRY="$REGION-docker.pkg.dev"
 IMAGE="$REGISTRY/$PROJECT_ID/rodeo-images/rodeo-frontend:staging"
-STAGING_URL="https://staging.rodeoagtech.com"
+STAGING_URL="https://rodeo-staging-831756494147.southamerica-east1.run.app"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  🐄 RODEO — Deploy to Staging"
@@ -66,29 +66,19 @@ echo "▶ Generando env vars YAML..."
 python3 - <<PYEOF
 import os, json
 def q(v): return json.dumps(str(v))
-# NOTA: FIREBASE_ADMIN_CREDENTIALS_BASE64 se omite aquí porque está
-# almacenado como Secret Manager reference en Cloud Run (no como literal).
-# Se mantiene via --update-secrets en el gcloud run deploy.
 lines = [
   f'NODE_ENV: production',
   f'NEXT_PUBLIC_APP_URL: {q("$STAGING_URL")}',
-  f'DATABASE_URL: {q("postgresql://rodeo_app:rodeo_app_staging_pass_123@/rodeo?host=/cloudsql/rodeo-app-fac50:southamerica-east1:rodeo-db-preprod")}',
-  f'DATABASE_URL_SERVICE: {q("postgresql://rodeo_service:rodeo_svc_staging_pass_123@/rodeo?host=/cloudsql/rodeo-app-fac50:southamerica-east1:rodeo-db-preprod")}',
+  f'DATABASE_URL: {q(os.environ.get("DATABASE_URL",""))}',
   f'FIREBASE_ADMIN_PROJECT_ID: {q(os.environ.get("FIREBASE_ADMIN_PROJECT_ID",""))}',
+  f'FIREBASE_ADMIN_CREDENTIALS_BASE64: {q(os.environ.get("FIREBASE_ADMIN_CREDENTIALS_BASE64",""))}',
   f'FIREBASE_ADMIN_IMPERSONATE_SA: {q(os.environ.get("FIREBASE_ADMIN_IMPERSONATE_SA",""))}',
   f'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: {q(os.environ.get("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",""))}',
   f'GCS_BUCKET_NAME: {q("rodeo-media")}',
-  f'GCS_EUDR_BUCKET_NAME: {q("rodeo-eudr-docs")}',
   f'GEMINI_API_KEY: {q(os.environ.get("GEMINI_API_KEY",""))}',
   f'RESEND_API_KEY: {q(os.environ.get("RESEND_API_KEY",""))}',
   f'RESEND_FROM_EMAIL: {q(os.environ.get("RESEND_FROM_EMAIL",""))}',
   f'TITILER_URL: {q(os.environ.get("TITILER_URL",""))}',
-  f'EMAIL_VERIFY_JWT_SECRET: {q(os.environ.get("EMAIL_VERIFY_JWT_SECRET",""))}',
-  f'NEXT_PUBLIC_SUPPORT_EMAIL: {q(os.environ.get("NEXT_PUBLIC_SUPPORT_EMAIL",""))}',
-  f'NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: {q(os.environ.get("NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY",""))}',
-  f'MERCADOPAGO_ACCESS_TOKEN: {q(os.environ.get("MERCADOPAGO_ACCESS_TOKEN",""))}',
-  f'MERCADOPAGO_WEBHOOK_SECRET: {q(os.environ.get("MERCADOPAGO_WEBHOOK_SECRET",""))}',
-  f'CONTACT_FORM_DESTINATION_EMAILS: {q(os.environ.get("CONTACT_FORM_DESTINATION_EMAILS",""))}',
 ]
 with open('/tmp/rodeo-staging-env.yaml','w') as f: f.write('\n'.join(lines))
 print('  ✓ /tmp/rodeo-staging-env.yaml generado')
@@ -108,7 +98,6 @@ gcloud run deploy $SERVICE_NAME \
   --min-instances=0 \
   --max-instances=3 \
   --env-vars-file=/tmp/rodeo-staging-env.yaml \
-  --update-secrets=FIREBASE_ADMIN_CREDENTIALS_BASE64=FIREBASE_ADMIN_CREDENTIALS_BASE64:latest \
   --quiet
 
 # ── Done ──────────────────────────────────────────────────────────────────────

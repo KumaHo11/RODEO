@@ -407,8 +407,8 @@ export default function AgendaPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-black text-gray-950">Agenda</h1>
-          <p className="text-sm text-gray-500 mt-0.5 line-clamp-1 sm:line-clamp-none">
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Agenda</h1>
+          <p className="text-sm text-gray-500 font-medium mt-1 line-clamp-1 sm:line-clamp-none">
             Gestión de eventos ganaderos: servicios, pariciones, sanidad y más
           </p>
           <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit mt-3">

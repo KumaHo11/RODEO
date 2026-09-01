@@ -54,12 +54,12 @@ function fmt(n: number, digits = 0) {
 // safeIso y daysBetween importados desde lib/utils/dates
 
 // Detect southern hemisphere season based on month
-function getCurrentSeason(): { name: string; color: string; restDaysMin: number; restDaysMax: number; growthFactor: number } {
+function getCurrentSeason(): { name: string; icon: string; restDaysMin: number; restDaysMax: number; growthFactor: number } {
   const month = new Date().getMonth() + 1 // 1-12
-  if (month >= 12 || month <= 2) return { name: 'Verano',    color: 'text-amber-600',  restDaysMin: 45, restDaysMax: 65, growthFactor: 1.4 }
-  if (month >= 3 && month <= 5)  return { name: 'Otoño',    color: 'text-orange-600', restDaysMin: 60, restDaysMax: 80, growthFactor: 0.9 }
-  if (month >= 6 && month <= 8)  return { name: 'Invierno', color: 'text-blue-600',   restDaysMin: 80, restDaysMax: 110,growthFactor: 0.4 }
-  return                                  { name: 'Primavera',color: 'text-green-600', restDaysMin: 35, restDaysMax: 50, growthFactor: 1.6 }
+  if (month >= 12 || month <= 2) return { name: 'Verano', icon: '☀️', restDaysMin: 45, restDaysMax: 65, growthFactor: 1.4 }
+  if (month >= 3 && month <= 5)  return { name: 'Otoño',   icon: '🍂', restDaysMin: 60, restDaysMax: 80, growthFactor: 0.9 }
+  if (month >= 6 && month <= 8)  return { name: 'Invierno',icon: '❄️', restDaysMin: 80, restDaysMax: 110,growthFactor: 0.4 }
+  return                                  { name: 'Primavera',icon: '🌱', restDaysMin: 35, restDaysMax: 50, growthFactor: 1.6 }
 }
 
 function holismoScore(paddocks: any[], plans: any[], herds: any[], weather: any): Score {
@@ -490,7 +490,7 @@ function InsightsContent({ user, profile }: { user: any; profile: any }) {
               <h2 className="text-5xl font-black">{forecastedDaysAvailable ?? '—'} <span className="text-2xl opacity-60">días</span></h2>
               <p className="text-emerald-100/70 text-sm mt-2 font-medium max-w-md">
                 {forecastedDaysAvailable && forecastedDaysAvailable < 15
-                  ? 'Alerta: Stock de pasto crítico. Considerá mover animales o suplementar.'
+                  ? '⚠️ Alerta: Stock de pasto crítico. Considerá mover animales o suplementar.'
                   : 'Tu rodeo tiene suficiente pasto para el corto plazo bajo manejo rotativo.'}
               </p>
               <div className="flex gap-3 mt-4">
@@ -526,8 +526,8 @@ function InsightsContent({ user, profile }: { user: any; profile: any }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-gray-950">Dashboard de Control</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">Dashboard de Control</h1>
+          <p className="text-sm text-gray-500 font-medium mt-1">
             Motor Predictivo · {season.name} · Descanso óptimo: {season.restDaysMin}–{season.restDaysMax} días
           </p>
         </div>
@@ -548,7 +548,7 @@ function InsightsContent({ user, profile }: { user: any; profile: any }) {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Score holístico</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Índice compuesto del manejo ganadero · <span className={season.color}>{season.name}</span></p>
+            <p className="text-xs text-gray-400 mt-0.5">Índice compuesto del manejo ganadero · {season.icon} {season.name}</p>
           </div>
           <div className="text-right">
             <span className={`text-4xl font-black ${score.color}`}>{score.value}</span>

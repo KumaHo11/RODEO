@@ -106,6 +106,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (err) {
     console.error('[GET /api/grazing-plans/export]', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }

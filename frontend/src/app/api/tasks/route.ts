@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ tasks })
   } catch (err: any) {
     console.error('GET /api/tasks error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
   }
 }
 
@@ -149,6 +149,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: taskId }, { status: 201 })
   } catch (err: any) {
     console.error('POST /api/tasks error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }

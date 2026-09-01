@@ -52,7 +52,7 @@ export async function PATCH(
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('PATCH /api/grazing-plans/[id] error:', err)
-    return NextResponse.json({ error: 'Error interno del servidor', detail: err?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }
 
