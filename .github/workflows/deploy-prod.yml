@@ -52,10 +52,24 @@ jobs:
             echo "⚠️  MIGRATION_DATABASE_URL_PROD no configurado — saltando migraciones"
             exit 0
           fi
-          
-          # Forzar conexión por el Cloud SQL Proxy local (127.0.0.1:5432) en lugar de IP pública
-          PROXIED_URL=$(echo "$MIGRATION_DATABASE_URL" | sed -E 's/@[^:]+:[0-9]+/@127.0.0.1:5432/')
-          
+
+          # Reemplazar host/port con 127.0.0.1:5432 (Cloud SQL Auth Proxy) usando Node.js
+          # (sed se rompe si la password tiene caracteres especiales como @, #, %)
+          PROXIED_URL=$(node -e "
+            const raw = process.env.MIGRATION_DATABASE_URL;
+            if (!raw) { console.error('MIGRATION_DATABASE_URL no está definida'); process.exit(1); }
+            try {
+              const u = new URL(raw);
+              u.hostname = '127.0.0.1';
+              u.port     = '5432';
+              console.log(u.toString());
+            } catch(e) {
+              console.error('URL inválida:', e.message);
+              process.exit(1);
+            }
+          ")
+          echo "✅ PROXIED_URL host: 127.0.0.1:5432"
+
           node scripts/full_schema_migration.js "$PROXIED_URL" \
             && echo "✅ full_schema_migration OK" \
             || echo "⚠️  full_schema_migration falló — verificar secret MIGRATION_DATABASE_URL_PROD"
