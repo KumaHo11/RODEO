@@ -941,7 +941,7 @@ async function verify(client) {
 async function main() {
   const client = new Client({
     connectionString: DB_URL,
-    ssl: { rejectUnauthorized: false },
+    ssl: DB_URL.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
     connectionTimeoutMillis: 15000,
   })
 

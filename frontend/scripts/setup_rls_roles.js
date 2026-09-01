@@ -28,7 +28,7 @@ async function main() {
     user: url.username,
     password: decodeURIComponent(url.password),
     database: url.pathname.slice(1).split('?')[0],
-    ssl: { rejectUnauthorized: false },
+    ssl: connectionString.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
   })
 
   const client = await pool.connect()
