@@ -555,13 +555,20 @@ export function obtenerEvRodeoParaFecha(
 
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** Tasa de crecimiento mensual de peso vivo para categorías jóvenes (kg/mes) */
+/**
+ * Tasa de crecimiento mensual de peso vivo (kg/mes) — fallback cuando no hay daily_gain_kg.
+ * Fuente: promedios INTA para Pampa Húmeda. Se usa solo si el rodeo no tiene daily_gain_kg.
+ */
 const GROWTH_RATE_KG_MONTH: Record<string, number> = {
-  TERNEROS:    25,
-  TERNERAS:    20,
-  NOVILLITOS:  18,
-  VAQUILLONAS: 15,
-  VACAS:       5,
+  TERNEROS:    25,   // ~830 g/día
+  TERNERAS:    20,   // ~660 g/día
+  NOVILLITOS:  18,   // ~600 g/día
+  NOVILLOS:    12,   // ~400 g/día (recría/invernada)
+  VAQUILLONAS: 15,   // ~500 g/día
+  VACAS:        5,   // mantenimiento/leve crecimiento
+  TOROS:        5,   // adultos, mantenimiento
+  MEJ:         10,
+  BUBALINOS:   15,
 }
 
 interface Herd {
@@ -675,6 +682,10 @@ export function calcularEvParaMes(
     head_count?: number | string | null
     avg_weight_kg?: number | string | null
     categoria?: string | null
+    /** GDP real del rodeo en kg/día — tiene prioridad sobre GROWTH_RATE_KG_MONTH */
+    daily_gain_kg?: number | string | null
+    /** Fecha del último pesaje — âncla para proyección de peso con GDP real */
+    last_weigh_date?: string | null
   },
   monthStartDate: string,
   headCountOverride: number,
@@ -698,7 +709,8 @@ export function calcularEvParaMes(
   const evPerHead = baseHeadCount > 0 ? baseHerdEv / baseHeadCount : 0
   if (evPerHead === 0) return 0
 
-  // ── Offset de meses desde la referencia hasta monthStartDate ────────────────────────
+  // ── Offset relativo a HOY para determinar mes actual vs. futuro ────────────
+  // referenceDate debe ser la fecha actual, NO el inicio del plan de temporada.
   const today = referenceDate ? new Date(referenceDate) : new Date()
   const todayYear = today.getFullYear()
   const todayMonth = today.getMonth()       // 0-based
@@ -712,9 +724,23 @@ export function calcularEvParaMes(
     return parseFloat((evPerHead * headCountOverride).toFixed(2))
   }
 
-  // ── Meses futuros: multiplicador relativo de crecimiento de peso ──────────
-  const growthKgMonth = GROWTH_RATE_KG_MONTH[categoria] ?? 0
-  const projectedWeight = Math.min(baseWeight + growthKgMonth * monthOffset, 600)
+  // ── Meses futuros: proyectar peso con GDP real (daily_gain_kg) si existe ───
+  // Prioridad: 1. daily_gain_kg real del rodeo, 2. tabla estática por categoría.
+  const gdpKgDay = Number(herd.daily_gain_kg) || 0
+  let projectedWeight: number
+
+  if (gdpKgDay > 0) {
+    // Usar GDP real: calcular días exactos desde el último pesaje hasta el mes objetivo
+    const weighRefStr = herd.last_weigh_date || referenceDate || new Date().toISOString().split('T')[0]
+    const weighRef = new Date(weighRefStr + 'T00:00:00')
+    const targetDate = new Date(monthStartDate + 'T00:00:00')
+    const daysDiff = Math.max(0, Math.round((targetDate.getTime() - weighRef.getTime()) / 86_400_000))
+    projectedWeight = Math.min(baseWeight + gdpKgDay * daysDiff, 650)
+  } else {
+    // Fallback a tabla estática mensual (ya con NOVILLOS, TOROS, etc.)
+    const growthKgMonth = GROWTH_RATE_KG_MONTH[categoria] ?? 0
+    projectedWeight = Math.min(baseWeight + growthKgMonth * monthOffset, 650)
+  }
 
   // Multiplicador de peso relativo al mes 0 (preserva la escala de total_ev)
   const baseRef = Math.pow((baseWeight || 450) / 450, 0.75)
@@ -723,12 +749,14 @@ export function calcularEvParaMes(
 
   let ev = evPerHead * headCountOverride * growthMultiplier
 
-  // ── Multiplicador fenológico relativo para vacas cría ─────────────────────
-  // Se aplica RELATIVO al mes 0 para no romper el total_ev como ancla.
+  // ── Factor fenológico vacas: SOLO incrementa, nunca reduce el EV ──────────
+  // Bug corregido: el ratio factorI/factor0 podía ser < 1 (e.g. Sep→Dic para
+  // parición primavera: 1.40 → 1.20) y hacía caer el EV sin eventos de hacienda.
   if (['VACAS', 'VAQUILLONAS'].includes(categoria)) {
     const factor0 = vacaFenologiaFactor(0, paritionSeason)
     const factorI = vacaFenologiaFactor(monthOffset, paritionSeason)
-    if (factor0 > 0) ev *= (factorI / factor0)
+    // Aplicar multiplicador solo si la demanda energética SUBE (lactancia/gestación tardía)
+    if (factor0 > 0 && factorI > factor0) ev *= (factorI / factor0)
   }
 
   return parseFloat(ev.toFixed(2))
@@ -746,6 +774,10 @@ export function calcularPesoParaMes(
   herd: {
     avg_weight_kg?: number | string | null
     categoria?: string | null
+    /** GDP real del rodeo en kg/día — tiene prioridad sobre GROWTH_RATE_KG_MONTH */
+    daily_gain_kg?: number | string | null
+    /** Fecha del último pesaje — âncla para proyección de peso con GDP real */
+    last_weigh_date?: string | null
   },
   monthStartDate: string,
   referenceDate?: string
@@ -763,7 +795,17 @@ export function calcularPesoParaMes(
 
   if (monthOffset <= 0) return baseWeight
 
+  // Preferir daily_gain_kg real del rodeo sobre la tabla estática (consistente con calcularEvParaMes)
+  const gdpKgDay = Number(herd.daily_gain_kg) || 0
+  if (gdpKgDay > 0) {
+    const weighRefStr = herd.last_weigh_date || referenceDate || new Date().toISOString().split('T')[0]
+    const weighRef = new Date(weighRefStr + 'T00:00:00')
+    const targetDate = new Date(monthStartDate + 'T00:00:00')
+    const daysDiff = Math.max(0, Math.round((targetDate.getTime() - weighRef.getTime()) / 86_400_000))
+    return Math.min(baseWeight + gdpKgDay * daysDiff, 650)
+  }
+
   const growthKgMonth = GROWTH_RATE_KG_MONTH[categoria] ?? 0
-  return Math.min(baseWeight + growthKgMonth * monthOffset, 600)
+  return Math.min(baseWeight + growthKgMonth * monthOffset, 650)
 }
 
