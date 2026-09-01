@@ -1950,7 +1950,7 @@ function InteractiveGantt({
                             const currentHeadCount = Number(herd.head_count) || 0
                             const headCount = herdActiveThisMonth ? getDynamicHeadcount(herd.id, currentHeadCount, m.startDate) : 0
                             const pesoBase = Number(herd.avg_weight_kg) || 0
-                            const referenceDate = activeSeasonPlan?.start_date || MONTHS_FOOTER[0]?.startDate
+                            const referenceDate = new Date().toISOString().split('T')[0]
                             const peso = herdActiveThisMonth ? Math.round(calcularPesoParaMes(herd, m.startDate, referenceDate)) : pesoBase
                             const gainedWeight = peso - pesoBase
                             const catKey = herd.categoria as string
@@ -2073,7 +2073,7 @@ function InteractiveGantt({
                             const herdExit = h.exit_date || '2100-01-01'
                             if (herdEntry <= m.endDate && herdExit >= m.startDate) {
                               const hc = getDynamicHeadcount(h.id, Number(h.head_count) || 0, m.startDate)
-                              const referenceDate = activeSeasonPlan?.start_date || MONTHS_FOOTER[0]?.startDate
+                              const referenceDate = new Date().toISOString().split('T')[0]
                               // ── Total row: mismo motor correcto que las filas individuales ──
                               const evHerd = hc > 0
                                 ? calcularEvParaMes(h, m.startDate, hc, 'primavera', referenceDate)
@@ -2434,7 +2434,7 @@ function InteractiveGantt({
                           // ── Proyección de EV y Peso ──
                           const headCount = getDynamicHeadcount(herd.id, currentHeadCount, m.startDate)
                           const catU = herd.categoria?.toUpperCase() || 'VACAS'
-                          const referenceDate = activeSeasonPlan?.start_date || MONTHS_FOOTER[0]?.startDate
+                          const referenceDate = new Date().toISOString().split('T')[0]
                           const pesoDinamico = Math.round(calcularPesoParaMes(herd, m.startDate, referenceDate))
                           const gainedWeight = pesoDinamico - peso
                           const pesoForCalc = pesoDinamico > 0 ? pesoDinamico
@@ -2524,7 +2524,7 @@ function InteractiveGantt({
                         const hExit = h.exit_date || '2100-01-01'
                         if (hEntry <= m.endDate && hExit >= m.startDate) {
                           const hc = getDynamicHeadcount(h.id, Number(h.head_count) || 0, m.startDate)
-                          const referenceDate = activeSeasonPlan?.start_date || MONTHS_FOOTER[0]?.startDate
+                          const referenceDate = new Date().toISOString().split('T')[0]
                           const evHerd = hc > 0 ? calcularEvParaMes(h, m.startDate, hc, 'primavera', referenceDate) : 0
                           totalCab += hc
                           totalEv += evHerd
