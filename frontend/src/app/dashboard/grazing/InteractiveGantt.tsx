@@ -1346,9 +1346,11 @@ function InteractiveGantt({
                   return sorted.map((plan, idx) => {
                     const entryDiff = daysBetween(windowStart, plan.entry_date)
                     const exitDate = plan.exit_date || addDays(plan.entry_date, 14)
-                    const duration = daysBetween(plan.entry_date, exitDate)
+                    const duration = Math.max(1, daysBetween(plan.entry_date, exitDate))
                     const leftPct = Math.max(0, (entryDiff / windowDays) * 100)
-                    const widthPct = Math.max(0.5, (duration / windowDays) * 100)
+                    // Mínimo = 1 día exacto en % (no 0.5% fijo que infla bloques en ventanas grandes)
+                    const oneDayPct = (1 / windowDays) * 100
+                    const widthPct = Math.max(oneDayPct, (duration / windowDays) * 100)
                     if (entryDiff > windowDays || (entryDiff + duration) < 0) return null
 
                     const hasRealEntry = !!plan.actual_entry_date
@@ -1455,10 +1457,11 @@ function InteractiveGantt({
                         style={{
                           position: 'absolute',
                           left: `${Math.min(startPct, 99)}%`,
+                          // Ancho exacto en %; sin minWidth fijo en px que inflaría bloques en ventanas grandes
                           width: `${Math.min(widthPctArg, 100 - Math.min(startPct, 99))}%`,
                           top: top,
                           height: BAR_H,
-                          minWidth: 8,
+                          minWidth: 4,  // Solo para que el borde sea visible — NO usar 8px+
                           borderTopLeftRadius: connectsLeft ? 0 : 4,
                           borderBottomLeftRadius: connectsLeft ? 0 : 4,
                           borderTopRightRadius: connectsRight ? 0 : 4,
