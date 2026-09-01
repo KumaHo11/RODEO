@@ -52,9 +52,12 @@ jobs:
         run: |
           cd frontend
           npm ci
-          node scripts/full_schema_migration.js "$MIGRATION_DATABASE_URL"
-          node scripts/setup_rls_roles.js "$MIGRATION_DATABASE_URL"
-          DATABASE_URL="$MIGRATION_DATABASE_URL" node insert_terms_v3.js
+          # Forzar conexión por el Cloud SQL Proxy local (127.0.0.1:5432) en lugar de IP pública
+          PROXIED_URL=$(echo "$MIGRATION_DATABASE_URL" | sed -E 's/@[^:]+:[0-9]+/@127.0.0.1:5432/')
+          
+          node scripts/full_schema_migration.js "$PROXIED_URL"
+          node scripts/setup_rls_roles.js "$PROXIED_URL"
+          DATABASE_URL="$PROXIED_URL" node insert_terms_v3.js
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
 
