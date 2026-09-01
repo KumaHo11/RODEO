@@ -80,6 +80,9 @@ jobs:
               const u = new URL(raw);
               u.hostname = '127.0.0.1';
               u.port = '5432';
+              // Cloud SQL Proxy maneja el cifrado internamente;
+              // deshabilitar SSL en el cliente evita ECONNRESET
+              u.searchParams.set('sslmode', 'disable');
               console.log(u.toString());
             } catch(e) { console.error('URL inválida:', e.message); process.exit(1); }
           ")
