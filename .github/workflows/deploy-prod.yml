@@ -42,7 +42,9 @@ jobs:
           chmod +x cloud-sql-proxy
           # Lanzar el proxy en background, redirigir stderr a log para diagnóstico
           ./cloud-sql-proxy ${{ env.PROJECT_ID }}:${{ env.REGION }}:rodeo-db-prod \
-            --address 127.0.0.1 --port 5432 > /tmp/cloudsql-proxy.log 2>&1 &
+            --address 127.0.0.1 --port 5432 \
+            --credentials-file /tmp/gcp_key.json \
+            > /tmp/cloudsql-proxy.log 2>&1 &
           PROXY_PID=$!
           echo "Proxy PID: $PROXY_PID"
           # Esperar hasta que el puerto esté disponible (máx 30 seg)
