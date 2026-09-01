@@ -43,10 +43,33 @@ jobs:
 
       - name: 'Setup Cloud SQL Auth Proxy'
         run: |
-          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.0/cloud-sql-proxy.linux.amd64
+          curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.0/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
-          ./cloud-sql-proxy ${{ env.PROJECT_ID }}:${{ env.REGION }}:rodeo-db-preprod &
-          sleep 5
+          # Lanzar el proxy en background, redirigir stderr a log para diagnóstico
+          ./cloud-sql-proxy ${{ env.PROJECT_ID }}:${{ env.REGION }}:rodeo-db-preprod \
+            --address 127.0.0.1 --port 5432 > /tmp/cloudsql-proxy.log 2>&1 &
+          PROXY_PID=$!
+          echo "Proxy PID: $PROXY_PID"
+          # Esperar hasta que el puerto esté disponible (máx 30 seg)
+          echo "Esperando que Cloud SQL Proxy esté listo en 127.0.0.1:5432..."
+          for i in $(seq 1 30); do
+            if nc -z 127.0.0.1 5432 2>/dev/null; then
+              echo "✅ Cloud SQL Proxy listo después de ${i}s"
+              break
+            fi
+            if ! kill -0 $PROXY_PID 2>/dev/null; then
+              echo "❌ Proxy terminó inesperadamente. Log:"
+              cat /tmp/cloudsql-proxy.log
+              exit 1
+            fi
+            echo "  Esperando... (${i}s)"
+            sleep 1
+          done
+          if ! nc -z 127.0.0.1 5432 2>/dev/null; then
+            echo "❌ Cloud SQL Proxy no respondió después de 30s. Log:"
+            cat /tmp/cloudsql-proxy.log
+            exit 1
+          fi
 
       - name: 'Run Database Migrations & Seeds'
         run: |
