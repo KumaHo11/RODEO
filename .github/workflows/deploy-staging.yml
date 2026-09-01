@@ -41,63 +41,57 @@ jobs:
         with:
           node-version: 22
 
-      - name: 'Setup Cloud SQL Auth Proxy'
+      - name: 'Setup Proxy & Run Database Migrations'
         run: |
+          # ── 1. Descargar Cloud SQL Auth Proxy ──────────────────────────────────
           curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.0/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
-          # Lanzar el proxy en background, redirigir stderr a log para diagnóstico
+
+          # ── 2. Iniciar proxy en background (mismo shell → vive durante las migs) ─
           ./cloud-sql-proxy ${{ env.PROJECT_ID }}:${{ env.REGION }}:rodeo-db-preprod \
             --address 127.0.0.1 --port 5432 \
             --credentials-file /tmp/gcp_key.json \
             > /tmp/cloudsql-proxy.log 2>&1 &
           PROXY_PID=$!
-          echo "Proxy PID: $PROXY_PID"
-          # Esperar hasta que el puerto esté disponible (máx 30 seg)
-          echo "Esperando que Cloud SQL Proxy esté listo en 127.0.0.1:5432..."
+
+          # ── 3. Esperar hasta que el puerto esté disponible (máx 30 seg) ────────
+          echo "Esperando Cloud SQL Proxy en 127.0.0.1:5432..."
           for i in $(seq 1 30); do
             if nc -z 127.0.0.1 5432 2>/dev/null; then
-              echo "✅ Cloud SQL Proxy listo después de ${i}s"
+              echo "✅ Proxy listo (${i}s)"
               break
             fi
             if ! kill -0 $PROXY_PID 2>/dev/null; then
-              echo "❌ Proxy terminó inesperadamente. Log:"
-              cat /tmp/cloudsql-proxy.log
-              exit 1
+              echo "❌ Proxy terminó inesperadamente. Log:"; cat /tmp/cloudsql-proxy.log; exit 1
             fi
-            echo "  Esperando... (${i}s)"
-            sleep 1
+            echo "  Esperando... (${i}s)"; sleep 1
           done
           if ! nc -z 127.0.0.1 5432 2>/dev/null; then
-            echo "❌ Cloud SQL Proxy no respondió después de 30s. Log:"
-            cat /tmp/cloudsql-proxy.log
-            exit 1
+            echo "❌ Proxy no respondió en 30s. Log:"; cat /tmp/cloudsql-proxy.log; exit 1
           fi
 
-      - name: 'Run Database Migrations & Seeds'
-        run: |
+          # ── 4. Construir URL con 127.0.0.1 (Node URL parser — soporta passwords especiales) ─
           cd frontend
           npm ci
-          # Reemplazar host/port con 127.0.0.1:5432 (Cloud SQL Auth Proxy) usando Node.js
-          # (sed se rompe si la password tiene caracteres especiales como @, #, %)
           PROXIED_URL=$(node -e "
             const raw = process.env.MIGRATION_DATABASE_URL;
-            if (!raw) { console.error('MIGRATION_DATABASE_URL no está definida'); process.exit(1); }
+            if (!raw) { console.error('MIGRATION_DATABASE_URL no definida'); process.exit(1); }
             try {
               const u = new URL(raw);
               u.hostname = '127.0.0.1';
-              u.port     = '5432';
+              u.port = '5432';
               console.log(u.toString());
-            } catch(e) {
-              console.error('URL inválida:', e.message);
-              process.exit(1);
-            }
+            } catch(e) { console.error('URL inválida:', e.message); process.exit(1); }
           ")
-          echo "🔗 Proxy URL host: $(node -e \"const u=new URL(process.env.MIGRATION_DATABASE_URL); console.log(u.hostname+':'+u.port)\" 2>/dev/null || echo 'N/A')"
-          echo "✅ PROXIED_URL host: 127.0.0.1:5432"
+          echo "✅ PROXIED_URL → 127.0.0.1:5432"
 
+          # ── 5. Ejecutar migraciones ────────────────────────────────────────────
           node scripts/full_schema_migration.js "$PROXIED_URL"
           node scripts/setup_rls_roles.js "$PROXIED_URL"
           DATABASE_URL="$PROXIED_URL" node insert_terms_v3.js
+
+          # ── 6. Apagar proxy limpiamente ────────────────────────────────────────
+          kill $PROXY_PID 2>/dev/null || true
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
 
