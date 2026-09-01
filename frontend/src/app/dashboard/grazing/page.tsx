@@ -40,6 +40,7 @@ import GanttClimateMonthRow from '@/components/GanttClimateMonthRow'
 
 
 import InteractiveGantt, { PlanCommentsSection } from './InteractiveGantt';
+import PromptModal from '@/components/ui/PromptModal';
 // ─────────────── CONSTANTS ───────────────
 const HERD_COLORS = [
   '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed',
@@ -274,6 +275,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [mercado, setMercado] = useState<any>(null)
   const [weatherEvents, setWeatherEvents] = useState<any[]>([])
+  const [disablePaddockPrompt, setDisablePaddockPrompt] = useState<{ paddockId: string } | null>(null)
 
   const [rainfallData, setRainfallData] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('rodeo_rainfall') || '{}') } catch { return {} }
@@ -802,6 +804,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
       // Persistent index for cycling through the suggested sequence
       let seqIdx = 0
+      let firstBlockPlaced = false
 
       while (currentEntry < targetEndDate && iteration < 600) {
         iteration++
@@ -811,19 +814,28 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         if (suggestedSeq.length > 0) {
           // ── Modo Sugerido: ciclar infinitamente por la secuencia ──
           const nextPaddockId = suggestedSeq[seqIdx % suggestedSeq.length]
-          seqIdx++
           chosenPaddock = activePaddocks.find(p => p.id === nextPaddockId)
 
-          if (!chosenPaddock) continue // potrero descartado/inactivo, pasar al siguiente
+          if (!chosenPaddock) {
+            seqIdx++
+            continue // potrero descartado/inactivo, pasar al siguiente
+          }
 
           const availTs = availabilityMap.get(chosenPaddock.id) ?? currentEntry.getTime()
-          if (availTs >= targetEndDate.getTime()) {
-            continue // potrero agotado o no disponible, saltar al siguiente en la secuencia
-          }
-          if (availTs > currentEntry.getTime()) {
-            currentEntry = new Date(availTs) // esperar a que se libere el potrero
-          }
 
+          if (!firstBlockPlaced) {
+            // HARD CONSTRAINT: El primer potrero de la secuencia DEBE usarse exactamente en la startDate.
+            // Ignoramos `availTs` para forzar que inicie donde el usuario eligió y el día que eligió.
+          } else {
+            if (availTs >= targetEndDate.getTime()) {
+              seqIdx++
+              continue // potrero agotado o no disponible, saltar al siguiente en la secuencia
+            }
+            if (availTs > currentEntry.getTime()) {
+              currentEntry = new Date(availTs) // esperar a que se libere el potrero
+            }
+          }
+          seqIdx++
         } else {
           // ── Modo Greedy: elegir el potrero más disponible ──
           const readyPaddocks = activePaddocks
@@ -944,6 +956,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           .map(p => availabilityMap.get(p.id) ?? currentEntry.getTime())
         const minOtherTs = otherTs.length > 0 ? Math.min(...otherTs) : recoveryEnd.getTime()
         currentEntry = new Date(Math.max(exitDate.getTime() + 86400000, minOtherTs))
+        firstBlockPlaced = true
       }
 
       if (newPlans.length === 0) {
@@ -1903,6 +1916,13 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
   // ── Paddock toggle (enable/disable) desde el Gantt ──
   const handlePaddockToggle = useCallback(async (paddockId: string, isActive: boolean) => {
+    if (!isActive) {
+      // Show prompt before disabling
+      setDisablePaddockPrompt({ paddockId });
+      return;
+    }
+
+    // Si se está habilitando, procedemos directo
     // Optimistic update
     setPaddocks((prev: any[]) => prev.map(p => p.id === paddockId ? { ...p, is_active: isActive } : p))
     try {
@@ -1916,6 +1936,37 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       toast.error('No se pudo actualizar el estado del potrero')
     }
   }, [])
+
+  const executeDisablePaddock = async (paddockId: string, comment: string) => {
+    // Optimistic update
+    setPaddocks((prev: any[]) => prev.map(p => p.id === paddockId ? { ...p, is_active: false } : p))
+    try {
+      await apiFetch(`/api/paddocks/${paddockId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: false })
+      })
+
+      if (comment.trim()) {
+        const paddock = paddocks.find((p: any) => p.id === paddockId);
+        await apiFetch('/api/field-notes', {
+          method: 'POST',
+          body: JSON.stringify({
+            paddock_id: paddockId,
+            title: `Potrero inhabilitado: ${paddock?.name || ''}`,
+            content: comment.trim(),
+            note_type: 'TEXT',
+            tags: ['potrero_inhabilitado'],
+          })
+        });
+      }
+    } catch {
+      // Revert on failure
+      setPaddocks((prev: any[]) => prev.map(p => p.id === paddockId ? { ...p, is_active: true } : p))
+      toast.error('No se pudo actualizar el estado del potrero')
+    } finally {
+      setDisablePaddockPrompt(null);
+    }
+  }
 
   // ── Comentarios en bloques de planificación ──
   const handleAddComment = useCallback(async (planId: string, text: string, authorEmail: string) => {
@@ -4262,6 +4313,21 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         </div>
       )}
     </div>
+
+      <PromptModal
+        isOpen={!!disablePaddockPrompt}
+        title="Inhabilitar Potrero"
+        message="Podés agregar un comentario o motivo por la inhabilitación del potrero. Esto quedará guardado en el historial (Bitácora)."
+        placeholder="Opcional: Ej. Alambrado roto, anegado, etc."
+        confirmLabel="Inhabilitar"
+        cancelLabel="Cancelar"
+        onConfirm={(comment) => {
+          if (disablePaddockPrompt) {
+            executeDisablePaddock(disablePaddockPrompt.paddockId, comment)
+          }
+        }}
+        onCancel={() => setDisablePaddockPrompt(null)}
+      />
 
     </>
   )

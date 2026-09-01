@@ -45,11 +45,6 @@ export async function GET(req: NextRequest) {
     console.log(`[paddock-reminders]   dates: today=${todayStr} tomorrow=${tomorrowStr} yesterday=${yesterdayStr} threeDaysAgo=${threeDaysAgoStr}`)
 
     // ── Fetch plans for today, tomorrow, yesterday and 3 days ago ────────────
-    // FIX: Use herd_id (UUID FK) instead of herd_ids (JSONB) for the JOIN.
-    //      herd_ids is JSONB, not uuid[], so ANY(COALESCE(herd_ids, ARRAY[]::uuid[]))
-    //      was causing a type mismatch and returning 0 rows.
-    // FIX: Use (pr.team_role IS NULL OR pr.team_role = 'owner') to match owners
-    //      regardless of whether their team_role was set during migration.
     const plans = await serviceQuery<{
       plan_id: string
       paddock_name: string
@@ -99,11 +94,6 @@ export async function GET(req: NextRequest) {
         day: 'numeric', month: 'long', year: 'numeric',
       })
     
-    const fmtDateShort = (iso: string) =>
-      new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {
-        day: 'numeric', month: 'long',
-      })
-
     // ── Insert In-App Notifications ──────────────────────────────────────────
     let inAppInserted = 0
     if (plans && plans.length > 0) {
@@ -112,7 +102,6 @@ export async function GET(req: NextRequest) {
         let body = ''
         
         if (plan.exit_date === todayStr) {
-          // FIX: Previously missing — today's exits had no in-app notification
           title = `HOY hay que mover los animales del potrero ${plan.paddock_name}`
           body = `Registrá el movimiento en el planificador para mantener la autonomía actualizada.`
         } else if (plan.exit_date === tomorrowStr) {
@@ -126,10 +115,8 @@ export async function GET(req: NextRequest) {
           body = `¿Moviste los animales? No olvides aplicar los cambios en el planificador.`
         }
 
-        // Guard: skip inserting notification if title is empty (shouldn't happen, but defensive)
         if (!title) continue
 
-        // Insert in-app notification using service pool (no RLS)
         await serviceMutate(`
           INSERT INTO notifications (org_id, profile_id, user_id, type, title, body)
           VALUES ($1, $2, $2, 'ALERTA', $3, $4)
@@ -144,7 +131,6 @@ export async function GET(req: NextRequest) {
     }
     console.log(`[paddock-reminders]   in-app notifications inserted: ${inAppInserted}`)
 
-    // ── Group today's exits by org for Emails ────────────────────────────────
     const plansToday = plans ? plans.filter(p => p.exit_date === todayStr) : []
     const byOrgToday = new Map<string, typeof plansToday>()
     for (const row of plansToday) {
@@ -152,7 +138,6 @@ export async function GET(req: NextRequest) {
       byOrgToday.get(row.org_id)!.push(row)
     }
 
-    // ── Group tomorrow's plans by org for Emails ─────────────────────────────
     const plansForEmail = plans ? plans.filter(p => p.exit_date === tomorrowStr) : []
     const byOrgTomorrow = new Map<string, typeof plansForEmail>()
     for (const row of plansForEmail) {
@@ -160,7 +145,6 @@ export async function GET(req: NextRequest) {
       byOrgTomorrow.get(row.org_id)!.push(row)
     }
 
-    // ── Group overdue plans by org for Emails ────────────────────────────────
     const overduePlansEmail = plans ? plans.filter(p => p.exit_date === yesterdayStr || p.exit_date === threeDaysAgoStr) : []
     const byOrgOverdue = new Map<string, typeof overduePlansEmail>()
     for (const row of overduePlansEmail) {
@@ -171,94 +155,89 @@ export async function GET(req: NextRequest) {
     let sent = 0
     const errors: string[] = []
 
-    // 1. Send Today's Exit Notifications (día de salida)
+    const emailPromises: Promise<void>[] = []
+
+    // 1. Send Today's Exit Notifications
     for (const [, rows] of byOrgToday) {
       const first = rows[0]
-      if (!first.owner_email) {
-        console.warn(`[paddock-reminders] ⚠ org=${first.org_id} has no owner email — skipping today exit email`)
-        continue
-      }
+      if (!first.owner_email) continue
 
-      try {
-        await sendEmail('paddock_move_today', first.owner_email, {
-          ownerName: first.owner_first_name || 'Productor',
-          orgName: first.org_name,
-          moves: rows.map(r => ({
-            paddockName: r.paddock_name,
-            herdName: r.herd_name,
-            headCount: r.head_count,
-            exitDate: fmtDate(r.exit_date),
-            recoveryDays: r.planned_recovery_days,
-          })),
-          dashboardUrl: `${APP_BASE_URL}/dashboard/grazing`,
-        })
-        sent++
-        console.log(`[paddock-reminders] ✓ sent today exit notification to ${first.owner_email} (org ${first.org_id})`)
-      } catch (err: any) {
-        const msg = `today-exit org=${first.org_id} email=${first.owner_email}: ${err.message}`
-        errors.push(msg)
-        console.error('[paddock-reminders] ✗', msg)
-      }
+      emailPromises.push((async () => {
+        try {
+          await sendEmail('paddock_move_today', first.owner_email, {
+            ownerName: first.owner_first_name || 'Productor',
+            orgName: first.org_name,
+            moves: rows.map(r => ({
+              paddockName: r.paddock_name,
+              herdName: r.herd_name,
+              headCount: r.head_count,
+              exitDate: fmtDate(r.exit_date),
+              recoveryDays: r.planned_recovery_days,
+            })),
+            dashboardUrl: `${APP_BASE_URL}/dashboard/grazing`,
+          })
+          sent++
+        } catch (err: any) {
+          const msg = `today-exit org=${first.org_id}: ${err.message}`
+          errors.push(msg)
+        }
+      })())
     }
 
     // 2. Send Tomorrow's Reminders
     for (const [, rows] of byOrgTomorrow) {
       const first = rows[0]
-      if (!first.owner_email) {
-        console.warn(`[paddock-reminders] ⚠ org=${first.org_id} has no owner email — skipping tomorrow reminder`)
-        continue
-      }
+      if (!first.owner_email) continue
 
-      try {
-        await sendEmail('paddock_move_reminder', first.owner_email, {
-          ownerName: first.owner_first_name || 'Productor',
-          orgName: first.org_name,
-          moves: rows.map(r => ({
-            paddockName: r.paddock_name,
-            herdName: r.herd_name,
-            headCount: r.head_count,
-            exitDate: fmtDate(r.exit_date),
-            recoveryDays: r.planned_recovery_days,
-          })),
-          dashboardUrl: `${APP_BASE_URL}/dashboard/grazing`,
-        })
-        sent++
-        console.log(`[paddock-reminders] ✓ sent tomorrow reminder to ${first.owner_email} (org ${first.org_id})`)
-      } catch (err: any) {
-        const msg = `tomorrow-reminder org=${first.org_id} email=${first.owner_email}: ${err.message}`
-        errors.push(msg)
-        console.error('[paddock-reminders] ✗', msg)
-      }
+      emailPromises.push((async () => {
+        try {
+          await sendEmail('paddock_move_reminder', first.owner_email, {
+            ownerName: first.owner_first_name || 'Productor',
+            orgName: first.org_name,
+            moves: rows.map(r => ({
+              paddockName: r.paddock_name,
+              herdName: r.herd_name,
+              headCount: r.head_count,
+              exitDate: fmtDate(r.exit_date),
+              recoveryDays: r.planned_recovery_days,
+            })),
+            dashboardUrl: `${APP_BASE_URL}/dashboard/grazing`,
+          })
+          sent++
+        } catch (err: any) {
+          const msg = `tomorrow-reminder org=${first.org_id}: ${err.message}`
+          errors.push(msg)
+        }
+      })())
     }
 
     // 3. Send Overdue Reminders
     for (const [, rows] of byOrgOverdue) {
       const first = rows[0]
-      if (!first.owner_email) {
-        console.warn(`[paddock-reminders] ⚠ org=${first.org_id} has no owner email — skipping overdue reminder`)
-        continue
-      }
+      if (!first.owner_email) continue
 
-      try {
-        await sendEmail('paddock_overdue_reminder', first.owner_email, {
-          ownerName: first.owner_first_name || 'Productor',
-          orgName: first.org_name,
-          moves: rows.map(r => ({
-            paddockName: r.paddock_name,
-            herdName: r.herd_name,
-            headCount: r.head_count,
-            exitDate: fmtDate(r.exit_date)
-          })),
-          dashboardUrl: `${APP_BASE_URL}/dashboard/grazing`,
-        })
-        sent++
-        console.log(`[paddock-reminders] ✓ sent overdue reminder to ${first.owner_email} (org ${first.org_id})`)
-      } catch (err: any) {
-        const msg = `overdue-reminder org=${first.org_id} email=${first.owner_email}: ${err.message}`
-        errors.push(msg)
-        console.error('[paddock-reminders] ✗', msg)
-      }
+      emailPromises.push((async () => {
+        try {
+          await sendEmail('paddock_overdue_reminder', first.owner_email, {
+            ownerName: first.owner_first_name || 'Productor',
+            orgName: first.org_name,
+            moves: rows.map(r => ({
+              paddockName: r.paddock_name,
+              herdName: r.herd_name,
+              headCount: r.head_count,
+              exitDate: fmtDate(r.exit_date)
+            })),
+            dashboardUrl: `${APP_BASE_URL}/dashboard/grazing`,
+          })
+          sent++
+        } catch (err: any) {
+          const msg = `overdue-reminder org=${first.org_id}: ${err.message}`
+          errors.push(msg)
+        }
+      })())
     }
+
+    await Promise.all(emailPromises)
 
     // ── Agenda events starting tomorrow ──────────────────────────────────────
     const events = await serviceQuery<{
