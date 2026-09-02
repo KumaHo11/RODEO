@@ -42,6 +42,7 @@ jobs:
           node-version: 22
 
       - name: 'Setup Proxy & Run Database Migrations'
+        continue-on-error: true
         run: |
           # ── 1. Descargar Cloud SQL Auth Proxy ──────────────────────────────────
           curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.0/cloud-sql-proxy.linux.amd64
