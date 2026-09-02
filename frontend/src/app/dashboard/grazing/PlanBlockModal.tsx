@@ -104,8 +104,8 @@ export default function PlanBlockModal({
 
       const payload = {
         herd_ids: selectedHerdIds,
-        // Eliminamos herd_id singular para planes con múltiples rodeos
-        herd_id: selectedHerdIds.length === 1 ? selectedHerdIds[0] : null,
+        // Preserve herd_id as the primary herd for backward compatibility
+        herd_id: selectedHerdIds[0] || null,
         exit_date: newExitStr,
         ai_analysis: {
           ...(plan.ai_analysis || {}),

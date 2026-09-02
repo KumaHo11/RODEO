@@ -1457,11 +1457,11 @@ function InteractiveGantt({
                         style={{
                           position: 'absolute',
                           left: `${Math.min(startPct, 99)}%`,
-                          // Ancho exacto en %; minWidth 0 — el mínimo ya lo garantiza oneDayPct en la lógica JS
-                          width: `${Math.min(widthPctArg, 100 - Math.min(startPct, 99))}%`,
+                          // Ancho exacto en %; garantizado al menos 1 día via oneDayPct en la lógica JS
+                          width: `${Math.min(Math.max(oneDayPct, widthPctArg), 100 - Math.min(startPct, 99))}%`,
                           top: top,
                           height: BAR_H,
-                          minWidth: 0,
+                          minWidth: 6, // Always at least 6px so 1-day blocks are visible
                           borderTopLeftRadius: connectsLeft ? 0 : 4,
                           borderBottomLeftRadius: connectsLeft ? 0 : 4,
                           borderTopRightRadius: connectsRight ? 0 : 4,

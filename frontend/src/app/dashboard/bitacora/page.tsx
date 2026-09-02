@@ -69,10 +69,10 @@ function NoteRow({ note, onDelete, onEdit }: { note: any, onDelete: (id: string,
   const hasTranscript = !!note.content
 
   return (
-    <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-base font-bold text-gray-950 tracking-tight leading-snug">
+    <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3" style={{ maxWidth: '100%' }}>
+      <div className="flex items-start justify-between gap-3" style={{ minWidth: 0 }}>
+        <div className="flex-1 min-w-0" style={{ overflow: 'hidden' }}>
+          <p className="text-base font-bold text-gray-950 tracking-tight leading-snug" style={{ overflowWrap: 'break-word', wordBreak: 'break-word', maxWidth: '100%' }}>
             {note.title.replace('Audio · ', '').replace('Foto · ', '')}
           </p>
           <div className="flex items-center gap-2 mt-0.5">
@@ -90,8 +90,8 @@ function NoteRow({ note, onDelete, onEdit }: { note: any, onDelete: (id: string,
 
           {/* Transcript preview */}
           {hasTranscript && (
-            <div className="mt-2">
-              <p className={`text-sm text-gray-600 leading-relaxed ${!expanded ? 'line-clamp-2' : ''}`}>
+            <div className="mt-2" style={{ maxWidth: '100%', overflow: 'hidden' }}>
+              <p className={`text-sm text-gray-600 leading-relaxed ${!expanded ? 'line-clamp-2' : ''}`} style={{ overflowWrap: 'break-word', wordBreak: 'break-word', maxWidth: '100%' }}>
                 {note.content}
               </p>
               {note.content.length > 100 && (

@@ -1584,12 +1584,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         }
       }
 
-      // Isolate the view for a specific season plan when viewed from History
-      // ── MODO GANTT: NO FILTRAR POR SEASON PLAN PARA QUE SE VEAN TODOS LOS AÑOS ──
-      // Eliminamos el filtrado de matchSeasonPlan para que siempre se vean todas las temporadas.
-      // El activeSeasonPlanId ahora solo se usa para pre-cargar datos de planificación,
-      // y para mostrar el nombre del plan en curso.
-      return matchSearch && matchStatus && matchTab
+      // ── Aislamiento por season plan en modo Gantt ────────────────────────────────
+      // Cuando hay un plan activo seleccionado, mostrar solo los bloques de ese plan
+      // para evitar solapamiento visual entre planes históricos y el actual.
+      let matchSeasonPlan = true
+      if (viewMode === 'gantt' && activeSeasonPlanId) {
+        const planSeasonId = p.ai_analysis?.season_plan_id || p.season_plan_id
+        // Si el plan tiene season_plan_id, filtrar por el activo
+        // Si no tiene season_plan_id (plan manual sin temporada), siempre mostrarlo
+        matchSeasonPlan = !planSeasonId || planSeasonId === activeSeasonPlanId
+      }
+
+      return matchSearch && matchStatus && matchTab && matchSeasonPlan
     }),
     [plans, search, filterStatus, viewMode, activeGanttTab, historyTab, activeSeasonPlanId]
   )
