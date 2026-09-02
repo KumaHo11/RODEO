@@ -23,10 +23,11 @@
 const { Client } = require('pg')
 
 const DB_URL = process.argv[2] || process.env.DATABASE_URL || process.env.DB_URL
+const USE_PG_ENV = !DB_URL  // si no hay URL, pg lee PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE/PGSSLMODE
 const VERIFY_ONLY = process.argv.includes('--verify-only')
 
-if (!DB_URL) {
-  console.error('❌ ERROR: Proveer DATABASE_URL como argumento o variable de entorno.')
+if (!DB_URL && !process.env.PGHOST) {
+  console.error('❌ ERROR: Proveer DATABASE_URL como argumento, variable de entorno, o PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE.')
   console.error('  Uso: node scripts/full_schema_migration.js "$DATABASE_URL"')
   process.exit(1)
 }
@@ -939,15 +940,26 @@ async function verify(client) {
 }
 
 async function main() {
-  const client = new Client({
-    connectionString: DB_URL,
-    ssl: DB_URL.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
-    connectionTimeoutMillis: 15000,
-  })
+  // Cuando USE_PG_ENV=true (no hay DB_URL), pg lee PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE/PGSSLMODE
+  // del entorno automáticamente (comportamiento libpq nativo — sin SSL ni connectionString)
+  const clientConfig = USE_PG_ENV
+    ? { connectionTimeoutMillis: 15000 }
+    : {
+        connectionString: DB_URL,
+        ssl: DB_URL.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
+        connectionTimeoutMillis: 15000,
+      }
+  const client = new Client(clientConfig)
 
-  const dbLabel = DB_URL.includes('34.95') ? 'PROD' : DB_URL.includes('35.247') ? 'STAGING' : 'DB'
+  const dbLabel = USE_PG_ENV
+    ? `${process.env.PGHOST}:${process.env.PGPORT}/${process.env.PGDATABASE}`
+    : (DB_URL.includes('34.95') ? 'PROD' : DB_URL.includes('35.247') ? 'STAGING' : 'DB')
   console.log(`🐄 RODEO — Full Schema Migration`)
-  console.log(`🔗 Conectando a ${dbLabel}: ${DB_URL.replace(/:[^:@]+@/, ':***@')}`)
+  if (USE_PG_ENV) {
+    console.log(`🔗 Conectando a ${dbLabel} (vía PGHOST/PGPORT/PGUSER)`)
+  } else {
+    console.log(`🔗 Conectando a ${dbLabel}: ${DB_URL.replace(/:[^:@]+@/, ':***@')}`)
+  }
 
   await client.connect()
   console.log(`✅ Conexión exitosa\n`)
