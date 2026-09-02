@@ -1457,11 +1457,11 @@ function InteractiveGantt({
                         style={{
                           position: 'absolute',
                           left: `${Math.min(startPct, 99)}%`,
-                          // Ancho exacto en %; sin minWidth fijo en px que inflaría bloques en ventanas grandes
+                          // Ancho exacto en %; minWidth 0 — el mínimo ya lo garantiza oneDayPct en la lógica JS
                           width: `${Math.min(widthPctArg, 100 - Math.min(startPct, 99))}%`,
                           top: top,
                           height: BAR_H,
-                          minWidth: 4,  // Solo para que el borde sea visible — NO usar 8px+
+                          minWidth: 0,
                           borderTopLeftRadius: connectsLeft ? 0 : 4,
                           borderBottomLeftRadius: connectsLeft ? 0 : 4,
                           borderTopRightRadius: connectsRight ? 0 : 4,
@@ -1628,7 +1628,7 @@ function InteractiveGantt({
                       const realEntryDiff = daysBetween(windowStart, effectiveRealEntry)
                       const realDuration  = daysBetween(effectiveRealEntry, realExit)
                       const realLeft      = Math.max(0, (realEntryDiff / windowDays) * 100)
-                      const realWidth     = Math.max(0.3, (realDuration / windowDays) * 100)
+                      const realWidth     = Math.max(oneDayPct, (realDuration / windowDays) * 100)
 
                       const plannedDuration = daysBetween(plan.entry_date, exitDate)
                       const devDays  = realDuration - plannedDuration
@@ -1647,7 +1647,7 @@ function InteractiveGantt({
                             width: `${Math.min(realWidth, 100 - Math.min(realLeft, 99))}%`,
                             top: TRACK3_TOP,
                             height: BAR_H,
-                            minWidth: 6,
+                            minWidth: 0,
                             borderRadius: 3,
                             backgroundColor: GREEN,
                             zIndex: 15,
