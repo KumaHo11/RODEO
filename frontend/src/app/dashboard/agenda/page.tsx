@@ -765,7 +765,7 @@ export default function AgendaPage() {
                   value={form.title}
                   onChange={e => setForm({ ...form, title: e.target.value })}
                   placeholder="Ej: Vacunación rodeo principal"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:ring-1 focus:ring-green-600 outline-none"
                 />
               </div>
 
@@ -801,7 +801,7 @@ export default function AgendaPage() {
                     type="date"
                     value={form.event_date}
                     onChange={e => setForm({ ...form, event_date: e.target.value })}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:ring-1 focus:ring-green-600 outline-none"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -810,7 +810,7 @@ export default function AgendaPage() {
                     type="date"
                     value={form.end_date}
                     onChange={e => setForm({ ...form, end_date: e.target.value })}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:ring-1 focus:ring-green-600 outline-none"
                   />
                 </div>
               </div>
@@ -907,7 +907,7 @@ export default function AgendaPage() {
                   onChange={e => setForm({ ...form, description: e.target.value })}
                   rows={2}
                   placeholder="Observaciones, veterinario, dosis..."
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-green-600 outline-none resize-none"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:ring-1 focus:ring-green-600 outline-none resize-none"
                 />
               </div>
             </div>

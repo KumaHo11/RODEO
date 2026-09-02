@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     if (!email) return NextResponse.json({ error: 'Email requerido' }, { status: 400 })
 
-    // Parche temporal: Evitar colisión de cuentas si el email ya existe
+    // Verificar si el email ya está registrado en la plataforma (en cualquier campo)
     const existingProfile = await serviceQueryOne<{ id: string }>(
       'SELECT id FROM profiles WHERE email = $1',
       [email.toLowerCase()]
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     if (existingProfile) {
       return NextResponse.json(
-        { error: 'El usuario ya se encuentra registrado en otro campo. Temporalmente, se requiere utilizar una dirección de correo electrónico diferente para poder invitarlo.' },
+        { error: 'Este correo ya tiene una cuenta activa en RODEO asociada a otro campo. Por el momento, cada usuario puede pertenecer a un solo campo. Pedile al usuario que use un correo diferente, o contactá a soporte para asistencia.' },
         { status: 400 }
       )
     }
