@@ -1584,20 +1584,12 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         }
       }
 
-      // ── Aislamiento por season plan en modo Gantt ────────────────────────────────
-      // Cuando hay un plan activo seleccionado, mostrar solo los bloques de ese plan
-      // para evitar solapamiento visual entre planes históricos y el actual.
-      let matchSeasonPlan = true
-      if (viewMode === 'gantt' && activeSeasonPlanId) {
-        const planSeasonId = p.ai_analysis?.season_plan_id || p.season_plan_id
-        // Si el plan tiene season_plan_id, filtrar por el activo
-        // Si no tiene season_plan_id (plan manual sin temporada), siempre mostrarlo
-        matchSeasonPlan = !planSeasonId || planSeasonId === activeSeasonPlanId
-      }
-
-      return matchSearch && matchStatus && matchTab && matchSeasonPlan
+      // Mostrar todos los planes del track activo, sin filtrar por temporada.
+      // El activeSeasonPlanId solo se usa para posicionar la ventana del Gantt,
+      // no para ocultar planes — los planes deben verse siempre que correspondan al tab.
+      return matchSearch && matchStatus && matchTab
     }),
-    [plans, search, filterStatus, viewMode, activeGanttTab, historyTab, activeSeasonPlanId]
+    [plans, search, filterStatus, viewMode, activeGanttTab, historyTab]
   )
 
   let dynamicWindowDays = (PERIODS[ganttPeriod] ?? 365) + (ganttPeriod === 'anual' ? 215 : 0)

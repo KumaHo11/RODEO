@@ -1342,6 +1342,10 @@ function InteractiveGantt({
                 {(() => {
                   const sorted = [...paddockPlans].sort((a,b) => a.entry_date.localeCompare(b.entry_date))
                   const today = new Date().toISOString().split('T')[0]
+                  // Compute actual pixels-per-day from the inner container formula:
+                  // innerW = Math.max(1000, windowDays * 6 + LABEL_W)
+                  const innerW = Math.max(1000, windowDays * 6 + LABEL_W)
+                  const pxPerDay = (innerW - LABEL_W) / windowDays
 
                   return sorted.map((plan, idx) => {
                     const entryDiff = daysBetween(windowStart, plan.entry_date)
@@ -1461,7 +1465,9 @@ function InteractiveGantt({
                           width: `${Math.min(Math.max(oneDayPct, widthPctArg), 100 - Math.min(startPct, 99))}%`,
                           top: top,
                           height: BAR_H,
-                          minWidth: 6, // Always at least 6px so 1-day blocks are visible
+                          // minWidth garantizado en px = 1 día real. Evita que bloques de 1 día
+                          // colapsen a 0 por redondeo de % en navegadores.
+                          minWidth: Math.max(6, pxPerDay * 1),
                           borderTopLeftRadius: connectsLeft ? 0 : 4,
                           borderBottomLeftRadius: connectsLeft ? 0 : 4,
                           borderTopRightRadius: connectsRight ? 0 : 4,

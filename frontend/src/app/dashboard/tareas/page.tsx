@@ -487,7 +487,7 @@ function TareasContent({ user }: { user: any }) {
               <div>
                 <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Título *</label>
                 <input required value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Ej: Vaccionar rodeo 1" />
               </div>
 
@@ -495,7 +495,7 @@ function TareasContent({ user }: { user: any }) {
                 <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Descripción</label>
                 <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                   rows={2}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
                   placeholder="Detalles adicionales..." />
               </div>
 
@@ -503,14 +503,14 @@ function TareasContent({ user }: { user: any }) {
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Tipo</label>
                   <select value={form.task_type} onChange={e => setForm(p => ({ ...p, task_type: e.target.value as TaskType }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-500">
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-green-500">
                     {TASK_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Prioridad</label>
                   <select value={form.priority} onChange={e => setForm(p => ({ ...p, priority: e.target.value as Priority }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-500">
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-green-500">
                     {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
                 </div>
@@ -520,7 +520,7 @@ function TareasContent({ user }: { user: any }) {
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Potrero</label>
                   <select value={form.paddock_id} onChange={e => setForm(p => ({ ...p, paddock_id: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-500">
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-green-500">
                     <option value="">Sin potrero</option>
                     {paddocks.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
@@ -528,7 +528,7 @@ function TareasContent({ user }: { user: any }) {
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Asignar a</label>
                   <select value={form.assigned_to} onChange={e => setForm(p => ({ ...p, assigned_to: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-500">
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-green-500">
                     <option value="">Sin asignar</option>
                     {members.map(m => (
                       <option key={m.id} value={m.id}>
@@ -543,7 +543,7 @@ function TareasContent({ user }: { user: any }) {
                 <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">Fecha de vencimiento</label>
                 <input type="date" value={form.due_date} onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))}
                   min={new Date().toISOString().slice(0, 10)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500" />
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-green-500" />
               </div>
 
               <div className="flex gap-3 pt-2">
