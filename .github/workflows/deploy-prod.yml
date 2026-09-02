@@ -70,32 +70,32 @@ jobs:
             echo "❌ Proxy no respondió en 30s. Log:"; cat /tmp/cloudsql-proxy.log; exit 1
           fi
 
-          # ── 4. Construir URL con 127.0.0.1 ────────────────────────────────────
+          # ── 4. Extraer credenciales y pasar como PG* env vars ─────────────────
           cd frontend
           npm ci
-          PROXIED_URL=$(node -e "
+          eval "$(node -e "
             const raw = process.env.MIGRATION_DATABASE_URL;
             if (!raw) { console.error('MIGRATION_DATABASE_URL no definida'); process.exit(1); }
             try {
               const u = new URL(raw);
-              u.hostname = '127.0.0.1';
-              u.port = '5432';
-              // Cloud SQL Proxy maneja el cifrado internamente;
-              // deshabilitar SSL en el cliente evita ECONNRESET
-              u.searchParams.set('sslmode', 'disable');
-              console.log(u.toString());
+              console.log('export PGHOST=127.0.0.1');
+              console.log('export PGPORT=5432');
+              console.log('export PGUSER=' + JSON.stringify(u.username));
+              console.log('export PGPASSWORD=' + JSON.stringify(decodeURIComponent(u.password)));
+              console.log('export PGDATABASE=' + JSON.stringify(u.pathname.slice(1).split('?')[0]));
+              console.log('export PGSSLMODE=disable');
             } catch(e) { console.error('URL inválida:', e.message); process.exit(1); }
-          ")
-          echo "✅ PROXIED_URL → 127.0.0.1:5432"
+          ")"
+          echo "✅ PG vars → PGHOST=127.0.0.1 PGPORT=5432 PGSSLMODE=disable"
 
-          # ── 5. Ejecutar migraciones ────────────────────────────────────────────
-          node scripts/full_schema_migration.js "$PROXIED_URL" \
+          # ── 5. Ejecutar migraciones (scripts leen PGHOST/PGPORT/etc. automáticamente) ──
+          node scripts/full_schema_migration.js \
             && echo "✅ full_schema_migration OK" \
-            || echo "⚠️  full_schema_migration falló — verificar secret MIGRATION_DATABASE_URL_PROD"
-          node scripts/setup_rls_roles.js "$PROXIED_URL" \
+            || echo "⚠️  full_schema_migration falló"
+          node scripts/setup_rls_roles.js \
             && echo "✅ setup_rls_roles OK" \
             || echo "⚠️  setup_rls_roles falló"
-          DATABASE_URL="$PROXIED_URL" node insert_terms_v3.js \
+          node insert_terms_v3.js \
             && echo "✅ insert_terms_v3 OK" \
             || echo "⚠️  insert_terms_v3 falló"
 

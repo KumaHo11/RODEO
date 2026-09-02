@@ -15,21 +15,31 @@
 const { Pool } = require('pg')
 
 const connectionString = process.argv[2]
-if (!connectionString) {
+const USE_PG_ENV = !connectionString
+
+if (!connectionString && !process.env.PGHOST) {
   console.error('Usage: node scripts/setup_rls_roles.js "$DATABASE_URL"')
+  console.error('  o bien setear PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE/PGSSLMODE')
   process.exit(1)
 }
 
 async function main() {
-  const url = new URL(connectionString.replace('postgresql://', 'http://'))
-  const pool = new Pool({
-    host: url.hostname,
-    port: parseInt(url.port || '5432'),
-    user: url.username,
-    password: decodeURIComponent(url.password),
-    database: url.pathname.slice(1).split('?')[0],
-    ssl: connectionString.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
-  })
+  // Cuando no hay connectionString, pg lee PGHOST/PGPORT/etc. del entorno (libpq nativo, sin SSL)
+  const poolConfig = USE_PG_ENV
+    ? { connectionTimeoutMillis: 15000 }
+    : (() => {
+        const url = new URL(connectionString.replace('postgresql://', 'http://'))
+        return {
+          host: url.hostname,
+          port: parseInt(url.port || '5432'),
+          user: url.username,
+          password: decodeURIComponent(url.password),
+          database: url.pathname.slice(1).split('?')[0],
+          ssl: connectionString.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
+          connectionTimeoutMillis: 15000,
+        }
+      })()
+  const pool = new Pool(poolConfig)
 
   const client = await pool.connect()
 
@@ -94,7 +104,9 @@ async function main() {
 
     // ── 2. Grant privileges ──────────────────────────────────────────
 
-    const currentDb = url.pathname.slice(1).split('?')[0]
+    const currentDb = USE_PG_ENV
+      ? process.env.PGDATABASE
+      : connectionString.replace('postgresql://', 'http://').split('/').pop().split('?')[0]
 
     for (const role of ['rodeo_app', 'rodeo_service']) {
       await client.query(`GRANT CONNECT ON DATABASE "${currentDb}" TO ${role}`)
