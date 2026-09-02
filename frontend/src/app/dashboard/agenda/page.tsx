@@ -852,7 +852,7 @@ export default function AgendaPage() {
                           value={form.bulls_count}
                           onChange={e => setForm({ ...form, bulls_count: e.target.value })}
                           placeholder="Ej: 3"
-                          className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
+                          className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:ring-1 focus:ring-amber-400 outline-none"
                         />
                       </div>
                       <div className="space-y-1">
@@ -864,7 +864,7 @@ export default function AgendaPage() {
                           value={form.bulls_weight}
                           onChange={e => setForm({ ...form, bulls_weight: e.target.value })}
                           placeholder="600 kg (ref. Cañuelas)"
-                          className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-amber-400 outline-none"
+                          className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:ring-1 focus:ring-amber-400 outline-none"
                         />
                       </div>
                     </div>
