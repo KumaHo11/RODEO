@@ -7,7 +7,7 @@ import {
   Plus, Search, Trash2, List, Download,
   ChevronUp, ChevronDown, Filter, X, Calendar,
 
-  Info, FileSpreadsheet, WifiOff,
+  Info, FileSpreadsheet, WifiOff, Camera, Sparkles
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import HerdModal, { type HerdData } from '@/components/HerdModal'
@@ -25,6 +25,7 @@ import { fmtDate } from '@/lib/utils/dates'
 import LoteCard, { type LoteData } from '@/components/LoteCard'
 import { IconoRodeos } from '@/components/icons/IconoRodeos'
 import OnboardingTour from '@/components/OnboardingTour'
+import { AICameraModal } from '@/components/AICameraModal'
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SortKey = 'name' | 'head_count' | 'avg_weight_kg' | 'admission_date' | 'total_ev'
 
@@ -341,6 +342,7 @@ export default function HerdsPage() {
   // Modal
   const [modalOpen,   setModalOpen]   = useState(false)
   const [editingHerd, setEditingHerd] = useState<HerdData | null>(null)
+  const [aiTargetHerd, setAiTargetHerd] = useState<HerdData | null>(null)
 
   const { getLimit } = usePlan()
   const maxHerds = getLimit('max_herds')
@@ -981,7 +983,16 @@ export default function HerdsPage() {
                                 <p className="text-sm font-black text-gray-500">{Math.round(ev * 11).toLocaleString('es-AR')} <span className="text-gray-400 font-medium">kg</span></p>
                               </div>
                             </div>
-                            <div className="mt-3 pt-3 border-t border-gray-50 flex justify-end">
+                            <div className="mt-3 pt-3 border-t border-gray-50 flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setAiTargetHerd(herd) }}
+                                title="Estimar Condición Corporal por IA"
+                                className="flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl px-3 py-2 transition-colors border border-purple-200"
+                              >
+                                <Camera className="w-3.5 h-3.5 mr-1" />
+                                <Sparkles className="w-3.5 h-3.5" />
+                              </button>
                               <button onClick={e => { e.stopPropagation(); openEdit(herd) }}
                                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-xl transition-all">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
@@ -1242,6 +1253,45 @@ export default function HerdsPage() {
         />
       )}
       <ConfirmModal />
+
+      <AICameraModal
+        isOpen={!!aiTargetHerd}
+        onClose={() => setAiTargetHerd(null)}
+        title={aiTargetHerd ? `Estimar Condición Corporal: ${aiTargetHerd.name}` : 'Estimar Condición Corporal'}
+        mode="body-condition"
+        onApply={async (result, uploadedUrls) => {
+          if (!aiTargetHerd) return
+          try {
+            await apiFetch(`/api/herds/${aiTargetHerd.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ 
+                bcs_score: result.bcs_score,
+                ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {})
+              })
+            })
+
+            // Registrar evento en historial
+            await apiFetch('/api/farm-events', {
+              method: 'POST',
+              body: JSON.stringify({
+                title: `Condición Corporal IA: ${aiTargetHerd.name}`,
+                event_type: 'NUTRITION',
+                event_date: new Date().toISOString(),
+                status: 'COMPLETED',
+                herd_id: aiTargetHerd.id,
+                description: `CC: ${result.bcs_score} (${result.condition_label}).\n${result.recommendation}`,
+                photo_url: uploadedUrls?.[0] || null,
+                source: 'rodeo'
+              })
+            })
+
+            window.location.reload()
+          } catch (e) {
+            console.error(e)
+          }
+          setAiTargetHerd(null)
+        }}
+      />
     </div>
   )
 }

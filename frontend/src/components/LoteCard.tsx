@@ -19,6 +19,9 @@ import { IconoRodeos } from '@/components/icons/IconoRodeos'
 import { type HerdData } from '@/components/HerdModal'
 import SubHerdCard from '@/components/SubHerdCard'
 import { PHYSIO_LABEL } from '@/lib/grazing/evProjection'
+import { AICameraModal } from '@/components/AICameraModal'
+import { Camera, Sparkles } from 'lucide-react'
+import { apiFetch } from '@/lib/apiFetch'
 
 // Colores para la progress bar de distribución fisiológica
 const PHYSIO_BAR_COLORS: Record<string, string> = {
@@ -59,6 +62,7 @@ export default function LoteCard({
   defaultExpanded = false,
 }: LoteCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
+  const [aiModalOpen, setAiModalOpen] = useState(false)
 
   // Safe totales — falls back to computing from hijos if API didn't send them
   const headCount = lote.totales?.head_count ?? lote.hijos.reduce((s, h) => s + (Number(h.head_count) || 0), 0)
@@ -115,7 +119,16 @@ export default function LoteCard({
               <h3 className="text-xl font-black text-gray-950 leading-tight truncate">
                 {lote.nombre}
               </h3>
-              <span className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full tracking-widest uppercase">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setAiModalOpen(true) }}
+                title="Estimar Condición Corporal por IA"
+                className="ml-1 flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg p-1 transition-colors border border-purple-200"
+              >
+                <Camera className="w-3.5 h-3.5 mr-0.5" />
+                <Sparkles className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full tracking-widest uppercase ml-1">
                 LOTE
               </span>
             </div>
@@ -218,6 +231,50 @@ export default function LoteCard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AICameraModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        title={`Estimar Condición Corporal: ${lote.nombre}`}
+        mode="body-condition"
+        onApply={async (result, uploadedUrls) => {
+          try {
+            await Promise.all(
+              lote.hijos.map(herd =>
+                apiFetch(`/api/herds/${herd.id}`, {
+                  method: 'PATCH',
+                  body: JSON.stringify({ 
+                    bcs_score: result.bcs_score,
+                    ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {})
+                  })
+                })
+              )
+            )
+
+            // Registrar evento en historial
+            await apiFetch('/api/farm-events', {
+              method: 'POST',
+              body: JSON.stringify({
+                title: `Condición Corporal IA: ${lote.nombre}`,
+                event_type: 'NUTRITION',
+                event_date: new Date().toISOString(),
+                status: 'COMPLETED',
+                herd_ids: lote.hijos.map(h => h.id),
+                description: `CC: ${result.bcs_score} (${result.condition_label}).\n${result.recommendation}`,
+                photo_url: uploadedUrls?.[0] || null,
+                source: 'rodeo'
+              })
+            })
+
+            // Ideally we should trigger a refresh, but we don't have a callback for that in LoteCard props
+            // So we just close and optionally show a toast/alert or force reload
+            window.location.reload()
+          } catch (e) {
+            console.error(e)
+          }
+          setAiModalOpen(false)
+        }}
+      />
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous, Info } from 'lucide-react'
+import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous, Info, Camera, Sparkles } from 'lucide-react'
 import { SatelliteData } from '@/lib/services/satellite'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
@@ -14,6 +14,7 @@ import WeatherConditionChip from '@/components/WeatherConditionChip'
 import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
 import { parseKmlFile } from '@/lib/kmlParser'
 import type { ParsedKmlFeature } from '@/lib/kmlParser'
+import { AICameraModal } from '@/components/AICameraModal'
 
 interface Paddock {
   id: string
@@ -132,6 +133,7 @@ export default function PaddockSidePanel({
   const [editingPaddock, setEditingPaddock] = useState<Paddock | null>(null)
   const [paddockNotes, setPaddockNotes]     = useState<any[]>([])
   const [notesLoading, setNotesLoading]     = useState(false)
+  const [aiModalTarget, setAiModalTarget]   = useState<Paddock | null>(null)
   // Local optimistic is_active map so toggle feels instant
   const [activeMap, setActiveMap] = useState<Record<string, boolean>>({})
 
@@ -452,6 +454,15 @@ export default function PaddockSidePanel({
                           }`}>
                             {paddock.name}
                           </h3>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setAiModalTarget(paddock) }}
+                            title="Estimar Materia Seca por IA"
+                            className="flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg p-1.5 transition-colors border border-purple-200"
+                          >
+                            <Camera className="w-3 h-3 mr-1" />
+                            <Sparkles className="w-3 h-3" />
+                          </button>
                           {ms === 0 && (
                             <div className="group relative shrink-0 z-10">
                               <span title="Sin materia seca declarada no es posible planificar pastoreos en este potrero." className="flex items-center gap-0.5 text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md cursor-help whitespace-nowrap">
@@ -730,6 +741,39 @@ export default function PaddockSidePanel({
         paddocks={paddocks}
       />
       <ConfirmModal />
+      <AICameraModal
+        isOpen={!!aiModalTarget}
+        onClose={() => setAiModalTarget(null)}
+        title={aiModalTarget ? `Estimar Materia Seca: ${aiModalTarget.name}` : 'Estimar Materia Seca'}
+        mode="biomass"
+        onApply={async (result, uploadedUrls) => {
+          if (aiModalTarget) {
+            await handleModalSave(
+              aiModalTarget.id,
+              aiModalTarget.name,
+              aiModalTarget.technical_data || {},
+              result.dry_matter_kg_ha,
+              aiModalTarget.area_ha
+            )
+            
+            // Registrar evento en historial
+            await apiFetch('/api/farm-events', {
+              method: 'POST',
+              body: JSON.stringify({
+                title: `Estimación Materia Seca IA: ${aiModalTarget.name}`,
+                event_type: 'NUTRITION',
+                event_date: new Date().toISOString(),
+                status: 'COMPLETED',
+                paddock_id: aiModalTarget.id,
+                description: `MS: ${result.dry_matter_kg_ha} kg/ha. Altura: ${result.grass_height_cm}cm. Estado: ${result.condition_label}.`,
+                photo_url: uploadedUrls?.[0] || null,
+                source: 'planner'
+              })
+            })
+          }
+          setAiModalTarget(null)
+        }}
+      />
     </>
   )
 }

@@ -3,23 +3,28 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
-// Helper: timeout de 30s para llamadas a Gemini
+// Helper: timeout de 60s para llamadas a Gemini
 function makeGeminiTimeout(): Promise<never> {
   return new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Gemini timeout after 30s')), 30_000)
+    setTimeout(() => reject(new Error('Gemini timeout after 60s')), 60_000)
   )
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageBase64, mimeType, species } = await req.json()
-    if (!imageBase64) return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 })
+    const { imageBase64, mimeType, imagesBase64, species } = await req.json()
+    
+    const images = imagesBase64 || (imageBase64 ? [{ base64: imageBase64, mimeType: mimeType || 'image/jpeg' }] : [])
+
+    if (images.length === 0) {
+      return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 })
+    }
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `Eres un veterinario y nutricionista animal experto en ganadería bovina, ovina y equina del Cono Sur de América Latina, especializado en evaluación de condición corporal (CC / BCS - Body Condition Score).
 
-Analizá esta imagen de un animal o rebaño (especie principal: ${species || 'bovino'}) y respondé SOLO con un objeto JSON válido, sin texto adicional, sin markdown, sin comillas de bloque de código.
+Analizá esta(s) imagen(es) de un animal o rebaño (especie principal: ${species || 'bovino'}) y respondé SOLO con un objeto JSON válido, sin texto adicional, sin markdown, sin comillas de bloque de código.
 
 El JSON debe tener exactamente estos campos:
 {
@@ -37,14 +42,16 @@ El JSON debe tener exactamente estos campos:
   "animal_count_visible": número de animales visibles en la imagen (1 si es solo uno)
 }`
 
+    const imageParts = images.map((img: any) => ({
+      inlineData: {
+        data: img.base64,
+        mimeType: img.mimeType as any,
+      },
+    }))
+
     const result = await Promise.race([
       model.generateContent([
-        {
-          inlineData: {
-            data: imageBase64,
-            mimeType: mimeType || 'image/jpeg',
-          },
-        },
+        ...imageParts,
         prompt,
       ]),
       makeGeminiTimeout(),

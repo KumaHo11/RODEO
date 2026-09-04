@@ -9,9 +9,9 @@
  *
  * Design System: tokens.css, Card organism, Badge atom.
  */
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Trash2, Calendar } from 'lucide-react'
+import { Trash2, Calendar, Camera, Sparkles } from 'lucide-react'
 import {
   CATEGORIA_COLORS, CATEGORIA_LABEL_RAE, type CategoriaComercial,
 } from '@/lib/categorias'
@@ -20,6 +20,8 @@ import { calculateBaseEV } from '@/lib/grazing/evProjection'
 import { fmtDate } from '@/lib/utils/dates'
 import type { HerdData } from '@/components/HerdModal'
 import WeatherConditionChip from '@/components/WeatherConditionChip'
+import { AICameraModal } from '@/components/AICameraModal'
+import { apiFetch } from '@/lib/apiFetch'
 
 // Colores semánticos por categoría fisiológica
 const PHYSIO_COLORS: Record<string, { dot: string; bg: string; text: string }> = {
@@ -41,6 +43,7 @@ interface SubHerdCardProps {
 }
 
 export default function SubHerdCard({ herd, onManage, onDelete }: SubHerdCardProps) {
+  const [aiModalOpen, setAiModalOpen] = useState(false)
   const catKey   = herd.categoria as CategoriaComercial | null
   const colors   = catKey ? CATEGORIA_COLORS[catKey] : null
   const catDisp  = catKey ? (CATEGORIA_LABEL_RAE[catKey] ?? catKey) : herd.species
@@ -142,6 +145,16 @@ export default function SubHerdCard({ herd, onManage, onDelete }: SubHerdCardPro
             </button>
 
             <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setAiModalOpen(true) }}
+              title="Estimar Condición Corporal por IA"
+              className="flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg p-1.5 transition-colors border border-purple-200 shrink-0"
+            >
+              <Camera className="w-3.5 h-3.5 mr-0.5" />
+              <Sparkles className="w-3.5 h-3.5" />
+            </button>
+
+            <button
               onClick={e => { e.stopPropagation(); onDelete() }}
               className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 shrink-0"
             >
@@ -158,6 +171,44 @@ export default function SubHerdCard({ herd, onManage, onDelete }: SubHerdCardPro
           <p className="text-[9px] font-bold text-gray-400">{fmtDate(herd.admission_date)}</p>
         </div>
       )}
+
+      <AICameraModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        title={`Estimar Condición Corporal: ${herd.name}`}
+        mode="body-condition"
+        onApply={async (result, uploadedUrls) => {
+          try {
+            await apiFetch(`/api/herds/${herd.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ 
+                bcs_score: result.bcs_score,
+                ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {})
+              })
+            })
+
+            // Registrar evento en historial
+            await apiFetch('/api/farm-events', {
+              method: 'POST',
+              body: JSON.stringify({
+                title: `Condición Corporal IA: ${herd.name}`,
+                event_type: 'NUTRITION',
+                event_date: new Date().toISOString(),
+                status: 'COMPLETED',
+                herd_id: herd.id,
+                description: `CC: ${result.bcs_score} (${result.condition_label}).\n${result.recommendation}`,
+                photo_url: uploadedUrls?.[0] || null,
+                source: 'rodeo'
+              })
+            })
+
+            window.location.reload()
+          } catch (e) {
+            console.error(e)
+          }
+          setAiModalOpen(false)
+        }}
+      />
     </motion.div>
   )
 }

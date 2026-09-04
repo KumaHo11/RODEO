@@ -9,10 +9,10 @@ import { checkFeatureAccess } from '@/lib/plan-limits'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
-// Helper: timeout de 30s para llamadas a Gemini
+// Helper: timeout de 60s para llamadas a Gemini
 function makeGeminiTimeout(): Promise<never> {
   return new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Gemini timeout after 30s')), 30_000)
+    setTimeout(() => reject(new Error('Gemini timeout after 60s')), 60_000)
   )
 }
 
