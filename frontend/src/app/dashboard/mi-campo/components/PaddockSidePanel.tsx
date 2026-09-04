@@ -756,18 +756,18 @@ export default function PaddockSidePanel({
               aiModalTarget.area_ha
             )
             
-            // Registrar evento en historial
-            await apiFetch('/api/farm-events', {
+            // Registrar evento en historial (field-notes para potreros)
+            await apiFetch('/api/field-notes', {
               method: 'POST',
               body: JSON.stringify({
                 title: `Estimación Materia Seca IA: ${aiModalTarget.name}`,
-                event_type: 'NUTRITION',
-                event_date: new Date().toISOString(),
-                status: 'COMPLETED',
+                category: 'BIOMASA',
+                tags: ['BIOMASA'],
                 paddock_id: aiModalTarget.id,
-                description: `MS: ${result.dry_matter_kg_ha} kg/ha. Altura: ${result.grass_height_cm}cm. Estado: ${result.condition_label}.`,
+                content: `MS: ${result.dry_matter_kg_ha} kg/ha. Altura: ${result.grass_height_cm}cm. Estado: ${result.condition_label}.`,
                 photo_url: uploadedUrls?.[0] || null,
-                source: 'planner'
+                photo_urls: uploadedUrls || [],
+                analysis_result: result,
               })
             })
           }
