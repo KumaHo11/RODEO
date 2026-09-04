@@ -586,7 +586,7 @@ export default function PaddockSidePanel({
                                 >
                                   <span className="[&>svg]:w-3 [&>svg]:h-3">{cond.icon}</span>
                                   {ndviVal != null && (
-                                    <span className="text-[9px] font-bold text-gray-400">{Number(ndviVal).toFixed(2)}</span>
+                                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">NDVI <span className="text-gray-900">{Number(ndviVal).toFixed(2)}</span></span>
                                   )}
                                   <Info className="w-2.5 h-2.5 text-gray-300" />
                                 </button>
