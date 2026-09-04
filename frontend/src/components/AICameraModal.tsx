@@ -103,7 +103,7 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
             const res = await apiFetch('/api/upload', {
               method: 'POST',
               body: formData
-            }, true) // true para omitir JSON stringify headers
+            })
             if (res.ok) {
               const data = await res.json()
               return data.url
