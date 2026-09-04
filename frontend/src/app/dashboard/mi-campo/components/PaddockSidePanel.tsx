@@ -454,15 +454,6 @@ export default function PaddockSidePanel({
                           }`}>
                             {paddock.name}
                           </h3>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setAiModalTarget(paddock) }}
-                            title="Estimar Materia Seca por IA"
-                            className="flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg p-1.5 transition-colors border border-purple-200"
-                          >
-                            <Camera className="w-3 h-3 mr-1" />
-                            <Sparkles className="w-3 h-3" />
-                          </button>
                           {ms === 0 && (
                             <div className="group relative shrink-0 z-10">
                               <span title="Sin materia seca declarada no es posible planificar pastoreos en este potrero." className="flex items-center gap-0.5 text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md cursor-help whitespace-nowrap">
@@ -654,17 +645,28 @@ export default function PaddockSidePanel({
                                <Trash2 className="w-3 h-3 text-gray-300 group-hover/del:text-red-500 transition-colors" />
                                Borrar
                              </button>
-                             <button
-                               type="button"
-                               onClick={e => { e.stopPropagation(); openModal(paddock) }}
-                               title="Editar potrero"
-                               className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-all shadow-sm"
-                             >
-                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
-                                 <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                               </svg>
-                               Editar
-                             </button>
+                             <div className="flex items-center gap-2">
+                               <button
+                                 type="button"
+                                 onClick={(e) => { e.stopPropagation(); setAiModalTarget(paddock) }}
+                                 title="Estimar Materia Seca por IA"
+                                 className="flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg p-1 transition-colors border border-purple-200"
+                               >
+                                 <Camera className="w-3 h-3 mr-1" />
+                                 <Sparkles className="w-3 h-3" />
+                               </button>
+                               <button
+                                 type="button"
+                                 onClick={e => { e.stopPropagation(); openModal(paddock) }}
+                                 title="Editar potrero"
+                                 className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold text-green-700 bg-green-600/10 hover:bg-green-600/20 border border-green-600 rounded-lg transition-all"
+                               >
+                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                                   <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                 </svg>
+                                 Editar
+                               </button>
+                             </div>
                            </div>
                          </div>
                        </>
