@@ -53,7 +53,7 @@ function FieldError({ msg }: { msg: string | null }) {
 // ─── Base input class builder ──────────────────────────────────────────────────
 function inputCls(hasError: boolean, extra = '') {
   return [
-    'w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-sm outline-none',
+    'w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-sm text-gray-900 outline-none',
     'transition-all duration-150 placeholder:text-gray-300 font-medium',
     hasError
       ? 'border-red-300 ring-1 ring-red-300 bg-red-50/30 focus:border-red-400 focus:ring-red-400'

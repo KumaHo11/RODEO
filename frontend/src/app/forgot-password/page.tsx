@@ -92,7 +92,7 @@ export default function ForgotPasswordPage() {
                       type="email"
                       required
                       placeholder="tu@email.com"
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-300 font-medium"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm text-gray-900 focus:ring-1 focus:ring-green-600 outline-none transition-all placeholder:text-gray-300 font-medium"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       autoFocus
