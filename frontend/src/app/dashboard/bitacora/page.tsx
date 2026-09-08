@@ -211,7 +211,7 @@ export default function BitacoraPage() {
     setLoading(true)
     let fetchedNotes: any[] = []
 
-    // ── Paso 1: IndexedDB inmediata ────────────────────────────────────────
+    // ── Paso 1: IndexedDB inmediata (única fuente de verdad) ──────────────
     try {
       const { dbGetAll } = await import('@/lib/offline/db')
       const localNotes = await dbGetAll('field_notes')
@@ -230,47 +230,49 @@ export default function BitacoraPage() {
       const res = await apiFetch('/api/field-notes?bitacora_only=1')
       if (res.ok) {
         fetchedNotes = (await res.json()).notes || []
-        // Guardar en IndexedDB y localStorage
+        // Guardar en IndexedDB — única fuente de verdad (sin localStorage)
         const { dbUpsertMany } = await import('@/lib/offline/db')
         await dbUpsertMany('field_notes', fetchedNotes).catch(() => {})
-        try {
-          localStorage.setItem('rodeo_cached_notes_bitacora', JSON.stringify(fetchedNotes))
-        } catch { /* ignore */ }
       } else {
         throw new Error('API error')
       }
     } catch {
-      // Usar datos ya cargados de IndexedDB o localStorage
-      if (fetchedNotes.length === 0) {
-        try {
-          fetchedNotes = JSON.parse(localStorage.getItem('rodeo_cached_notes_bitacora') || '[]')
-        } catch { /* ignore */ }
-      }
+      // fetchedNotes ya tiene lo que se cargó de IDB en el Paso 1
     }
 
-    // Merge with offline queue — solo items de bitácora (paddock_id null)
+    // ── Paso 3: Merge con pendientes del outbox (IndexedDB — sin localStorage) ─
     try {
-      const queue = JSON.parse(localStorage.getItem('rodeo_offline_queue') || '[]')
-      const pendingFieldNotes = queue.filter(
-        (q: any) =>
-          q.type === 'field_note' &&
-          (q.data?.paddock_id === null || q.data?.paddock_id === undefined || q.data?.paddock_id === '') &&
-          !q.data?.herd_id // excluir también notas de rodeo
-      )
-      
-      const localNotes = await Promise.all(pendingFieldNotes.map(async (item: any) => {
-        const noteData = { ...item.data, id: `pending-${item.timestamp}`, created_at: new Date(item.timestamp).toISOString(), is_pending: true }
-        
+      const { outboxGetAll } = await import('@/lib/offline/db')
+      const pendingItems = await outboxGetAll()
+      const pendingNotes = pendingItems.filter((item: any) => {
+        try {
+          const body = item.body ? JSON.parse(item.body) : {}
+          return (
+            item.type === 'field_note' &&
+            (body?.paddock_id === null || body?.paddock_id === undefined || body?.paddock_id === '') &&
+            !body?.herd_id
+          )
+        } catch { return false }
+      })
+
+      const localNotes = await Promise.all(pendingNotes.map(async (item: any) => {
+        const body = item.body ? JSON.parse(item.body) : {}
+        const noteData: any = {
+          ...body,
+          id: item.id,
+          created_at: new Date(item.created_at).toISOString(),
+          is_pending: true,
+          title: body.title ?? 'Pendiente',
+        }
+
         if (item.mediaType === 'photo' && item.mediaId) {
           const { getPendingPhoto } = await import('@/lib/audioOfflineStore')
           const photo = await getPendingPhoto(item.mediaId)
-          if (photo && photo.blob) {
-            noteData.photo_url = URL.createObjectURL(photo.blob)
-          }
+          if (photo?.blob) noteData.photo_url = URL.createObjectURL(photo.blob)
         } else if (item.mediaType === 'audio' && item.mediaId) {
           const { getPendingAudio } = await import('@/lib/audioOfflineStore')
           const audio = await getPendingAudio(item.mediaId)
-          if (audio && audio.blob) {
+          if (audio?.blob) {
             noteData.audio_url = URL.createObjectURL(audio.blob)
             noteData.audio_duration_secs = audio.durationSecs
             if (!noteData.content && audio.transcript) noteData.content = audio.transcript
@@ -278,7 +280,7 @@ export default function BitacoraPage() {
         }
         return noteData
       }))
-      
+
       setNotes([...localNotes, ...fetchedNotes])
     } catch (e) {
       console.error('Error merging offline notes:', e)
@@ -417,18 +419,16 @@ export default function BitacoraPage() {
         transcript: liveTranscript,
       }
       await savePendingAudio(pa)
-      const { addToOfflineQueue } = await import('@/components/OfflineManager')
-      addToOfflineQueue({
+      const { enqueue } = await import('@/lib/offline/outbox')
+      await enqueue({
         type: 'field_note',
-        data: {
-          paddock_id: null, tags: ['GENERAL'], title,
-          content: liveTranscript || null, lat, lng,
-          sync_status: 'PENDING'
-        },
-        timestamp: Date.now(),
+        url: '/api/field-notes',
+        method: 'POST',
+        body: { paddock_id: null, tags: ['GENERAL'], title, content: liveTranscript || null, lat, lng, sync_status: 'PENDING' },
         mediaType: 'audio',
-        mediaId: id
-      } as any)
+        mediaId: id,
+        idempotency_key: `field_note-audio-${id}`,
+      })
       await refreshPending()
       toast.success('🎙️ Audio guardado. Se subirá al servidor cuando tengas conexión.')
       flashSaved(); resetCapture(); return
@@ -440,18 +440,16 @@ export default function BitacoraPage() {
       const id = `local-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const blob = new Blob([await photoFile.arrayBuffer()], { type: photoFile.type })
       await savePendingPhoto({ id, blob, lat, lng, createdAt: new Date().toISOString(), title })
-      const { addToOfflineQueue } = await import('@/components/OfflineManager')
-      addToOfflineQueue({
+      const { enqueue } = await import('@/lib/offline/outbox')
+      await enqueue({
         type: 'field_note',
-        data: {
-          paddock_id: null, tags: ['GENERAL'], title,
-          content: textNote.trim() || null, lat, lng,
-          sync_status: 'PENDING'
-        },
-        timestamp: Date.now(),
+        url: '/api/field-notes',
+        method: 'POST',
+        body: { paddock_id: null, tags: ['GENERAL'], title, content: textNote.trim() || null, lat, lng, sync_status: 'PENDING' },
         mediaType: 'photo',
-        mediaId: id
-      } as any)
+        mediaId: id,
+        idempotency_key: `field_note-photo-${id}`,
+      })
       await refreshPending()
       toast.success('📷 Foto guardada. Se subirá al servidor cuando tengas conexión.')
       flashSaved(); resetCapture(); return
@@ -460,20 +458,15 @@ export default function BitacoraPage() {
     // ── OFFLINE path: texto (y cualquier nota sin blob ni foto)
     if (!navigator.onLine) {
       setSavingMsg('Guardando sin conexión...')
-      const { addToOfflineQueue } = await import('@/components/OfflineManager')
-      addToOfflineQueue({
+      const noteId = `field-note-text-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const { enqueue } = await import('@/lib/offline/outbox')
+      await enqueue({
         type: 'field_note',
-        data: {
-          paddock_id: null,
-          tags: ['GENERAL'],
-          title,
-          content: liveTranscript || null,
-          lat,
-          lng,
-          sync_status: 'PENDING',
-        },
-        timestamp: Date.now(),
-      } as any)
+        url: '/api/field-notes',
+        method: 'POST',
+        body: { paddock_id: null, tags: ['GENERAL'], title, content: liveTranscript || null, lat, lng, sync_status: 'PENDING' },
+        idempotency_key: `field_note-text-${noteId}`,
+      })
       await refreshPending()
       toast.success('📝 Nota guardada. Se subirá al servidor cuando tengas conexión.')
       flashSaved(); resetCapture(); return
@@ -541,16 +534,15 @@ export default function BitacoraPage() {
 
     if (!navigator.onLine) {
       setSavingMsg('Guardando sin conexión...')
-      const { addToOfflineQueue } = await import('@/components/OfflineManager')
-      addToOfflineQueue({
+      const txtId = `field-note-text-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const { enqueue } = await import('@/lib/offline/outbox')
+      await enqueue({
         type: 'field_note',
-        data: {
-          paddock_id: null, tags: ['GENERAL'], title,
-          content: textNote.trim(), lat, lng,
-          sync_status: 'PENDING',
-        },
-        timestamp: Date.now(),
-      } as any)
+        url: '/api/field-notes',
+        method: 'POST',
+        body: { paddock_id: null, tags: ['GENERAL'], title, content: textNote.trim(), lat, lng, sync_status: 'PENDING' },
+        idempotency_key: `field_note-text-${txtId}`,
+      })
       toast.success('📝 Nota guardada. Se subirá al servidor cuando tengas conexión.')
       flashSaved(); resetCapture(); setShowTextMenu(false); setTextNote(''); return
     }

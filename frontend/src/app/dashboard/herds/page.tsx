@@ -356,62 +356,54 @@ export default function HerdsPage() {
     if (!user) return
     setLoading(true)
     try {
-      // ── Paso 1: IndexedDB inmediata (sin espera) ──────────────────────────
-      const { dbGetAll } = await import('@/lib/offline/db')
-      const localHerds = await dbGetAll('herds')
+      // ── Paso 1: IndexedDB inmediata ────────────────────────────────────────
+      const { dbGetAll, metaGet } = await import('@/lib/offline/db')
+      const [localHerds, cachedStructure] = await Promise.all([
+        dbGetAll('herds'),
+        metaGet('herds_structure'),
+      ])
       if (localHerds.length > 0) {
-        // Mostrar herds como lista plana offline (sin reconstruir lotes)
         setHerds(localHerds as HerdData[])
-        setUngrouped(localHerds as HerdData[])
-        setLotes([])
+        if (cachedStructure) {
+          setLotes(cachedStructure.lotes || [])
+          setUngrouped(cachedStructure.ungrouped || (localHerds as HerdData[]))
+        } else {
+          setUngrouped(localHerds as HerdData[])
+          setLotes([])
+        }
         setLoading(false)
         setIsOfflineData(false)
         import('@/lib/analytics').then(({ event }) => event({ action: 'herds_view', category: 'herds', mode: 'offline' }))
       }
 
-      // ── Paso 2: API en background ────────────────────────────────────────
+      // ── Paso 2: API en background ──────────────────────────────────────────
       const res = await apiFetch('/api/herds')
       if (res.ok) {
         const data = await res.json()
         const herdsData = data.herds || []
+        const lotesData = data.lotes || []
+        const ungroupedData = data.ungrouped || herdsData
         setHerds(herdsData)
-        setLotes(data.lotes || [])
-        setUngrouped(data.ungrouped || herdsData)
+        setLotes(lotesData)
+        setUngrouped(ungroupedData)
         setIsOfflineData(false)
         import('@/lib/analytics').then(({ event }) => event({ action: 'herds_view', category: 'herds', mode: 'online' }))
-        // Guardar en IndexedDB
-        const { dbUpsertMany } = await import('@/lib/offline/db')
-        await dbUpsertMany('herds', herdsData)
-        // También en localStorage como respaldo
-        try {
-          localStorage.setItem('rodeo_cached_herds', JSON.stringify({
-            herds: herdsData,
-            lotes: data.lotes || [],
-            ungrouped: data.ungrouped || herdsData,
-          }))
-        } catch { /* ignore */ }
+        // Guardar en IndexedDB — única fuente de verdad (sin localStorage)
+        const { dbUpsertMany, metaSet } = await import('@/lib/offline/db')
+        await Promise.all([
+          dbUpsertMany('herds', herdsData),
+          metaSet('herds_structure', { lotes: lotesData, ungrouped: ungroupedData }),
+        ])
       } else {
         throw new Error('API error')
       }
     } catch {
-      // Fallback: datos de IndexedDB ya se cargaron arriba
-      // Si no había nada en IndexedDB, intentar localStorage
-      if (herds.length === 0) {
-        try {
-          const cached = JSON.parse(localStorage.getItem('rodeo_cached_herds') || 'null')
-          if (cached) {
-            setHerds(cached.herds || [])
-            setLotes(cached.lotes || [])
-            setUngrouped(cached.ungrouped || cached.herds || [])
-            setIsOfflineData(true)
-          }
-        } catch { /* ignore */ }
-      } else {
-        setIsOfflineData(true)
-      }
+      // Fallback: datos de IndexedDB ya se cargaron en Paso 1
+      setIsOfflineData(true)
     }
     setLoading(false)
   }
+
 
 
   const loadHistorial = async () => {

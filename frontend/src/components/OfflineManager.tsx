@@ -20,30 +20,7 @@ import { processQueue, getPendingCount } from '@/lib/offline/outbox'
 import { toast } from 'sonner'
 import { WifiOff, Wifi, RefreshCw } from 'lucide-react'
 
-/**
- * Limpia el rodeo_offline_queue del localStorage legacy.
- * Elimina ítems con syncing:true que quedan atascados después de un reinicio.
- * Esto evita que el OfflineIndicator viejo interfiera con el nuevo OfflineManager.
- */
-function cleanLegacyLocalStorageQueue() {
-  try {
-    const raw = localStorage.getItem('rodeo_offline_queue')
-    if (!raw) return
-    const queue = JSON.parse(raw)
-    if (!Array.isArray(queue)) {
-      localStorage.removeItem('rodeo_offline_queue')
-      return
-    }
-    // Quitar solo los marcados como syncing:true (quedaron atascados)
-    const cleaned = queue.filter((item: any) => !item.syncing)
-    if (cleaned.length !== queue.length) {
-      localStorage.setItem('rodeo_offline_queue', JSON.stringify(cleaned))
-    }
-  } catch {
-    // Si está corrupto, limpiar
-    try { localStorage.removeItem('rodeo_offline_queue') } catch { /* ignore */ }
-  }
-}
+
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
@@ -137,8 +114,6 @@ export function OfflineManager({ children }: { children?: React.ReactNode }) {
     if (!user || initDoneRef.current) return
     initDoneRef.current = true
 
-    // Limpiar ítems syncing:true atascados del sistema legacy (localStorage)
-    cleanLegacyLocalStorageQueue()
 
     // Inicializar motor de sync
     initSync(getToken)

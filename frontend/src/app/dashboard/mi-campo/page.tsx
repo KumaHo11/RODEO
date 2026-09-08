@@ -134,15 +134,13 @@ export default function MiCampoPage() {
 
       if (!paddocksRes.ok && !orgRes.ok) throw new Error('offline')
 
-      // Guardar datos críticos en IndexedDB y caché local
+      // Guardar datos críticos en IndexedDB — única fuente de verdad (sin localStorage)
       const { dbUpsertMany, dbUpsertOrg } = await import('@/lib/offline/db')
       if (paddocksRes.ok) {
         await dbUpsertMany('paddocks', paddocksData).catch(() => {})
-        try { localStorage.setItem('rodeo_cached_paddocks', JSON.stringify(paddocksData)) } catch { /* ignore */ }
       }
       if (orgRes.ok && orgData) {
         await dbUpsertOrg(orgData).catch(() => {})
-        try { localStorage.setItem('rodeo_cached_org', JSON.stringify(orgData)) } catch { /* ignore */ }
       }
 
       // Indexar snapshots climáticos por paddock_id (el más reciente primero)
@@ -209,17 +207,8 @@ export default function MiCampoPage() {
       setLoading(false)
       loadNdviForPaddocks(paddocksData)
     } catch {
-      // Fallback: usar datos cacheados localmente
-      try {
-        const cachedPaddocks = JSON.parse(localStorage.getItem('rodeo_cached_paddocks') || '[]')
-        const cachedOrg = JSON.parse(localStorage.getItem('rodeo_cached_org') || 'null')
-        setPaddocks(cachedPaddocks)
-        if (cachedOrg) {
-          setOrg(cachedOrg)
-          if (cachedOrg.boundaries) setFieldBoundary(cachedOrg.boundaries)
-        }
-        setIsOfflineData(true)
-      } catch { /* ignore */ }
+      // Fallback: datos de IndexedDB ya se cargaron en Paso 1 (paddocks + org)
+      setIsOfflineData(true)
       setLoading(false)
     }
   }, [user])
@@ -258,17 +247,20 @@ export default function MiCampoPage() {
     if (dryMatter !== undefined) updates.dry_matter_kg_ha = dryMatter
 
     if (!navigator.onLine) {
-      const { addToOfflineQueue } = await import('@/components/OfflineManager')
-      addToOfflineQueue({
+      const { enqueue } = await import('@/lib/offline/outbox')
+      await enqueue({
         type: 'paddock_update',
-        data: { paddock_id: paddockId, ...updates },
-        timestamp: Date.now()
-      } as any)
+        url: `/api/paddocks/${paddockId}`,
+        method: 'PATCH',
+        body: { paddock_id: paddockId, ...updates },
+        idempotency_key: `paddock-update-${paddockId}-${Date.now()}`,
+        localData: { store: 'paddocks', data: { id: paddockId, ...updates } },
+      })
       import('sonner').then(({ toast }) => toast.success('Potrero guardado offline. Se sincronizará al conectar.'))
     } else {
       await apiFetch(`/api/paddocks/${paddockId}`, { method: 'PATCH', body: JSON.stringify(updates) })
     }
-    
+
     setPaddocks(prev => prev.map(p => p.id === paddockId ? { ...p, ...updates } : p))
   }
 

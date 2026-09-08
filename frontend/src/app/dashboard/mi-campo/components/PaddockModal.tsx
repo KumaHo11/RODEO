@@ -18,6 +18,7 @@ import { useConfirm } from '@/components/ui/ConfirmModal'
 import { CustomSelect } from '@/components/CustomSelect'
 import { usePlan } from '@/hooks/usePlan'
 import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
+import { useOfflineStatus } from '@/components/OfflineManager'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -513,15 +514,10 @@ export default function PaddockModal({
     (paddock.technical_data?.weed_types?.length ?? 0) > 0
   )
 
-  // Online/offline detection
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
-  useEffect(() => {
-    const onOnline  = () => setIsOnline(true)
-    const onOffline = () => setIsOnline(false)
-    window.addEventListener('online', onOnline)
-    window.addEventListener('offline', onOffline)
-    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline) }
-  }, [])
+  // Online/offline detection — centralizado con el hook compartido
+  const { isOffline: isCurrentlyOffline } = useOfflineStatus()
+  // Alias para que el JSX existente siga funcionando (isOnline = !isOffline)
+  const isOnline = !isCurrentlyOffline
 
   // Tab 3 — notas e historial
   const [noteExpanded, setNoteExpanded]     = useState(false)
@@ -666,23 +662,24 @@ export default function PaddockModal({
       hasWater:             hasWaterPoint,
       hasPests:             hasPests,
       hasInfraIssues:       fenceType === 'none' || fenceType === 'poor',
-      hasPredators,
       has_water_risk:       hasWaterRisk,
       relative_quality:     relativeQuality > 0 ? relativeQuality : undefined,
     }
 
-
-    // ── Offline path: save locally and show confirmation ─────────────────────
+    // ── Offline path: guardar localmente y mostrar confirmación ───────────────
     if (!navigator.onLine && !isCreating) {
       try {
-        const { addToOfflineQueue } = await import('@/components/OfflineManager')
+        const { enqueue } = await import('@/lib/offline/outbox')
         const updates: Record<string, any> = { technical_data: td }
         if (msHa !== '') updates.dry_matter_kg_ha = Number(msHa)
-        addToOfflineQueue({
+        await enqueue({
           type: 'paddock_update',
-          data: { paddock_id: paddock.id, name: name.trim(), ...updates },
-          timestamp: Date.now(),
-        } as any)
+          url: `/api/paddocks/${paddock.id}`,
+          method: 'PATCH',
+          body: { paddock_id: paddock.id, name: name.trim(), ...updates },
+          idempotency_key: `paddock-update-${paddock.id}-${Date.now()}`,
+          localData: { store: 'paddocks', data: { id: paddock.id, name: name.trim(), ...updates } },
+        })
         // Update local state optimistically so the map reflects the change
         await onSave(paddock.id, name.trim(), td,
           msHa   !== '' ? Number(msHa)   : undefined,
@@ -694,6 +691,7 @@ export default function PaddockModal({
       }
       return
     }
+
 
     // ── Online path ──────────────────────────────────────────────────────────
     await onSave(paddock.id, name.trim(), td,
@@ -832,21 +830,25 @@ export default function PaddockModal({
         })
       }
 
-      import('@/components/OfflineManager').then(({ addToOfflineQueue }) => {
-        addToOfflineQueue({
-          type: 'field_note',
-          data: {
-            paddock_id: paddock.id,
-            category: noteResult ? 'BIOMASA' : 'GENERAL',
-            tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-            title: offlineTitle,
-            content: noteText || audioTranscript || null,
-            sync_status: 'PENDING',
-            analysis_result: noteResult || null,
-          },
-          timestamp: Date.now(),
-          mediaIds: { audio: audioId, photo: photoId }
-        } as any)
+      // Nota de campo pendiente — va al outbox nativo (IndexedDB)
+      const { enqueue } = await import('@/lib/offline/outbox')
+      const noteId = crypto.randomUUID()
+      await enqueue({
+        type: 'field_note',
+        url: '/api/field-notes',
+        method: 'POST',
+        body: {
+          paddock_id: paddock.id,
+          category: noteResult ? 'BIOMASA' : 'GENERAL',
+          tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
+          title: offlineTitle,
+          content: noteText || audioTranscript || null,
+          sync_status: 'PENDING',
+          analysis_result: noteResult || null,
+        },
+        idempotency_key: `field_note-paddock-${noteId}`,
+        mediaType: effectiveBlob && audioId ? 'audio' : (noteImages.length > 0 && photoId ? 'photo' : undefined),
+        mediaId: effectiveBlob && audioId ? audioId : (noteImages.length > 0 && photoId ? photoId : undefined),
       })
 
       toast.success('Nota guardada. Se sincronizará cuando tengas internet.')
@@ -993,7 +995,7 @@ export default function PaddockModal({
       }
 
       console.warn('[saveQuickNote] network error → saving offline:', networkErr.message)
-      const { addToOfflineQueue } = await import('@/components/OfflineManager')
+      const { enqueue } = await import('@/lib/offline/outbox')
       const offlineId = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
       const offlineTitle = noteTitle.trim() || noteText?.slice(0, 60) || audioTranscript?.slice(0, 60) || 'Nota de campo'
 
@@ -1004,32 +1006,38 @@ export default function PaddockModal({
           lat: null, lng: null, createdAt: new Date().toISOString(),
           title: offlineTitle, transcript: audioTranscript
         }).catch(() => {})
-        addToOfflineQueue({
+        await enqueue({
           type: 'field_note',
-          data: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
-          timestamp: Date.now(), mediaType: 'audio', mediaId: offlineId,
-        } as any)
+          url: '/api/field-notes',
+          method: 'POST',
+          body: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
+          idempotency_key: `field_note-paddock-audio-${offlineId}`,
+          mediaType: 'audio',
+          mediaId: offlineId,
+        })
       } else if (noteImages.length > 0) {
         const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
-        const ppIds = []
-        for (const img of noteImages) {
-          const id = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
-          await savePendingPhoto({
-            id: id, blob: img, lat: null, lng: null,
-            createdAt: new Date().toISOString(), title: offlineTitle,
-          }).catch(() => {})
-          ppIds.push(id)
-        }
-        addToOfflineQueue({
+        const firstId = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
+        await savePendingPhoto({
+          id: firstId, blob: noteImages[0], lat: null, lng: null,
+          createdAt: new Date().toISOString(), title: offlineTitle,
+        }).catch(() => {})
+        await enqueue({
           type: 'field_note',
-          data: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
-          timestamp: Date.now(), mediaType: 'photo', mediaIds: { photos: ppIds },
-        } as any)
+          url: '/api/field-notes',
+          method: 'POST',
+          body: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
+          idempotency_key: `field_note-paddock-photo-${firstId}`,
+          mediaType: 'photo',
+          mediaId: firstId,
+        })
       } else {
-        addToOfflineQueue({
+        await enqueue({
           type: 'field_note',
-          data: { paddock_id: paddock.id, category: noteResult ? 'BIOMASA' : 'GENERAL', tags: noteResult ? ['BIOMASA'] : ['GENERAL'], title: offlineTitle, content: noteText || null, sync_status: 'PENDING' },
-          timestamp: Date.now(),
+          url: '/api/field-notes',
+          method: 'POST',
+          body: { paddock_id: paddock.id, category: noteResult ? 'BIOMASA' : 'GENERAL', tags: noteResult ? ['BIOMASA'] : ['GENERAL'], title: offlineTitle, content: noteText || null, sync_status: 'PENDING' },
+          idempotency_key: `field_note-paddock-text-${offlineId}`,
         })
       }
 
