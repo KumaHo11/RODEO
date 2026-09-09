@@ -139,6 +139,18 @@ export default function RootLayout({
                 if (!isPwa || path === '/landing' || path === '/login' || path === '/') {
                   document.getElementById('global-native-splash').style.display = 'none';
                 }
+
+                // iOS PWA Watchdog: If the splash screen is still visible after 4 seconds (React failed to mount),
+                // it's likely a chunk loading error from a stale service worker cache. Force a hard reload.
+                window.addEventListener('load', function() {
+                  setTimeout(function() {
+                    var splash = document.getElementById('global-native-splash');
+                    if (splash && splash.style.display !== 'none' && isPwa) {
+                      console.error('Watchdog triggered: React failed to mount. Forcing reload.');
+                      window.location.reload(true);
+                    }
+                  }, 4000);
+                });
               } catch(e) {}
             })();
           `

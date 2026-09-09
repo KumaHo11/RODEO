@@ -12,6 +12,7 @@ import { apiFetch } from '@/lib/apiFetch'
 import { isOffline } from '@/lib/connectivity'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
+import RecordEditor from '@/components/shared/RecordEditor'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ui/ConfirmModal'
@@ -520,31 +521,9 @@ export default function PaddockModal({
   const isOnline = !isCurrentlyOffline
 
   // Tab 3 — notas e historial
-  const [noteExpanded, setNoteExpanded]     = useState(false)
-  const [noteMode, setNoteMode]             = useState<'text' | 'image' | 'audio' | null>(null)
-  const [noteTitle, setNoteTitle]           = useState('')
-  const [noteText, setNoteText]             = useState('')
-  const [noteImages, setNoteImages]         = useState<File[]>([])
-  const [noteImagePreviews, setNoteImagePreviews] = useState<string[]>([])
-  const [aiUpdateProposal, setAiUpdateProposal] = useState<any>(null)
+  const [noteSaving, setNoteSaving]         = useState(false)
   const [lightboxImages, setLightboxImages] = useState<string[]>([])
   const [lightboxIndex, setLightboxIndex] = useState(0)
-  const [noteAnalyzing, setNoteAnalyzing]   = useState(false)
-  const [noteResult, setNoteResult]         = useState<any>(null)
-  const [noteSaving, setNoteSaving]         = useState(false)
-  const [noteSaved, setNoteSaved]           = useState(false)
-  const noteImageRef                        = useRef<HTMLInputElement>(null)
-  const noteCameraRef                       = useRef<HTMLInputElement>(null)
-
-  // Audio
-  const [recording, setRecording]             = useState(false)
-  const [audioTranscript, setAudioTranscript] = useState('')
-  const [audioBlob, setAudioBlob]             = useState<Blob | null>(null)
-  const audioBlobRef                          = useRef<Blob | null>(null)  // sync ref for closure access
-  const [audioUrl, setAudioUrl]               = useState<string | null>(null)
-  const mediaRecorderRef                      = useRef<MediaRecorder | null>(null)
-  const audioChunksRef                        = useRef<Blob[]>([])
-  const speechRef                             = useRef<any>(null)
 
   // Historial + eliminados locales
   const [notes, setNotes]                     = useState<any[]>([])
@@ -707,11 +686,6 @@ export default function PaddockModal({
     if (!name.trim()) return
     setSaving(true)
 
-    // ── Opción A: Si hay un borrador pendiente en Registros, guardarlo primero ──
-    if (noteExpanded && (noteText || audioTranscript || noteImages.length > 0 || audioBlobRef.current)) {
-      await saveQuickNote()
-    }
-
     const td: Record<string, any> = {
       ...(paddock.technical_data || {}),
       quality_score:        qualityScore,
@@ -775,357 +749,169 @@ export default function PaddockModal({
     }
   }
 
-  // ── Audio con SpeechRecognition + MediaRecorder ────────────────────────────
-  const startRecording = useCallback(async () => {
-    // Reset ONLY audio state — never touch noteTitle (shared state)
-    setAudioTranscript('')
-    setAudioBlob(null); setAudioUrl(null)
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (SR) {
-      try {
-        const rec = new SR()
-        rec.continuous = true; rec.interimResults = true; rec.lang = 'es-AR'
-        rec.onresult = (e: any) => {
-          let full = ''
-          for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript
-          setAudioTranscript(full)
-        }
-        rec.start()
-        speechRef.current = rec
-      } catch { /* SpeechRecognition not available on this device */ }
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      // Pick best supported MIME type (webm for Chrome/Android, mp4 for Safari/iOS)
-      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', '']
-        .find(m => !m || MediaRecorder.isTypeSupported(m)) ?? ''
-      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-      audioChunksRef.current = []
-      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
-      mr.onstop = () => {
-        stream.getTracks().forEach(t => t.stop())
-        const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' })
-        audioBlobRef.current = blob        // sync ref — always up to date
-        setAudioBlob(blob)                 // trigger re-render
-        setAudioUrl(URL.createObjectURL(blob))
-      }
-      mr.start()
-      mediaRecorderRef.current = mr
-    } catch { toast.error('No se pudo acceder al micrófono. Verificá los permisos del navegador.') }
-    setRecording(true)
-  }, [])
-
-  const stopRecording = useCallback(() => {
-    speechRef.current?.stop()
-    mediaRecorderRef.current?.stop()
-    setRecording(false)
-  }, [])
-
-  // ── Helper: reset ALL capture state after saving ───────────────────────────
-  const resetNoteCapture = useCallback(() => {
-    setNoteText('')
-    setNoteTitle('')
-    setAudioTranscript('')
-    setAudioBlob(null)
-    setAudioUrl(null)
-    audioBlobRef.current = null
-    setNoteImages([])
-    setNoteImagePreviews([])
-    setNoteResult(null)
-    setNoteMode(null)
-    setNoteExpanded(false)
-    setRecording(false)
-    speechRef.current?.stop()
-    mediaRecorderRef.current?.stop()
-  }, [])
-
-  // ── Guardar nota ───────────────────────────────────────────────────────────
-  const saveQuickNote = useCallback(async (): Promise<boolean> => {
-    // If still recording, stop first and wait for onstop to complete
-    let effectiveBlob: Blob | null = audioBlobRef.current
-
-    if (recording && mediaRecorderRef.current?.state !== 'inactive') {
-      setNoteSaving(true)
-      // Stop SpeechRecognition immediately
-      speechRef.current?.stop()
-      // Wait for MediaRecorder.onstop to fire and blob to be available
-      effectiveBlob = await new Promise<Blob | null>((resolve) => {
-        const mr = mediaRecorderRef.current
-        if (!mr || mr.state === 'inactive') { resolve(audioBlobRef.current); return }
-        const origOnStop = mr.onstop
-        mr.onstop = (ev) => {
-          if (typeof origOnStop === 'function') origOnStop.call(mr, ev)
-          setTimeout(() => resolve(audioBlobRef.current), 50)
-        }
-        mr.stop()
-      })
-      setRecording(false)
-    }
-
-    const content = noteText || audioTranscript
-    if (!content && noteImages.length === 0 && !effectiveBlob) {
-      setNoteSaving(false)
-      return false
-    }
-
+  // ── Guardar nota (RecordEditor) ──────────────────────────────────────────────
+  const saveNote = async ({ textContent, audioBlob, photoFile, recordSecs, liveTranscript }: { textContent: string, audioBlob: Blob | null, photoFile: File | null, recordSecs: number, liveTranscript: string }) => {
+    if (!textContent.trim() && !photoFile && !audioBlob) return
+    if (!paddock?.id) return
     setNoteSaving(true)
+
+    const finalTranscript = [textContent, liveTranscript].filter(Boolean).join(' ').trim()
+    const isAudioNote = !!audioBlob
     const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+    const titleStr = isAudioNote
+      ? `🎙️ Nota de audio: ${finalTranscript.slice(0, 60) || 'Audio guardado'}`
+      : finalTranscript
+        ? `Nota: ${finalTranscript.slice(0, 60)}`
+        : (photoFile ? 'Nota visual agregada' : 'Nota de campo')
 
     // ── Offline Path ──
     if (isCurrentlyOffline) {
-      const offlineTitle = noteTitle.trim() || (noteText || audioTranscript).slice(0, 60) || 'Nota de campo'
-      const audioId = effectiveBlob ? crypto.randomUUID() : undefined
-      const photoId = noteImages.length > 0 ? crypto.randomUUID() : undefined
-
-      if (effectiveBlob && audioId) {
-        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
-        await savePendingAudio({
-          id: audioId,
-          blob: effectiveBlob,
-          durationSecs: 0,
-          lat: null, lng: null,
-          createdAt: new Date().toISOString(),
-          title: noteTitle.trim() || `Audio · ${timestamp}`,
-          transcript: audioTranscript
-        })
-      }
-
-      if (noteImages.length > 0 && photoId) {
+      let mediaType: 'audio' | 'photo' | undefined
+      let mediaId: string | undefined
+      if (photoFile) {
+        mediaType = 'photo'
+        mediaId = crypto.randomUUID?.() ?? `${Date.now()}`
         const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
-        await savePendingPhoto({
-          id: photoId,
-          blob: noteImages[0],
-          lat: null, lng: null,
-          createdAt: new Date().toISOString(),
-          title: noteTitle.trim() || noteImages[0]?.name,
-        })
+        await savePendingPhoto({ id: mediaId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr })
+      } else if (audioBlob) {
+        mediaType = 'audio'
+        mediaId = crypto.randomUUID?.() ?? `${Date.now()}`
+        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+        await savePendingAudio({ id: mediaId, blob: audioBlob, durationSecs: recordSecs, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: finalTranscript })
       }
 
-      // Nota de campo pendiente — va al outbox nativo (IndexedDB)
       const { enqueue } = await import('@/lib/offline/outbox')
-      const noteId = crypto.randomUUID()
       await enqueue({
         type: 'field_note',
         url: '/api/field-notes',
         method: 'POST',
-        body: {
-          paddock_id: paddock.id,
-          category: noteResult ? 'BIOMASA' : 'GENERAL',
-          tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
-          title: offlineTitle,
-          content: noteText || audioTranscript || null,
-          sync_status: 'PENDING',
-          analysis_result: noteResult || null,
-        },
-        idempotency_key: `field_note-paddock-${noteId}`,
-        mediaType: effectiveBlob && audioId ? 'audio' : (noteImages.length > 0 && photoId ? 'photo' : undefined),
-        mediaId: effectiveBlob && audioId ? audioId : (noteImages.length > 0 && photoId ? photoId : undefined),
+        body: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: titleStr, content: finalTranscript || null, sync_status: 'PENDING' },
+        idempotency_key: `field_note-paddock-${paddock.id}-${Date.now()}`,
+        mediaType,
+        mediaId,
       })
 
-      toast.success('Registro guardado localmente. Se sincronizará al recuperar la conexión.')
-      
       setNoteSaving(false)
-      setNoteSaved(true)
       setSessionNoteCount(c => c + 1)
-      setTimeout(() => setNoteSaved(false), 3000)
-      resetNoteCapture()
-      audioBlobRef.current = null
-      
-      // Actualizar vista inmediatamente con el nuevo registro local
+      import('sonner').then(({ toast }) => toast.success('Registro guardado localmente. Se sincronizará al recuperar la conexión.'))
       loadNotes()
-      return true
+      return
     }
 
-    // ── Online Path —— con auto-fallback a offline si la red falla ──
-    // iOS puede reportar navigator.onLine=true estando sin internet.
-    // Si cualquier fetch falla con TypeError (error de red), encolamos offline.
+    // ── Online Path —— try-catch completo ──
     try {
       let photo_url: string | null = null
       const photo_urls: string[] = []
-      if (noteImages.length > 0) {
+      if (photoFile) {
         try {
-          for (const img of noteImages) {
-            const compressedImage = await compressImage(img)
-            const fd = new FormData()
-            fd.append('file', compressedImage)
-            fd.append('folder', 'field-notes')
-            const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-            if (up.ok) {
-              const upData = await up.json().catch(() => ({}))
-              if (upData.url) photo_urls.push(upData.url)
-            } else {
-              console.warn('[saveQuickNote] photo upload failed:', up.status)
+          const { compressImage } = await import('@/components/shared/RecordEditor')
+          const compressedImage = await compressImage(photoFile)
+          const fd = new FormData()
+          fd.append('file', compressedImage)
+          fd.append('folder', 'field-notes')
+          const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
+          if (up.ok) {
+            const upData = await up.json().catch(() => ({}))
+            if (upData.url) {
+              photo_urls.push(upData.url)
+              photo_url = upData.url
             }
           }
         } catch (err) {
-          console.error('[saveQuickNote] compress/upload error:', err)
-          throw err // re-throw para que caiga en el catch externo (fallback offline)
+          throw err // re-lanzar para fallback offline
         }
-
-        if (photo_urls.length === 0) {
-          toast.error('No se pudieron subir las fotos al servidor. Verificá tu conexión e intentá de nuevo.')
-          setNoteSaving(false)
-          return false
-        }
-        photo_url = photo_urls[0]
       }
 
-      // 1. Upload audio file
       let audio_url: string | null = null
-      if (effectiveBlob) {
-        const blobType = effectiveBlob.type || 'audio/webm'
+      let transcriptFromServer = finalTranscript
+
+      if (audioBlob) {
+        const blobType = audioBlob.type || 'audio/webm'
         const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
         const fd = new FormData()
-        fd.append('file', new File([effectiveBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
+        fd.append('file', new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
         fd.append('folder', 'field-notes-audio')
         const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
-        if (up.ok) {
-          const upData = await up.json().catch(() => ({}))
-          audio_url = upData.url || null
-        } else {
-          const errTxt = await up.text().catch(() => String(up.status))
-          console.warn('[saveQuickNote] audio upload failed:', errTxt)
-          toast.error('No se pudo subir el audio. Verificá tu conexión e intentá de nuevo.')
-          setNoteSaving(false)
-          return false
-        }
+        if (up.ok) ({ url: audio_url } = await up.json())
+
+        try {
+          const tf = new FormData()
+          tf.append('file', new File([audioBlob], `audio-transcript-${Date.now()}.${ext}`, { type: blobType }))
+          const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
+          if (tr.ok) {
+            const d = await tr.json()
+            if (d.transcript && d.transcript !== '[Sin voz detectable]') {
+              transcriptFromServer = d.transcript
+            }
+          }
+        } catch { /* keep live Web Speech transcript */ }
       }
 
-      // 2. Build content
-      const resolvedContent = noteText || audioTranscript || null
-      const resolvedTitle = noteTitle.trim() ||
-        resolvedContent?.slice(0, 60) ||
-        noteImages[0]?.name ||
-        (effectiveBlob ? `Audio · ${timestamp}` : 'Nota de campo')
+      const resolvedTitle = isAudioNote
+        ? `🎤 Nota de audio: ${transcriptFromServer.slice(0, 60) || 'Audio guardado'}`
+        : transcriptFromServer
+          ? `Nota: ${transcriptFromServer.slice(0, 60)}`
+          : (photoFile ? 'Nota visual agregada' : 'Nota de campo')
 
-      // 3. Save note immediately
       const saveRes = await apiFetch('/api/field-notes', {
         method: 'POST',
         body: JSON.stringify({
           paddock_id: paddock.id,
-          category: noteResult ? 'BIOMASA' : 'GENERAL',
-          tags: noteResult ? ['BIOMASA'] : ['GENERAL'],
+          category: 'GENERAL',
+          tags: ['GENERAL'],
           title: resolvedTitle,
-          content: resolvedContent,
+          content: transcriptFromServer || null,
           photo_url,
           photo_urls,
           audio_url,
-          analysis_result: noteResult || null,
         }),
       })
 
       if (!saveRes.ok) {
-        const errData = await saveRes.json().catch(() => ({}))
-        console.error('[saveQuickNote] POST failed:', errData)
-        toast.error('No se pudo guardar el registro. Intentá de nuevo.')
+        import('sonner').then(({ toast }) => toast.error('Error al guardar la nota'))
         setNoteSaving(false)
-        return false
-      }
-
-      const savedNote = await saveRes.json().catch(() => ({}))
-      const savedNoteId: string | null = savedNote?.note?.id ?? null
-
-      // 4. AI transcription in background (non-blocking)
-      if (effectiveBlob && savedNoteId) {
-        const capturedBlob = effectiveBlob
-        ;(async () => {
-          try {
-            const blobType = capturedBlob.type || 'audio/webm'
-            const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
-            const tf = new FormData()
-            tf.append('file', new File([capturedBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 20000)
-            const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf, signal: controller.signal }).catch(() => null)
-            clearTimeout(timeoutId)
-            if (!tr?.ok) return
-            const d = await tr.json().catch(() => ({}))
-            if (d.transcript && d.transcript !== '[Sin voz detectable]') {
-              await apiFetch(`/api/field-notes/${savedNoteId}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ content: d.transcript }),
-              }).catch(() => null)
-            }
-          } catch { /* background — ignore */ }
-        })()
+        return
       }
 
       setNoteSaving(false)
-      setNoteSaved(true)
-      setTimeout(() => setNoteSaved(false), 3000)
-      audioBlobRef.current = null
-      resetNoteCapture()
+      setSessionNoteCount(c => c + 1)
       loadNotes()
-      return true
 
     } catch (networkErr: any) {
-      // ── Auto-fallback offline cuando la red falla (común en iOS) ──────────
-      const isNetErr = networkErr instanceof TypeError || networkErr?.message?.includes('fetch') || networkErr?.name === 'AbortError'
-      if (!isNetErr) {
-        console.error('[saveQuickNote] unexpected error:', networkErr)
-        toast.error('Error al guardar. Intentá de nuevo.')
-        setNoteSaving(false)
-        return false
-      }
-
-      console.warn('[saveQuickNote] network error → saving offline:', networkErr.message)
-      const { enqueue } = await import('@/lib/offline/outbox')
-      const offlineId = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
-      const offlineTitle = noteTitle.trim() || noteText?.slice(0, 60) || audioTranscript?.slice(0, 60) || 'Nota de campo'
-
-      if (effectiveBlob) {
-        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
-        await savePendingAudio({
-          id: offlineId, blob: effectiveBlob, durationSecs: 0,
-          lat: null, lng: null, createdAt: new Date().toISOString(),
-          title: offlineTitle, transcript: audioTranscript
-        }).catch(() => {})
+      // Auto-fallback offline
+      const isNetErr = networkErr instanceof TypeError || networkErr?.message?.includes('fetch')
+      if (isNetErr) {
+        const offlineId = (crypto.randomUUID?.() ?? `${Date.now()}`)
+        let mediaType: 'audio' | 'photo' | undefined
+        let mediaId: string | undefined
+        if (photoFile) {
+          mediaType = 'photo'; mediaId = offlineId
+          const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+          await savePendingPhoto({ id: mediaId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr }).catch(() => {})
+        } else if (audioBlob) {
+          mediaType = 'audio'; mediaId = offlineId
+          const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+          await savePendingAudio({ id: mediaId, blob: audioBlob, durationSecs: recordSecs, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: finalTranscript }).catch(() => {})
+        }
+        const { enqueue } = await import('@/lib/offline/outbox')
         await enqueue({
           type: 'field_note',
           url: '/api/field-notes',
           method: 'POST',
-          body: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
-          idempotency_key: `field_note-paddock-audio-${offlineId}`,
-          mediaType: 'audio',
-          mediaId: offlineId,
+          body: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: titleStr, content: finalTranscript || null, sync_status: 'PENDING' },
+          idempotency_key: `field_note-paddock-fallback-${paddock.id}-${Date.now()}`,
+          mediaType,
+          mediaId,
         })
-      } else if (noteImages.length > 0) {
-        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
-        const firstId = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
-        await savePendingPhoto({
-          id: firstId, blob: noteImages[0], lat: null, lng: null,
-          createdAt: new Date().toISOString(), title: offlineTitle,
-        }).catch(() => {})
-        await enqueue({
-          type: 'field_note',
-          url: '/api/field-notes',
-          method: 'POST',
-          body: { paddock_id: paddock.id, category: 'GENERAL', tags: ['GENERAL'], title: offlineTitle, sync_status: 'PENDING' },
-          idempotency_key: `field_note-paddock-photo-${firstId}`,
-          mediaType: 'photo',
-          mediaId: firstId,
-        })
+        setSessionNoteCount(c => c + 1)
+        loadNotes()
+        import('sonner').then(({ toast }) => toast.success('Registro guardado localmente. Se sincronizará al reconectar.'))
       } else {
-        await enqueue({
-          type: 'field_note',
-          url: '/api/field-notes',
-          method: 'POST',
-          body: { paddock_id: paddock.id, category: noteResult ? 'BIOMASA' : 'GENERAL', tags: noteResult ? ['BIOMASA'] : ['GENERAL'], title: offlineTitle, content: noteText || null, sync_status: 'PENDING' },
-          idempotency_key: `field_note-paddock-text-${offlineId}`,
-        })
+        import('sonner').then(({ toast }) => toast.error('Error al guardar la nota'))
       }
-
-      toast.success('Sin conexión — nota guardada. Se sincronizará al reconectar.')
       setNoteSaving(false)
-      setNoteSaved(true)
-      setTimeout(() => setNoteSaved(false), 3000)
-      audioBlobRef.current = null
-      resetNoteCapture()
-      return true
     }
-  }, [noteText, audioTranscript, noteImages, noteResult, paddock.id, loadNotes, noteTitle, recording, resetNoteCapture, isCurrentlyOffline])
-
-
+  }
 
   // ── Eliminar nota (solo creador) ─────────────────────────────────────────────
   const deleteNote = useCallback(async (noteId: string) => {
@@ -1140,57 +926,13 @@ export default function PaddockModal({
     setDeletedNotes(prev => ({ ...prev, [noteId]: new Date() }))
   }, [confirm])
 
-  const analyzeNoteImage = useCallback(async () => {
-    if (noteImages.length === 0) return
-    setNoteAnalyzing(true)
-    setNoteResult(null)
-    setAiUpdateProposal(null)
-    try {
-      const imagesBase64 = []
-      for (const img of noteImages) {
-        const compressedImage = await compressImage(img)
-        const reader = new FileReader()
-        const b64: string = await new Promise((res, rej) => {
-          reader.onload = () => res((reader.result as string).split(',')[1])
-          reader.onerror = rej
-          reader.readAsDataURL(compressedImage)
-        })
-        imagesBase64.push({ base64: b64, mimeType: compressedImage.type })
-      }
-      
-      const resp = await apiFetch('/api/analyze-biomass', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagesBase64, area_ha: areaHa }),
-        timeout: 60000 // 60 seconds timeout for Gemini multimodal
-      })
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}))
-        toast.error(err.error || 'Error al analizar la imagen')
-        setNoteAnalyzing(false)
-        return
-      }
-      const data = await resp.json().catch(() => ({}))
-      // API returns { success: true, data: { dry_matter_kg_ha, ... } }
-      const result = data?.data ?? data
-      if (result?.dry_matter_kg_ha) {
-        setNoteResult(result)
-        setAiUpdateProposal(result)
-      } else {
-        toast.error('La IA no pudo determinar la biomasa de esta imagen')
-      }
-    } catch (e: any) {
-      console.error('analyzeNoteImage error:', e)
-      toast.error(e.name === 'AbortError' ? 'El análisis tardó demasiado. Intenta con menos fotos.' : 'Error de conexión al analizar')
-    }
-    setNoteAnalyzing(false)
-  }, [noteImages, areaHa])
-
-  const analyzeBio = useCallback(async () => {
-    if (!bioPhoto) return
+  const analyzeBio = useCallback(async (fileToAnalyze?: File) => {
+    const targetFile = fileToAnalyze || bioPhoto
+    if (!targetFile) return
     setBioAnalyzing(true); setBioError(null); setBioResult(null)
     try {
-      const compressedImage = await compressImage(bioPhoto)
+      const { compressImage } = await import('@/components/shared/RecordEditor')
+      const compressedImage = await compressImage(targetFile)
       const reader = new FileReader()
       const b64: string = await new Promise((res, rej) => { reader.onload = () => res((reader.result as string).split(',')[1]); reader.onerror = rej; reader.readAsDataURL(compressedImage) })
       const resp = await apiFetch('/api/analyze-biomass', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: b64, mimeType: compressedImage.type, area_ha: areaHa }) })
@@ -1637,15 +1379,15 @@ export default function PaddockModal({
             <div className="px-6 py-4 space-y-4">
 
                 {/* ══ CARD 1: NOTAS DE CAMPO ══ */}
-                <div className="rounded-2xl border border-gray-200 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
-                        <Mic className="w-4 h-4 text-green-600" />
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between px-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center">
+                        <Mic className="w-3.5 h-3.5 text-gray-500" />
                       </div>
                       <div>
-                        <p className="text-sm font-black text-gray-900">Notas del potrero</p>
-                        <p className="text-xs text-gray-400 font-medium">Audio · Texto · Foto</p>
+                        <p className="text-[10px] font-black text-gray-800 tracking-widest uppercase">Notas del potrero</p>
+                        <p className="text-[9px] text-gray-400 font-medium">Audio · Texto · Foto</p>
                       </div>
                     </div>
                     {sessionNoteCount > 0 && (
@@ -1655,229 +1397,11 @@ export default function PaddockModal({
                       </span>
                     )}
                   </div>
-                  <div className="p-4">
-                    {/* Three capture buttons — switching mode resets previous mode state */}
-                    <div className={`grid gap-2 mb-3 ${canVoice ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                      {/* Mic — solo si voice_bitacora habilitado */}
-                      {canVoice ? (
-                        <button type="button"
-                          onClick={() => {
-                            if (noteMode === 'audio') {
-                              setNoteExpanded(false); setNoteMode(null)
-                            } else {
-                              setNoteText(''); setNoteImages([]); setNoteImagePreviews([]); setNoteResult(null)
-                              setNoteExpanded(true); setNoteMode('audio')
-                            }
-                          }}
-                          className={`relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'}`}>
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
-                            {recording ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
-                          </div>
-                          <span className="text-[9px] font-black text-gray-600 tracking-wide">{recording ? 'GRABANDO' : 'AUDIO'}</span>
-                          {recording && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />}
-                        </button>
-                      ) : null}
-                      {/* Camera */}
-                      <button type="button"
-                        onClick={() => {
-                          if (noteMode === 'image') {
-                            setNoteExpanded(false); setNoteMode(null)
-                          } else {
-                            // Clear previous mode data
-                            setAudioTranscript(''); setAudioBlob(null); setAudioUrl(null); setNoteText('')
-                            speechRef.current?.stop(); mediaRecorderRef.current?.stop(); setRecording(false)
-                            setNoteExpanded(true); setNoteMode('image')
-                          }
-                        }}
-                        className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'image' ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'}`}>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'image' ? 'bg-green-500 shadow-md shadow-green-200' : 'bg-green-100'}`}>
-                          <Camera className={`w-4 h-4 ${noteMode === 'image' ? 'text-white' : 'text-green-600'}`} />
-                        </div>
-                        <span className="text-[9px] font-black text-gray-600 tracking-wide">FOTO</span>
-                      </button>
-                      {/* Text */}
-                      <button type="button"
-                        onClick={() => {
-                          if (noteMode === 'text') {
-                            setNoteExpanded(false); setNoteMode(null)
-                          } else {
-                            // Clear previous mode data
-                            setAudioTranscript(''); setAudioBlob(null); setAudioUrl(null)
-                            setNoteImages([]); setNoteImagePreviews([]); setNoteResult(null)
-                            speechRef.current?.stop(); mediaRecorderRef.current?.stop(); setRecording(false)
-                            setNoteExpanded(true); setNoteMode('text')
-                          }
-                        }}
-                        className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${noteMode === 'text' ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'}`}>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'text' ? 'bg-gray-700 shadow-md' : 'bg-gray-100'}`}>
-                          <BookOpen className={`w-4 h-4 ${noteMode === 'text' ? 'text-white' : 'text-gray-500'}`} />
-                        </div>
-                        <span className="text-[9px] font-black text-gray-600 tracking-wide">TEXTO</span>
-                      </button>
-                    </div>
-
-                    {/* Expanded capture form */}
-                    {noteExpanded && (
-                      <div className="space-y-2.5 pt-2 border-t border-gray-100">
-                        <input type="text" value={noteTitle} onChange={e => setNoteTitle(e.target.value)}
-                          placeholder="Título del registro (opcional)…" className={INPUT_CLS} />
-
-                        {/* TEXT mode */}
-                        {noteMode === 'text' && (
-                          <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
-                            placeholder="Escribí tu observación de campo…" rows={3} autoFocus
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-base md:text-sm font-medium text-gray-800 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none" />
-                        )}
-
-                        {/* AUDIO mode */}
-                        {noteMode === 'audio' && (
-                          <div className="space-y-2">
-                            <button type="button" onClick={recording ? stopRecording : startRecording}
-                              className={`w-full flex items-center justify-center gap-2 py-3 text-sm font-black rounded-xl transition-all ${recording ? 'bg-red-500 text-white shadow-md shadow-red-200' : 'bg-red-600 hover:bg-red-700 text-white'}`}>
-                              {recording ? <><MicOff className="w-4 h-4" /> Detener</> : <><Mic className="w-4 h-4" /> Grabar ahora</>}
-                            </button>
-                            {recording && (
-                              <div className="flex items-center justify-center gap-2">
-                                <div className="flex items-end gap-0.5 h-5">{[3,5,4,7,5,6,3,4].map((h, i) => (<div key={i} className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: `${h * 2.5}px`, animationDelay: `${i * 80}ms` }} />))}</div>
-                                <span className="text-[9px] font-black text-red-600 tracking-widest uppercase">Grabando…</span>
-                              </div>
-                            )}
-                            {audioTranscript && (
-                              <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-200">
-                                <p className={LABEL_CLS}>Transcripción</p>
-                                <p className="text-xs font-medium text-gray-700 mt-1 italic">"{audioTranscript}"</p>
-                              </div>
-                            )}
-                            {audioUrl && !recording && (
-                               
-                              <audio controls src={audioUrl} className="w-full rounded-xl" />
-                            )}
-                          </div>
-                        )}
-
-                        {/* IMAGE mode */}
-                        {noteMode === 'image' && (
-                          <div className="space-y-2">
-                            <div className="grid grid-cols-2 gap-2">
-                              <button type="button" onClick={() => noteImageRef.current?.click()}
-                                className="flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-gray-600 border border-dashed border-gray-300 rounded-xl hover:border-green-400 hover:text-green-700 bg-gray-50">
-                                <Paperclip className="w-3.5 h-3.5" /> Galería
-                              </button>
-                              <button type="button" onClick={() => noteCameraRef.current?.click()}
-                                className="flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-white bg-green-600 rounded-xl hover:bg-green-700">
-                                <Camera className="w-3.5 h-3.5" /> Cámara
-                              </button>
-                            </div>
-                            <input ref={noteImageRef} type="file" multiple accept="image/*" className="sr-only"
-                              onChange={e => {
-                                const files = Array.from(e.target.files || [])
-                                if (files.length === 0) return
-                                if (noteImages.length + files.length > 5) {
-                                  toast.error('Máximo 5 fotos')
-                                  return
-                                }
-                                setNoteImages(prev => [...prev, ...files])
-                                setNoteImagePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
-                                setNoteResult(null)
-                              }} />
-                            <input ref={noteCameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
-                              onChange={e => {
-                                const files = Array.from(e.target.files || [])
-                                if (files.length === 0) return
-                                if (noteImages.length + files.length > 5) {
-                                  toast.error('Máximo 5 fotos')
-                                  return
-                                }
-                                setNoteImages(prev => [...prev, ...files])
-                                setNoteImagePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
-                                setNoteResult(null)
-                              }} />
-                            {noteImagePreviews.length > 0 && (
-                              <div className="flex flex-wrap gap-2">
-                                {noteImagePreviews.map((preview, idx) => (
-                                  <div key={idx} className="relative w-20 h-20 group">
-                                    <img src={preview} alt="preview" className="w-full h-full object-cover rounded-xl" />
-                                    <button type="button" onClick={() => {
-                                      setNoteImages(prev => prev.filter((_, i) => i !== idx))
-                                      setNoteImagePreviews(prev => prev.filter((_, i) => i !== idx))
-                                      setNoteResult(null)
-                                    }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {noteImages.length > 0 && canAiInsight && (
-                              <button type="button" onClick={analyzeNoteImage} disabled={noteAnalyzing || !isOnline}
-                                title={!isOnline ? 'Requiere conexión a internet' : undefined}
-                                className="w-full flex items-center justify-center gap-1.5 py-3 text-sm font-bold bg-violet-50 text-violet-700 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap overflow-hidden px-2">
-                                {noteAnalyzing ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" /> : <Sparkles className="w-4 h-4 shrink-0" />}
-                                <span className="truncate">{noteAnalyzing ? 'Analizando con IA…' : !isOnline ? 'IA no disponible sin conexión' : 'Analizar biomasa con IA'}</span>
-                              </button>
-                            )}
-                            {noteImages.length > 0 && !canAiInsight && (
-                              <div className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-center">
-                                <p className="text-[10px] font-bold text-gray-400">✨ Análisis de biomasa IA disponible en planes Pro</p>
-                              </div>
-                            )}
-                            {aiUpdateProposal && (
-                              <div className="bg-violet-50 px-3 py-2 rounded-xl border border-violet-200 flex flex-col gap-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-lg">✨</span>
-                                    <div>
-                                      <p className="text-[9px] font-black text-violet-500 tracking-widest uppercase">Análisis completado</p>
-                                      <p className="text-sm font-black text-violet-900">Resultados listos</p>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="pl-8 flex flex-col gap-0.5 text-xs text-violet-700 font-medium">
-                                  <p><span className="font-bold">Materia Seca:</span> {Math.round(aiUpdateProposal.dry_matter_kg_ha)} kg MS/ha</p>
-                                  {aiUpdateProposal.pasture_type && <p><span className="font-bold">Tipo:</span> {aiUpdateProposal.pasture_type}</p>}
-                                  {aiUpdateProposal.protein_content_pct && <p><span className="font-bold">Proteína:</span> {aiUpdateProposal.protein_content_pct}%</p>}
-                                  {aiUpdateProposal.coverage_pct && <p><span className="font-bold">Cobertura:</span> {aiUpdateProposal.coverage_pct}%</p>}
-                                  {aiUpdateProposal.grass_height_cm && <p><span className="font-bold">Altura:</span> {aiUpdateProposal.grass_height_cm} cm</p>}
-                                  {aiUpdateProposal.weeds_detected && aiUpdateProposal.weeds_detected.length > 0 && <p><span className="font-bold">Malezas:</span> {aiUpdateProposal.weeds_detected.join(', ')}</p>}
-                                </div>
-                                <div className="mt-1 flex items-center justify-end gap-2">
-                                  <button type="button" onClick={() => setAiUpdateProposal(null)} className="px-3 py-1.5 text-xs font-bold text-violet-600 bg-white border border-violet-200 rounded-lg hover:bg-violet-50">Descartar</button>
-                                  <button type="button" onClick={() => {
-                                    setMsHa(String(Math.round(aiUpdateProposal.dry_matter_kg_ha)))
-                                    if (aiUpdateProposal.weeds_detected?.length > 0) setHasPests(true)
-                                    setAiUpdateProposal(null)
-                                    toast.success('Valores aplicados al potrero.')
-                                  }} className="px-3 py-1.5 text-xs font-bold text-white bg-violet-600 rounded-lg hover:bg-violet-700">Aplicar Datos</button>
-                                </div>
-                              </div>
-                            )}
-                            <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Descripción adicional…" rows={2}
-                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-base md:text-sm text-gray-700 placeholder:text-gray-400 focus:ring-1 focus:ring-green-600 outline-none resize-none" />
-                          </div>
-                        )}
-
-                        {/* Banner informativo: el borrador se guarda al presionar Guardar cambios */}
-                        {(noteText || audioTranscript || noteImages.length > 0 || audioBlob) && (
-                          <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 rounded-xl px-3.5 py-2.5">
-                            <div className="w-5 h-5 rounded-full bg-green-600 flex items-center justify-center shrink-0">
-                              <Check className="w-3 h-3 text-white" />
-                            </div>
-                            <p className="text-xs font-semibold text-green-800 flex-1 leading-snug">
-                              Borrador listo &middot; Se guardará al presionar{' '}
-                              <span className="font-black">Guardar cambios</span>
-                            </p>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={resetNoteCapture}
-                          className="w-full px-3 py-2.5 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700 hover:bg-gray-200 transition-all"
-                        >
-                          Limpiar borrador
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <RecordEditor 
+                    onSave={saveNote} 
+                    isOnline={!isCurrentlyOffline} 
+                    savingMsg={noteSaving ? 'Guardando...' : undefined} 
+                  />
                 </div>
 
                 {/* ══ CARD 2: INTELIGENCIA DE CAMPO ══ */}
@@ -1946,13 +1470,24 @@ export default function PaddockModal({
                       ) : (
                         <p className="text-xs font-bold text-violet-400 mt-1">Sin análisis</p>
                       )}
-                      <button type="button"
-                        onClick={() => { if (!isOnline) return; setNoteExpanded(true); setNoteMode('image') }}
-                        disabled={!isOnline}
-                        title={!isOnline ? 'Requiere conexión a internet' : undefined}
-                        className={`mt-2 text-[9px] font-black flex items-center gap-1 transition-colors ${!isOnline ? 'text-gray-400 cursor-not-allowed' : 'text-violet-600 hover:text-violet-800'}`}>
-                        <Sparkles className="w-3 h-3" /> {!isOnline ? 'Sin conexión' : 'Analizar foto'}
-                      </button>
+                      <div>
+                        <input type="file" id="bioPhotoUpload" accept="image/*" className="hidden" 
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) {
+                              setBioPhoto(e.target.files[0])
+                              analyzeBio(e.target.files[0])
+                            }
+                          }}
+                        />
+                        <button type="button"
+                          onClick={() => { if (!isOnline) return; document.getElementById('bioPhotoUpload')?.click() }}
+                          disabled={!isOnline || bioAnalyzing}
+                          title={!isOnline ? 'Requiere conexión a internet' : undefined}
+                          className={`mt-2 text-[9px] font-black flex items-center gap-1 transition-colors ${(!isOnline || bioAnalyzing) ? 'text-gray-400 cursor-not-allowed' : 'text-violet-600 hover:text-violet-800'}`}>
+                          {bioAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} 
+                          {!isOnline ? 'Sin conexión' : bioAnalyzing ? 'Analizando...' : bioPhoto ? 'Analizar foto seleccionada' : 'Seleccionar foto y analizar'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

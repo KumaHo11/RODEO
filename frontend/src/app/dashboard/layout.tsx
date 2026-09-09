@@ -72,6 +72,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [menuConfig, setMenuConfig]         = useState<Record<string, boolean>>({})
   const notifRef = useRef<HTMLDivElement>(null)
 
+  // ── Proactive Offline Prefetch (Sync Inicial Silenciosa) ───────────────
+  // Si estamos online, precargamos datos críticos para que IDB/SW cache 
+  // los tenga disponibles inmediatamente si el usuario se queda sin red
+  // en el campo, sin necesidad de haber visitado cada sección.
+  useEffect(() => {
+    if (!user || isOffline) return
+    const prefetchData = async () => {
+      try {
+        const idToken = await user.getIdToken()
+        const headers = { Authorization: `Bearer ${idToken}` }
+        // Fetch paddocks, herds, and farm-events silently
+        await Promise.allSettled([
+          fetch('/api/paddocks', { headers }),
+          fetch('/api/herds', { headers }),
+          fetch('/api/farm-events', { headers })
+        ])
+        console.log('[Offline] Proactive data prefetch completed.')
+      } catch (err) {
+        console.warn('[Offline] Proactive data prefetch failed:', err)
+      }
+    }
+    // Retrasar 5 segundos para no bloquear la carga inicial de UI/chunks
+    const timer = setTimeout(prefetchData, 5000)
+    return () => clearTimeout(timer)
+  }, [user, isOffline])
+
   useEffect(() => {
     fetch('/api/config/menu')
       .then(res => res.json())

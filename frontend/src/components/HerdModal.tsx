@@ -27,6 +27,7 @@ import {
   type CategoriaComercial,
 } from '@/lib/categorias'
 import { usePlan } from '@/hooks/usePlan'
+import RecordEditor from '@/components/shared/RecordEditor'
 import { calculateBaseEV, calculateProjectedEV, PHYSIOLOGICAL_CATEGORIES, PHYSIO_LABEL, PHYSIO_EV_BASE, PHYSIO_PESO_DEFAULT, physioToComercial, GROWTH_PHYSIO_CATEGORIES, type PhysiologicalCategory } from '@/lib/grazing/evProjection'
 import { calcularEVRodeo, LACTANCIA_RANGES, ESTADIOS_GESTACION, RATION_SUGERIDA_POR_CATEGORIA, type LactanciaRange, type EstadioGestacion } from '@/lib/grazing/evMatrix'
 import { todayISO } from '@/lib/utils/dates'
@@ -1016,15 +1017,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [bcsAnalyzing,  setBcsAnalyzing]  = useState(false)
   const [bcsAiResult,   setBcsAiResult]   = useState<string | null>(null)
   const bcsCameraRef = useRef<HTMLInputElement>(null)
-  const [showNote,      setShowNote]      = useState(false)
-  const [quickNote,     setQuickNote]     = useState('')
-  const [noteMode,      setNoteMode]      = useState<'text' | 'audio' | 'photo' | null>(null)
-  const [notePhoto,     setNotePhoto]     = useState<File | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
-  const [noteExpanded,  setNoteExpanded]  = useState(false)
   const [noteSaving,    setNoteSaving]    = useState(false)
-  const [noteSaved,     setNoteSaved]     = useState(false)
   const [sessionNoteCount, setSessionNoteCount] = useState(0)
   const [agendaEvents,  setAgendaEvents]  = useState<any[]>([])
   const [evLoading,     setEvLoading]     = useState(false)
@@ -1044,80 +1037,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const [evSaved,      setEvSaved]      = useState(false)
 
   // ── Audio con SpeechRecognition + MediaRecorder ────────────────────────────
-  const [micOn, setMicOn] = useState(false)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
-  const speechRef = useRef<any>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioChunksRef = useRef<BlobPart[]>([])
-  const audioBlobRef = useRef<Blob | null>(null)
-
-  const startRecording = useCallback(async () => {
-    setQuickNote('')
-    setAudioBlob(null); setAudioUrl(null)
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (SR) {
-      try {
-        const rec = new SR()
-        rec.continuous = true; rec.interimResults = true; rec.lang = 'es-AR'
-        rec.onresult = (e: any) => {
-          let full = ''
-          for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript
-          setQuickNote(full)
-        }
-        rec.start()
-        speechRef.current = rec
-      } catch { /* SpeechRecognition not available */ }
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', '']
-        .find(m => !m || MediaRecorder.isTypeSupported(m)) ?? ''
-      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-      audioChunksRef.current = []
-      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
-      mr.onstop = () => {
-        stream.getTracks().forEach(t => t.stop())
-        const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' })
-        audioBlobRef.current = blob
-        setAudioBlob(blob)
-        setAudioUrl(URL.createObjectURL(blob))
-      }
-      mr.start()
-      mediaRecorderRef.current = mr
-    } catch {
-      import('sonner').then(({ toast }) => toast.error('No se pudo acceder al micrófono.'))
-    }
-    setMicOn(true)
-  }, [])
-
-  const stopRecordingAndWait = (): Promise<Blob | null> => {
-    return new Promise(resolve => {
-      speechRef.current?.stop()
-      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
-        setMicOn(false)
-        resolve(audioBlobRef.current || audioBlob)
-        return
-      }
-      mediaRecorderRef.current.onstop = () => {
-        mediaRecorderRef.current?.stream?.getTracks().forEach(t => t.stop())
-        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
-        const blob = new Blob(audioChunksRef.current, { type: mimeType })
-        audioBlobRef.current = blob
-        setAudioBlob(blob)
-        setAudioUrl(URL.createObjectURL(blob))
-        setMicOn(false)
-        resolve(blob)
-      }
-      mediaRecorderRef.current.stop()
-      setMicOn(false)
-    })
-  }
-
-  const toggleMic = useCallback(() => {
-    if (micOn) stopRecordingAndWait()
-    else startRecording()
-  }, [micOn, startRecording])
+  // Eliminado por refactor a RecordEditor
 
   const loadData = useCallback(async () => {
     if (!herd?.id) return
@@ -1357,37 +1277,33 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     setBcsAnalyzing(false)
   }
 
-  const saveNote = async () => {
-    let effectiveBlob = audioBlobRef.current || audioBlob
-    if (micOn) {
-      effectiveBlob = await stopRecordingAndWait()
-    }
-
-    if (!quickNote.trim() && !notePhoto && !effectiveBlob) return
+  const saveNote = async ({ textContent, audioBlob, photoFile, recordSecs, liveTranscript }: { textContent: string, audioBlob: Blob | null, photoFile: File | null, recordSecs: number, liveTranscript: string }) => {
+    if (!textContent.trim() && !photoFile && !audioBlob) return
     if (!herd?.id) return
     setNoteSaving(true)
 
-    const isAudioNote = noteMode === 'audio' || !!effectiveBlob
+    const finalTranscript = [textContent, liveTranscript].filter(Boolean).join(' ').trim()
+    const isAudioNote = !!audioBlob
     const titleStr = isAudioNote
-      ? `🎙️ Nota de audio: ${quickNote.trim().slice(0, 60) || 'Audio guardado'}`
-      : quickNote.trim()
-        ? `Nota: ${quickNote.trim().slice(0, 60)}`
-        : (notePhoto ? 'Nota visual agregada' : 'Nota de rodeo')
+      ? `🎙️ Nota de audio: ${finalTranscript.slice(0, 60) || 'Audio guardado'}`
+      : finalTranscript
+        ? `Nota: ${finalTranscript.slice(0, 60)}`
+        : (photoFile ? 'Nota visual agregada' : 'Nota de rodeo')
 
     // ── Offline Path (sincrónico — sin fetch bloqueante) ──
     if (isCurrentlyOffline) {
       let mediaType: 'audio' | 'photo' | undefined
       let mediaId: string | undefined
-      if (notePhoto) {
+      if (photoFile) {
         mediaType = 'photo'
         mediaId = crypto.randomUUID?.() ?? `${Date.now()}`
         const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
-        await savePendingPhoto({ id: mediaId, blob: notePhoto, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr })
-      } else if (effectiveBlob) {
+        await savePendingPhoto({ id: mediaId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr })
+      } else if (audioBlob) {
         mediaType = 'audio'
         mediaId = crypto.randomUUID?.() ?? `${Date.now()}`
         const { savePendingAudio } = await import('@/lib/audioOfflineStore')
-        await savePendingAudio({ id: mediaId, blob: effectiveBlob, durationSecs: 0, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: quickNote.trim() })
+        await savePendingAudio({ id: mediaId, blob: audioBlob, durationSecs: recordSecs, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: finalTranscript })
       }
 
       const { enqueue } = await import('@/lib/offline/outbox')
@@ -1395,26 +1311,27 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         type: 'farm_event',
         url: '/api/farm-events',
         method: 'POST',
-        body: { title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado', source: 'rodeo' },
+        body: { title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: finalTranscript || null, status: 'completado', source: 'rodeo' },
         idempotency_key: `farm-event-nota-herd-${herd.id}-${Date.now()}`,
         mediaType,
         mediaId,
       })
 
-      setAgendaEvents(prev => [{ id: `temp-${Date.now()}`, title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado' }, ...prev])
-      setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null); audioBlobRef.current = null;
-      setTimeout(() => setNoteSaved(false), 3000)
+      setAgendaEvents(prev => [{ id: `temp-${Date.now()}`, title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: finalTranscript || null, status: 'completado' }, ...prev])
+      setNoteSaving(false)
+      setSessionNoteCount(c => c + 1)
       import('sonner').then(({ toast }) => toast.success('Registro guardado localmente. Se sincronizará al recuperar la conexión.'))
-      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save_note', category: 'herds', note_type: isAudioNote ? 'audio' : notePhoto ? 'photo' : 'text', mode: 'offline' }))
+      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save_note', category: 'herds', note_type: isAudioNote ? 'audio' : photoFile ? 'photo' : 'text', mode: 'offline' }))
       return
     }
 
     // ── Online Path —— try-catch completo (fallback automático a offline en iOS) ──
     try {
       let photo_url: string | null = null
-      if (notePhoto) {
+      if (photoFile) {
         try {
-          const compressedImage = await compressImage(notePhoto)
+          const { compressImage } = await import('@/components/shared/RecordEditor')
+          const compressedImage = await compressImage(photoFile)
           const fd = new FormData()
           fd.append('file', compressedImage)
           fd.append('folder', 'herd-notes')
@@ -1426,38 +1343,37 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       }
 
       let audio_url: string | null = null
-      let finalTranscript = quickNote.trim()
+      let transcriptFromServer = finalTranscript
 
-      if (effectiveBlob) {
-        const blobType = effectiveBlob.type || 'audio/webm'
+      if (audioBlob) {
+        const blobType = audioBlob.type || 'audio/webm'
         const ext = blobType.includes('mp4') ? 'mp4' : blobType.includes('ogg') ? 'ogg' : 'webm'
         const fd = new FormData()
-        fd.append('file', new File([effectiveBlob], `audio.${ext}`, { type: blobType }))
+        fd.append('file', new File([audioBlob], `audio.${ext}`, { type: blobType }))
         fd.append('folder', 'herd-audio')
         const up = await apiFetch('/api/upload', { method: 'POST', body: fd })
         if (up.ok) ({ url: audio_url } = await up.json())
 
         try {
           const tf = new FormData()
-          tf.append('file', new File([effectiveBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
+          tf.append('file', new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: blobType }))
           const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
           if (tr.ok) {
             const d = await tr.json()
             if (d.transcript && d.transcript !== '[Sin voz detectable]') {
-              finalTranscript = d.transcript
-              setQuickNote(d.transcript)
+              transcriptFromServer = d.transcript
             }
           }
         } catch { /* keep live Web Speech transcript */ }
       }
 
       const resolvedTitle = isAudioNote
-        ? `🎤 Nota de audio: ${finalTranscript.slice(0, 60) || 'Audio guardado'}`
-        : finalTranscript
-          ? `Nota: ${finalTranscript.slice(0, 60)}`
-          : (notePhoto ? 'Nota visual agregada' : 'Nota de rodeo')
+        ? `🎤 Nota de audio: ${transcriptFromServer.slice(0, 60) || 'Audio guardado'}`
+        : transcriptFromServer
+          ? `Nota: ${transcriptFromServer.slice(0, 60)}`
+          : (photoFile ? 'Nota visual agregada' : 'Nota de rodeo')
 
-      const description = [finalTranscript, photo_url ? `[Foto](${photo_url})` : ''].filter(Boolean).join('\n\n')
+      const description = [transcriptFromServer, photo_url ? `[Foto](${photo_url})` : ''].filter(Boolean).join('\n\n')
 
       const res = await apiFetch('/api/farm-events', {
         method: 'POST',
@@ -1482,42 +1398,42 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         photo_url, audio_url, status: 'completado',
       }, ...prev])
 
-      setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null); audioBlobRef.current = null;
-      setTimeout(() => setNoteSaved(false), 3000)
-      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save_note', category: 'herds', note_type: isAudioNote ? 'audio' : notePhoto ? 'photo' : 'text', mode: 'online' }))
+      setNoteSaving(false)
+      setSessionNoteCount(c => c + 1)
+      import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save_note', category: 'herds', note_type: isAudioNote ? 'audio' : photoFile ? 'photo' : 'text', mode: 'online' }))
 
     } catch (networkErr: any) {
-      // Auto-fallback offline (común en iOS con navigator.onLine=true sin internet real)
+      // Auto-fallback offline
       const isNetErr = networkErr instanceof TypeError || networkErr?.message?.includes('fetch')
       if (isNetErr) {
         const offlineId = (crypto.randomUUID?.() ?? `${Date.now()}`)
         let mediaType: 'audio' | 'photo' | undefined
         let mediaId: string | undefined
-        if (notePhoto) {
+        if (photoFile) {
           mediaType = 'photo'; mediaId = offlineId
           const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
-          await savePendingPhoto({ id: mediaId, blob: notePhoto, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr }).catch(() => {})
-        } else if (effectiveBlob) {
+          await savePendingPhoto({ id: mediaId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr }).catch(() => {})
+        } else if (audioBlob) {
           mediaType = 'audio'; mediaId = offlineId
           const { savePendingAudio } = await import('@/lib/audioOfflineStore')
-          await savePendingAudio({ id: mediaId, blob: effectiveBlob, durationSecs: 0, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: quickNote.trim() }).catch(() => {})
+          await savePendingAudio({ id: mediaId, blob: audioBlob, durationSecs: recordSecs, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: finalTranscript }).catch(() => {})
         }
         const { enqueue } = await import('@/lib/offline/outbox')
         await enqueue({
           type: 'farm_event',
           url: '/api/farm-events',
           method: 'POST',
-          body: { title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado', source: 'rodeo' },
+          body: { title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: finalTranscript || null, status: 'completado', source: 'rodeo' },
           idempotency_key: `farm-event-nota-herd-fallback-${herd.id}-${Date.now()}`,
           mediaType,
           mediaId,
         })
+        setSessionNoteCount(c => c + 1)
         import('sonner').then(({ toast }) => toast.success('Registro guardado localmente. Se sincronizará al reconectar.'))
       } else {
         import('sonner').then(({ toast }) => toast.error('Error al guardar la nota'))
       }
-      setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null); audioBlobRef.current = null;
-      setTimeout(() => setNoteSaved(false), 3000)
+      setNoteSaving(false)
     }
   }
 
@@ -2663,112 +2579,11 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       )}
                     </div>
                     <div className="p-4">
-                      {/* Three capture buttons */}
-                      <div className="grid gap-2 mb-3 grid-cols-3">
-                        {/* Mic — siempre visible, pero difuminado si no tiene voice_bitacora */}
-                        <div className="relative h-full">
-                          <button type="button"
-                            onClick={() => {
-                              if (!canVoice) return;
-                              if (noteExpanded && noteMode === 'audio') { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('audio') }
-                            }}
-                            className={`w-full h-full relative flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
-                              noteMode === 'audio' ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/40'
-                            } ${!canVoice ? 'opacity-50 blur-[1px] cursor-not-allowed' : ''}`}>
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${noteMode === 'audio' ? 'bg-red-500 shadow-md shadow-red-200' : 'bg-red-100'}`}>
-                              {micOn ? <MicOff className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} /> : <Mic className={`w-4 h-4 ${noteMode === 'audio' ? 'text-white' : 'text-red-500'}`} />}
-                            </div>
-                            <span className="text-[9px] font-black text-gray-600 tracking-wide">{micOn ? 'GRABANDO' : 'AUDIO'}</span>
-                            {micOn && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />}
-                          </button>
-                          {!canVoice && (
-                            <div className="absolute inset-0 flex items-center justify-center z-10" title="Requiere Plan Holístico">
-                              <span className="bg-white/80 backdrop-blur-sm p-1 rounded-full border border-gray-200 shadow-sm">
-                                <Lock className="w-3.5 h-3.5 text-amber-600" />
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        {/* Camera */}
-                        <button type="button"
-                          onClick={() => { if (noteMode === 'photo' && noteExpanded) { setNoteExpanded(false); setNoteMode(null) } else { setNoteExpanded(true); setNoteMode('photo') } }}
-                          className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
-                            noteMode === 'photo' && noteExpanded ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/40'
-                          }`}>
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteMode === 'photo' && noteExpanded ? 'bg-green-500 shadow-md shadow-green-200' : 'bg-green-100'}`}>
-                            <Camera className={`w-4 h-4 ${noteMode === 'photo' && noteExpanded ? 'text-white' : 'text-green-600'}`} />
-                          </div>
-                          <span className="text-[9px] font-black text-gray-600 tracking-wide">FOTO</span>
-                        </button>
-                        {/* Text */}
-                        <button type="button"
-                          onClick={() => { if (noteExpanded && noteMode === null) { setNoteExpanded(false) } else { setNoteExpanded(true); setNoteMode(null) } }}
-                          className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border-2 transition-all ${
-                            noteExpanded && noteMode === null ? 'border-gray-500 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'
-                          }`}>
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${noteExpanded && noteMode === null ? 'bg-gray-700 shadow-md' : 'bg-gray-100'}`}>
-                            <MessageSquarePlus className={`w-4 h-4 ${noteExpanded && noteMode === null ? 'text-white' : 'text-gray-500'}`} />
-                          </div>
-                          <span className="text-[9px] font-black text-gray-600 tracking-wide">TEXTO</span>
-                        </button>
-                      </div>
-
-                      {/* Expanded note form */}
-                      {noteExpanded && (
-                        <div className="space-y-2.5 pt-1 border-t border-gray-100 mt-1">
-                          {noteMode === 'audio' && (
-                            <button type="button" onClick={toggleMic}
-                              className={`w-full flex items-center justify-center gap-2 py-2.5 text-xs font-black rounded-xl transition-all ${micOn ? 'bg-red-500 text-white shadow-md shadow-red-200' : 'bg-red-600 hover:bg-red-700 text-white'}`}>
-                              {micOn ? <><MicOff className="w-4 h-4" /> Detener grabación</> : <><Mic className="w-4 h-4" /> Iniciar grabación de voz</>}
-                            </button>
-                          )}
-                          {micOn && (
-                            <div className="flex items-center justify-center gap-2 py-1">
-                              <div className="flex items-end gap-0.5 h-5">{[3,5,4,7,5,6,3,4].map((h, i) => (<div key={i} className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: `${h * 2.5}px`, animationDelay: `${i * 80}ms` }} />))}</div>
-                              <span className="text-[9px] font-black text-red-600 tracking-widest uppercase">Escuchando y grabando…</span>
-                            </div>
-                          )}
-                          {noteMode === 'audio' && audioUrl && !micOn && (
-                            <audio controls src={audioUrl} className="w-full mt-2 rounded-xl" />
-                          )}
-                          {noteMode === 'photo' && (
-                            <div className="flex flex-col gap-2">
-                              <div className="grid grid-cols-2 gap-2">
-                                <button type="button" onClick={() => fileInputRef.current?.click()}
-                                  className="flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-gray-600 border border-dashed border-gray-300 rounded-xl hover:border-green-400 hover:text-green-700 bg-gray-50">
-                                  <Paperclip className="w-3.5 h-3.5" /> Galería
-                                </button>
-                                <button type="button" onClick={() => cameraInputRef.current?.click()}
-                                  className="flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-white bg-green-600 rounded-xl hover:bg-green-700">
-                                  <Camera className="w-3.5 h-3.5" /> Cámara
-                                </button>
-                              </div>
-                              <input type="file" ref={fileInputRef} className="sr-only" accept="image/*" onChange={e => { if(e.target.files?.[0]) { setNotePhoto(e.target.files[0]); setNoteMode('photo'); setNoteExpanded(true) } }} />
-                              <input type="file" ref={cameraInputRef} className="sr-only" accept="image/*" capture="environment" onChange={e => { if(e.target.files?.[0]) { setNotePhoto(e.target.files[0]); setNoteMode('photo'); setNoteExpanded(true) } }} />
-                              {notePhoto && (
-                                <div className="relative w-full h-32 rounded-xl overflow-hidden border border-gray-200 mt-2">
-                                  <img src={URL.createObjectURL(notePhoto)} className="w-full h-full object-cover" />
-                                  <button type="button" onClick={() => setNotePhoto(null)} className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full text-white hover:bg-black/70 transition-all"><X className="w-4 h-4"/></button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          <textarea value={quickNote} onChange={e => setQuickNote(e.target.value)} rows={3}
-                            placeholder={noteMode === 'audio' ? 'El dictado aparecerá aquí…' : noteMode === 'photo' ? 'Descripción de la foto (opcional)…' : 'Observación, evento o nota…'}
-                            className={TEXTAREA} autoFocus={noteMode !== 'audio'} />
-                          <div className="flex gap-2">
-                            <button type="button"
-                              onClick={async () => { await saveNote(); setSessionNoteCount(c => c + 1); setNoteExpanded(false); setNoteMode(null) }}
-                              disabled={noteSaving || (!quickNote.trim() && !notePhoto)}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all">
-                              {noteSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                              {noteSaved ? '¡Guardado!' : 'Guardar nota'}
-                            </button>
-                            <button type="button" onClick={() => { setNoteExpanded(false); setNoteMode(null); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null) }}
-                              className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl hover:text-gray-700">Cancelar</button>
-                          </div>
-                        </div>
-                      )}
+                      <RecordEditor
+                        onSave={saveNote}
+                        isOnline={!isCurrentlyOffline}
+                        savingMsg={noteSaving ? 'Guardando...' : undefined}
+                      />
                     </div>
                   </div>
 
