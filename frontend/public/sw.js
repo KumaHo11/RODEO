@@ -26,7 +26,7 @@
  * Versionado: Cambiar CACHE_VERSION invalida TODAS las cachés existentes.
  */
 
-const CACHE_VERSION  = 'rodeo-v12'
+const CACHE_VERSION  = 'rodeo-v13'
 const STATIC_CACHE   = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE  = `${CACHE_VERSION}-dynamic`
 
@@ -38,6 +38,8 @@ const PRECACHE_URLS = [
   '/icons/icon-512.png',
   '/_offline',
   '/login',
+  '/startup.html',
+  '/LogoLoginBlanco.svg',
 ]
 
 // Dominios de fuentes permitidas
@@ -184,7 +186,11 @@ async function cacheFirst(request, cacheName) {
  */
 async function networkFirstNavigation(request, cacheName) {
   try {
-    const response = await fetch(request)
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), 4500)
+    
+    const response = await fetch(request, { signal: controller.signal })
+    clearTimeout(id)
 
     // Safari Bug Fix: Las respuestas "redirected" en modo navigate rompen Safari PWA.
     // Hay que convertirlas en una redirección explícita.

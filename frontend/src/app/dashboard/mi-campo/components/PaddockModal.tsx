@@ -713,6 +713,11 @@ export default function PaddockModal({
       relative_quality:     relativeQuality > 0 ? relativeQuality : undefined,
     }
 
+    // Guardar el registro si estamos en la pestaña correspondiente (funciona online y offline)
+    if (activeTab === 'registros' && recordEditorRef.current?.hasData()) {
+      await recordEditorRef.current.submit()
+    }
+
     // ── Offline path: guardar localmente y mostrar confirmación ───────────────
     if (!navigator.onLine && !isCreating) {
       try {
@@ -739,11 +744,7 @@ export default function PaddockModal({
       return
     }
 
-
     // ── Online path ──────────────────────────────────────────────────────────
-    if (activeTab === 'registros' && recordEditorRef.current?.hasData()) {
-      await recordEditorRef.current.submit()
-    }
     
     await onSave(paddock.id, name.trim(), td,
       msHa   !== '' ? Number(msHa)   : undefined,

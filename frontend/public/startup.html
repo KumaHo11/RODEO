@@ -41,10 +41,18 @@
     <div class="splash-content">
       <img src="/LogoLoginBlanco.svg" alt="RODEO" style="width: 220px; height: auto; margin-bottom: 32px;" />
       <div style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-      <p style="margin-top: 24px; font-size: 11px; font-weight: bold; letter-spacing: 0.15em; opacity: 0.9;">PREPARANDO ENTORNO...</p>
+      <p id="loading-text" style="margin-top: 24px; font-size: 11px; font-weight: bold; letter-spacing: 0.15em; opacity: 0.9;">PREPARANDO ENTORNO...</p>
     </div>
   </div>
   <script>
+    // Si la redirección tarda más de 3 segundos, asumimos conexión lenta y avisamos al usuario.
+    setTimeout(() => {
+      const textEl = document.getElementById('loading-text');
+      if (textEl) {
+        textEl.innerText = "Sincronizando datos. Por favor, aguarda...";
+      }
+    }, 3000);
+
     // Inmediatamente después de renderizar la pantalla, redirigimos a la app principal.
     // La pantalla verde se mantendrá visible en el navegador mientras se descarga el HTML de /dashboard.
     window.location.replace('/dashboard');
