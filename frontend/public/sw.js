@@ -26,7 +26,7 @@
  * Versionado: Cambiar CACHE_VERSION invalida TODAS las cachés existentes.
  */
 
-const CACHE_VERSION  = 'rodeo-v10'
+const CACHE_VERSION  = 'rodeo-v11'
 const STATIC_CACHE   = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE  = `${CACHE_VERSION}-dynamic`
 
