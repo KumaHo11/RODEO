@@ -26,7 +26,7 @@
  * Versionado: Cambiar CACHE_VERSION invalida TODAS las cachés existentes.
  */
 
-const CACHE_VERSION  = 'rodeo-v14'
+const CACHE_VERSION  = 'rodeo-v15'
 const STATIC_CACHE   = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE  = `${CACHE_VERSION}-dynamic`
 
@@ -193,14 +193,13 @@ async function networkFirstNavigation(request, cacheName) {
     clearTimeout(id)
 
     // Safari Bug Fix: Las respuestas "redirected" en modo navigate rompen Safari PWA.
-    // Hay que "limpiar" la respuesta creando una nueva sin el flag de redirección.
+    // Usamos una redirección nativa del navegador vía HTML (meta refresh) para evitar
+    // cualquier problema interno de Safari con Service Workers y redirecciones.
     if (response.redirected) {
-      const cloned = response.clone()
-      return new Response(cloned.body, {
-        headers: cloned.headers,
-        status: cloned.status,
-        statusText: cloned.statusText
-      })
+      return new Response(
+        `<html><head><meta http-equiv="refresh" content="0; url=${response.url}" /></head><body></body></html>`,
+        { headers: { 'Content-Type': 'text/html' } }
+      )
     }
 
     // Sólo cachear respuestas exitosas (200 OK), nunca errores ni redirecciones
