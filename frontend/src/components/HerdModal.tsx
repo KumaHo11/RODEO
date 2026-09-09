@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '@/lib/apiFetch'
-import { isOffline } from '@/lib/connectivity'
+import { useOfflineStatus } from '@/components/OfflineManager'
 import { CatCombobox, BreedCombobox } from '@/components/HerdComboboxes'
 import { CustomSelect } from '@/components/CustomSelect'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
@@ -185,6 +185,7 @@ function useSpeech(onResult: (t: string) => void, onStart?: () => void) {
 export default function HerdModal({ herd, allHerds = [], isTemporary = false, onClose, onSaved }: Props) {
   const { hasFeature } = usePlan()
   const canVoice     = hasFeature('voice_bitacora')
+  const { isOffline: isCurrentlyOffline } = useOfflineStatus()
 
   const [tab, setTab] = useState<'operativo' | 'actividades' | 'registros' | 'historial'>('operativo')
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
@@ -375,15 +376,21 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       let res: Response
       let finalId = targetId
 
-      if (await isOffline()) {
-        const { addToOfflineQueue } = await import('@/components/OfflineManager')
+      if (isCurrentlyOffline) {
+        // ── Offline Path: persistir en IndexedDB + encolar en Outbox nativo ──
         const tempId = targetId || `temp-${Date.now()}`
         finalId = tempId
-        addToOfflineQueue({
+        const localHerd = { ...payload, id: tempId }
+        const { enqueue } = await import('@/lib/offline/outbox')
+        await enqueue({
           type: targetId ? 'herd_update' : 'herd_create',
-          data: { ...payload, herd_id: targetId, local_id: tempId },
-          timestamp: Date.now()
-        } as any)
+          url: targetId ? `/api/herds/${targetId}` : '/api/herds',
+          method: targetId ? 'PATCH' : 'POST',
+          body: payload,
+          idempotency_key: `herd-${targetId ? `update-${targetId}` : `create-${tempId}`}-${Date.now()}`,
+          // Persistencia local inmediata en IDB — SSOT
+          localData: { store: 'herds', data: localHerd },
+        })
       } else {
         if (!targetId) {
           res = await apiFetch('/api/herds', { method: 'POST', body: JSON.stringify(payload) })
@@ -713,14 +720,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       const patchPayload: Record<string, any> = { head_count: newCount, total_ev: newEV }
       if (isAdd && actWeight !== '' && Number(actWeight) > 0) patchPayload.avg_weight_kg = newWeight
 
-        if (await isOffline()) {
-          const { addToOfflineQueue } = await import('@/components/OfflineManager')
-          addToOfflineQueue({
-            type: 'herd_update',
-            data: { herd_id: targetId, ...patchPayload },
-            timestamp: Date.now()
-          } as any)
-          
+        if (isCurrentlyOffline) {
           const evTitle = `${actId.charAt(0).toUpperCase() + actId.slice(1)}: ${n} cab. · ${liveHerd?.name || herd?.name}${
             isAdd && actWeight !== '' ? ` · ${Number(actWeight)} kg/cab` : ''
           }`
@@ -730,22 +730,39 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             `EV resultante: ${newEV.toFixed(0)}`,
           ].filter(Boolean).join(' · ')
           
-          addToOfflineQueue({
+          const { enqueue } = await import('@/lib/offline/outbox')
+          const updatedHerdData = { ...(liveHerd || herd || {}), ...patchPayload, id: targetId } as any
+
+          // 1. Encolar actualización de stock del rodeo (PATCH /api/herds/:id) — con persistencia IDB
+          await enqueue({
+            type: 'herd_update',
+            url: `/api/herds/${targetId}`,
+            method: 'PATCH',
+            body: patchPayload,
+            idempotency_key: `herd-activity-${actId}-${targetId}-${Date.now()}`,
+            localData: { store: 'herds', data: updatedHerdData },
+          })
+
+          // 2. Encolar evento en agenda (POST /api/farm-events)
+          await enqueue({
             type: 'farm_event',
-            data: {
+            url: '/api/farm-events',
+            method: 'POST',
+            body: {
               title: evTitle, event_type: actId, event_date: actDate,
-              herd_id: targetId, herd_ids: [targetId], description: evDesc || null, status: 'completado'
+              herd_id: targetId, herd_ids: [targetId], description: evDesc || null,
+              status: 'completado', source: 'rodeo',
             },
-            timestamp: Date.now() + 1
-          } as any)
+            idempotency_key: `farm-event-${actId}-${targetId}-${Date.now()}`,
+          })
 
-        setAgendaEvents(prev => [{
-          id: `temp-${Date.now()}`,
-          title: evTitle, event_type: actId, event_date: actDate,
-          herd_id: targetId, herd_ids: [targetId], description: evDesc || null, status: 'completado',
-        }, ...prev])
+          setAgendaEvents(prev => [{
+            id: `temp-${Date.now()}`,
+            title: evTitle, event_type: actId, event_date: actDate,
+            herd_id: targetId, herd_ids: [targetId], description: evDesc || null, status: 'completado',
+          }, ...prev])
 
-        import('sonner').then(({ toast }) => toast.success('Actividad guardada offline. Se sincronizará al conectar.'))
+          import('sonner').then(({ toast }) => toast.success('Actividad guardada offline. Se sincronizará al reconectar.'))
         } else {
           const patchRes = await apiFetch(`/api/herds/${targetId}`, {
             method: 'PATCH',
@@ -1126,6 +1143,17 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
   useEffect(() => { if (tab === 'registros' || tab === 'historial') loadData() }, [tab, loadData])
 
+  // Reactividad post-sincronización: refrescar historial automáticamente sin F5
+  useEffect(() => {
+    const handleSyncComplete = () => {
+      if (tab === 'registros' || tab === 'historial') {
+        loadData()
+      }
+    }
+    window.addEventListener('rodeo_sync_completed', handleSyncComplete)
+    return () => window.removeEventListener('rodeo_sync_completed', handleSyncComplete)
+  }, [tab, loadData])
+
   const saveBcs = async () => {
     if (!herd?.id) return
     setBcsSaving(true)
@@ -1133,7 +1161,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     const label = bcsLabel(bcsScore)
 
     // ── Offline Path ──
-    if (await isOffline()) {
+    if (isCurrentlyOffline) {
       let mediaId: string | undefined
       if (bcsPhotoFile) {
         mediaId = crypto.randomUUID()
@@ -1146,10 +1174,12 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           title: `Condición Corporal: ${bcsScore}/5 — ${label}`
         })
       }
-      const { addToOfflineQueue } = await import('@/components/OfflineManager')
-      addToOfflineQueue({
+      const { enqueue } = await import('@/lib/offline/outbox')
+      await enqueue({
         type: 'bcs_update',
-        data: {
+        url: `/api/herds/${herd.id}/bcs`,
+        method: 'POST',
+        body: {
           herd_id: herd.id,
           bcs_score: bcsScore,
           bcs_label: label,
@@ -1161,10 +1191,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           herd_name: herd.name,
           total_ev: herd.total_ev,
         },
-        timestamp: Date.now(),
+        idempotency_key: `bcs-${herd.id}-${Date.now()}`,
         mediaType: mediaId ? 'photo' : undefined,
-        mediaId
-      } as any)
+        mediaId,
+      })
       setBcsSaving(false)
       setBcsSaved(true)
       setSessionNoteCount(c => c + 1)
@@ -1264,17 +1294,21 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       const isNetErr = networkErr instanceof TypeError || networkErr?.message?.includes('fetch')
       if (isNetErr) {
         console.warn('[saveBcs] network error → saving offline')
-        const { addToOfflineQueue } = await import('@/components/OfflineManager')
         const mediaId = bcsPhotoFile ? (crypto.randomUUID?.() ?? `${Date.now()}`) : undefined
         if (mediaId && bcsPhotoFile) {
           const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
           await savePendingPhoto({ id: mediaId, blob: bcsPhotoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: `BCS: ${bcsScore}/5 — ${label}` }).catch(() => {})
         }
-        addToOfflineQueue({
+        const { enqueue } = await import('@/lib/offline/outbox')
+        await enqueue({
           type: 'bcs_update',
-          data: { herd_id: herd.id, bcs_score: bcsScore, bcs_label: label, quantity: herd.head_count, weight_kg: herd.avg_weight_kg, categoria: herd.categoria, breed: herd.breed, admission_date: herd.admission_date, herd_name: herd.name, total_ev: herd.total_ev },
-          timestamp: Date.now(), mediaType: mediaId ? 'photo' : undefined, mediaId,
-        } as any)
+          url: `/api/herds/${herd.id}/bcs`,
+          method: 'POST',
+          body: { herd_id: herd.id, bcs_score: bcsScore, bcs_label: label, quantity: herd.head_count, weight_kg: herd.avg_weight_kg, categoria: herd.categoria, breed: herd.breed, admission_date: herd.admission_date, herd_name: herd.name, total_ev: herd.total_ev },
+          idempotency_key: `bcs-fallback-${herd.id}-${Date.now()}`,
+          mediaType: mediaId ? 'photo' : undefined,
+          mediaId,
+        })
         import('sonner').then(({ toast }) => toast.success('BCS guardado offline. Se sincronizará al conectar.'))
       } else {
         import('sonner').then(({ toast }) => toast.error('Error al guardar BCS. Intentá de nuevo.'))
@@ -1340,8 +1374,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         ? `Nota: ${quickNote.trim().slice(0, 60)}`
         : (notePhoto ? 'Nota visual agregada' : 'Nota de rodeo')
 
-    // ── Offline Path ──
-    if (await isOffline()) {
+    // ── Offline Path (sincrónico — sin fetch bloqueante) ──
+    if (isCurrentlyOffline) {
       let mediaType: 'audio' | 'photo' | undefined
       let mediaId: string | undefined
       if (notePhoto) {
@@ -1356,17 +1390,21 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         await savePendingAudio({ id: mediaId, blob: effectiveBlob, durationSecs: 0, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: quickNote.trim() })
       }
 
-      const { addToOfflineQueue } = await import('@/components/OfflineManager')
-      addToOfflineQueue({
+      const { enqueue } = await import('@/lib/offline/outbox')
+      await enqueue({
         type: 'farm_event',
-        data: { title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado' },
-        timestamp: Date.now(), mediaType, mediaId
-      } as any)
+        url: '/api/farm-events',
+        method: 'POST',
+        body: { title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado', source: 'rodeo' },
+        idempotency_key: `farm-event-nota-herd-${herd.id}-${Date.now()}`,
+        mediaType,
+        mediaId,
+      })
 
       setAgendaEvents(prev => [{ id: `temp-${Date.now()}`, title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado' }, ...prev])
       setNoteSaving(false); setNoteSaved(true); setQuickNote(''); setNotePhoto(null); setAudioBlob(null); setAudioUrl(null); audioBlobRef.current = null;
       setTimeout(() => setNoteSaved(false), 3000)
-      import('sonner').then(({ toast }) => toast.success('Nota guardada offline. Se sincronizará al conectar.'))
+      import('sonner').then(({ toast }) => toast.success('Registro guardado localmente. Se sincronizará al recuperar la conexión.'))
       import('@/lib/analytics').then(({ event }) => event({ action: 'herd_save_note', category: 'herds', note_type: isAudioNote ? 'audio' : notePhoto ? 'photo' : 'text', mode: 'offline' }))
       return
     }
@@ -1452,7 +1490,6 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       // Auto-fallback offline (común en iOS con navigator.onLine=true sin internet real)
       const isNetErr = networkErr instanceof TypeError || networkErr?.message?.includes('fetch')
       if (isNetErr) {
-        const { addToOfflineQueue } = await import('@/components/OfflineManager')
         const offlineId = (crypto.randomUUID?.() ?? `${Date.now()}`)
         let mediaType: 'audio' | 'photo' | undefined
         let mediaId: string | undefined
@@ -1465,8 +1502,17 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           const { savePendingAudio } = await import('@/lib/audioOfflineStore')
           await savePendingAudio({ id: mediaId, blob: effectiveBlob, durationSecs: 0, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: quickNote.trim() }).catch(() => {})
         }
-        addToOfflineQueue({ type: 'farm_event', data: { title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado' }, timestamp: Date.now(), mediaType, mediaId } as any)
-        import('sonner').then(({ toast }) => toast.success('Nota guardada offline. Se sincronizará al reconectar.'))
+        const { enqueue } = await import('@/lib/offline/outbox')
+        await enqueue({
+          type: 'farm_event',
+          url: '/api/farm-events',
+          method: 'POST',
+          body: { title: titleStr, event_type: 'nota', event_date: todayISO(), herd_id: herd.id, herd_ids: [herd.id], description: quickNote.trim() || null, status: 'completado', source: 'rodeo' },
+          idempotency_key: `farm-event-nota-herd-fallback-${herd.id}-${Date.now()}`,
+          mediaType,
+          mediaId,
+        })
+        import('sonner').then(({ toast }) => toast.success('Registro guardado localmente. Se sincronizará al reconectar.'))
       } else {
         import('sonner').then(({ toast }) => toast.error('Error al guardar la nota'))
       }
@@ -1491,13 +1537,15 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       source: 'rodeo' as const,
     }
 
-    if (await isOffline()) {
-      const { addToOfflineQueue } = await import('@/components/OfflineManager')
-      addToOfflineQueue({
+    if (isCurrentlyOffline) {
+      const { enqueue } = await import('@/lib/offline/outbox')
+      await enqueue({
         type: 'farm_event',
-        data: payload,
-        timestamp: Date.now()
-      } as any)
+        url: '/api/farm-events',
+        method: 'POST',
+        body: payload,
+        idempotency_key: `farm-event-agenda-herd-${herd?.id}-${Date.now()}`,
+      })
       setAgendaEvents(prev => [{
         id: `temp-${Date.now()}`,
         ...payload

@@ -457,6 +457,13 @@ export default function HerdsPage() {
 
   useEffect(() => { loadHerds() }, [user])  
 
+  // Reactividad post-sincronización: refrescar rodeos automáticamente sin F5
+  useEffect(() => {
+    const handleSyncComplete = () => { loadHerds() }
+    window.addEventListener('rodeo_sync_completed', handleSyncComplete)
+    return () => window.removeEventListener('rodeo_sync_completed', handleSyncComplete)
+  }, []) 
+
   // ── Derived data ──────────────────────────────────────────────────────────
 
   const totalAnimals = Math.round(herds.reduce((s, h) => s + (h.head_count || 0), 0))
