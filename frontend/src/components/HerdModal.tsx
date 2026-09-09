@@ -27,7 +27,7 @@ import {
   type CategoriaComercial,
 } from '@/lib/categorias'
 import { usePlan } from '@/hooks/usePlan'
-import RecordEditor from '@/components/shared/RecordEditor'
+import RecordEditor, { RecordEditorRef } from '@/components/shared/RecordEditor'
 import { calculateBaseEV, calculateProjectedEV, PHYSIOLOGICAL_CATEGORIES, PHYSIO_LABEL, PHYSIO_EV_BASE, PHYSIO_PESO_DEFAULT, physioToComercial, GROWTH_PHYSIO_CATEGORIES, type PhysiologicalCategory } from '@/lib/grazing/evProjection'
 import { calcularEVRodeo, LACTANCIA_RANGES, ESTADIOS_GESTACION, RATION_SUGERIDA_POR_CATEGORIA, type LactanciaRange, type EstadioGestacion } from '@/lib/grazing/evMatrix'
 import { todayISO } from '@/lib/utils/dates'
@@ -352,6 +352,16 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const handleSave = async () => {
     if (!canSave) return
     setSaving(true); setSaveError(null)
+
+    if (tab === 'registros') {
+      if (recordEditorRef.current?.hasData()) {
+        await recordEditorRef.current.submit()
+      }
+      if (!bcsSaved && (bcsScore || bcsPhotoFile)) {
+        await saveBcs()
+      }
+    }
+
     const payload = {
       name: name.trim(), species: catLabel || catKey || 'vacas',
       categoria: catKey, breed: breed.trim() || null,
@@ -1019,6 +1029,8 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
   const bcsCameraRef = useRef<HTMLInputElement>(null)
   const [noteSaving,    setNoteSaving]    = useState(false)
   const [sessionNoteCount, setSessionNoteCount] = useState(0)
+  const recordEditorRef = useRef<RecordEditorRef>(null)
+  const [hasRecordData, setHasRecordData] = useState(false)
   const [agendaEvents,  setAgendaEvents]  = useState<any[]>([])
   const [evLoading,     setEvLoading]     = useState(false)
   const [showAllEvents, setShowAllEvents] = useState(false)
@@ -2571,18 +2583,15 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           <p className="text-[9px] text-gray-400 font-medium">Audio · Texto · Foto</p>
                         </div>
                       </div>
-                      {sessionNoteCount > 0 && (
-                        <span className="flex items-center gap-1 bg-green-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
-                          <span className="w-1 h-1 rounded-full bg-green-300 animate-pulse" />
-                          +{sessionNoteCount}
-                        </span>
-                      )}
                     </div>
                     <div className="p-4">
                       <RecordEditor
+                        ref={recordEditorRef}
                         onSave={saveNote}
                         isOnline={!isCurrentlyOffline}
                         savingMsg={noteSaving ? 'Guardando...' : undefined}
+                        hideSaveButton
+                        onDataChange={setHasRecordData}
                       />
                     </div>
                   </div>
@@ -2598,13 +2607,6 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           <p className={CARD_TIT}>Registro de condición corporal</p>
                           <p className="text-[9px] text-gray-400 font-medium">BCS · Escala 1–5</p>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={saveBcs} disabled={bcsSaving}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-all">
-                          {bcsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : bcsSaved ? <Check className="w-3.5 h-3.5" /> : null}
-                          {bcsSaved ? 'Guardado' : 'Guardar'}
-                        </button>
                       </div>
                     </div>
                     <div className="px-4 py-4 space-y-4">
@@ -2908,7 +2910,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         )}
 
         {/* Footer — barra de acción sticky, mobile-first */}
-        {(tab === 'operativo' || (tab === 'registros' && sessionNoteCount > 0)) && (
+        {(tab === 'operativo' || tab === 'registros') && (
           <div className="px-4 pt-4 pb-6 border-t border-gray-100 bg-white shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="flex-1" />
@@ -2916,27 +2918,18 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                 className="px-5 py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all min-h-[48px]">
                 Cancelar
               </button>
-              {tab === 'operativo' && (
-                <button type="button" onClick={handleSave} disabled={saving || !canSave}
-                  className="relative flex-1 sm:flex-none sm:min-w-[168px] py-3 px-5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all min-h-[48px] shadow-sm shadow-green-200">
-                  {saving && (
-                    <span className="absolute inset-0 flex items-center justify-center">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </span>
-                  )}
-                  <span className={`flex items-center justify-center gap-2 ${saving ? 'invisible' : ''}`}>
-                    <Check className="w-4 h-4" />
-                    {isEditing ? 'Guardar rodeo' : 'Crear rodeo'}
+              <button type="button" onClick={handleSave} disabled={saving || !canSave || (tab === 'registros' && !hasRecordData && !(!bcsSaved && (bcsScore || bcsPhotoFile)))}
+                className="relative flex-1 sm:flex-none sm:min-w-[168px] py-3 px-5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all min-h-[48px] shadow-sm shadow-green-200">
+                {saving && (
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   </span>
-                </button>
-              )}
-              {tab === 'registros' && sessionNoteCount > 0 && (
-                <button type="button" onClick={onClose}
-                  className="flex-1 sm:flex-none sm:min-w-[168px] py-3 px-5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 transition-all min-h-[48px] shadow-sm shadow-green-200 flex items-center justify-center gap-2">
+                )}
+                <span className={`flex items-center justify-center gap-2 ${saving ? 'invisible' : ''}`}>
                   <Check className="w-4 h-4" />
-                  Confirmar (+{sessionNoteCount} registros)
-                </button>
-              )}
+                  {isEditing ? 'Guardar cambios' : 'Crear rodeo'}
+                </span>
+              </button>
             </div>
           </div>
         )}

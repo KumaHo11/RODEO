@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { createPortal } from 'react-dom'
 import { Mic, Camera, Loader2, Check, Square, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -80,9 +80,16 @@ export interface RecordEditorProps {
   onSave: (data: { textContent: string; audioBlob: Blob | null; photoFile: File | null; recordSecs: number; liveTranscript: string }) => Promise<void>
   isOnline: boolean
   savingMsg?: string
+  hideSaveButton?: boolean
+  onDataChange?: (hasData: boolean) => void
 }
 
-export default function RecordEditor({ onSave, isOnline, savingMsg }: RecordEditorProps) {
+export interface RecordEditorRef {
+  submit: () => Promise<void>;
+  hasData: () => boolean;
+}
+
+const RecordEditor = forwardRef<RecordEditorRef, RecordEditorProps>(({ onSave, isOnline, savingMsg, hideSaveButton, onDataChange }, ref) => {
   const [textContent, setTextContent] = useState('')
   const [saving, setSaving] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -106,6 +113,12 @@ export default function RecordEditor({ onSave, isOnline, savingMsg }: RecordEdit
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
+
+  useEffect(() => {
+    if (onDataChange) {
+      onDataChange(!!textContent.trim() || !!audioBlob || !!photoFile || isRecording)
+    }
+  }, [textContent, audioBlob, photoFile, isRecording, onDataChange])
 
   const resetAll = useCallback(() => {
     setSaving(false)
@@ -235,20 +248,25 @@ export default function RecordEditor({ onSave, isOnline, savingMsg }: RecordEdit
     
     // Stop recording gracefully if somehow it's still running
     if (isRecording) {
-        stopRecording()
-        // Wait a tiny bit for the blob to be created
-        await new Promise(res => setTimeout(res, 300))
+      stopRecording()
+      // Wait a tiny bit for the blob to be created
+      await new Promise(res => setTimeout(res, 300))
     }
 
     try {
-        await onSave({ textContent, audioBlob, photoFile, recordSecs: recordSecsSnap.current, liveTranscript })
-        resetAll()
+      await onSave({ textContent, audioBlob, photoFile, recordSecs: recordSecsSnap.current, liveTranscript })
+      resetAll()
     } catch (e: any) {
-        toast.error(e.message || 'Error al guardar')
+      toast.error(e.message || 'Error al guardar')
     } finally {
-        setSaving(false)
+      setSaving(false)
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    submit: handleSave,
+    hasData: canSave
+  }))
 
   return (
     <div className="flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
@@ -332,13 +350,15 @@ export default function RecordEditor({ onSave, isOnline, savingMsg }: RecordEdit
           <input ref={galleryRef} type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
         </div>
 
-        <button type="button" onClick={handleSave} disabled={!canSave()}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black text-white shadow-sm transition-all ${
-            isOnline ? 'bg-green-600 hover:bg-green-700' : 'bg-amber-600 hover:bg-amber-700'
-          } disabled:opacity-40 disabled:cursor-not-allowed`}>
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          {saving ? (savingMsg || 'Guardando...') : (isOnline ? 'Guardar' : 'Guardar offline')}
-        </button>
+        {!hideSaveButton && (
+          <button type="button" onClick={handleSave} disabled={!canSave()}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black text-white shadow-sm transition-all ${
+              isOnline ? 'bg-green-600 hover:bg-green-700' : 'bg-amber-600 hover:bg-amber-700'
+            } disabled:opacity-40 disabled:cursor-not-allowed`}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            {saving ? (savingMsg || 'Guardando...') : (isOnline ? 'Guardar' : 'Guardar offline')}
+          </button>
+        )}
       </div>
 
       {/* Photo menu modal */}
@@ -377,4 +397,7 @@ export default function RecordEditor({ onSave, isOnline, savingMsg }: RecordEdit
       )}
     </div>
   )
-}
+})
+
+RecordEditor.displayName = 'RecordEditor'
+export default RecordEditor

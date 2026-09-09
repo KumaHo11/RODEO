@@ -12,7 +12,7 @@ import { apiFetch } from '@/lib/apiFetch'
 import { isOffline } from '@/lib/connectivity'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
-import RecordEditor from '@/components/shared/RecordEditor'
+import RecordEditor, { RecordEditorRef } from '@/components/shared/RecordEditor'
 import { Tooltip } from '@/design-system/atoms/Tooltip'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/ui/ConfirmModal'
@@ -531,6 +531,8 @@ export default function PaddockModal({
   const [deletedNotes, setDeletedNotes]       = useState<Record<string, Date>>({})
   // Session counter — notes created in this modal session
   const [sessionNoteCount, setSessionNoteCount] = useState(0)
+  const recordEditorRef = useRef<RecordEditorRef>(null)
+  const [hasRecordData, setHasRecordData] = useState(false)
 
   const loadNotes = useCallback(async () => {
     if (!paddock.id || paddock.id === '__NEW__') return
@@ -739,6 +741,10 @@ export default function PaddockModal({
 
 
     // ── Online path ──────────────────────────────────────────────────────────
+    if (activeTab === 'registros' && recordEditorRef.current?.hasData()) {
+      await recordEditorRef.current.submit()
+    }
+    
     await onSave(paddock.id, name.trim(), td,
       msHa   !== '' ? Number(msHa)   : undefined,
       areaHa !== '' ? Number(areaHa) : undefined,
@@ -1398,9 +1404,12 @@ export default function PaddockModal({
                     )}
                   </div>
                   <RecordEditor 
+                    ref={recordEditorRef}
                     onSave={saveNote} 
                     isOnline={!isCurrentlyOffline} 
                     savingMsg={noteSaving ? 'Guardando...' : undefined} 
+                    hideSaveButton
+                    onDataChange={setHasRecordData}
                   />
                 </div>
 
@@ -1926,7 +1935,7 @@ export default function PaddockModal({
             {/* Guardar cambios */}
             <button
               onClick={handleSave}
-              disabled={saving || !name.trim()}
+              disabled={saving || !name.trim() || (activeTab === 'registros' && !hasRecordData)}
               className="relative flex-1 sm:flex-none sm:min-w-[168px] py-3 px-5 text-sm font-black text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-all min-h-[48px] shadow-sm shadow-green-200"
             >
               {saving && (
@@ -1936,9 +1945,7 @@ export default function PaddockModal({
               )}
               <span className={`flex items-center justify-center gap-2 ${saving ? 'invisible' : ''}`}>
                 <Check className="w-4 h-4" />
-                {isCreating
-                  ? sessionNoteCount > 0 ? `Crear potrero (+${sessionNoteCount})` : 'Crear potrero'
-                  : sessionNoteCount > 0 ? `Guardar (+${sessionNoteCount})` : 'Guardar cambios'}
+                {isCreating ? 'Crear potrero' : 'Guardar cambios'}
               </span>
             </button>
 
