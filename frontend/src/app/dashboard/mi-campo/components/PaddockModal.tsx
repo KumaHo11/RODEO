@@ -556,13 +556,84 @@ export default function PaddockModal({
   const loadNotes = useCallback(async () => {
     if (!paddock.id || paddock.id === '__NEW__') return
     setNotesLoading(true)
-    const res = await apiFetch(`/api/field-notes?paddock_id=${paddock.id}`)
-    setNotes(res.ok ? (await res.json()).notes || [] : [])
+    let fetchedNotes: any[] = []
+    
+    try {
+      const res = await apiFetch(`/api/field-notes?paddock_id=${paddock.id}`)
+      if (res.ok) {
+        fetchedNotes = (await res.json()).notes || []
+      }
+    } catch {
+      // Offline fallback: keep empty, we'll append pending outbox items below
+    }
+
+    try {
+      const { outboxGetAll } = await import('@/lib/offline/db')
+      const pendingItems = await outboxGetAll()
+      const pendingNotes = pendingItems.filter((item: any) => {
+        try {
+          const body = item.body ? (typeof item.body === 'string' ? JSON.parse(item.body) : item.body) : {}
+          return item.type === 'field_note' && body?.paddock_id === paddock.id
+        } catch { return false }
+      })
+
+      const localNotes = await Promise.all(pendingNotes.map(async (item: any) => {
+        const body = item.body ? (typeof item.body === 'string' ? JSON.parse(item.body) : item.body) : {}
+        const noteData: any = {
+          id: item.id || `pending-${Date.now()}`,
+          paddock_id: body.paddock_id,
+          category: body.category || 'GENERAL',
+          tags: body.tags || [],
+          title: body.title || 'Nota pendiente',
+          content: body.content || null,
+          sync_status: 'PENDING',
+          analysis_result: body.analysis_result || null,
+          created_at: new Date().toISOString(),
+          photos: [],
+        }
+
+        if (item.mediaType === 'photo' && item.mediaId) {
+          const { getPendingPhoto } = await import('@/lib/audioOfflineStore')
+          const p = await getPendingPhoto(item.mediaId).catch(() => null)
+          if (p && p.blob) {
+            noteData.photos = [{
+              id: item.mediaId,
+              photo_url: URL.createObjectURL(p.blob),
+              created_at: p.createdAt
+            }]
+          }
+        } else if (item.mediaType === 'audio' && item.mediaId) {
+          const { getPendingAudio } = await import('@/lib/audioOfflineStore')
+          const a = await getPendingAudio(item.mediaId).catch(() => null)
+          if (a && a.blob) {
+            noteData.audio_url = URL.createObjectURL(a.blob)
+          }
+        }
+        return noteData
+      }))
+
+      fetchedNotes = [...localNotes, ...fetchedNotes]
+    } catch (err) {
+      console.warn('Error loading pending notes for paddock', err)
+    }
+
+    setNotes(fetchedNotes)
     setNotesLoading(false)
   }, [paddock.id])
 
   useEffect(() => {
     if (activeTab === 'registros' || activeTab === 'historial') loadNotes()
+  }, [activeTab, loadNotes])
+
+  // Reactividad: refrescar la lista de registros cuando termine la sincronización background
+  useEffect(() => {
+    const handleSyncComplete = () => {
+      if (activeTab === 'registros' || activeTab === 'historial') {
+        loadNotes()
+      }
+    }
+    window.addEventListener('rodeo_sync_completed', handleSyncComplete)
+    return () => window.removeEventListener('rodeo_sync_completed', handleSyncComplete)
   }, [activeTab, loadNotes])
 
   const [bioPhoto, setBioPhoto]               = useState<File | null>(null)
@@ -800,8 +871,8 @@ export default function PaddockModal({
     setNoteSaving(true)
     const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
 
-    // ── Offline Path ──  (navigator.onLine no es confiable en iOS)
-    if (await isOffline()) {
+    // ── Offline Path ──
+    if (isCurrentlyOffline) {
       const offlineTitle = noteTitle.trim() || (noteText || audioTranscript).slice(0, 60) || 'Nota de campo'
       const audioId = effectiveBlob ? crypto.randomUUID() : undefined
       const photoId = noteImages.length > 0 ? crypto.randomUUID() : undefined
@@ -851,7 +922,7 @@ export default function PaddockModal({
         mediaId: effectiveBlob && audioId ? audioId : (noteImages.length > 0 && photoId ? photoId : undefined),
       })
 
-      toast.success('Nota guardada. Se sincronizará cuando tengas internet.')
+      toast.success('Registro guardado localmente. Se sincronizará al recuperar la conexión.')
       
       setNoteSaving(false)
       setNoteSaved(true)
@@ -859,6 +930,9 @@ export default function PaddockModal({
       setTimeout(() => setNoteSaved(false), 3000)
       resetNoteCapture()
       audioBlobRef.current = null
+      
+      // Actualizar vista inmediatamente con el nuevo registro local
+      loadNotes()
       return true
     }
 
@@ -1049,7 +1123,7 @@ export default function PaddockModal({
       resetNoteCapture()
       return true
     }
-  }, [noteText, audioTranscript, noteImages, noteResult, paddock.id, loadNotes, noteTitle, recording, resetNoteCapture])
+  }, [noteText, audioTranscript, noteImages, noteResult, paddock.id, loadNotes, noteTitle, recording, resetNoteCapture, isCurrentlyOffline])
 
 
 
