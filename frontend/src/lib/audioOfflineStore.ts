@@ -13,6 +13,16 @@ const DB_VERSION = 2
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    let isResolved = false;
+    const timeout = setTimeout(() => {
+      if (!isResolved) {
+        console.warn('[audioDB] Timeout opening IDB, dropping and retrying...');
+        const dropReq = indexedDB.deleteDatabase(DB_NAME);
+        dropReq.onsuccess = () => resolve(openDB());
+        dropReq.onerror = () => reject(dropReq.error);
+      }
+    }, 8000);
+
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
       const db = req.result
@@ -23,8 +33,16 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(PHOTO_STORE, { keyPath: 'id' })
       }
     }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    req.onsuccess = () => {
+      isResolved = true;
+      clearTimeout(timeout);
+      resolve(req.result);
+    }
+    req.onerror = () => {
+      isResolved = true;
+      clearTimeout(timeout);
+      reject(req.error);
+    }
   })
 }
 

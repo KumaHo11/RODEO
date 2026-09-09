@@ -108,7 +108,7 @@ let _dbPromise: Promise<IDBPDatabase<RodeoDBSchema>> | null = null
 
 function getDB(): Promise<IDBPDatabase<RodeoDBSchema>> {
   if (!_dbPromise) {
-    _dbPromise = openDB<RodeoDBSchema>(DB_NAME, DB_VERSION, {
+    const doOpen = () => openDB<RodeoDBSchema>(DB_NAME, DB_VERSION, {
       upgrade(db, oldVersion) {
         // ── v1 stores ──────────────────────────────────────────────────────
         if (oldVersion < 1) {
@@ -177,6 +177,30 @@ function getDB(): Promise<IDBPDatabase<RodeoDBSchema>> {
         }
       },
     })
+
+    _dbPromise = new Promise((resolve, reject) => {
+      let isResolved = false;
+      const timeout = setTimeout(() => {
+        if (!isResolved) {
+          console.warn('[DB] openDB timeout, dropping database and retrying...');
+          const req = indexedDB.deleteDatabase(DB_NAME);
+          req.onsuccess = () => resolve(doOpen());
+          req.onerror = () => reject(req.error);
+        }
+      }, 8000);
+
+      doOpen()
+        .then(db => {
+          isResolved = true;
+          clearTimeout(timeout);
+          resolve(db);
+        })
+        .catch(err => {
+          isResolved = true;
+          clearTimeout(timeout);
+          reject(err);
+        });
+    });
   }
   return _dbPromise
 }

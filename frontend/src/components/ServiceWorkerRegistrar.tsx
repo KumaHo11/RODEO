@@ -41,6 +41,10 @@ export default function ServiceWorkerRegistrar() {
           updateViaCache: 'none', // siempre pedir la versión más reciente del sw.js
         })
 
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: 'SKIP_WAITING' })
+        }
+
         // Cuando hay una actualización disponible, activarla en segundo plano
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing
