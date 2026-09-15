@@ -689,7 +689,7 @@ export default function EquipoPage() {
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             <div className="sticky top-0 bg-white/98 backdrop-blur px-6 py-5 border-b border-gray-100 flex items-center justify-between rounded-t-3xl z-10 shrink-0">
               <div>
-                <h2 className="text-lg font-black text-gray-950 tracking-tight">Editar accesos</h2>
+                <h2 className="modal-title tracking-tight">Editar accesos</h2>
                 <p className="text-xs text-gray-400 font-medium mt-0.5">
                   {[editMember.first_name, editMember.last_name].filter(Boolean).join(' ') || editMember.email}
                 </p>
@@ -776,7 +776,7 @@ export default function EquipoPage() {
             {/* Header */}
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
-                <h2 className="text-lg font-black text-gray-950 tracking-tight">Invitar al equipo</h2>
+                <h2 className="modal-title tracking-tight">Invitar al equipo</h2>
                 <p className="text-xs text-gray-400 font-medium mt-0.5">Enviá una invitación por email con acceso configurado</p>
               </div>
               <button onClick={() => setModalOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
@@ -789,7 +789,7 @@ export default function EquipoPage() {
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Check className="w-8 h-8 text-green-600" />
                 </div>
-                <h3 className="text-lg font-black text-gray-900 mb-1">¡Invitación enviada!</h3>
+                <h3 className="modal-title mb-1">¡Invitación enviada!</h3>
                 <p className="text-sm text-gray-500">El email fue enviado a <strong>{inviteEmail}</strong></p>
               </div>
             ) : (
@@ -937,7 +937,7 @@ export default function EquipoPage() {
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-300">
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
-                <h2 className="text-lg font-black text-gray-950 tracking-tight">Rol personalizado</h2>
+                <h2 className="modal-title tracking-tight">Rol personalizado</h2>
                 <p className="text-xs text-gray-400 font-medium mt-0.5">Definir un nuevo rol operativo</p>
               </div>
               <button onClick={() => setNewRoleModalOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all">

@@ -225,3 +225,27 @@ body {
 .leaflet-pm-toolbar .active a[class*="leaflet-pm-icon-"]::after {
   color: #15803d;
 }
+
+/* ── Tipografía estándar de modales — RODEO Design System ────────────────────
+   Regla global para unificar el tamaño de título en TODOS los modales de la
+   plataforma. Usar la clase .modal-title en el <h2> o <h3> del header.
+   .modal-subtitle → subtítulos y etiquetas de sección (14px)
+   .modal-body-text → texto explicativo y párrafos de apoyo (10px)          */
+
+.modal-title {
+  font-size: 18px !important;
+  font-weight: 900;
+  line-height: 1.2;
+  color: #030712;
+}
+
+.modal-subtitle {
+  font-size: 14px !important;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.modal-body-text {
+  font-size: 10px !important;
+  line-height: 1.5;
+}

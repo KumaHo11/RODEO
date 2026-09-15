@@ -594,7 +594,7 @@ export default function AgendaPage() {
               <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
                 <div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Eventos</p>
-                  <h4 className="text-xl font-black text-gray-950 capitalize">
+                  <h4 className="modal-title capitalize">
                     {dayDate.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </h4>
                 </div>
@@ -744,8 +744,8 @@ export default function AgendaPage() {
           <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <div>
-                <h3 className="text-lg font-black text-gray-950">
-                  {editingEvent ? 'Editar Evento' : 'Nuevo Evento'}
+                <h3 className="modal-title">
+                  {editingEvent ? 'Editar evento' : 'Nuevo evento'}
                 </h3>
               </div>
               <button
@@ -941,7 +941,7 @@ export default function AgendaPage() {
                 <Calendar className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-black text-red-900">Alerta de Superposición</h3>
+                <h3 className="modal-title text-red-900">Alerta de superposición</h3>
                 <p className="text-xs text-red-700 font-medium">Conflicto con el Planificador de Pastoreo</p>
               </div>
             </div>
@@ -986,7 +986,7 @@ export default function AgendaPage() {
               <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
                 <Trash2 className="w-7 h-7 text-red-600" />
               </div>
-              <h3 className="text-lg font-black text-gray-950 mb-1">¿Eliminar este evento?</h3>
+              <h3 className="modal-title mb-1">¿Eliminar este evento?</h3>
               <p className="text-sm text-gray-500 font-medium leading-relaxed">
                 Estás a punto de eliminar el evento <span className="font-black text-red-600">"{eventToDelete.title}"</span>. Esta acción <strong>no se puede deshacer</strong>.
               </p>

@@ -65,6 +65,8 @@ export interface HerdData {
   // v10: Lote de Manejo fields
   grupo_manejo_id?: string | null
   grupo_manejo_nombre?: string | null
+  // v11: IA campos extra
+  ms_dia_kg?: number | null
 }
 
 interface Props {
@@ -106,7 +108,8 @@ async function compressImage(file: File, maxDim = 1200): Promise<File> {
   })
 }
 
-function bcsLabel(s: number) {
+function bcsLabel(s: number | null) {
+  if (s == null) return ''
   if (s <= 1) return 'Muy baja'
   if (s <= 2) return 'Baja'
   if (s <= 3) return 'Óptima'
@@ -1019,7 +1022,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
 
   // ── Tab 3: Registros ──────────────────────────────────────────────────────
-  const [bcsScore,      setBcsScore]      = useState(herd?.bcs_score ?? 3)
+  const [bcsScore,      setBcsScore]      = useState<number | null>(herd?.bcs_score ?? null)
   const [bcsSaving,     setBcsSaving]     = useState(false)
   const [bcsSaved,      setBcsSaved]      = useState(false)
   const [bcsPhotoFile,  setBcsPhotoFile]  = useState<File | null>(null)
@@ -1621,7 +1624,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               </div>
             )}
             <div>
-              <h3 className="text-xl font-black text-gray-950 tracking-tight">
+              <h3 className="modal-title tracking-tight">
                 {isEditing ? (liveHerd?.name || herd?.name || 'Rodeo') : 'Nuevo rodeo'}
               </h3>
               <p className="text-xs text-gray-500 font-medium mt-0.5">
@@ -1779,10 +1782,9 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                       <motion.div
                         initial={{ opacity: 0, scale: 0.98 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="grid grid-cols-2 gap-2"
+                        className="grid grid-cols-3 gap-2"
                       >
                         <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50 rounded-xl border border-green-100">
-                          <Scale className="w-3.5 h-3.5 text-green-500 shrink-0" />
                           <div>
                             <p className="text-[9px] font-black text-green-600 uppercase tracking-widest">EV Total</p>
                             <p className="text-base font-black text-green-700 leading-none">
@@ -1792,7 +1794,6 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           </div>
                         </div>
                         <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
-                          <Leaf className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                           <div>
                             <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">MS/día</p>
                             <p className="text-base font-black text-emerald-700 leading-none">
@@ -1800,6 +1801,21 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                               <span className="text-[9px] font-normal ml-1">kg</span>
                             </p>
                           </div>
+                        </div>
+                        <div className="flex flex-col justify-center px-3 py-1.5 bg-green-50 rounded-xl border border-green-100">
+                          <p className="text-[9px] font-black text-green-600 uppercase tracking-widest mb-1">CC</p>
+                          <input
+                            type="number"
+                            min="0"
+                            max="5"
+                            step="0.25"
+                            inputMode="decimal"
+                            value={bcsScore ?? ''}
+                            onChange={e => setBcsScore(e.target.value === '' ? null : Number(e.target.value))}
+                            onFocus={e => e.target.select()}
+                            placeholder="0"
+                            className="w-full bg-transparent border-none outline-none text-base font-black text-green-700 leading-none p-0 placeholder:text-green-300"
+                          />
                         </div>
                       </motion.div>
                     )}
@@ -2713,27 +2729,82 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                           }
                           return (
                             <div key={ev.id} className="flex gap-2.5">
-                              <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${type === 'audio' ? 'bg-red-50 border-red-200' : type === 'foto' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100'}`}>
                                 {type === 'audio' ? <Mic className="w-3.5 h-3.5 text-red-500" /> :
-                                 type === 'foto' ? <ImageIcon className="w-3.5 h-3.5 text-green-600" /> :
+                                 type === 'foto' ? <Camera className="w-3.5 h-3.5 text-green-600" /> :
                                  isNota ? <FileText className="w-3.5 h-3.5 text-gray-500" /> :
                                  <div className="w-2 h-2 rounded-full bg-gray-400" />}
                               </div>
                               <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
-                                <div className="px-3 pt-2 pb-1">
+                                <div className="px-3 pt-2 pb-1.5">
+                                  <div className="flex flex-wrap gap-1 mb-0.5">
+                                    {ev.analysis_result != null ? (
+                                      <>
+                                        <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase tracking-widest">CONDICIÓN CORPORAL</span>
+                                        <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 uppercase tracking-widest">GENERAL</span>
+                                        <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase tracking-widest">IA</span>
+                                      </>
+                                    ) : (
+                                      <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 uppercase tracking-widest">{ev.event_type}</span>
+                                    )}
+                                  </div>
                                   <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
-                                  <p className="text-[8px] text-gray-400 font-medium mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''}{isNota ? '' : ` · ${ev.event_type}`}</p>
+                                  {!ev.analysis_result && ev.description && !ev.description.startsWith('[Foto]') && (
+                                    <p className="text-[10px] text-gray-500 mt-0.5 whitespace-pre-wrap">{ev.description}</p>
+                                  )}
                                 </div>
                                 {ev.audio_url && (
                                   <div className="px-3 pb-2">
                                     <audio controls src={ev.audio_url} className="w-full rounded-lg" style={{ height: '28px' }} />
                                   </div>
                                 )}
-                                {ev.photo_url && (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-24 object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setLightboxUrl(ev.photo_url)} />
+                                {/* Fotos — grid multi-imagen */}
+                                {(() => {
+                                  const urls = (ev.photo_urls?.length ? ev.photo_urls : ev.photo_url ? [ev.photo_url] : []) as string[]
+                                  if (!urls.length) return null
+                                  return (
+                                    <div className={`grid gap-1 px-3 pb-2 ${urls.length === 1 ? 'grid-cols-1' : urls.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                      {urls.map((u: string, i: number) => (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img key={i} src={u} alt="Evidencia" className={`w-full object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity ${urls.length === 1 ? 'max-h-60' : 'aspect-square'}`} onClick={() => setLightboxUrl(u)} />
+                                      ))}
+                                    </div>
+                                  )
+                                })()}
+                                {/* Chips de IA (CC) */}
+                                {ev.analysis_result != null && (
+                                  <div className="px-3 pb-2 space-y-1.5">
+                                    <div className="flex gap-1.5 flex-wrap">
+                                      {[
+                                        { l: 'CC',     v: ev.analysis_result.bcs_score != null ? `${Number(ev.analysis_result.bcs_score).toFixed(1)}/5` : null },
+                                        { l: 'Peso',   v: ev.analysis_result.estimated_weight_kg != null ? `${ev.analysis_result.estimated_weight_kg} kg` : null },
+                                        { l: 'Ijar',   v: ev.analysis_result.ruminal_fill_score != null ? `${ev.analysis_result.ruminal_fill_score}/5` : null },
+                                        { l: 'MS/d',   v: ev.analysis_result.daily_dry_matter_demand_kg != null ? `${ev.analysis_result.daily_dry_matter_demand_kg} kg` : null },
+                                        { l: 'Fecal',  v: ev.analysis_result.fecal_score != null ? `${ev.analysis_result.fecal_score}/5` : null },
+                                      ].filter(item => item.v != null).map(item => (
+                                        <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
+                                          <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
+                                          <p className="text-[10px] font-black text-violet-800">{item.v}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {ev.analysis_result.category_biotype && (
+                                      <p className="text-[9px] text-gray-500 leading-snug">
+                                        <span className="font-bold text-gray-600">Biotipo:</span> {ev.analysis_result.category_biotype}
+                                      </p>
+                                    )}
+                                    {ev.analysis_result.recommendation && (
+                                      <p className="text-[9px] text-green-700 bg-green-50 rounded-lg px-2 py-1.5 leading-snug border border-green-100">
+                                        {ev.analysis_result.recommendation}
+                                      </p>
+                                    )}
+                                  </div>
                                 )}
-                                {!ev.audio_url && !ev.photo_url && <div className="pb-1" />}
+                                <div className="px-3 pb-2">
+                                  <p className="text-[8px] text-gray-300 font-medium">
+                                    {ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''}
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           )
@@ -2840,18 +2911,28 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
 
                         return (
                           <div key={ev.id} className="flex gap-2.5 group">
-                            <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0 z-10">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 z-10 border ${type === 'audio' ? 'bg-red-50 border-red-200' : type === 'foto' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100'}`}>
                               {type === 'audio' ? <Mic className="w-3.5 h-3.5 text-red-500" /> :
                                type === 'foto' ? <Camera className="w-3.5 h-3.5 text-green-600" /> :
                                isNota ? <FileText className="w-3.5 h-3.5 text-gray-500" /> :
                                <div className="w-2 h-2 rounded-full bg-gray-400" />}
                             </div>
-                            <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all">
-                              <div className="px-3 py-2 flex items-start justify-between gap-2">
+                            <div className="flex-1 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-sm transition-all relative">
+                              <div className="px-3 pt-2 pb-1.5 flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap gap-1 mb-0.5">
+                                    {ev.analysis_result != null ? (
+                                      <>
+                                        <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase tracking-widest">CONDICIÓN CORPORAL</span>
+                                        <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 uppercase tracking-widest">GENERAL</span>
+                                        <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 uppercase tracking-widest">IA</span>
+                                      </>
+                                    ) : (
+                                      <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 uppercase tracking-widest">{ev.event_type}</span>
+                                    )}
+                                  </div>
                                   <p className="text-[11px] font-black text-gray-900 leading-tight">{ev.title}</p>
-                                  <p className="text-[9px] text-gray-400 mt-0.5">{ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''}{isNota ? '' : ` · ${ev.event_type}`}</p>
-                                  {ev.description && !ev.description.startsWith('[Foto]') && (
+                                  {!ev.analysis_result && ev.description && !ev.description.startsWith('[Foto]') && (
                                     <p className="text-[10px] text-gray-500 mt-0.5 whitespace-pre-wrap">{ev.description}</p>
                                   )}
                                   {ev.audio_url && (
@@ -2859,14 +2940,57 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                                   )}
                                 </div>
                                 <button type="button" onClick={() => setEventToDelete(ev)}
-                                  className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all shrink-0">
+                                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all shrink-0">
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                              {ev.photo_url && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={ev.photo_url} alt="Evidencia" className="w-full max-h-60 object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setLightboxUrl(ev.photo_url)} />
+                              {/* Fotos — grid multi-imagen */}
+                              {(() => {
+                                const urls = (ev.photo_urls?.length ? ev.photo_urls : ev.photo_url ? [ev.photo_url] : []) as string[]
+                                if (!urls.length) return null
+                                return (
+                                  <div className={`grid gap-1 px-3 pb-2 ${urls.length === 1 ? 'grid-cols-1' : urls.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                    {urls.map((u: string, i: number) => (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img key={i} src={u} alt="Evidencia" className={`w-full object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity ${urls.length === 1 ? 'max-h-60' : 'aspect-square'}`} onClick={() => setLightboxUrl(u)} />
+                                    ))}
+                                  </div>
+                                )
+                              })()}
+                              {/* Chips de IA (CC) */}
+                              {ev.analysis_result != null && (
+                                <div className="px-3 pb-2 space-y-1.5">
+                                  <div className="flex gap-1.5 flex-wrap">
+                                    {[
+                                      { l: 'CC',     v: ev.analysis_result.bcs_score != null ? `${Number(ev.analysis_result.bcs_score).toFixed(1)}/5` : null },
+                                      { l: 'Peso',   v: ev.analysis_result.estimated_weight_kg != null ? `${ev.analysis_result.estimated_weight_kg} kg` : null },
+                                      { l: 'Ijar',   v: ev.analysis_result.ruminal_fill_score != null ? `${ev.analysis_result.ruminal_fill_score}/5` : null },
+                                      { l: 'MS/d',   v: ev.analysis_result.daily_dry_matter_demand_kg != null ? `${ev.analysis_result.daily_dry_matter_demand_kg} kg` : null },
+                                      { l: 'Fecal',  v: ev.analysis_result.fecal_score != null ? `${ev.analysis_result.fecal_score}/5` : null },
+                                    ].filter(item => item.v != null).map(item => (
+                                      <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
+                                        <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
+                                        <p className="text-[10px] font-black text-violet-800">{item.v}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {ev.analysis_result.category_biotype && (
+                                    <p className="text-[9px] text-gray-500 leading-snug">
+                                      <span className="font-bold text-gray-600">Biotipo:</span> {ev.analysis_result.category_biotype}
+                                    </p>
+                                  )}
+                                  {ev.analysis_result.recommendation && (
+                                    <p className="text-[9px] text-green-700 bg-green-50 rounded-lg px-2 py-1.5 leading-snug border border-green-100">
+                                      {ev.analysis_result.recommendation}
+                                    </p>
+                                  )}
+                                </div>
                               )}
+                              <div className="px-3 pb-2">
+                                <p className="text-[8px] text-gray-300 font-medium">
+                                  {ev.event_date}{ev.end_date ? ` → ${ev.end_date}` : ''}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         )
@@ -2892,7 +3016,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
                 <Check className="w-7 h-7 text-green-600" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-lg font-black text-gray-900">Cambios guardados</h3>
+                <h3 className="modal-title">Cambios guardados</h3>
                 <p className="text-sm text-gray-500 leading-relaxed">
                   Los cambios fueron guardados correctamente en el dispositivo.
                   Cuando la aplicación esté online, se sincronizarán automáticamente.
@@ -2941,7 +3065,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-xl font-black text-gray-900">¿Eliminar registro?</h3>
+              <h3 className="modal-title">¿Eliminar registro?</h3>
               <p className="text-xs text-gray-500 leading-relaxed">
                 Vas a eliminar el evento <span className="font-bold text-gray-700">"{eventToDelete.title}"</span>. 
                 Si este evento modificó el stock (ej. Parición, Mortandad, Compra, Venta), el stock general del rodeo se revertirá automáticamente.

@@ -409,7 +409,7 @@ export default function ExcelImporter({ paddocks, herds, onClose, onImported }: 
               <FileSpreadsheet className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-gray-950">Importar desde Excel</h3>
+              <h3 className="modal-title">Importar desde Excel</h3>
               <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">
                 {filename || 'Ningún archivo seleccionado'} · {' '}
                 {step === 'upload' ? 'Paso 1 de 4' : step === 'columns' ? 'Paso 2 de 4' : step === 'match' ? 'Paso 3 de 4' : step === 'confirm' ? 'Paso 4 de 4' : 'Listo'}
@@ -808,9 +808,9 @@ export default function ExcelImporter({ paddocks, herds, onClose, onImported }: 
                     <Check className="w-8 h-8 text-green-600" />
                   </div>
                   <div className="text-center">
-                    <p className="text-xl font-black text-gray-900">
+                    <h3 className="modal-title">
                       {importedCount} movimiento{importedCount > 1 ? 's' : ''} importado{importedCount > 1 ? 's' : ''}
-                    </p>
+                    </h3>
                     <p className="text-sm text-gray-400 mt-1 font-medium">
                       Ya aparecen en el Gantt. Podés ajustar fechas y detalles directamente desde ahí.
                     </p>

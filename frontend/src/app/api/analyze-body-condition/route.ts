@@ -28,14 +28,18 @@ Analizá esta(s) imagen(es) de un animal o rebaño (especie principal: ${species
 
 El JSON debe tener exactamente estos campos:
 {
-  "bcs_score": número con un decimal (escala 1-5 para bovinos/ovinos, 1-9 para equinos),
-  "bcs_scale": "1-5" o "1-9",
+  "category_biotype": texto en español (categoría y biotipo inferido del animal visible, ej: "Vaca Hereford media sangre", "Vaquillona Angus", "Ternero mestizo cruzado"),
+  "bcs_score": número con un decimal (escala 1-5 para bovinos/ovinos),
+  "bcs_scale": "1-5",
   "condition_label": "MUY FLACO" | "FLACO" | "MODERADO" | "BUENO" | "OBESO",
   "condition_es": descripción en español del estado corporal observado (1-2 oraciones),
+  "estimated_weight_kg": número estimado de peso vivo del animal en kg (o null si no se puede estimar),
+  "ruminal_fill_score": número del 1 al 5 evaluando el llenado ruminal (fosa del ijar): 1=muy vacío, 3=normal, 5=muy lleno (o null si no es visible),
+  "daily_dry_matter_demand_kg": número estimado de demanda diaria individual de materia seca en kg MS/día (calculado como peso_vivo_kg × 0.024 si hay buen estado, ajustado por CC),
+  "fecal_score": número del 1 al 5 evaluando el score fecal si las heces son visibles en la imagen (1=muy líquido, 3=normal, 5=muy seco), o null si no son visibles,
   "visible_signs": array de strings con señales visibles observadas (ej: ["costillas visibles", "grupa hundida", "lomo estrecho"]),
   "recommendation": recomendación práctica en español para el ganadero (2-3 oraciones),
   "nutritional_status": "DEFICIENTE" | "BAJO" | "OPTIMO" | "EXCESO",
-  "estimated_weight_kg": number estimado de peso vivo del animal en kg (o null si no se puede estimar),
   "alert_level": "NINGUNA" | "ATENCION" | "URGENTE",
   "alert_reason": razón de la alerta en español (o null si no hay alerta),
   "confidence": número entre 0 y 1 indicando confianza del análisis,

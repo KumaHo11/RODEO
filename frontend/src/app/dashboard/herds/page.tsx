@@ -979,8 +979,22 @@ export default function HerdsPage() {
                               <div className="w-px h-6 bg-gray-100" />
                               <div>
                                 <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-0.5">MS/día</p>
-                                <p className="text-sm font-black text-gray-500">{Math.round(ev * 11).toLocaleString('es-AR')} <span className="text-gray-400 font-medium">kg</span></p>
+                                <p className="text-sm font-black text-gray-500">
+                                  {herd.ms_dia_kg
+                                    ? Math.round(Number(herd.ms_dia_kg)).toLocaleString('es-AR')
+                                    : Math.round(ev * 11).toLocaleString('es-AR')
+                                  } <span className="text-gray-400 font-medium">kg</span>
+                                </p>
                               </div>
+                              {herd.bcs_score != null && (
+                                <>
+                                  <div className="w-px h-6 bg-gray-100" />
+                                  <div>
+                                    <p className="text-[9px] font-black text-gray-300 tracking-widest uppercase mb-0.5">CC</p>
+                                    <p className="text-sm font-black text-gray-500">{Number(herd.bcs_score).toFixed(1)}</p>
+                                  </div>
+                                </>
+                              )}
                             </div>
                             <div className="mt-3 pt-3 border-t border-gray-50 flex justify-end gap-2">
                               <button
@@ -1261,30 +1275,69 @@ export default function HerdsPage() {
         onApply={async (result, uploadedUrls) => {
           if (!aiTargetHerd) return
           try {
+            // 1. Actualizar el herd con bcs_score y peso estimado
+            const herdPatch: Record<string, any> = {
+              bcs_score: result.bcs_score ?? null,
+            }
+            if (result.estimated_weight_kg) herdPatch.avg_weight_kg = result.estimated_weight_kg
             await apiFetch(`/api/herds/${aiTargetHerd.id}`, {
               method: 'PATCH',
-              body: JSON.stringify({ 
-                bcs_score: result.bcs_score,
-                ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {})
-              })
+              body: JSON.stringify(herdPatch),
             })
 
-            // Registrar evento en historial
+            // 2. Construir descripción con TODOS los campos de IA
+            const descParts: string[] = []
+            if (result.bcs_score != null)               descParts.push(`CC: ${result.bcs_score}/5 (${result.condition_label ?? ''})`)
+            if (result.category_biotype)                descParts.push(`Biotipo: ${result.category_biotype}`)
+            if (result.estimated_weight_kg != null)     descParts.push(`Peso estimado: ${result.estimated_weight_kg} kg`)
+            if (result.ruminal_fill_score != null)      descParts.push(`Llenado ruminal: ${result.ruminal_fill_score}/5`)
+            if (result.daily_dry_matter_demand_kg != null) descParts.push(`Demanda MS: ${result.daily_dry_matter_demand_kg} kg/día`)
+            if (result.fecal_score != null)             descParts.push(`Score fecal: ${result.fecal_score}/5`)
+            if (result.estimated_error_pct != null)     descParts.push(`Error estimado: ±${result.estimated_error_pct}%`)
+            if (result.recommendation)                  descParts.push(`Recomendación: ${result.recommendation}`)
+
+            // 3. Registrar en historial con TODAS las imágenes y campos
             await apiFetch('/api/farm-events', {
               method: 'POST',
               body: JSON.stringify({
                 title: `Condición Corporal IA: ${aiTargetHerd.name}`,
                 event_type: 'NUTRITION',
-                event_date: new Date().toISOString(),
-                status: 'COMPLETED',
+                event_date: new Date().toISOString().split('T')[0],
+                status: 'completado',
                 herd_id: aiTargetHerd.id,
-                description: `CC: ${result.bcs_score} (${result.condition_label}).\n${result.recommendation}`,
+                herd_ids: [aiTargetHerd.id],
+                description: descParts.join(' · '),
                 photo_url: uploadedUrls?.[0] || null,
-                source: 'rodeo'
-              })
+                photo_urls: uploadedUrls || [],
+                analysis_result: {
+                  bcs_score:                    result.bcs_score ?? null,
+                  condition_label:              result.condition_label ?? null,
+                  category_biotype:             result.category_biotype ?? null,
+                  estimated_weight_kg:          result.estimated_weight_kg ?? null,
+                  ruminal_fill_score:           result.ruminal_fill_score ?? null,
+                  daily_dry_matter_demand_kg:   result.daily_dry_matter_demand_kg ?? null,
+                  fecal_score:                  result.fecal_score ?? null,
+                  estimated_error_pct:          result.estimated_error_pct ?? null,
+                  recommendation:               result.recommendation ?? null,
+                  alert_level:                  result.alert_level ?? null,
+                  alert_reason:                 result.alert_reason ?? null,
+                  condition:                    result.condition ?? null,
+                },
+                source: 'rodeo',
+              }),
             })
 
-            window.location.reload()
+            // 4. Actualizar estado local (evita reload página entera)
+            setHerds(prev => prev.map(h =>
+              h.id === aiTargetHerd.id
+                ? { ...h, bcs_score: result.bcs_score ?? h.bcs_score, ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {}) }
+                : h
+            ))
+            setUngrouped(prev => prev.map(h =>
+              h.id === aiTargetHerd.id
+                ? { ...h, bcs_score: result.bcs_score ?? h.bcs_score, ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {}) }
+                : h
+            ))
           } catch (e) {
             console.error(e)
           }

@@ -93,7 +93,8 @@ export function Modal({
           <div>
             <h2
               id="modal-title"
-              className="text-base font-black text-gray-950 tracking-tight"
+              className="font-black text-gray-950 tracking-tight"
+              style={{ fontSize: '18px' }}
             >
               {title}
             </h2>

@@ -1007,7 +1007,7 @@ export default function PaddockModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
           <div>
-            <h3 className="text-xl font-black text-gray-950 tracking-tight">
+            <h3 className="modal-title tracking-tight">
               {isCreating ? 'Nuevo potrero' : paddock.name}
             </h3>
             <p className="text-xs text-gray-500 font-medium mt-0.5">
@@ -1591,17 +1591,33 @@ export default function PaddockModal({
                                 )
                               })()}
                               {hasAI && (
-                                <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
-                                  {[
-                                    { l: 'MS/ha', v: `${note.analysis_result.dry_matter_kg_ha} kg` },
-                                    { l: 'Alt.', v: `${note.analysis_result.grass_height_cm ?? '—'} cm` },
-                                    { l: 'Cob.', v: `${note.analysis_result.coverage_pct ?? '—'}%` },
-                                  ].map(item => (
-                                    <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
-                                      <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
-                                      <p className="text-[10px] font-black text-violet-800">{item.v}</p>
-                                    </div>
-                                  ))}
+                                <div className="px-3 pb-2 space-y-1.5">
+                                  <div className="flex gap-1.5 flex-wrap">
+                                    {[
+                                      { l: 'MS/ha', v: note.analysis_result.dry_matter_kg_ha ? `${Number(note.analysis_result.dry_matter_kg_ha).toLocaleString('es')} kg` : null },
+                                      { l: 'Alt.',  v: note.analysis_result.grass_height_cm != null ? `${note.analysis_result.grass_height_cm} cm` : null },
+                                      { l: 'Cob.',  v: note.analysis_result.coverage_pct != null ? `${note.analysis_result.coverage_pct}%` : null },
+                                      { l: 'PC',    v: note.analysis_result.protein_content_pct != null ? `${note.analysis_result.protein_content_pct}%` : null },
+                                      { l: 'Verde', v: note.analysis_result.green_ratio_pct != null ? `${note.analysis_result.green_ratio_pct}%` : null },
+                                      { l: 'Rem.',  v: note.analysis_result.suggested_remnant_pct != null ? `${note.analysis_result.suggested_remnant_pct}%` : null },
+                                    ].filter(item => item.v !== null).map(item => (
+                                      <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
+                                        <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
+                                        <p className="text-[10px] font-black text-violet-800">{item.v}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {note.analysis_result.dominant_species && (
+                                    <p className="text-[9px] text-gray-500 leading-snug">
+                                      <span className="font-bold text-gray-600">Especie:</span> {note.analysis_result.dominant_species}
+                                      {note.analysis_result.phenological_stage ? ` · ${note.analysis_result.phenological_stage}` : ''}
+                                    </p>
+                                  )}
+                                  {note.analysis_result.recommendation && (
+                                    <p className="text-[9px] text-green-700 bg-green-50 rounded-lg px-2 py-1.5 leading-snug border border-green-100">
+                                      {note.analysis_result.recommendation}
+                                    </p>
+                                  )}
                                 </div>
                               )}
                               <div className="px-3 pb-2">
@@ -1833,17 +1849,33 @@ export default function PaddockModal({
                                 </div>
                               )}
                               {hasAI && (
-                                <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
-                                  {[
-                                    { l: 'MS/ha', v: `${note.analysis_result.dry_matter_kg_ha} kg` },
-                                    { l: 'Alt.', v: `${note.analysis_result.grass_height_cm ?? '—'} cm` },
-                                    { l: 'Cob.', v: `${note.analysis_result.coverage_pct ?? '—'}%` },
-                                  ].map(item => (
-                                    <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
-                                      <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
-                                      <p className="text-[10px] font-black text-violet-800">{item.v}</p>
-                                    </div>
-                                  ))}
+                                <div className="px-3 pb-2 space-y-1.5">
+                                  <div className="flex gap-1.5 flex-wrap">
+                                    {[
+                                      { l: 'MS/ha', v: note.analysis_result.dry_matter_kg_ha ? `${Number(note.analysis_result.dry_matter_kg_ha).toLocaleString('es')} kg` : null },
+                                      { l: 'Alt.',  v: note.analysis_result.grass_height_cm != null ? `${note.analysis_result.grass_height_cm} cm` : null },
+                                      { l: 'Cob.',  v: note.analysis_result.coverage_pct != null ? `${note.analysis_result.coverage_pct}%` : null },
+                                      { l: 'PC',    v: note.analysis_result.protein_content_pct != null ? `${note.analysis_result.protein_content_pct}%` : null },
+                                      { l: 'Verde', v: note.analysis_result.green_ratio_pct != null ? `${note.analysis_result.green_ratio_pct}%` : null },
+                                      { l: 'Rem.',  v: note.analysis_result.suggested_remnant_pct != null ? `${note.analysis_result.suggested_remnant_pct}%` : null },
+                                    ].filter(item => item.v !== null).map(item => (
+                                      <div key={item.l} className="bg-violet-50 rounded-lg px-2 py-1">
+                                        <p className="text-[7px] text-violet-400 font-black uppercase">{item.l}</p>
+                                        <p className="text-[10px] font-black text-violet-800">{item.v}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {note.analysis_result.dominant_species && (
+                                    <p className="text-[9px] text-gray-500 leading-snug">
+                                      <span className="font-bold text-gray-600">Especie:</span> {note.analysis_result.dominant_species}
+                                      {note.analysis_result.phenological_stage ? ` · ${note.analysis_result.phenological_stage}` : ''}
+                                    </p>
+                                  )}
+                                  {note.analysis_result.recommendation && (
+                                    <p className="text-[9px] text-green-700 bg-green-50 rounded-lg px-2 py-1.5 leading-snug border border-green-100">
+                                      {note.analysis_result.recommendation}
+                                    </p>
+                                  )}
                                 </div>
                               )}
                               <div className="px-3 pb-2">
@@ -1869,7 +1901,7 @@ export default function PaddockModal({
                 <Check className="w-7 h-7 text-green-600" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-lg font-black text-gray-900">Cambios guardados</h3>
+                <h3 className="modal-title">Cambios guardados</h3>
                 <p className="text-sm text-gray-500 leading-relaxed">
                   Los cambios fueron guardados correctamente en el dispositivo.
                   Cuando la aplicación esté online, se sincronizarán automáticamente.

@@ -175,34 +175,54 @@ export default function SubHerdCard({ herd, onManage, onDelete }: SubHerdCardPro
       <AICameraModal
         isOpen={aiModalOpen}
         onClose={() => setAiModalOpen(false)}
-        title={`Estimar Condición Corporal: ${herd.name}`}
+        title={`Estimar condición corporal: ${herd.name}`}
         mode="body-condition"
         onApply={async (result, uploadedUrls) => {
           try {
+            // Actualizar CC y peso en el herd
             await apiFetch(`/api/herds/${herd.id}`, {
               method: 'PATCH',
-              body: JSON.stringify({ 
+              body: JSON.stringify({
                 bcs_score: result.bcs_score,
-                ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {})
-              })
+                ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {}),
+              }),
             })
 
-            // Registrar evento en historial
+            // Registrar evento en historial con todos los campos acordados
+            const descParts: string[] = []
+            if (result.category_biotype)           descParts.push(`Categoría/biotipo: ${result.category_biotype}`)
+            if (result.bcs_score)                  descParts.push(`CC: ${result.bcs_score}/5 (${result.condition_label})`)
+            if (result.estimated_weight_kg)        descParts.push(`Peso estimado: ${result.estimated_weight_kg} kg`)
+            if (result.ruminal_fill_score != null)  descParts.push(`Llenado ruminal: ${result.ruminal_fill_score}/5`)
+            if (result.daily_dry_matter_demand_kg)  descParts.push(`Demanda diaria: ${result.daily_dry_matter_demand_kg} kg MS/día`)
+            if (result.fecal_score != null)         descParts.push(`Score fecal: ${result.fecal_score}/5`)
+            if (result.estimated_error_pct)         descParts.push(`Error estimado: ±${result.estimated_error_pct}%`)
+            descParts.push(result.recommendation || '')
+
             await apiFetch('/api/farm-events', {
               method: 'POST',
               body: JSON.stringify({
-                title: `Condición Corporal IA: ${herd.name}`,
-                event_type: 'NUTRITION',
-                event_date: new Date().toISOString(),
-                status: 'COMPLETED',
-                herd_id: herd.id,
-                description: `CC: ${result.bcs_score} (${result.condition_label}).\n${result.recommendation}`,
-                photo_url: uploadedUrls?.[0] || null,
-                source: 'rodeo'
-              })
+                title:        `Condición corporal IA: ${herd.name}`,
+                event_type:   'NUTRITION',
+                event_date:   new Date().toISOString(),
+                status:       'COMPLETED',
+                herd_id:      herd.id,
+                description:  descParts.filter(Boolean).join('\n'),
+                photo_url:    uploadedUrls?.[0] || null,
+                source:       'rodeo',
+                metadata: {
+                  ruminal_fill_score:         result.ruminal_fill_score,
+                  daily_dry_matter_demand_kg: result.daily_dry_matter_demand_kg,
+                  fecal_score:                result.fecal_score,
+                  category_biotype:           result.category_biotype,
+                  ai_estimated_error_pct:     result.estimated_error_pct,
+                },
+              }),
             })
 
-            window.location.reload()
+            // Mostrar toast de confirmación (sin reload de página)
+            const { toast } = await import('sonner')
+            toast.success(`Condición corporal actualizada: CC ${result.bcs_score}/5`, { duration: 4000 })
           } catch (e) {
             console.error(e)
           }

@@ -3931,7 +3931,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-3">
                 <span className="text-2xl">⚠️</span>
               </div>
-              <h3 className="text-xl font-black text-gray-950 mb-1">Sin pasto suficiente</h3>
+              <h3 className="modal-title mb-1">Sin pasto suficiente</h3>
               <p className="text-sm text-gray-500 font-medium leading-relaxed">
                 El potrero <span className="font-black text-gray-800">{overgrazingRisk.paddockName}</span> no tiene
                 biomasa disponible para este rodeo con el remanente objetivo actual.
@@ -4070,7 +4070,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between">
               <div>
-                <p className="text-xl font-black text-gray-950">{editingEventId ? 'Editar evento' : 'Nuevo evento en agenda'}</p>
+                <p className="modal-title">{editingEventId ? 'Editar evento' : 'Nuevo evento en agenda'}</p>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Vinculado al Planificador</p>
               </div>
               <button onClick={() => setShowNewEventModal(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
@@ -4304,7 +4304,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
       {suggesting && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center animate-in fade-in duration-200">
           <Loader2 className="w-12 h-12 text-green-600 animate-spin mb-4" />
-          <h2 className="text-xl font-black text-gray-900 tracking-tight">Procesando Planificación...</h2>
+          <h2 className="modal-title tracking-tight">Procesando planificación...</h2>
           <p className="text-sm font-medium text-gray-500 mt-2 text-center max-w-sm">
             Generando secuencias de pastoreo y calculando períodos de descanso regenerativo. Por favor, esperá.
           </p>

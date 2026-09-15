@@ -746,36 +746,60 @@ export default function PaddockSidePanel({
       <AICameraModal
         isOpen={!!aiModalTarget}
         onClose={() => setAiModalTarget(null)}
-        title={aiModalTarget ? `Estimar Materia Seca: ${aiModalTarget.name}` : 'Estimar Materia Seca'}
+        title={aiModalTarget ? `Estimar materia seca: ${aiModalTarget.name}` : 'Estimar materia seca'}
         mode="biomass"
         onApply={async (result, uploadedUrls) => {
           if (aiModalTarget) {
+            // Combinar los datos técnicos actuales con los nuevos campos IA
+            const updatedTechnicalData = {
+              ...(aiModalTarget.technical_data || {}),
+              dominant_species:     result.dominant_species    || result.pasture_type || undefined,
+              phenological_stage:   result.phenological_stage  || undefined,
+              coverage_pct:         result.coverage_pct        ?? undefined,
+              green_ratio_pct:      result.green_ratio_pct     ?? undefined,
+              suggested_remnant_pct: result.suggested_remnant_pct ?? undefined,
+              protein_content_pct:  result.protein_content_pct ?? undefined,
+              ai_estimated_error_pct: result.estimated_error_pct ?? undefined,
+              last_ai_analysis_at:  new Date().toISOString(),
+            }
+
             await handleModalSave(
               aiModalTarget.id,
               aiModalTarget.name,
-              aiModalTarget.technical_data || {},
+              updatedTechnicalData,
               result.dry_matter_kg_ha,
-              aiModalTarget.area_ha
+              aiModalTarget.area_ha,
             )
-            
-            // Registrar evento en historial (field-notes para potreros)
+
+            // Registrar evento en historial con todos los campos
+            const summaryParts: string[] = []
+            if (result.dry_matter_kg_ha)     summaryParts.push(`MS: ${result.dry_matter_kg_ha} kg/ha`)
+            if (result.dominant_species)      summaryParts.push(`Especie: ${result.dominant_species}`)
+            if (result.grass_height_cm)       summaryParts.push(`Altura: ${result.grass_height_cm} cm`)
+            if (result.phenological_stage)    summaryParts.push(`Fenol.: ${result.phenological_stage}`)
+            if (result.green_ratio_pct)       summaryParts.push(`Verde: ${result.green_ratio_pct}%`)
+            if (result.protein_content_pct)   summaryParts.push(`PC: ${result.protein_content_pct}%`)
+            if (result.estimated_error_pct)   summaryParts.push(`Error: ±${result.estimated_error_pct}%`)
+            if (result.condition_label)       summaryParts.push(`Estado: ${result.condition_label}`)
+
             await apiFetch('/api/field-notes', {
               method: 'POST',
               body: JSON.stringify({
-                title: `Estimación Materia Seca IA: ${aiModalTarget.name}`,
-                category: 'BIOMASA',
-                tags: ['BIOMASA'],
-                paddock_id: aiModalTarget.id,
-                content: `MS: ${result.dry_matter_kg_ha} kg/ha. Altura: ${result.grass_height_cm}cm. Estado: ${result.condition_label}.`,
-                photo_url: uploadedUrls?.[0] || null,
-                photo_urls: uploadedUrls || [],
+                title:          `Estimación materia seca IA: ${aiModalTarget.name}`,
+                category:       'BIOMASA',
+                tags:           ['BIOMASA', 'IA'],
+                paddock_id:     aiModalTarget.id,
+                content:        summaryParts.join('. ') + '.',
+                photo_url:      uploadedUrls?.[0] || null,
+                photo_urls:     uploadedUrls || [],
                 analysis_result: result,
-              })
+              }),
             })
           }
           setAiModalTarget(null)
         }}
       />
+
     </>
   )
 }

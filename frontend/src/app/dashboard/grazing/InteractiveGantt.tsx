@@ -2261,7 +2261,7 @@ function InteractiveGantt({
                 className="w-6 h-6 rounded-lg bg-white/80 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white transition-all text-xs border border-gray-100"
               >✕</button>
             </div>
-            <h3 className="text-2xl font-black text-gray-950 leading-tight">
+            <h3 className="modal-title leading-tight">
               {selectedGap.deficit_days} día{selectedGap.deficit_days !== 1 ? 's' : ''} sin forraje
             </h3>
             <p className="text-sm text-gray-500 mt-1">
@@ -2332,7 +2332,7 @@ function InteractiveGantt({
           <button onClick={() => setShowHerdDecisionModal(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
             <X className="w-4 h-4" />
           </button>
-          <h3 className="text-lg font-black text-gray-900 mb-2">Añadir Animales</h3>
+          <h3 className="modal-title mb-2">Añadir animales</h3>
           <p className="text-xs text-gray-500 mb-6 font-medium">¿Qué tipo de stock necesitás registrar?</p>
           
           <div className="space-y-3">
@@ -2380,7 +2380,7 @@ function InteractiveGantt({
           <div className="bg-white rounded-3xl shadow-2xl max-w-[95vw] w-full max-h-[90vh] flex flex-col pointer-events-auto">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
-                <h2 className="text-xl font-black text-gray-900 tracking-tight">Detalle de carga animal</h2>
+                <h2 className="modal-title tracking-tight">Detalle de carga animal</h2>
                 <p className="text-xs text-gray-500 font-medium mt-1">Composición mensual — hacé clic en las cabezas para editar</p>
               </div>
               <button onClick={() => setShowAnnualHerdModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">

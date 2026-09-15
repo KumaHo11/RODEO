@@ -235,40 +235,57 @@ export default function LoteCard({
       <AICameraModal
         isOpen={aiModalOpen}
         onClose={() => setAiModalOpen(false)}
-        title={`Estimar Condición Corporal: ${lote.nombre}`}
+        title={`Estimar condición corporal: ${lote.nombre}`}
         mode="body-condition"
         onApply={async (result, uploadedUrls) => {
           try {
+            // Actualizar CC y peso en todos los sub-rodeos del lote
             await Promise.all(
               lote.hijos.map(herd =>
                 apiFetch(`/api/herds/${herd.id}`, {
                   method: 'PATCH',
-                  body: JSON.stringify({ 
+                  body: JSON.stringify({
                     bcs_score: result.bcs_score,
-                    ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {})
-                  })
+                    ...(result.estimated_weight_kg ? { avg_weight_kg: result.estimated_weight_kg } : {}),
+                  }),
                 })
               )
             )
 
-            // Registrar evento en historial
+            // Registrar evento en historial con todos los campos acordados
+            const descParts: string[] = []
+            if (result.category_biotype)           descParts.push(`Categoría/biotipo: ${result.category_biotype}`)
+            if (result.bcs_score)                  descParts.push(`CC: ${result.bcs_score}/5 (${result.condition_label})`)
+            if (result.estimated_weight_kg)        descParts.push(`Peso estimado: ${result.estimated_weight_kg} kg`)
+            if (result.ruminal_fill_score != null)  descParts.push(`Llenado ruminal: ${result.ruminal_fill_score}/5`)
+            if (result.daily_dry_matter_demand_kg)  descParts.push(`Demanda diaria: ${result.daily_dry_matter_demand_kg} kg MS/día`)
+            if (result.fecal_score != null)         descParts.push(`Score fecal: ${result.fecal_score}/5`)
+            if (result.estimated_error_pct)         descParts.push(`Error estimado: ±${result.estimated_error_pct}%`)
+            descParts.push(result.recommendation || '')
+
             await apiFetch('/api/farm-events', {
               method: 'POST',
               body: JSON.stringify({
-                title: `Condición Corporal IA: ${lote.nombre}`,
-                event_type: 'NUTRITION',
-                event_date: new Date().toISOString(),
-                status: 'COMPLETED',
-                herd_ids: lote.hijos.map(h => h.id),
-                description: `CC: ${result.bcs_score} (${result.condition_label}).\n${result.recommendation}`,
-                photo_url: uploadedUrls?.[0] || null,
-                source: 'rodeo'
-              })
+                title:       `Condición corporal IA: ${lote.nombre}`,
+                event_type:  'NUTRITION',
+                event_date:  new Date().toISOString(),
+                status:      'COMPLETED',
+                herd_ids:    lote.hijos.map(h => h.id),
+                description: descParts.filter(Boolean).join('\n'),
+                photo_url:   uploadedUrls?.[0] || null,
+                source:      'rodeo',
+                metadata: {
+                  ruminal_fill_score:         result.ruminal_fill_score,
+                  daily_dry_matter_demand_kg: result.daily_dry_matter_demand_kg,
+                  fecal_score:                result.fecal_score,
+                  category_biotype:           result.category_biotype,
+                  ai_estimated_error_pct:     result.estimated_error_pct,
+                },
+              }),
             })
 
-            // Ideally we should trigger a refresh, but we don't have a callback for that in LoteCard props
-            // So we just close and optionally show a toast/alert or force reload
-            window.location.reload()
+            const { toast } = await import('sonner')
+            toast.success(`Condición corporal actualizada: CC ${result.bcs_score}/5 para ${lote.nombre}`, { duration: 4000 })
           } catch (e) {
             console.error(e)
           }

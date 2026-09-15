@@ -40,10 +40,10 @@ export async function GET(req: NextRequest) {
       `SELECT column_name FROM information_schema.columns
        WHERE table_name = 'farm_events'
          AND column_name = ANY($1)`,
-      [['source', 'bulls_count', 'bulls_weight', 'herd_ids', 'photo_url', 'audio_url']]
+      [['source', 'bulls_count', 'bulls_weight', 'herd_ids', 'photo_url', 'audio_url', 'photo_urls', 'analysis_result']]
     )
     const existingCols = new Set(colRows.map(r => r.column_name))
-    const optionals = ['source','bulls_count','bulls_weight','herd_ids','photo_url','audio_url']
+    const optionals = ['source','bulls_count','bulls_weight','herd_ids','photo_url','audio_url','photo_urls','analysis_result']
       .filter(c => existingCols.has(c))
     const selectCols = [
       'id', 'org_id', 'title', 'event_type',
@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
       title, event_type, event_date, end_date,
       herd_id, herd_ids, paddock_id, description, status,
       assigned_to, bulls_count, bulls_weight, photo_url, audio_url,
+      photo_urls,     // string[]  — todas las URLs subidas
+      analysis_result, // object   — resultado IA completo
       source, // 'agenda' (default) | 'rodeo' | 'planner'
     } = body
 
@@ -172,6 +174,30 @@ export async function POST(req: NextRequest) {
         )
       } catch {
         // Columna no existe aún — ejecutar: ALTER TABLE farm_events ADD COLUMN idempotency_key TEXT;
+      }
+    }
+
+    // Step 6: photo_urls (array JSON con todas las fotos subidas)
+    if (id && Array.isArray(photo_urls) && photo_urls.length > 0) {
+      try {
+        await serviceMutate(
+          `UPDATE farm_events SET photo_urls = $1 WHERE id = $2`,
+          [JSON.stringify(photo_urls), id]
+        )
+      } catch {
+        // Columna no existe aún — ejecutar: ALTER TABLE farm_events ADD COLUMN photo_urls JSONB;
+      }
+    }
+
+    // Step 7: analysis_result (objeto JSON con todos los campos de IA)
+    if (id && analysis_result != null) {
+      try {
+        await serviceMutate(
+          `UPDATE farm_events SET analysis_result = $1 WHERE id = $2`,
+          [JSON.stringify(analysis_result), id]
+        )
+      } catch {
+        // Columna no existe aún — ejecutar: ALTER TABLE farm_events ADD COLUMN analysis_result JSONB;
       }
     }
 
