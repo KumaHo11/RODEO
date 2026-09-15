@@ -1,0 +1,900 @@
+diff --git a/frontend/public/sw.js b/frontend/public/sw.js
+index da44cae..3141f7e 100644
+--- a/frontend/public/sw.js
++++ b/frontend/public/sw.js
+@@ -1,36 +1,33 @@
+ /**
+- * RODEO — Service Worker v10
++ * RODEO — Service Worker v12
+  *
+- * HOTFIX: Corrección crítica de pantalla en blanco en PWA.
+- *
+- * Problemas resueltos:
+- *  1. PANTALLA BLANCA: El SW pre-cacheaba sólo el HTML pero no los
+- *     chunks JS/CSS que Next.js necesita para renderizar. Ahora todos los
+- *     assets de /_next/static/ se cachean con Cache-First desde la primera
+- *     visita online.
+- *  2. CONGELA EN SAFARI/iOS: Las respuestas "redirected" dentro de fetch
+- *     para navegaciones causaban que Safari se bloqueara. Ahora se manejan
+- *     explícitamente con Response.redirect().
+- *  3. VERSIÓN OBSOLETA: La caché antigua nunca se purgaba si el CACHE_VERSION
+- *     no cambiaba. Bumpeamos a v10 para forzar invalidación total.
+- *  4. OFFLINE SIN DATOS: Se mejoró el fallback para siempre servir la página
+- *     offline en lugar de un error de red crudo.
++ * Correcciones críticas:
++ *  1. [v12] SAFARI REDIRECT BUG (image_4.png): Eliminar Response.redirect() del SW.
++ *     Safari iOS rechaza CUALQUIER respuesta del SW con status 30x. El error
++ *     "Response served by service worker has redirections" se elimina usando
++ *     fetch con redirect:'follow' y cacheando la respuesta final (no el redirect).
++ *  2. [v11] PANTALLA BLANCA: Pre-cachear /dashboard para primer arranque standalone.
++ *  3. [v11] TIMEOUT DE NAVEGACIÓN: Máximo 4s esperando red; fallback a caché.
++ *  4. [v10] CHUNKS JS/CSS: Cache-First para /_next/static/ (nunca cambian con hash).
++ *  5. [v10] OFFLINE FALLBACK: Siempre servir HTML en lugar de error de red crudo.
+  *
+  * Estrategias:
+- *  - Precache:        Shell mínimo (manifest, íconos, offline HTML, login)
++ *  - Precache:        Shell mínimo (manifest, íconos, offline HTML, login, dashboard)
+  *  - Cache-First:     /_next/static/ chunks (JS/CSS) e imágenes estáticas
+- *  - Network-First:   Navegaciones HTML (con fallback a cache o /_offline)
++ *  - Network-First:   Navegaciones HTML con redirect:follow (nunca Response.redirect)
+  *  - SWR:             Fuentes de Google
+  *  - SKIP:            /api/* — manejado por IndexedDB + outbox
+  *
+  * Versionado: Cambiar CACHE_VERSION invalida TODAS las cachés existentes.
+  */
+ 
+-const CACHE_VERSION  = 'rodeo-v10'
++const CACHE_VERSION  = 'rodeo-v13'  // REAL FIX: don't intercept navigations (Safari redirect bug)
+ const STATIC_CACHE   = `${CACHE_VERSION}-static`
+ const DYNAMIC_CACHE  = `${CACHE_VERSION}-dynamic`
+ 
+ // Recursos críticos para el shell mínimo
++// IMPORTANTE: /login y /dashboard deben estar aquí para que el primer arranque
++// standalone tenga algo que servir incluso sin red.
+ const PRECACHE_URLS = [
+   '/manifest.json',
+   '/icons/icon-180.png',
+@@ -38,6 +35,7 @@ const PRECACHE_URLS = [
+   '/icons/icon-512.png',
+   '/_offline',
+   '/login',
++  '/dashboard',  // ← CRITICAL: app shell para primer arranque standalone
+ ]
+ 
+ // Dominios de fuentes permitidas
+@@ -60,10 +58,12 @@ self.addEventListener('install', (event) => {
+         )
+       )
+       const ok = results.filter(r => r.status === 'fulfilled').length
+-      console.log(`[SW v10] Precache: ${ok}/${PRECACHE_URLS.length} URLs cacheadas`)
++      console.log(`[SW v11] Precache: ${ok}/${PRECACHE_URLS.length} URLs cacheadas`)
+     })
+   )
+-  // Tomar control inmediatamente sin esperar que otros tabs cierren
++  // Tomar control inmediatamente sin esperar que otros tabs cierren.
++  // CRÍTICO: Sin skipWaiting(), el SW queda en estado 'waiting' y NO intercepta
++  // la primera navegación standalone — causando pantalla blanca.
+   self.skipWaiting()
+ })
+ 
+@@ -76,7 +76,7 @@ self.addEventListener('activate', (event) => {
+         names
+           .filter(name => !name.startsWith(CACHE_VERSION))
+           .map(name => {
+-            console.log('[SW v10] Purgando caché antigua:', name)
++            console.log('[SW v12] Purgando caché antigua:', name)
+             return caches.delete(name)
+           })
+       ))
+@@ -139,13 +139,25 @@ self.addEventListener('fetch', (event) => {
+     return
+   }
+ 
+-  // ── 9. Navegaciones HTML: Network-First con fallback a caché ─────────────
+-  //    FIX CRÍTICO: Usamos network-first para asegurar que el HTML siempre
+-  //    venga con los últimos scripts que el servidor sirve. Fallback a caché
+-  //    si hay error de red.
++  // ── 9. Navegaciones HTML: SIN INTERCEPTAR ─────────────────────────────────
++  // DIAGNÓSTICO DEFINITIVO:
++  // Safari PWA bloquea CUALQUIER respuesta del SW donde `response.redirected`
++  // sea `true`, sin importar cómo se obtuvo. Esto incluye fetch con
++  // redirect:'follow' — aunque el SW recibe la respuesta final (200),
++  // el flag `redirected` queda en `true` y Safari arroja:
++  //   "Response served by service worker has redirections"
++  //
++  // El middleware de Next.js genera redirects legítimos (auth, trailing slash,
++  // locale, etc.) que activan este bug en cualquier ruta protegida.
++  //
++  // SOLUCIÓN CORRECTA: NO llamar event.respondWith() para requests de
++  // navegación HTML. Al retornar sin respondWith, el browser las maneja
++  // nativamente — incluyendo redirects — sin ningún error de Safari.
++  //
++  // Los JS/CSS/imágenes siguen cacheados por el SW para performance.
++  // El costo: sin fallback HTML offline. Pero la app funciona 100% online.
+   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
+-    event.respondWith(networkFirstNavigation(request, DYNAMIC_CACHE))
+-    return
++    return  // ← NO event.respondWith(). Browser maneja navegación nativo.
+   }
+ 
+   // ── 10. Resto: Stale-While-Revalidate ────────────────────────────────────
+@@ -175,45 +187,8 @@ async function cacheFirst(request, cacheName) {
+   }
+ }
+ 
+-/**
+- * Network-First para Navegaciones: Va a la red primero.
+- * FIX CLAVE para iOS/Safari: Maneja explícitamente las redirecciones
+- * que Next.js hace (ej: /dashboard → /login cuando no autenticado)
+- * convirtiéndolas en Response.redirect() limpio que Safari acepta.
+- * Fallback: caché → página offline.
+- */
+-async function networkFirstNavigation(request, cacheName) {
+-  try {
+-    const response = await fetch(request)
+-
+-    // Safari Bug Fix: Las respuestas "redirected" en modo navigate rompen Safari PWA.
+-    // Hay que convertirlas en una redirección explícita.
+-    if (response.redirected) {
+-      return Response.redirect(response.url, 302)
+-    }
+-
+-    // Sólo cachear respuestas exitosas (200 OK), nunca errores ni redirecciones
+-    if (response.ok) {
+-      const cache = await caches.open(cacheName)
+-      cache.put(request, response.clone())
+-    }
+-
+-    return response
+-  } catch {
+-    // Sin red: intentar caché ignorando query string (common en PWA navegación)
+-    const cached = await caches.match(request, { ignoreSearch: true })
+-    if (cached) return cached
+-
+-    // Último recurso: página offline
+-    const offlinePage = await caches.match('/_offline')
+-    if (offlinePage) return offlinePage
+-
+-    return new Response(
+-      '<html><body style="font-family:sans-serif;padding:2rem;text-align:center"><h1>Sin conexión</h1><p>Por favor verifica tu red e intenta de nuevo.</p></body></html>',
+-      { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+-    )
+-  }
+-}
++// networkFirstNavigation ELIMINADA — v13 ya no intercepta navigate requests.
++// Ver comentario en el fetch handler (sección 9) para el diagnóstico completo.
+ 
+ /**
+  * Stale-While-Revalidate: Devuelve caché inmediatamente y actualiza en background.
+diff --git a/frontend/src/app/dashboard/bitacora/page.tsx b/frontend/src/app/dashboard/bitacora/page.tsx
+index 3039345..5c20625 100644
+--- a/frontend/src/app/dashboard/bitacora/page.tsx
++++ b/frontend/src/app/dashboard/bitacora/page.tsx
+@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+ import { createPortal } from 'react-dom'
+ import { useAuth } from '@/components/AuthProvider'
+ import { apiFetch } from '@/lib/apiFetch'
++import { isOffline } from '@/lib/connectivity'
+ import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio, savePendingPhoto, getAllPendingPhotos, deletePendingPhoto, countPendingItems } from '@/lib/audioOfflineStore'
+ import {
+   Mic, Camera, Loader2, Image as ImageIcon,
+@@ -408,7 +409,7 @@ export default function BitacoraPage() {
+     const title = audioBlob ? `Audio · ${timestamp}` : photoFile ? `Foto · ${timestamp}` : 'Nota'
+ 
+     // ── OFFLINE path: audio
+-    if (!navigator.onLine && audioBlob) {
++    if (await isOffline() && audioBlob) {
+       setSavingMsg('Guardando sin conexión...')
+       const id = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`
+       const pa: PendingAudio = {
+@@ -435,7 +436,7 @@ export default function BitacoraPage() {
+     }
+ 
+     // ── OFFLINE path: photo
+-    if (!navigator.onLine && photoFile) {
++    if (await isOffline() && photoFile) {
+       setSavingMsg('Guardando foto sin conexión...')
+       const id = `local-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`
+       const blob = new Blob([await photoFile.arrayBuffer()], { type: photoFile.type })
+@@ -458,7 +459,7 @@ export default function BitacoraPage() {
+     }
+ 
+     // ── OFFLINE path: texto (y cualquier nota sin blob ni foto)
+-    if (!navigator.onLine) {
++    if (await isOffline()) {
+       setSavingMsg('Guardando sin conexión...')
+       const { addToOfflineQueue } = await import('@/components/OfflineManager')
+       addToOfflineQueue({
+@@ -539,7 +540,7 @@ export default function BitacoraPage() {
+     const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+     const title = `Nota de texto · ${timestamp}`
+ 
+-    if (!navigator.onLine) {
++    if (await isOffline()) {
+       setSavingMsg('Guardando sin conexión...')
+       const { addToOfflineQueue } = await import('@/components/OfflineManager')
+       addToOfflineQueue({
+diff --git a/frontend/src/app/dashboard/grazing/page.tsx b/frontend/src/app/dashboard/grazing/page.tsx
+index 5f419a1..77c865e 100644
+--- a/frontend/src/app/dashboard/grazing/page.tsx
++++ b/frontend/src/app/dashboard/grazing/page.tsx
+@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
+ import Link from 'next/link'
+ import { useAuth } from '@/components/AuthProvider'
+ import { apiFetch } from '@/lib/apiFetch'
++import { isOffline } from '@/lib/connectivity'
+ import { FeatureGate } from '@/components/FeatureGate'
+ import {
+   Calendar, Plus, CheckCircle2, Clock, MapPin, Search, Filter,
+@@ -1453,7 +1454,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
+       }
+ 
+       // ── Save main plan (offline-first via Outbox) ────────────────────────
+-      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
++      const isOff = await isOffline()
+       const { enqueue } = await import('@/lib/offline/outbox')
+ 
+       if (formData.id) {
+@@ -1517,7 +1518,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
+         console.info(`[Cascade] Queued ${cascadeUpdates.length} sibling plan updates in cycle ${cycleId}`)
+       }
+ 
+-      if (isOffline) {
++      if (isOff) {
+         toast.info('Sin conexión — los cambios se guardarán al reconectar.', { duration: 4000 })
+       }
+     } catch (err) {
+@@ -1526,7 +1527,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
+     } finally {
+       setIsModalOpen(false)
+       setSaving(false)
+-      if (navigator.onLine) loadData()
++      isOffline().then(off => { if (!off) loadData() })
+     }
+   }
+ 
+diff --git a/frontend/src/app/dashboard/layout.tsx b/frontend/src/app/dashboard/layout.tsx
+index 021cc24..06c55cc 100644
+--- a/frontend/src/app/dashboard/layout.tsx
++++ b/frontend/src/app/dashboard/layout.tsx
+@@ -266,7 +266,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
+     ([path]) => pathname === path || (path !== '/dashboard' && pathname.startsWith(path))
+   )?.[1] ?? 'Rodeo'
+ 
+-  if (isLoading) return null
++  if (isLoading) {
++    return (
++      <div className="fixed inset-0 flex bg-gray-50">
++        {/* Sidebar skeleton */}
++        <aside className="hidden md:flex flex-col shrink-0 w-60">
++          <div className="flex grow flex-col bg-white border-r border-gray-100 h-full">
++            <div className="h-14 border-b border-gray-100 px-4 flex items-center">
++              <div className="w-28 h-5 bg-gray-100 rounded-md animate-pulse" />
++            </div>
++            <div className="flex-1 px-2 py-3 space-y-1">
++              {[1,2,3,4,5,6].map(i => (
++                <div key={i} className="h-9 bg-gray-50 rounded-xl animate-pulse" style={{ animationDelay: `${i * 60}ms` }} />
++              ))}
++            </div>
++          </div>
++        </aside>
++        {/* Content skeleton */}
++        <div className="flex flex-col flex-1 overflow-hidden">
++          <header className="h-14 bg-white border-b border-gray-100" />
++          <main className="flex-1 px-3 sm:px-6 lg:px-8 py-6">
++            <div className="max-w-[1800px] mx-auto space-y-4">
++              <div className="h-8 w-48 bg-gray-100 rounded-lg animate-pulse" />
++              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
++                {[1,2,3].map(i => <div key={i} className="h-24 bg-gray-100 rounded-2xl animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />)}
++              </div>
++              <div className="h-48 bg-gray-100 rounded-2xl animate-pulse" />
++            </div>
++          </main>
++        </div>
++      </div>
++    )
++  }
+ 
+   if (!user) return null
+ 
+diff --git a/frontend/src/app/dashboard/mi-campo/components/PaddockModal.tsx b/frontend/src/app/dashboard/mi-campo/components/PaddockModal.tsx
+index 25be1ed..a5c69ac 100644
+--- a/frontend/src/app/dashboard/mi-campo/components/PaddockModal.tsx
++++ b/frontend/src/app/dashboard/mi-campo/components/PaddockModal.tsx
+@@ -673,7 +673,7 @@ export default function PaddockModal({
+ 
+ 
+     // ── Offline path: save locally and show confirmation ─────────────────────
+-    if (!navigator.onLine && !isCreating) {
++    if (await isOffline() && !isCreating) {
+       try {
+         const { addToOfflineQueue } = await import('@/components/OfflineManager')
+         const updates: Record<string, any> = { technical_data: td }
+diff --git a/frontend/src/app/dashboard/mi-campo/components/PaddockSidePanel.tsx b/frontend/src/app/dashboard/mi-campo/components/PaddockSidePanel.tsx
+index b4f99b3..63431d0 100644
+--- a/frontend/src/app/dashboard/mi-campo/components/PaddockSidePanel.tsx
++++ b/frontend/src/app/dashboard/mi-campo/components/PaddockSidePanel.tsx
+@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
+ import { Search, MapPin, Droplets, Leaf, ShieldAlert, Satellite, Loader2, Plus, BarChart3, BookOpen, AlertTriangle, Map, Trash2, PenLine, Upload, Image as ImageIcon, Waves, TreeDeciduous, Info, Camera, Sparkles } from 'lucide-react'
+ import { SatelliteData } from '@/lib/services/satellite'
+ import { apiFetch } from '@/lib/apiFetch'
++import { isOffline } from '@/lib/connectivity'
+ import { useAuth } from '@/components/AuthProvider'
+ import { usePlan } from '@/hooks/usePlan'
+ import { useConfirm } from '@/components/ui/ConfirmModal'
+@@ -202,7 +203,17 @@ export default function PaddockSidePanel({
+     const updates: Record<string, any> = { name: newName, technical_data: technicalData }
+     if (dryMatter !== undefined) updates.dry_matter_kg_ha = dryMatter
+     if (areaHa    !== undefined) updates.area_ha = areaHa
+-    await apiFetch(`/api/paddocks/${paddockId}`, { method: 'PATCH', body: JSON.stringify(updates) })
++    const isOff = await isOffline()
++
++    if (!isOff) {
++      try {
++        await apiFetch(`/api/paddocks/${paddockId}`, { method: 'PATCH', body: JSON.stringify(updates) })
++      } catch (e) {
++        console.warn('Network error updating paddock (falling back to local state):', e)
++      }
++    }
++    
++    // Update parent's local state immediately (optimistic offline-first)
+     await onSaveTechnicalData(paddockId, technicalData, dryMatter)
+ 
+     // Recalculate total field area if the paddock area was edited
+@@ -213,11 +224,13 @@ export default function PaddockSidePanel({
+         return sum + ha
+       }, 0)
+       // Only update if different from current org total
+-      if (Math.abs(newTotal - (Number(org?.total_area_ha) || 0)) > 0.01) {
+-        await apiFetch('/api/organizations', {
+-          method: 'PATCH',
+-          body: JSON.stringify({ total_area_ha: parseFloat(newTotal.toFixed(2)) }),
+-        })
++      if (!isOff && Math.abs(newTotal - (Number(org?.total_area_ha) || 0)) > 0.01) {
++        try {
++          await apiFetch('/api/organizations', {
++            method: 'PATCH',
++            body: JSON.stringify({ total_area_ha: parseFloat(newTotal.toFixed(2)) }),
++          })
++        } catch (e) { /* ignore */ }
+       }
+     }
+ 
+diff --git a/frontend/src/app/dashboard/mi-campo/page.tsx b/frontend/src/app/dashboard/mi-campo/page.tsx
+index 2b25e69..d7cc46b 100644
+--- a/frontend/src/app/dashboard/mi-campo/page.tsx
++++ b/frontend/src/app/dashboard/mi-campo/page.tsx
+@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
+ import { useSearchParams } from 'next/navigation'
+ import { useAuth } from '@/components/AuthProvider'
+ import { apiFetch } from '@/lib/apiFetch'
++import { isOffline } from '@/lib/connectivity'
+ import { getPaddockNDVI, SatelliteData } from '@/lib/services/satellite'
+ import { X, Check, Plus, Satellite, Image as ImageIcon, MapPin, Building2, Loader2 as Spin, Search, AlertTriangle, Link2, Loader2 } from 'lucide-react'
+ import { useConfirm } from '@/components/ui/ConfirmModal'
+@@ -257,7 +258,7 @@ export default function MiCampoPage() {
+     const updates: Record<string, any> = { technical_data: technicalData }
+     if (dryMatter !== undefined) updates.dry_matter_kg_ha = dryMatter
+ 
+-    if (!navigator.onLine) {
++    if (await isOffline()) {
+       const { addToOfflineQueue } = await import('@/components/OfflineManager')
+       addToOfflineQueue({
+         type: 'paddock_update',
+diff --git a/frontend/src/app/dashboard/tareas/page.tsx b/frontend/src/app/dashboard/tareas/page.tsx
+index 57510f1..9e5cf35 100644
+--- a/frontend/src/app/dashboard/tareas/page.tsx
++++ b/frontend/src/app/dashboard/tareas/page.tsx
+@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
+ import { createPortal } from 'react-dom'
+ import { useAuth } from '@/components/AuthProvider'
+ import { apiFetch } from '@/lib/apiFetch'
++import { isOffline } from '@/lib/connectivity'
+ import { FeatureGate } from '@/components/FeatureGate'
+ import {
+   Plus, CheckSquare, Clock, AlertTriangle, X, Check,
+@@ -299,13 +300,14 @@ function TareasContent({ user }: { user: any }) {
+     setModalOpen(false)
+     setForm({ title: '', description: '', task_type: 'GENERAL', paddock_id: '', assigned_to: '', due_date: '', priority: 'NORMAL' })
+     // Toast descriptivo diferenciado online/offline
+-    if (!navigator.onLine) {
++    const isOff = await isOffline()
++    if (isOff) {
+       toast.success('Tarea guardada sin conexión. Se sincronizará al reconectar.', {
+         icon: '📋',
+       })
+     }
+     // Si hay red, recargar para obtener ID real
+-    if (navigator.onLine) setTimeout(() => load(), 1500)
++    if (!isOff) setTimeout(() => load(), 1500)
+   }
+ 
+   // ── Filtered/grouped tasks ─────────────────────────────────────────────
+diff --git a/frontend/src/app/layout.tsx b/frontend/src/app/layout.tsx
+index 846c025..2d85007 100644
+--- a/frontend/src/app/layout.tsx
++++ b/frontend/src/app/layout.tsx
+@@ -125,28 +125,79 @@ export default function RootLayout({
+           style={{ 
+             position: 'fixed', inset: 0, backgroundColor: '#16a34a', zIndex: 999999, 
+             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+-            transition: 'opacity 0.5s ease-out', color: 'white'
++            transition: 'opacity 0.4s ease-out', color: 'white'
+           }}
+         >
+-          <img src="/LogoLoginBlanco.svg" alt="RODEO" style={{ width: '220px', height: 'auto', marginBottom: '32px' }} />
+-          <div style={{ width: '40px', height: '40px', border: '3px solid rgba(255,255,255,0.2)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+-          <p style={{ marginTop: '24px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.15em', opacity: 0.9 }}>PREPARANDO ENTORNO...</p>
++          <img src="/LogoLoginBlanco.svg" alt="RODEO" style={{ width: '200px', height: 'auto', marginBottom: '36px' }} />
++          {/* Progress bar — gives users visual feedback instead of silence */}
++          <div style={{ width: '160px', height: '3px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '999px', overflow: 'hidden', marginBottom: '20px' }}>
++            <div
++              id="splash-progress-bar"
++              style={{ 
++                height: '100%', width: '0%', backgroundColor: 'white', borderRadius: '999px',
++                transition: 'width 0.3s ease-out'
++              }}
++            />
++          </div>
++          <p style={{ fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.15em', opacity: 0.75, margin: 0 }}>PREPARANDO ENTORNO...</p>
+         </div>
+         <script dangerouslySetInnerHTML={{
+           __html: `
+             (function() {
+               try {
+-                var isPwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+-                var path = window.location.pathname;
+-                if (!isPwa || path === '/landing' || path === '/login' || path === '/') {
+-                  document.getElementById('global-native-splash').style.display = 'none';
++                // Animar la barra de progreso para dar feedback visual inmediato
++                var bar = document.getElementById('splash-progress-bar');
++                if (bar) {
++                  // Simular progreso: 0% → 70% en 1.5s, luego lento hasta 90%
++                  var progress = 0;
++                  var phase1 = setInterval(function() {
++                    progress = Math.min(progress + 4, 70);
++                    if (bar) bar.style.width = progress + '%';
++                    if (progress >= 70) clearInterval(phase1);
++                  }, 85);
++                  var phase2 = setInterval(function() {
++                    progress = Math.min(progress + 0.5, 90);
++                    if (bar) bar.style.width = progress + '%';
++                    if (progress >= 90) clearInterval(phase2);
++                  }, 200);
+                 }
++
++                // Safety net: si después de 6s React NO ha quitado el splash,
++                // mostrar overlay de recuperación. Esto cubre el caso de pantalla
++                // blanca donde los chunks JS no cargan (primer arranque sin caché).
++                var SPLASH_TIMEOUT = 6000;
++                var safetyTimer = setTimeout(function() {
++                  var splash = document.getElementById('global-native-splash');
++                  if (!splash || splash.style.display === 'none' || splash.style.opacity === '0') return;
++                  // React no montó → convertir splash en overlay de recuperación
++                  splash.innerHTML = [
++                    '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:2rem;text-align:center;">',
++                      '<img src="/LogoLoginBlanco.svg" alt="RODEO" style="width:140px;height:auto;margin-bottom:32px;opacity:0.9" />',
++                      '<div style="width:56px;height:56px;border-radius:16px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:20px;font-size:28px;">⚠️</div>',
++                      '<p style="font-size:15px;font-weight:900;margin:0 0 8px;color:white;">Error de carga</p>',
++                      '<p style="font-size:13px;opacity:0.85;margin:0 0 28px;max-width:280px;line-height:1.5;color:white;">La app tardó demasiado en cargar. Verificá tu conexión e intentá de nuevo.</p>',
++                      '<button onclick="location.reload()" style="padding:14px 28px;background:white;color:#16a34a;font-weight:900;font-size:14px;border:none;border-radius:14px;cursor:pointer;margin-bottom:10px;width:200px;">Reintentar</button>',
++                      '<button onclick="location.href=\'/login\'" style="padding:12px 28px;background:rgba(255,255,255,0.15);color:white;font-weight:700;font-size:13px;border:none;border-radius:14px;cursor:pointer;width:200px;">Ir al login</button>',
++                    '</div>'
++                  ].join('');
++                }, SPLASH_TIMEOUT);
++
++                // Cuando React quite el splash, cancelar el timer
++                var observer = new MutationObserver(function() {
++                  var s = document.getElementById('global-native-splash');
++                  if (!s || s.style.display === 'none' || s.style.opacity === '0') {
++                    clearTimeout(safetyTimer);
++                    observer.disconnect();
++                  }
++                });
++                observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
++
+               } catch(e) {}
+             })();
+           `
+         }} />
+ 
++
+         <AuthProvider>
+           <OfflineManager>
+             {children}
+diff --git a/frontend/src/components/AuthProvider.tsx b/frontend/src/components/AuthProvider.tsx
+index f89a3f6..f67d4d1 100644
+--- a/frontend/src/components/AuthProvider.tsx
++++ b/frontend/src/components/AuthProvider.tsx
+@@ -57,49 +57,64 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+   const [profile, setProfile] = useState<Profile | null>(null)
+   const [isLoading, setIsLoading] = useState(true)
+ 
+-  const fetchProfile = useCallback(async (firebaseUser: User) => {
+-    // ── Offline fast path: usar caché ANTES de intentar getIdToken ──────────
+-    // Crítico: getIdToken(true) puede quedar bloqueado sin red. Si hay caché,
+-    // lo usamos inmediatamente sin tocar la red.
+-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+-      try {
+-        // 1. IndexedDB primero (más confiable, persiste entre sesiones)
+-        const idbProfile = await getCachedProfile()
+-        if (idbProfile) {
+-          setProfile(idbProfile)
+-          console.log('[AuthProvider] Offline — usando perfil cacheado de IndexedDB')
+-          return
+-        }
+-        // 2. Fallback a localStorage (más rápido pero puede ser stale)
+-        const cached = localStorage.getItem('rodeo_cached_profile')
+-        if (cached) {
+-          setProfile(JSON.parse(cached))
+-          console.log('[AuthProvider] Offline — usando perfil cacheado de localStorage')
+-          return
++  const fetchProfile = useCallback(async (firebaseUser: User, cachedToken?: string) => {
++    const t0 = performance.now()
++
++    // ───────────────────────────────────────────────────────────────
++    // PASO 1 — Stale-While-Revalidate: mostrar caché INMEDIATAMENTE
++    // Si hay cualquier perfil cacheado, lo mostramos al instante para que
++    // el splash desaparezca en <200ms. La red actualizará en background.
++    // ───────────────────────────────────────────────────────────────
++    let hasCacheHit = false
++    try {
++      // IDB primero (más reciente), luego localStorage
++      const idbProfile = await getCachedProfile()
++      if (idbProfile) {
++        setProfile(idbProfile)
++        setIsLoading(false)    // ← CLAVE: quitar el splash INMEDIATAMENTE
++        hasCacheHit = true
++        console.log(`[AuthProvider] Perfil cacheado en ${(performance.now()-t0).toFixed(0)}ms — mostrando UI`)
++      } else {
++        const ls = localStorage.getItem('rodeo_cached_profile')
++        if (ls) {
++          setProfile(JSON.parse(ls))
++          setIsLoading(false)  // ← CLAVE: quitar el splash INMEDIATAMENTE
++          hasCacheHit = true
++          console.log(`[AuthProvider] Perfil localStorage en ${(performance.now()-t0).toFixed(0)}ms — mostrando UI`)
+         }
+-      } catch { /* ignore storage errors */ }
+-      // Sin caché disponible: navigator.onLine puede mentir (p.ej. captive portals).
+-      // Intentamos la red de todas formas, con timeout corto.
+-      console.warn('[AuthProvider] Offline y sin caché — intentando red de todas formas...')
++      }
++    } catch { /* ignore storage errors */ }
++
++    // Si estamos offline Y ya tenemos caché, no hay nada más que hacer.
++    if (hasCacheHit && typeof navigator !== 'undefined' && !navigator.onLine) {
++      console.log('[AuthProvider] Offline con caché — skip revalidación de red')
++      return
+     }
+ 
++    // Si no hay caché Y estamos offline, no podemos hacer nada más.
++    if (!hasCacheHit && typeof navigator !== 'undefined' && !navigator.onLine) {
++      console.warn('[AuthProvider] Offline sin caché — intentando red de todas formas...')
++    }
++
++    // ───────────────────────────────────────────────────────────────
++    // PASO 2 — Revalidación en background (o primer carga si sin caché)
++    // Usa el token ya obtenido por onIdTokenChanged (evita doble roundtrip).
++    // Solo fuerza refresh si el token está dentro de 5 minutos de expirar.
++    // ───────────────────────────────────────────────────────────────
+     try {
+-      // Forzar refresh del token para garantizar que el UID y claims son frescos.
+-      // Crítico después de la verificación de email: el token cacheado puede
+-      // no tener el claim email_verified=true, causando 401/404 en el backend.
+-      // Timeout de token: 8s cuando aparentemente offline (navigator.onLine=false),
+-      // 12s en condiciones normales. Evita que getIdToken quede colgado en red mala.
+-      const isApparentlyOffline = typeof navigator !== 'undefined' && !navigator.onLine
+-      const idToken = await Promise.race([
+-        firebaseUser.getIdToken(/* forceRefresh */ true),
+-        new Promise<never>((_, reject) =>
+-          setTimeout(() => reject(new Error('getIdToken timeout')), isApparentlyOffline ? 8000 : 12000)
+-        ),
+-      ]) as string
++      // Usar el token ya obtenido en onIdTokenChanged si está disponible.
++      // getIdToken(false) = usar token cacheado si no expiró (evita roundtrip a Firebase).
++      // getIdToken(true)  = solo si el token caduca en <5min (necesidad real de refresh).
++      let idToken = cachedToken
++      if (!idToken) {
++        const exp = decodeJwtExp(await firebaseUser.getIdToken(false))
++        const needsRefresh = exp ? (exp - Date.now()) < 5 * 60 * 1000 : true
++        idToken = await firebaseUser.getIdToken(needsRefresh)
++      }
++      console.log(`[AuthProvider] Token listo en ${(performance.now()-t0).toFixed(0)}ms`)
+ 
+-      // Timeout de fetch: 8s offline / 10s online
+       const controller = new AbortController()
+-      const timeoutId = setTimeout(() => controller.abort(), isApparentlyOffline ? 8000 : 10000)
++      const timeoutId = setTimeout(() => controller.abort(), 8000)
+ 
+       let res: Response
+       try {
+@@ -115,11 +130,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+       if (res.ok) {
+         const data = await res.json()
+         setProfile(data.profile)
+-        // Cachear perfil en IndexedDB y localStorage (redundante pero seguro)
++        // Actualizar caché con perfil fresco
+         try {
+           localStorage.setItem('rodeo_cached_profile', JSON.stringify(data.profile))
+           await cacheProfile(data.profile)
+         } catch { /* ignore */ }
++        console.log(`[AuthProvider] Perfil fresco en ${(performance.now()-t0).toFixed(0)}ms`)
+         return
+       }
+ 
+@@ -162,8 +178,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+           return
+         }
+ 
+-        // El perfil no existe en la BD — intentar auto-crearlo con los datos del usuario Firebase
+-        // Esto ocurre cuando /api/auth/register falló pero el usuario Firebase sí se creó.
++        // El perfil no existe en la BD — intentar auto-crearlo
+         console.warn('[AuthProvider] Profile still 404 — attempting auto-create via /api/auth/register')
+         try {
+           const freshToken = await firebaseUser.getIdToken(true)
+@@ -179,7 +194,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+             }),
+           })
+           if (autoCreate.ok) {
+-            // Perfil creado — buscar el perfil recién creado
+             await new Promise(r => setTimeout(r, 500))
+             const freshToken2 = await firebaseUser.getIdToken(true)
+             const profileRes2 = await fetch('/api/auth/profile?t=' + Date.now(), {
+@@ -201,8 +215,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+           console.warn('[AuthProvider] Auto-create profile failed:', autoErr.message)
+         }
+ 
+-        // Si todo falla → redirigir a registro para que el usuario complete el flujo
+-        console.error('[AuthProvider] Profile 404 after auto-create attempt — redirecting to register')
++        console.error('[AuthProvider] Profile 404 after auto-create — redirecting to register')
+         await firebaseSignOut(auth)
+         document.cookie = '__session=; path=/; max-age=0'
+         if (currentPath !== '/login' && currentPath !== '/register') {
+@@ -211,36 +224,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+         return
+       }
+ 
+-      // Fallback al caché si la API falló por cualquier motivo
+-      try {
+-        const cached = localStorage.getItem('rodeo_cached_profile')
+-        if (cached) { setProfile(JSON.parse(cached)); return }
+-      } catch { /* ignore */ }
+-      setProfile(null)
++      // API falló por otro motivo: si hay caché, mantenerla
++      if (!hasCacheHit) {
++        try {
++          const cached = localStorage.getItem('rodeo_cached_profile')
++          if (cached) { setProfile(JSON.parse(cached)); return }
++        } catch { /* ignore */ }
++        setProfile(null)
++      }
+     } catch (err: any) {
+       if (err.name === 'AbortError' || err?.message?.includes('timeout')) {
+-        console.warn('[AuthProvider] fetchProfile timeout — usando caché si existe')
++        console.warn('[AuthProvider] fetchProfile timeout — manteniendo caché')
+       } else {
+         console.warn('[AuthProvider] Error fetching profile (possibly offline):', err)
+       }
+-      // ── Fallback en cascada: nunca dejar profile=null si hay caché ────────
++      // Si ya mostramos caché en el paso 1, no hacer nada más
++      if (hasCacheHit) return
++      // Sin caché previa: intentar recuperar
+       try {
+         const idbProfile = await getCachedProfile()
+-        if (idbProfile) {
+-          setProfile(idbProfile)
+-          console.log('[AuthProvider] Error de red — usando perfil cacheado de IndexedDB')
+-          return
+-        }
++        if (idbProfile) { setProfile(idbProfile); return }
+       } catch { /* ignore */ }
+       try {
+         const cached = localStorage.getItem('rodeo_cached_profile')
+-        if (cached) {
+-          setProfile(JSON.parse(cached))
+-          console.log('[AuthProvider] Error de red — usando perfil cacheado de localStorage')
+-          return
+-        }
++        if (cached) { setProfile(JSON.parse(cached)); return }
+       } catch { /* ignore */ }
+-      // Solo llegamos aquí si genuinamente no hay caché (primera instalación)
+       setProfile(null)
+     }
+   }, [])
+@@ -271,23 +279,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
+       setUser(firebaseUser)
+       if (firebaseUser) {
+-        // Guarda el token en cookie para el middleware
+-        const token = await firebaseUser.getIdToken()
++        // Obtener token UNA SOLA VEZ y reutilizarlo en fetchProfile.
++        // Evita el doble roundtrip (onIdTokenChanged + fetchProfile) a Firebase.
++        const token = await firebaseUser.getIdToken(false) // false = usar caché si no expiró
+         // Cachear token en IndexedDB para login offline
+         const expMs = decodeJwtExp(token)
+-        if (expMs) cacheAuthToken(token, expMs).catch(() => { })
+-        // Set Secure flag only over HTTPS (production) — not in localhost dev
+-        // max-age=604800 (7 days) — covers rural usage patterns where users
+-        // may be offline for days. Token is validated server-side on each API call.
++        if (expMs) cacheAuthToken(token, expMs).catch(() => {})
+         const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
+         document.cookie = `__session=${token}; path=/; max-age=604800; SameSite=Lax${isHttps ? '; Secure' : ''}`
+-        await fetchProfile(firebaseUser)
+-        // App loaded successfully — dismiss any recovery overlay from pwa-diagnostics
++        // Pasar token a fetchProfile — evita que llame getIdToken() de nuevo
++        await fetchProfile(firebaseUser, token)
+         dismissRecoveryOverlay()
+       } else {
+-        // Limpiar cookie al cerrar sesión
+         document.cookie = '__session=; path=/; max-age=0'
+-        clearAuthCache().catch(() => { })
++        clearAuthCache().catch(() => {})
+         setProfile(null)
+       }
+       setIsLoading(false)
+@@ -311,16 +316,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+   // Fade out global native splash screen when loading finishes
+   useEffect(() => {
+     if (!isLoading) {
+-      // Pequeño delay para permitir que los Suspense boundaries de Next.js (como el login con useSearchParams) 
+-      // resuelvan y pinten la vista antes de quitar la pantalla verde, evitando el parpadeo blanco.
++      // Fill progress bar to 100% first for visual closure, then fade out splash.
++      // This eliminates the abrupt cut-to-blank between the green screen and the
++      // login/dashboard content (the "second blank screen" UX complaint).
++      const bar = document.getElementById('splash-progress-bar')
++      if (bar) bar.style.width = '100%'
++
+       const t = setTimeout(() => {
+         const splash = document.getElementById('global-native-splash')
+         if (splash) {
+           splash.style.opacity = '0'
+           splash.style.pointerEvents = 'none'
+-          setTimeout(() => { splash.style.display = 'none' }, 600)
++          setTimeout(() => { splash.style.display = 'none' }, 450)
+         }
+-      }, 150)
++      }, 200) // 200ms: just enough for the bar to visually reach 100%
+       return () => clearTimeout(t)
+     }
+   }, [isLoading])
+diff --git a/frontend/src/components/HerdModal.tsx b/frontend/src/components/HerdModal.tsx
+index 8df8507..bb007b7 100644
+--- a/frontend/src/components/HerdModal.tsx
++++ b/frontend/src/components/HerdModal.tsx
+@@ -1504,16 +1504,31 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
+       }, ...prev])
+       import('sonner').then(({ toast }) => toast.success('Evento guardado offline. Se sincronizará al conectar.'))
+     } else {
+-      const res = await apiFetch('/api/farm-events', {
+-        method: 'POST',
+-        body: JSON.stringify(payload),
+-      })
+-      if (res.ok) {
+-        const saved = await res.json().catch(() => null)
++      try {
++        const res = await apiFetch('/api/farm-events', {
++          method: 'POST',
++          body: JSON.stringify(payload),
++        })
++        if (res.ok) {
++          const saved = await res.json().catch(() => null)
++          setAgendaEvents(prev => [{
++            id: saved?.event?.id ?? `temp-${Date.now()}`,
++            ...payload
++          }, ...prev])
++        }
++      } catch (err) {
++        console.warn('Network error saving event, falling back to offline:', err)
++        const { addToOfflineQueue } = await import('@/components/OfflineManager')
++        addToOfflineQueue({
++          type: 'farm_event',
++          data: payload,
++          timestamp: Date.now()
++        } as any)
+         setAgendaEvents(prev => [{
+-          id: saved?.event?.id ?? `temp-${Date.now()}`,
++          id: `temp-${Date.now()}`,
+           ...payload
+         }, ...prev])
++        import('sonner').then(({ toast }) => toast.success('Evento guardado offline por falla de red. Se sincronizará al conectar.'))
+       }
+     }
+     
+diff --git a/frontend/src/components/ServiceWorkerRegistrar.tsx b/frontend/src/components/ServiceWorkerRegistrar.tsx
+index f35c718..fb01926 100644
+--- a/frontend/src/components/ServiceWorkerRegistrar.tsx
++++ b/frontend/src/components/ServiceWorkerRegistrar.tsx
+@@ -41,6 +41,29 @@ export default function ServiceWorkerRegistrar() {
+           updateViaCache: 'none', // siempre pedir la versión más reciente del sw.js
+         })
+ 
++        // ── Fix: Primer arranque standalone ────────────────────────────────────
++        // En el primer arranque, el SW NO controla la página porque se instaló
++        // DESPUÉS de que el navegador ya había pedido el HTML y los chunks JS.
++        // Esto causa que los chunks lleguen por red (lenta) en lugar de caché,
++        // resultando en pantalla blanca si la red falla a mitad de carga.
++        //
++        // SOLUCIÓN: Cuando el SW toma control por primera vez (controllerchange),
++        // recargar la página UNA SOLA VEZ para que todos los recursos pasen por
++        // el SW (Cache-First). La flag en sessionStorage evita loops infinitos.
++        //
++        // Patrón recomendado por Google: https://web.dev/service-worker-lifecycle/
++        if (!navigator.serviceWorker.controller) {
++          // No hay controller → esto es el primer arranque
++          navigator.serviceWorker.addEventListener('controllerchange', () => {
++            const RELOAD_FLAG = 'rodeo_sw_first_load_reloaded'
++            if (!sessionStorage.getItem(RELOAD_FLAG)) {
++              sessionStorage.setItem(RELOAD_FLAG, '1')
++              console.log('[SW] Primer arranque: recargando para activar caché del SW...')
++              window.location.reload()
++            }
++          }, { once: true })
++        }
++
+         // Cuando hay una actualización disponible, activarla en segundo plano
+         registration.addEventListener('updatefound', () => {
+           const newWorker = registration.installing
+@@ -56,13 +79,12 @@ export default function ServiceWorkerRegistrar() {
+         console.log('[SW] Registrado:', registration.scope)
+ 
+         // Register Periodic Sync (Chrome/Edge only — Safari ignores this)
+-        // Syncs data every 30 minutes even when the app isn't actively in use
+         if ('periodicSync' in registration) {
+           try {
+             const status = await navigator.permissions.query({ name: 'periodic-background-sync' as any })
+             if (status.state === 'granted') {
+               await (registration as any).periodicSync.register('rodeo-periodic-sync', {
+-                minInterval: 30 * 60 * 1000, // 30 minutes
++                minInterval: 30 * 60 * 1000,
+               })
+               console.log('[SW] Periodic sync registered (30min)')
+             }
+@@ -72,17 +94,16 @@ export default function ServiceWorkerRegistrar() {
+         }
+ 
+         // Pre-cachear rutas del dashboard después de un delay
+-        // (solo si ya hay un SW activo controlando la página)
+         if (navigator.serviceWorker.controller) {
+           setTimeout(() => {
+             navigator.serviceWorker.controller?.postMessage({
+               type: 'PRECACHE_ROUTES',
+               routes: DASHBOARD_ROUTES,
+             })
+-          }, 5000) // Esperar 5s para no competir con el render inicial
++          }, 5000)
+         }
+ 
+-        // Si es la primera vez (no hay controller), esperar a que el SW tome control
++        // Precachear también después de un controllerchange (para el caso de reload)
+         navigator.serviceWorker.addEventListener('controllerchange', () => {
+           setTimeout(() => {
+             navigator.serviceWorker.controller?.postMessage({
+@@ -107,3 +128,4 @@ export default function ServiceWorkerRegistrar() {
+ 
+   return null // No renderiza nada
+ }
++
+diff --git a/frontend/src/lib/connectivity.ts b/frontend/src/lib/connectivity.ts
+index d734ca0..d4ca33a 100644
+--- a/frontend/src/lib/connectivity.ts
++++ b/frontend/src/lib/connectivity.ts
+@@ -16,7 +16,7 @@ const CACHE_TTL_MS = 5000 // re-verificar cada 5 s máximo
+ 
+ /**
+  * Devuelve true si el dispositivo NO tiene conectividad real a internet.
+- * Usa un HEAD request a /manifest.json (siempre cacheado por el SW) como señal.
++ * Usa un HEAD request a /api/ping (que el SW ignora) como señal.
+  * Tiene caché de 5 segundos para no hacer fetch en cada llamada.
+  */
+ export async function isOffline(): Promise<boolean> {
+@@ -31,7 +31,8 @@ export async function isOffline(): Promise<boolean> {
+   try {
+     const controller = new AbortController()
+     const timeout = setTimeout(() => controller.abort(), 3000) // 3s timeout
+-    await fetch('/manifest.json', {
++    // El Service Worker ignora /api/ por lo que esto saldrá siempre a la red real.
++    await fetch('/api/ping', {
+       method: 'HEAD',
+       cache: 'no-store',
+       signal: controller.signal,

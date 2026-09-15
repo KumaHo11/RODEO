@@ -82,16 +82,20 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
     }
 
     setError(null)
+    const { compressImage } = await import('@/components/shared/RecordEditor')
     const processed = await Promise.all(
-      newFiles.map(file => new Promise<{ url: string; base64: string; mimeType: string }>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = (ev) => {
-          const dataUrl = ev.target?.result as string
-          resolve({ url: URL.createObjectURL(file), base64: dataUrl.split(',')[1], mimeType: file.type })
-        }
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      }))
+      newFiles.map(async (file) => {
+        const compressedFile = await compressImage(file)
+        return new Promise<{ url: string; base64: string; mimeType: string }>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = (ev) => {
+            const dataUrl = ev.target?.result as string
+            resolve({ url: URL.createObjectURL(compressedFile), base64: dataUrl.split(',')[1], mimeType: compressedFile.type })
+          }
+          reader.onerror = reject
+          reader.readAsDataURL(compressedFile)
+        })
+      })
     )
     setPhotos(prev => [...prev, ...processed])
     e.target.value = ''
@@ -152,10 +156,9 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
     return (
       <div className="space-y-3 mt-4 animate-in fade-in zoom-in-95">
         {/* Tarjeta de resultados */}
-        <div className="bg-green-50 rounded-xl border border-green-200 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-green-100">
-            <Sparkles className="w-4 h-4 text-green-600 shrink-0" />
-            <h4 className="modal-subtitle text-green-900">Resultados del análisis</h4>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+            <h4 className="modal-subtitle text-gray-900 font-bold">Resultados del análisis</h4>
             {(result.condition || result.condition_label) && (
               <span className={`ml-auto text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
                 result.condition === 'OPTIMO' ? 'bg-green-200 text-green-800'
@@ -171,32 +174,32 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
           <div className="p-4">
             {mode === 'biomass' ? (
               <div className="grid grid-cols-2 gap-2">
-                <ResultRow icon={<Leaf className="w-3.5 h-3.5 text-green-600" />} label="Especie dominante" value={result.dominant_species || result.pasture_type || '—'} fullWidth />
-                <ResultRow icon={<Activity className="w-3.5 h-3.5 text-green-600" />} label="Altura media" value={result.grass_height_cm != null ? `${result.grass_height_cm} cm` : '—'} />
-                <ResultRow icon={<Eye className="w-3.5 h-3.5 text-green-600" />} label="Cobertura de suelo" value={result.coverage_pct != null ? `${result.coverage_pct}%` : '—'} />
-                <ResultRow icon={<Info className="w-3.5 h-3.5 text-green-600" />} label="Estado fenológico" value={result.phenological_stage || '—'} />
-                <ResultRow icon={<Droplets className="w-3.5 h-3.5 text-green-600" />} label="Material verde" value={result.green_ratio_pct != null ? `${result.green_ratio_pct}%` : '—'} />
-                <ResultRow icon={<Scale className="w-3.5 h-3.5 text-green-600" />} label="Disponibilidad forrajera" value={result.dry_matter_kg_ha != null ? `${result.dry_matter_kg_ha.toLocaleString('es')} kg MS/ha` : '—'} highlight />
-                <ResultRow icon={<FlaskConical className="w-3.5 h-3.5 text-green-600" />} label="Proteína cruda (% PC)" value={result.protein_content_pct != null ? `${result.protein_content_pct}%` : '—'} />
-                <ResultRow icon={<Target className="w-3.5 h-3.5 text-green-600" />} label="Remanente sugerido" value={result.suggested_remnant_pct != null ? `${result.suggested_remnant_pct}%` : '—'} />
+                <ResultRow label="Especie dominante" value={result.dominant_species || result.pasture_type || '—'} fullWidth />
+                <ResultRow label="Altura media" value={result.grass_height_cm != null ? `${result.grass_height_cm} cm` : '—'} />
+                <ResultRow label="Cobertura de suelo" value={result.coverage_pct != null ? `${result.coverage_pct}%` : '—'} />
+                <ResultRow label="Estado fenológico" value={result.phenological_stage || '—'} />
+                <ResultRow label="Material verde" value={result.green_ratio_pct != null ? `${result.green_ratio_pct}%` : '—'} />
+                <ResultRow label="Disponibilidad forrajera" value={result.dry_matter_kg_ha != null ? `${result.dry_matter_kg_ha.toLocaleString('es')} kg MS/ha` : '—'} highlight />
+                <ResultRow label="Proteína cruda (% PC)" value={result.protein_content_pct != null ? `${result.protein_content_pct}%` : '—'} />
+                <ResultRow label="Remanente sugerido" value={result.suggested_remnant_pct != null ? `${result.suggested_remnant_pct}%` : '—'} />
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                <ResultRow icon={<Info className="w-3.5 h-3.5 text-green-600" />} label="Categoría y biotipo" value={result.category_biotype || '—'} fullWidth />
-                <ResultRow icon={<Scale className="w-3.5 h-3.5 text-green-600" />} label="Peso vivo estimado" value={result.estimated_weight_kg != null ? `${result.estimated_weight_kg} kg` : '—'} highlight />
-                <ResultRow icon={<Activity className="w-3.5 h-3.5 text-green-600" />} label="Condición corporal" value={result.bcs_score != null ? `${result.bcs_score} / 5 — ${result.condition_label || ''}` : '—'} />
-                <ResultRow icon={<Droplets className="w-3.5 h-3.5 text-green-600" />} label="Llenado ruminal (ijar)" value={result.ruminal_fill_score != null ? `${result.ruminal_fill_score} / 5` : '—'} />
-                <ResultRow icon={<Leaf className="w-3.5 h-3.5 text-green-600" />} label="Demanda diaria individual" value={result.daily_dry_matter_demand_kg != null ? `${result.daily_dry_matter_demand_kg} kg MS/día` : '—'} />
+                <ResultRow label="Categoría y biotipo" value={result.category_biotype || '—'} fullWidth />
+                <ResultRow label="Peso vivo estimado" value={result.estimated_weight_kg != null ? `${result.estimated_weight_kg} kg` : '—'} highlight />
+                <ResultRow label="Condición corporal" value={result.bcs_score != null ? `${result.bcs_score} / 5 — ${result.condition_label || ''}` : '—'} />
+                <ResultRow label="Llenado ruminal (ijar)" value={result.ruminal_fill_score != null ? `${result.ruminal_fill_score} / 5` : '—'} />
+                <ResultRow label="Demanda diaria individual" value={result.daily_dry_matter_demand_kg != null ? `${result.daily_dry_matter_demand_kg} kg MS/día` : '—'} />
                 {result.fecal_score != null && (
-                  <ResultRow icon={<FlaskConical className="w-3.5 h-3.5 text-green-600" />} label="Score fecal" value={`${result.fecal_score} / 5`} />
+                  <ResultRow label="Score fecal" value={`${result.fecal_score} / 5`} />
                 )}
               </div>
             )}
 
             {result.recommendation && (
-              <div className="mt-3 pt-3 border-t border-green-100">
-                <p className="modal-body-text font-black text-green-700 uppercase tracking-widest mb-1">Recomendación</p>
-                <p className="modal-body-text text-green-800 leading-relaxed">{result.recommendation}</p>
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="modal-body-text font-black text-gray-500 uppercase tracking-widest mb-1">Recomendación</p>
+                <p className="modal-body-text text-gray-900 font-bold leading-relaxed">{result.recommendation}</p>
               </div>
             )}
 
@@ -385,9 +388,8 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
 
 // ─── Componente auxiliar: fila de resultado ───────────────────────────────────
 function ResultRow({
-  icon, label, value, highlight = false, fullWidth = false,
+  label, value, highlight = false, fullWidth = false,
 }: {
-  icon: React.ReactNode
   label: string
   value: string
   highlight?: boolean
@@ -395,13 +397,12 @@ function ResultRow({
 }) {
   return (
     <div className={`flex flex-col gap-0.5 ${fullWidth ? 'col-span-2' : ''}`}>
-      <div className="flex items-center gap-1 text-green-600">
-        {icon}
-        <span style={{ fontSize: '10px' }} className="font-black text-gray-400 uppercase tracking-widest">{label}</span>
+      <div className="flex items-center gap-1 text-gray-500">
+        <span style={{ fontSize: '10px' }} className="font-black text-gray-500 uppercase tracking-widest">{label}</span>
       </div>
       <p
         style={{ fontSize: highlight ? '14px' : '12px' }}
-        className={`font-black leading-tight ${highlight ? 'text-gray-900' : 'text-gray-700'}`}
+        className={`font-black leading-tight ${highlight ? 'text-gray-900' : 'text-gray-500'}`}
       >
         {value}
       </p>

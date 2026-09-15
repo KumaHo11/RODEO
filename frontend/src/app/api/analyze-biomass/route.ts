@@ -2,6 +2,9 @@
  * POST /api/analyze-biomass
  * Analiza una foto de pastura y devuelve estimación de biomasa con Gemini.
  */
+export const runtime = 'edge'
+export const maxDuration = 60
+
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'

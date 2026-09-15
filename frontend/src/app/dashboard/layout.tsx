@@ -762,11 +762,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* ── Page content ───────────────────────────────────────────────────── */}
-        <main className="flex-1 overflow-y-auto flex flex-col min-h-0 focus:outline-none" tabIndex={-1}>
+        <main className="flex-1 overflow-y-auto flex flex-col min-h-0">
             {isMiCampo ? (
-              <div className="flex-1 flex flex-col md:overflow-hidden md:h-full focus:outline-none">{children}</div>
+              <div className="flex-1 flex flex-col md:overflow-hidden md:h-full">{children}</div>
             ) : (
-              <div className="flex flex-col min-h-full px-3 sm:px-6 lg:px-8 py-4 pb-6 max-w-[1800px] w-full mx-auto focus:outline-none">
+              <div className="flex flex-col min-h-full px-3 sm:px-6 lg:px-8 py-4 pb-6 max-w-[1800px] w-full mx-auto">
                 {children}
               </div>
             )}

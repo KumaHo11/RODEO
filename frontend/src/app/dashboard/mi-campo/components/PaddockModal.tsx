@@ -7,7 +7,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock, Search, FileText, Image as ImageIcon, Filter, Sparkles } from 'lucide-react'
+import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock, Search, FileText, Image as ImageIcon, Filter, Sparkles, Download } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
 import { isOffline } from '@/lib/connectivity'
 import { SatelliteData } from '@/lib/services/satellite'
@@ -533,6 +533,7 @@ export default function PaddockModal({
   const [sessionNoteCount, setSessionNoteCount] = useState(0)
   const recordEditorRef = useRef<RecordEditorRef>(null)
   const [hasRecordData, setHasRecordData] = useState(false)
+  const [isNdviExpanded, setIsNdviExpanded] = useState(false)
 
   const loadNotes = useCallback(async () => {
     if (!paddock.id || paddock.id === '__NEW__') return
@@ -1697,47 +1698,69 @@ export default function PaddockModal({
 
               {/* ══ NDVI SATELITAL — diferenciado con badge y estilo esmeralda ══ */}
               {filteredSnapshots.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">NDVI Satelital</span>
-                    <div className="flex-1 h-px bg-emerald-100" />
-                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                      <span className="text-[10px]">🛰️</span> Cada 5 días
-                    </span>
+                <div className="bg-emerald-50/30 rounded-2xl border border-emerald-100 overflow-hidden">
+                  <div
+                    className="flex items-center gap-2 p-4 cursor-pointer hover:bg-emerald-50/50 transition-colors"
+                    onClick={() => setIsNdviExpanded(!isNdviExpanded)}
+                  >
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Histórico NDVI</span>
+                    <div className="flex-1" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const csv = 'Fecha,NDVI,Crecimiento (kg/d)\n' + filteredSnapshots.map((s: any) => 
+                          `${new Date(s.calculated_at).toLocaleDateString('es-AR')},${Number(s.ndvi).toFixed(3)},${Number(s.grass_growth_rate).toFixed(1)}`
+                        ).join('\n')
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `ndvi_historial_${paddock.name}.csv`
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors text-[10px] font-bold shadow-sm"
+                    >
+                      <Download className="w-3 h-3" /> Exportar
+                    </button>
+                    <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 ml-1">
+                      {isNdviExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    {filteredSnapshots.map((snap: any, i: number) => {
-                      const ndvi = Number(snap.ndvi)
-                      const ndviBg = ndvi >= 0.6 ? 'bg-emerald-50 border-emerald-200' : ndvi >= 0.4 ? 'bg-green-50 border-green-200' : ndvi >= 0.2 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
-                      const ndviTxt = ndvi >= 0.6 ? 'text-emerald-700' : ndvi >= 0.4 ? 'text-green-700' : ndvi >= 0.2 ? 'text-amber-700' : 'text-red-700'
-                      const ndviLabel = ndvi >= 0.6 ? 'Óptimo' : ndvi >= 0.4 ? 'Bueno' : ndvi >= 0.2 ? 'Regular' : 'Bajo'
-                      return (
-                        <div key={i} className={`flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-xl border ${ndviBg}`}>
-                          <div className="flex items-center gap-2">
-                            {/* Distinctive satellite icon for NDVI entries */}
-                            <div className="w-7 h-7 rounded-lg bg-white/70 border border-current/20 flex items-center justify-center text-[13px]" title="Medición satelital Sentinel-2">🛰️</div>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border bg-white/60 ${ndviTxt}`}>{ndviLabel}</span>
-                                <span className="text-[8px] font-bold text-gray-400 bg-white/60 border border-gray-200 px-1.5 py-0.5 rounded-full">Sentinel-2</span>
+                  {isNdviExpanded && (
+                    <div className="px-4 pb-4 space-y-2">
+                      {filteredSnapshots.map((snap: any, i: number) => {
+                        const ndvi = Number(snap.ndvi)
+                        const ndviBg = ndvi >= 0.6 ? 'bg-emerald-50 border-emerald-200' : ndvi >= 0.4 ? 'bg-green-50 border-green-200' : ndvi >= 0.2 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+                        const ndviTxt = ndvi >= 0.6 ? 'text-emerald-700' : ndvi >= 0.4 ? 'text-green-700' : ndvi >= 0.2 ? 'text-amber-700' : 'text-red-700'
+                        const ndviLabel = ndvi >= 0.6 ? 'Óptimo' : ndvi >= 0.4 ? 'Bueno' : ndvi >= 0.2 ? 'Regular' : 'Bajo'
+                        return (
+                          <div key={i} className={`flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-xl border bg-white ${ndviBg}`}>
+                            <div className="flex items-center gap-2">
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border bg-white/60 ${ndviTxt}`}>{ndviLabel}</span>
+                                  <span className="text-[8px] font-bold text-gray-400 bg-white/60 border border-gray-200 px-1.5 py-0.5 rounded-full">Sentinel-2</span>
+                                </div>
+                                <p className="text-xs font-bold text-gray-700 mt-0.5">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
                               </div>
-                              <p className="text-xs font-bold text-gray-700 mt-0.5">{new Date(snap.calculated_at).toLocaleDateString('es-AR')}</p>
+                            </div>
+                            <div className="flex items-center gap-4 text-right">
+                              <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">NDVI</p>
+                                <p className={`text-base font-black ${ndviTxt}`}>{ndvi.toFixed(3)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Crecimiento</p>
+                                <p className="text-base font-black text-gray-900">{Number(snap.grass_growth_rate).toFixed(1)} <span className="text-xs font-bold text-gray-400">kg/d</span></p>
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4 text-right">
-                            <div>
-                              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">NDVI</p>
-                              <p className={`text-base font-black ${ndviTxt}`}>{ndvi.toFixed(3)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Crecimiento</p>
-                              <p className="text-base font-black text-gray-900">{Number(snap.grass_growth_rate).toFixed(1)} <span className="text-xs font-bold text-gray-400">kg/d</span></p>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
