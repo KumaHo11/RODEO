@@ -1,4 +1,7 @@
 'use client'
+import { enqueue } from '@/lib/offline/outbox'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
+import { dbGetAll, dbUpsertMany, outboxGetAll, metaGet, metaSet, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 
 import React, { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/components/AuthProvider'
@@ -357,7 +360,7 @@ export default function HerdsPage() {
     setLoading(true)
     try {
       // ── Paso 1: IndexedDB inmediata ────────────────────────────────────────
-      const { dbGetAll, metaGet } = await import('@/lib/offline/db')
+      
       const [localHerds, cachedStructure] = await Promise.all([
         dbGetAll('herds'),
         metaGet('herds_structure'),
@@ -389,7 +392,7 @@ export default function HerdsPage() {
         setIsOfflineData(false)
         import('@/lib/analytics').then(({ event }) => event({ action: 'herds_view', category: 'herds', mode: 'online' }))
         // Guardar en IndexedDB — única fuente de verdad (sin localStorage)
-        const { dbUpsertMany, metaSet } = await import('@/lib/offline/db')
+        
         await Promise.all([
           dbUpsertMany('herds', herdsData),
           metaSet('herds_structure', { lotes: lotesData, ungrouped: ungroupedData }),

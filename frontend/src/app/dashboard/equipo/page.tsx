@@ -1,4 +1,7 @@
 'use client'
+import { enqueue } from '@/lib/offline/outbox'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
+import { dbGetAll, dbUpsertMany, outboxGetAll, metaGet, metaSet, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 
 import { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
@@ -197,7 +200,7 @@ export default function EquipoPage() {
 
     // ── Paso 1: IndexedDB inmediata (offline-first) ──────────────────────
     try {
-      const { dbGetAll } = await import('@/lib/offline/db')
+      
       const [localMembers, localInvitations] = await Promise.all([
         dbGetAll('team_members'),
         dbGetAll('invitations'),
@@ -240,7 +243,7 @@ export default function EquipoPage() {
     // ── Paso 3: Actualizar IndexedDB con datos frescos ────────────────────
     if (freshMembers.length > 0 || freshInvitations.length > 0) {
       try {
-        const { dbUpsertMany } = await import('@/lib/offline/db')
+        
         await Promise.all([
           freshMembers.length > 0
             ? dbUpsertMany('team_members', freshMembers).catch(() => {})

@@ -1,4 +1,7 @@
 'use client'
+import { enqueue } from '@/lib/offline/outbox'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
+import { dbGetAll, dbUpsertMany, outboxGetAll, metaGet, metaSet, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 
 import { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
@@ -194,7 +197,7 @@ function TareasContent({ user }: { user: any }) {
 
     // ── Paso 1: IndexedDB inmediata ───────────────────────────────────────
     try {
-      const { dbGetAll } = await import('@/lib/offline/db')
+      
       const [localTasks, localPaddocks] = await Promise.all([
         dbGetAll('tasks'),
         dbGetAll('paddocks'),
@@ -227,7 +230,7 @@ function TareasContent({ user }: { user: any }) {
 
     // Actualizar IndexedDB
     if (tasksData.length > 0) {
-      const { dbUpsertMany } = await import('@/lib/offline/db')
+      
       await dbUpsertMany('tasks', tasksData).catch(() => {})
     }
 
@@ -241,7 +244,7 @@ function TareasContent({ user }: { user: any }) {
     // Optimistic update
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
     // Enqueue via outbox (funciona offline)
-    const { enqueue } = await import('@/lib/offline/outbox')
+    
     await enqueue({
       type: 'task_status',
       url: `/api/tasks/${taskId}`,
@@ -284,7 +287,7 @@ function TareasContent({ user }: { user: any }) {
     setTasks(prev => [tempTask, ...prev])
 
     // Enqueue via outbox
-    const { enqueue } = await import('@/lib/offline/outbox')
+    
     await enqueue({
       type: 'task',
       url: '/api/tasks',

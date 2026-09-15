@@ -1,10 +1,12 @@
 'use client'
+import { enqueue } from '@/lib/offline/outbox'
+import { dbGetAll, dbUpsertMany, outboxGetAll, metaGet, metaSet, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio, savePendingPhoto, getAllPendingPhotos, deletePendingPhoto, countPendingItems } from '@/lib/audioOfflineStore'
+import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio, savePendingPhoto, getAllPendingPhotos, deletePendingPhoto, countPendingItems, getPendingPhoto, getPendingAudio } from '@/lib/audioOfflineStore'
 import {
   Mic, Camera, Loader2, Image as ImageIcon,
   CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp, Lock, MessageCircle, Filter, FileText,
@@ -213,7 +215,7 @@ export default function BitacoraPage() {
 
     // ── Paso 1: IndexedDB inmediata (única fuente de verdad) ──────────────
     try {
-      const { dbGetAll } = await import('@/lib/offline/db')
+      
       const localNotes = await dbGetAll('field_notes')
       // Solo notas de bitácora (sin paddock_id)
       const bitacoraLocal = localNotes.filter((n: any) => !n.paddock_id)
@@ -231,7 +233,7 @@ export default function BitacoraPage() {
       if (res.ok) {
         fetchedNotes = (await res.json()).notes || []
         // Guardar en IndexedDB — única fuente de verdad (sin localStorage)
-        const { dbUpsertMany } = await import('@/lib/offline/db')
+        
         await dbUpsertMany('field_notes', fetchedNotes).catch(() => {})
       } else {
         throw new Error('API error')
@@ -242,7 +244,7 @@ export default function BitacoraPage() {
 
     // ── Paso 3: Merge con pendientes del outbox (IndexedDB — sin localStorage) ─
     try {
-      const { outboxGetAll } = await import('@/lib/offline/db')
+      
       const pendingItems = await outboxGetAll()
       const pendingNotes = pendingItems.filter((item: any) => {
         try {
@@ -266,11 +268,11 @@ export default function BitacoraPage() {
         }
 
         if (item.mediaType === 'photo' && item.mediaId) {
-          const { getPendingPhoto } = await import('@/lib/audioOfflineStore')
+          
           const photo = await getPendingPhoto(item.mediaId)
           if (photo?.blob) noteData.photo_url = URL.createObjectURL(photo.blob)
         } else if (item.mediaType === 'audio' && item.mediaId) {
-          const { getPendingAudio } = await import('@/lib/audioOfflineStore')
+          
           const audio = await getPendingAudio(item.mediaId)
           if (audio?.blob) {
             noteData.audio_url = URL.createObjectURL(audio.blob)
@@ -419,7 +421,7 @@ export default function BitacoraPage() {
         transcript: liveTranscript,
       }
       await savePendingAudio(pa)
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
       await enqueue({
         type: 'field_note',
         url: '/api/field-notes',
@@ -440,7 +442,7 @@ export default function BitacoraPage() {
       const id = `local-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const blob = new Blob([await photoFile.arrayBuffer()], { type: photoFile.type })
       await savePendingPhoto({ id, blob, lat, lng, createdAt: new Date().toISOString(), title })
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
       await enqueue({
         type: 'field_note',
         url: '/api/field-notes',
@@ -459,7 +461,7 @@ export default function BitacoraPage() {
     if (!navigator.onLine) {
       setSavingMsg('Guardando sin conexión...')
       const noteId = `field-note-text-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
       await enqueue({
         type: 'field_note',
         url: '/api/field-notes',
@@ -535,7 +537,7 @@ export default function BitacoraPage() {
     if (!navigator.onLine) {
       setSavingMsg('Guardando sin conexión...')
       const txtId = `field-note-text-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
       await enqueue({
         type: 'field_note',
         url: '/api/field-notes',

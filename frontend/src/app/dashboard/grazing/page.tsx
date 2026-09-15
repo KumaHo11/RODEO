@@ -1,4 +1,7 @@
 'use client'
+import { enqueue } from '@/lib/offline/outbox'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
+import { dbGetAll, dbUpsertMany, outboxGetAll, metaGet, metaSet, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
@@ -1454,7 +1457,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
       // ── Save main plan (offline-first via Outbox) ────────────────────────
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
 
       if (formData.id) {
         // ── Optimistic local update ───────────────────────────────────────
@@ -1550,7 +1553,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     }))
 
     // Persist via outbox (works offline)
-    const { enqueue } = await import('@/lib/offline/outbox')
+    
     await enqueue({
       type: 'grazing_plan_move',
       url: `/api/grazing-plans/${planId}`,

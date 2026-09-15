@@ -1,3 +1,4 @@
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
 /**
  * lib/offline/outbox.ts
  * Outbox Pattern para operaciones de escritura offline.
@@ -138,7 +139,7 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
         // --- 1. AUDIO ---
         const audioId = item.mediaIds?.audio || (item.mediaType === 'audio' ? item.mediaId : null)
         if (audioId) {
-          const { getPendingAudio } = await import('@/lib/audioOfflineStore')
+          
           const pa = await getPendingAudio(audioId)
           if (pa) {
             const fd = new FormData()
@@ -174,7 +175,7 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
         const photoIds = Array.isArray(rawPhotoIds) ? rawPhotoIds.filter(Boolean) : []
         
         if (photoIds.length > 0) {
-          const { getPendingPhoto } = await import('@/lib/audioOfflineStore')
+          
           for (const ppId of photoIds) {
             if (!ppId) continue
             const pp = await getPendingPhoto(ppId)
@@ -231,14 +232,14 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
         try {
           const audioId = item.mediaIds?.audio || (item.mediaType === 'audio' ? item.mediaId : null)
           if (audioId) {
-            const { deletePendingAudio } = await import('@/lib/audioOfflineStore')
+            
             await deletePendingAudio(audioId)
           }
 
           const rawPhotoIds = item.mediaIds?.photos || (item.mediaIds?.photo ? [item.mediaIds.photo] : null) || (item.mediaType === 'photo' ? [item.mediaId] : [])
           const photoIds = Array.isArray(rawPhotoIds) ? rawPhotoIds.filter(Boolean) : []
           if (photoIds.length > 0) {
-            const { deletePendingPhoto } = await import('@/lib/audioOfflineStore')
+            
             for (const ppId of photoIds) {
               if (ppId) await deletePendingPhoto(ppId)
             }

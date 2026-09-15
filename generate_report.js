@@ -5,7 +5,7 @@ const pool = new Pool({
   host: '127.0.0.1',
   port: 5433,
   user: 'postgres',
-  password: 'RodeoProd2026New!',
+  password: process.env.DB_PASSWORD,
   database: 'rodeo_main'
 });
 

@@ -1,3 +1,5 @@
+import { enqueue } from '@/lib/offline/outbox'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch } from '@/lib/apiFetch'
@@ -263,7 +265,7 @@ export default function BitacoraModal({
       const photoId = photoFile ? crypto.randomUUID() : undefined
 
       if (audioBlob && audioId) {
-        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+        
         await savePendingAudio({
           id: audioId, blob: audioBlob, durationSecs: recordSecsSnap.current,
           lat: null, lng: null, createdAt: new Date().toISOString(), title: genTitle, transcript: ''
@@ -271,7 +273,7 @@ export default function BitacoraModal({
       }
 
       if (photoFile && photoId) {
-        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+        
         await savePendingPhoto({
           id: photoId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: genTitle
         })

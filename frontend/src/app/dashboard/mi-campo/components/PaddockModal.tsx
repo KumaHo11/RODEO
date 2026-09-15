@@ -1,4 +1,7 @@
 'use client'
+import { enqueue } from '@/lib/offline/outbox'
+import { outboxGetAll } from '@/lib/offline/db'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
 
 /**
  * PaddockModal — Modal de gestión de potrero (3 tabs)
@@ -550,7 +553,7 @@ export default function PaddockModal({
     }
 
     try {
-      const { outboxGetAll } = await import('@/lib/offline/db')
+      
       const pendingItems = await outboxGetAll()
       const pendingNotes = pendingItems.filter((item: any) => {
         try {
@@ -575,7 +578,7 @@ export default function PaddockModal({
         }
 
         if (item.mediaType === 'photo' && item.mediaId) {
-          const { getPendingPhoto } = await import('@/lib/audioOfflineStore')
+          
           const p = await getPendingPhoto(item.mediaId).catch(() => null)
           if (p && p.blob) {
             noteData.photos = [{
@@ -585,7 +588,7 @@ export default function PaddockModal({
             }]
           }
         } else if (item.mediaType === 'audio' && item.mediaId) {
-          const { getPendingAudio } = await import('@/lib/audioOfflineStore')
+          
           const a = await getPendingAudio(item.mediaId).catch(() => null)
           if (a && a.blob) {
             noteData.audio_url = URL.createObjectURL(a.blob)
@@ -722,7 +725,7 @@ export default function PaddockModal({
     // ── Offline path: guardar localmente y mostrar confirmación ───────────────
     if (!navigator.onLine && !isCreating) {
       try {
-        const { enqueue } = await import('@/lib/offline/outbox')
+        
         const updates: Record<string, any> = { technical_data: td }
         if (msHa !== '') updates.dry_matter_kg_ha = Number(msHa)
         await enqueue({
@@ -779,16 +782,16 @@ export default function PaddockModal({
       if (photoFile) {
         mediaType = 'photo'
         mediaId = crypto.randomUUID?.() ?? `${Date.now()}`
-        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+        
         await savePendingPhoto({ id: mediaId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr })
       } else if (audioBlob) {
         mediaType = 'audio'
         mediaId = crypto.randomUUID?.() ?? `${Date.now()}`
-        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+        
         await savePendingAudio({ id: mediaId, blob: audioBlob, durationSecs: recordSecs, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: finalTranscript })
       }
 
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
       await enqueue({
         type: 'field_note',
         url: '/api/field-notes',
@@ -812,7 +815,7 @@ export default function PaddockModal({
       const photo_urls: string[] = []
       if (photoFile) {
         try {
-          const { compressImage } = await import('@/components/shared/RecordEditor')
+          
           const compressedImage = await compressImage(photoFile)
           const fd = new FormData()
           fd.append('file', compressedImage)
@@ -894,14 +897,14 @@ export default function PaddockModal({
         let mediaId: string | undefined
         if (photoFile) {
           mediaType = 'photo'; mediaId = offlineId
-          const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+          
           await savePendingPhoto({ id: mediaId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr }).catch(() => {})
         } else if (audioBlob) {
           mediaType = 'audio'; mediaId = offlineId
-          const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+          
           await savePendingAudio({ id: mediaId, blob: audioBlob, durationSecs: recordSecs, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: finalTranscript }).catch(() => {})
         }
-        const { enqueue } = await import('@/lib/offline/outbox')
+        
         await enqueue({
           type: 'field_note',
           url: '/api/field-notes',
@@ -939,7 +942,7 @@ export default function PaddockModal({
     if (!targetFile) return
     setBioAnalyzing(true); setBioError(null); setBioResult(null)
     try {
-      const { compressImage } = await import('@/components/shared/RecordEditor')
+      
       const compressedImage = await compressImage(targetFile)
       const reader = new FileReader()
       const b64: string = await new Promise((res, rej) => { reader.onload = () => res((reader.result as string).split(',')[1]); reader.onerror = rej; reader.readAsDataURL(compressedImage) })

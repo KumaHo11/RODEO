@@ -1,4 +1,7 @@
 'use client'
+import { enqueue } from '@/lib/offline/outbox'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
+import { dbGetAll, dbUpsertMany, outboxGetAll, metaGet, metaSet, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 
 import dynamic from 'next/dynamic'
 import PaddockSidePanel from './components/PaddockSidePanel'
@@ -101,7 +104,7 @@ export default function MiCampoPage() {
 
     // ── Paso 1: IndexedDB inmediata ────────────────────────────────────────
     try {
-      const { dbGetAll, dbGetOrg } = await import('@/lib/offline/db')
+      
       const [localPaddocks, localOrg] = await Promise.all([
         dbGetAll('paddocks'),
         dbGetOrg(),
@@ -135,7 +138,7 @@ export default function MiCampoPage() {
       if (!paddocksRes.ok && !orgRes.ok) throw new Error('offline')
 
       // Guardar datos críticos en IndexedDB — única fuente de verdad (sin localStorage)
-      const { dbUpsertMany, dbUpsertOrg } = await import('@/lib/offline/db')
+      
       if (paddocksRes.ok) {
         await dbUpsertMany('paddocks', paddocksData).catch(() => {})
       }
@@ -247,7 +250,7 @@ export default function MiCampoPage() {
     if (dryMatter !== undefined) updates.dry_matter_kg_ha = dryMatter
 
     if (!navigator.onLine) {
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
       await enqueue({
         type: 'paddock_update',
         url: `/api/paddocks/${paddockId}`,

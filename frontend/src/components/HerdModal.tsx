@@ -1,4 +1,6 @@
 'use client'
+import { enqueue } from '@/lib/offline/outbox'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
 
 /**
  * HerdModal — Modal unificado Alta y Edición de Rodeos.
@@ -395,7 +397,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         const tempId = targetId || `temp-${Date.now()}`
         finalId = tempId
         const localHerd = { ...payload, id: tempId }
-        const { enqueue } = await import('@/lib/offline/outbox')
+        
         await enqueue({
           type: targetId ? 'herd_update' : 'herd_create',
           url: targetId ? `/api/herds/${targetId}` : '/api/herds',
@@ -744,7 +746,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
             `EV resultante: ${newEV.toFixed(0)}`,
           ].filter(Boolean).join(' · ')
           
-          const { enqueue } = await import('@/lib/offline/outbox')
+          
           const updatedHerdData = { ...(liveHerd || herd || {}), ...patchPayload, id: targetId } as any
 
           // 1. Encolar actualización de stock del rodeo (PATCH /api/herds/:id) — con persistencia IDB
@@ -1100,7 +1102,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       let mediaId: string | undefined
       if (bcsPhotoFile) {
         mediaId = crypto.randomUUID()
-        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+        
         await savePendingPhoto({
           id: mediaId,
           blob: bcsPhotoFile,
@@ -1109,7 +1111,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
           title: `Condición Corporal: ${bcsScore}/5 — ${label}`
         })
       }
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
       await enqueue({
         type: 'bcs_update',
         url: `/api/herds/${herd.id}/bcs`,
@@ -1231,10 +1233,10 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         console.warn('[saveBcs] network error → saving offline')
         const mediaId = bcsPhotoFile ? (crypto.randomUUID?.() ?? `${Date.now()}`) : undefined
         if (mediaId && bcsPhotoFile) {
-          const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+          
           await savePendingPhoto({ id: mediaId, blob: bcsPhotoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: `BCS: ${bcsScore}/5 — ${label}` }).catch(() => {})
         }
-        const { enqueue } = await import('@/lib/offline/outbox')
+        
         await enqueue({
           type: 'bcs_update',
           url: `/api/herds/${herd.id}/bcs`,
@@ -1312,16 +1314,16 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       if (photoFile) {
         mediaType = 'photo'
         mediaId = crypto.randomUUID?.() ?? `${Date.now()}`
-        const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+        
         await savePendingPhoto({ id: mediaId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr })
       } else if (audioBlob) {
         mediaType = 'audio'
         mediaId = crypto.randomUUID?.() ?? `${Date.now()}`
-        const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+        
         await savePendingAudio({ id: mediaId, blob: audioBlob, durationSecs: recordSecs, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: finalTranscript })
       }
 
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
       await enqueue({
         type: 'farm_event',
         url: '/api/farm-events',
@@ -1345,7 +1347,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
       let photo_url: string | null = null
       if (photoFile) {
         try {
-          const { compressImage } = await import('@/components/shared/RecordEditor')
+          
           const compressedImage = await compressImage(photoFile)
           const fd = new FormData()
           fd.append('file', compressedImage)
@@ -1426,14 +1428,14 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
         let mediaId: string | undefined
         if (photoFile) {
           mediaType = 'photo'; mediaId = offlineId
-          const { savePendingPhoto } = await import('@/lib/audioOfflineStore')
+          
           await savePendingPhoto({ id: mediaId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr }).catch(() => {})
         } else if (audioBlob) {
           mediaType = 'audio'; mediaId = offlineId
-          const { savePendingAudio } = await import('@/lib/audioOfflineStore')
+          
           await savePendingAudio({ id: mediaId, blob: audioBlob, durationSecs: recordSecs, lat: null, lng: null, createdAt: new Date().toISOString(), title: titleStr, transcript: finalTranscript }).catch(() => {})
         }
-        const { enqueue } = await import('@/lib/offline/outbox')
+        
         await enqueue({
           type: 'farm_event',
           url: '/api/farm-events',
@@ -1469,7 +1471,7 @@ export default function HerdModal({ herd, allHerds = [], isTemporary = false, on
     }
 
     if (isCurrentlyOffline) {
-      const { enqueue } = await import('@/lib/offline/outbox')
+      
       await enqueue({
         type: 'farm_event',
         url: '/api/farm-events',

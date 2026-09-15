@@ -1,4 +1,7 @@
 'use client'
+import { enqueue } from '@/lib/offline/outbox'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
+import { dbGetAll, dbUpsertMany, outboxGetAll, metaGet, metaSet, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 
 import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
@@ -80,7 +83,7 @@ export default function AgendaPage() {
 
     // ── Paso 1: IndexedDB inmediata ────────────────────────────────────────
     try {
-      const { dbGetAll } = await import('@/lib/offline/db')
+      
       const [localEvents, localHerds, localPlans] = await Promise.all([
         dbGetAll('farm_events'),
         dbGetAll('herds'),
@@ -125,7 +128,7 @@ export default function AgendaPage() {
           return merged
         })
         // Guardar en IndexedDB
-        const { dbUpsertMany } = await import('@/lib/offline/db')
+        
         await dbUpsertMany('farm_events', allEvents).catch(() => {})
       } else {
         // Si la API falla (offline o error), conservar el estado actual
@@ -137,7 +140,7 @@ export default function AgendaPage() {
       setGrazingPlans(plansData)
       // Guardar en IndexedDB
       if (herdsData.length > 0) {
-        const { dbUpsertMany } = await import('@/lib/offline/db')
+        
         await dbUpsertMany('herds', herdsData).catch(() => {})
         await dbUpsertMany('grazing_plans', plansData).catch(() => {})
       }
