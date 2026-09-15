@@ -158,7 +158,7 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
         {/* Tarjeta de resultados */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-            <h4 className="modal-subtitle text-gray-900 font-bold">Resultados del análisis</h4>
+            <h4 className="text-[14px] text-gray-900 font-bold">Resultados del análisis</h4>
             {(result.condition || result.condition_label) && (
               <span className={`ml-auto text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
                 result.condition === 'OPTIMO' ? 'bg-green-200 text-green-800'
@@ -198,8 +198,8 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
 
             {result.recommendation && (
               <div className="mt-3 pt-3 border-t border-gray-100">
-                <p className="modal-body-text font-black text-gray-500 uppercase tracking-widest mb-1">Recomendación</p>
-                <p className="modal-body-text text-gray-900 font-bold leading-relaxed">{result.recommendation}</p>
+                <p className="text-[12px] font-bold text-gray-900 mb-1">Recomendación</p>
+                <p className="text-[10px] text-gray-700 font-normal leading-relaxed">{result.recommendation}</p>
               </div>
             )}
 
@@ -397,13 +397,10 @@ function ResultRow({
 }) {
   return (
     <div className={`flex flex-col gap-0.5 ${fullWidth ? 'col-span-2' : ''}`}>
-      <div className="flex items-center gap-1 text-gray-500">
-        <span style={{ fontSize: '10px' }} className="font-black text-gray-500 uppercase tracking-widest">{label}</span>
+      <div className="flex items-center gap-1">
+        <span className="text-[12px] font-bold text-gray-900">{label}</span>
       </div>
-      <p
-        style={{ fontSize: highlight ? '14px' : '12px' }}
-        className={`font-black leading-tight ${highlight ? 'text-gray-900' : 'text-gray-500'}`}
-      >
+      <p className="text-[10px] font-normal text-gray-700 leading-tight">
         {value}
       </p>
     </div>

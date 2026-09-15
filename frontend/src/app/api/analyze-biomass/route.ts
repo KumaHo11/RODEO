@@ -2,7 +2,6 @@
  * POST /api/analyze-biomass
  * Analiza una foto de pastura y devuelve estimación de biomasa con Gemini.
  */
-export const runtime = 'edge'
 export const maxDuration = 60
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
