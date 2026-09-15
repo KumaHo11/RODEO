@@ -148,6 +148,7 @@ export async function triggerSync(getToken: () => Promise<string | null>): Promi
 /** Fuerza sincronización manual (ej: al pulsar "Sincronizar ahora") */
 export async function forceSyncNow(getToken: () => Promise<string | null>): Promise<void> {
   _isSyncing = false // reset lock
+  _lastSyncAt = 0 // reset cooldown para forzar ejecución inmediata
   await triggerSync(getToken)
 }
 

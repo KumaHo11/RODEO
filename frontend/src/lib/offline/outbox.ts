@@ -305,8 +305,9 @@ async function trySend(record: {
     // 409 Conflict (ya existe con esa idempotency_key) → considerar enviado
     if (res.status === 409) return true
 
-    // 4xx (excepto 429) → error del cliente, no reintentar
-    if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+    // 4xx (excepto 429, 401, 403) → error del cliente (ej. mal formato), no reintentar
+    // Ignoramos 401 y 403 para no borrar datos si la sesión expiró offline.
+    if (res.status >= 400 && res.status < 500 && res.status !== 429 && res.status !== 401 && res.status !== 403) {
       console.warn(`[outbox] Client error ${res.status} for ${record.url} — dropping`)
       return true // Eliminamos para no quedar en loop
     }
