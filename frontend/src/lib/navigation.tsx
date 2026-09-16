@@ -2,7 +2,7 @@
 
 import {
   LayoutDashboard, CalendarDays, Lightbulb, NotebookPen,
-  Users, CheckSquare, Fence, Calendar, Cloud, BookOpen, Leaf, MessageCircle, CreditCard,
+  Users, CheckSquare, Fence, Calendar, Cloud, Leaf, MessageCircle, CreditCard,
   Calculator
 } from 'lucide-react'
 import { IconoRodeos } from '@/components/icons/IconoRodeos'
@@ -36,7 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: 'Potreros', href: '/dashboard/mi-campo',  icon: Fence,        permissionKey: 'mi_campo'    },
       { name: 'Rodeos',   href: '/dashboard/herds',     icon: IconoRodeos,  permissionKey: 'rebanhos'    },
       { name: 'Agenda',   href: '/dashboard/agenda',    icon: CalendarDays, permissionKey: 'agenda'      },
-      { name: 'Bitácora', href: '/dashboard/bitacora', icon: BookOpen, permissionKey: 'bitacora' },
+      { name: 'Bitácora', href: '/dashboard/bitacora', icon: NotebookPen, permissionKey: 'bitacora' },
       { name: 'Clima',    href: '/dashboard/clima',    icon: Cloud,    permissionKey: 'clima'    },
     ],
   },
