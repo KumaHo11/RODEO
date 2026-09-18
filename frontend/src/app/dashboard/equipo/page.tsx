@@ -7,12 +7,14 @@ import { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
+import { toast } from 'sonner'
 import { usePermissions } from '@/lib/usePermissions'
 import {
   Users, Plus, Mail, Trash2, UserCheck, UserX,
   Shield, Wrench, Stethoscope, HelpCircle, Crown,
   Loader2, Check, X, Eye, Copy, CheckCheck,
-  ChevronRight, Pencil, Save, Star, AlertCircle, BadgePlus
+  ChevronRight, Pencil, Save, Star, AlertCircle, BadgePlus,
+  MessageCircle, Phone, ExternalLink
 } from 'lucide-react'
 import { AppHeader } from '@/components/AppHeader'
 import { Button, FormField } from '@/design-system'
@@ -178,6 +180,24 @@ export default function EquipoPage() {
   const [inviteSent, setInviteSent] = useState(false)
   const [inviteError, setInviteError] = useState('')
 
+  // ── WhatsApp invite state ──────────────────────────────────────────────────
+  type InviteChannel = 'email' | 'whatsapp'
+  const [inviteChannel, setInviteChannel] = useState<InviteChannel>('whatsapp')
+
+  const [waPhone, setWaPhone]           = useState('')
+  const [waOperatorName, setWaOperatorName] = useState('')
+  const [waRole, setWaRole]             = useState<'CAPATAZ' | 'AYUDANTE' | 'VETERINARIO' | 'ADMIN'>('CAPATAZ')
+  const [waLink, setWaLink]             = useState('')
+  const [waBotLink, setWaBotLink]       = useState('') // wa.me al bot — lo que se comparte
+  const [waDirectLink, setWaDirectLink] = useState('') // wa.me al operario directo (con teléfono)
+  const [waShareText, setWaShareText]   = useState('') // texto sin URL
+  const [waCopyText, setWaCopyText]     = useState('') // texto+URL para portapapeles
+  const [waSending, setWaSending]       = useState(false)
+  const [waCopied, setWaCopied]         = useState(false)
+  const [waShared, setWaShared]         = useState(false)
+  // Map of profileId → whatsapp link status
+  const [waStatuses, setWaStatuses] = useState<Record<string, { phone: string; isActive: boolean } | null>>({})
+
   // ── New custom role modal ──────────────────────────────────────────────────
   const [newRoleModalOpen, setNewRoleModalOpen] = useState(false)
   const [newRoleLabel, setNewRoleLabel]         = useState('')
@@ -323,12 +343,86 @@ export default function EquipoPage() {
       setInviteLastName('')
       setInviteRole('CAPATAZ')
       setInvitePerms(ROLE_MAP['CAPATAZ'].defaultPermissions)
+      setInviteChannel('email')
       load()
     }, 2500)
   }
 
+  // ── WhatsApp invite handler ───────────────────────────────────────────────
+  const handleGenerateWaLink = async () => {
+    setWaSending(true)
+    const res = await apiFetch('/api/team/whatsapp-invite', {
+      method: 'POST',
+      body: JSON.stringify({
+        phone:        waPhone.trim() || undefined,
+        operatorName: waOperatorName.trim() || undefined,
+        role:         waRole,
+        fieldName:    orgName || undefined,  // nombre real del establecimiento
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      toast.error(err.error || 'Error al generar el link')
+      setWaSending(false)
+      return
+    }
+    const data = await res.json()
+    setWaLink(data.waLink)
+    setWaBotLink(data.waBotLink)       // wa.me al bot — URL principal a compartir
+    setWaDirectLink(data.waDirectLink) // wa.me al operario directo
+    setWaShareText(data.waShareText)
+    setWaCopyText(data.waCopyText)     // texto completo con waBotLink
+    setWaSending(false)
+  }
+
+  // Compartir link — usa waBotLink (wa.me público) como URL
+  // Esto evita el problema de localhost Y el problema de texto+URL concatenados
+  const shareWaLink = async () => {
+    const shareData = {
+      title: 'Invitación a RODEO',
+      text:  waShareText,   // texto del mensaje (navigator.share lo adjunta antes de la URL)
+      url:   waBotLink,     // URL pública wa.me — nunca localhost
+    }
+    if (typeof navigator !== 'undefined' && 'share' in navigator) {
+      try {
+        await navigator.share(shareData)
+        setWaShared(true)
+        setTimeout(() => setWaShared(false), 3000)
+        return
+      } catch { /* usuario canceló — caer al portapapeles */ }
+    }
+    // Fallback portapapeles: copia waCopyText (ya contiene waBotLink, no localhost)
+    await navigator.clipboard.writeText(waCopyText)
+    setWaCopied(true)
+    setTimeout(() => setWaCopied(false), 2000)
+  }
+
+  const copyWaLink = async () => {
+    // Copia el mensaje completo con la URL wa.me (pública, sin localhost)
+    await navigator.clipboard.writeText(waCopyText || waBotLink)
+    setWaCopied(true)
+    setTimeout(() => setWaCopied(false), 2000)
+  }
+
+  // Pre-load WA statuses for all members
+  const loadWaStatuses = async (memberList: any[]) => {
+    const nonOwners = memberList.filter(m => m.team_role && m.team_role !== 'OWNER')
+    await Promise.all(nonOwners.map(async m => {
+      const res = await apiFetch(`/api/team/whatsapp-invite?profileId=${m.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setWaStatuses(prev => ({ ...prev, [m.id]: data.link || null }))
+      }
+    }))
+  }
+
   const revokeInvitation = async (id: string) => {
     await apiFetch(`/api/invitations/${id}`, { method: 'DELETE' })
+    load()
+  }
+
+  const revokeWaInvite = async (id: string) => {
+    await apiFetch(`/api/team/whatsapp-invite?id=${id}`, { method: 'DELETE' })
     load()
   }
 
@@ -533,6 +627,17 @@ export default function EquipoPage() {
                           {!member.is_active && (
                             <span className="text-[9px] font-black bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Inactivo</span>
                           )}
+                          {/* WhatsApp badge */}
+                          {!isOwnerRow && waStatuses[member.id] && (
+                            <span className={`flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full ${
+                              waStatuses[member.id]?.isActive
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              <MessageCircle className="w-2.5 h-2.5" />
+                              {waStatuses[member.id]?.isActive ? 'WA activo' : 'WA pendiente'}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <RoleBadge roleId={isOwnerRow ? undefined : member.team_role} customRoles={customRoles} />
@@ -586,30 +691,62 @@ export default function EquipoPage() {
               ) : (
                 <div className="divide-y divide-gray-50">
                   {pendingInvitations.map(inv => {
-                    const isExpired = new Date(inv.expires_at) < new Date()
+                    const isExpired = inv.expires_at ? new Date(inv.expires_at) < new Date() : false
+                    const isWa      = inv.channel === 'whatsapp'
+                    // Para WA invites: reconstruir el waBotLink desde el token
+                    const WA_BOT = process.env.NEXT_PUBLIC_WA_BOT_NUMBER || ''
+                    const waBotLink = isWa && inv.token
+                      ? `https://wa.me/${WA_BOT}?text=${encodeURIComponent(`Vincular al campo TOKEN_${inv.token}`)}`
+                      : null
+
                     return (
                       <div key={inv.id} className="flex items-center gap-4 px-6 py-4">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-gray-900 truncate">{inv.email}</p>
+                          <div className="flex items-center gap-2">
+                            {isWa
+                              ? <MessageCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                              : <Mail className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            }
+                            <p className="text-sm font-bold text-gray-900 truncate">
+                              {inv.operator_name || inv.email || (isWa ? 'Invitación WhatsApp' : 'Sin nombre')}
+                            </p>
+                          </div>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <RoleBadge roleId={inv.team_role} customRoles={customRoles} />
-                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">Pendiente</span>
-                            <span className="text-[9px] text-gray-400">{fmtDate(inv.created_at)}</span>
-                            {isExpired && <span className="text-[9px] font-bold text-gray-500">Expirada</span>}
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                              isWa ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {isWa ? '📱 WhatsApp' : 'Email'}
+                            </span>
+                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pendiente</span>
+                            {inv.created_at && <span className="text-[9px] text-gray-400">{fmtDate(inv.created_at)}</span>}
+                            {isExpired && <span className="text-[9px] font-bold text-red-500">Expirada</span>}
                           </div>
                         </div>
                         {isOwner && (
                           <div className="flex items-center gap-1 shrink-0">
+                            {/* Botón copiar — WA: copia el link wa.me / email: copia el join link */}
                             <button
-                              onClick={() => copyJoinLink(inv.token)}
+                              onClick={() => {
+                                if (isWa && waBotLink) {
+                                  const msg = `¡Te invito a sumarte a ${orgName || 'RODEO'}! Tocá este link para activar tu cuenta: ${waBotLink}`
+                                  navigator.clipboard.writeText(msg)
+                                } else {
+                                  copyJoinLink(inv.token)
+                                }
+                                setCopiedToken(inv.id)
+                                setTimeout(() => setCopiedToken(null), 2000)
+                              }}
                               className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                              title="Copiar link"
+                              title={isWa ? 'Copiar link WhatsApp' : 'Copiar link de invitación'}
                             >
-                              {copiedToken === inv.token ? <CheckCheck className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                              {copiedToken === inv.id ? <CheckCheck className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
+                            {/* Revocar */}
                             <button
-                              onClick={() => revokeInvitation(inv.id)}
+                              onClick={() => isWa ? revokeWaInvite(inv.id) : revokeInvitation(inv.id)}
                               className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                              title="Revocar invitación"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
@@ -780,12 +917,39 @@ export default function EquipoPage() {
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
                 <h2 className="modal-title tracking-tight">Invitar al equipo</h2>
-                <p className="text-xs text-gray-400 font-medium mt-0.5">Enviá una invitación por email con acceso configurado</p>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">Elegí cómo preferís invitar al miembro</p>
               </div>
-              <button onClick={() => setModalOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
+              <button onClick={() => { setModalOpen(false); setWaLink(''); setWaBotLink(''); setWaDirectLink(''); setWaShareText(''); setWaCopyText(''); setWaPhone(''); setWaOperatorName(''); setWaRole('CAPATAZ') }} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Channel tabs — WhatsApp primero */}
+            <div className="px-6 pt-4 pb-0 flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setInviteChannel('whatsapp'); setWaLink(''); setWaBotLink(''); setWaCopyText('') }}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                  inviteChannel === 'whatsapp'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+              </button>
+              <button
+                type="button"
+                onClick={() => { setInviteChannel('email'); setWaLink(''); setWaBotLink(''); setWaCopyText('') }}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                  inviteChannel === 'email'
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                <Mail className="w-3.5 h-3.5" /> Email
+              </button>
+            </div>
+
 
             {inviteSent ? (
               <div className="p-10 text-center">
@@ -794,6 +958,173 @@ export default function EquipoPage() {
                 </div>
                 <h3 className="modal-title mb-1">¡Invitación enviada!</h3>
                 <p className="text-sm text-gray-500">El email fue enviado a <strong>{inviteEmail}</strong></p>
+              </div>
+            ) : inviteChannel === 'whatsapp' ? (
+              /* ── WhatsApp invite panel ─────────────────────────────────── */
+              <div className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+                  {!waBotLink ? (
+                    /* ── Panel de configuración ─────────────────────────── */
+                    <>
+                      {/* Nombre / Alias (opcional) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre / Alias</label>
+                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">Opcional</span>
+                        </div>
+                        <input
+                          type="text"
+                          value={waOperatorName}
+                          onChange={e => setWaOperatorName(e.target.value)}
+                          placeholder="ej. Juan el Capataz"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all placeholder:text-gray-300"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">Si no lo ingresás, se usará el nombre de perfil de WhatsApp del operario.</p>
+                      </div>
+
+                      {/* Teléfono (opcional) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Teléfono WhatsApp</label>
+                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">Opcional</span>
+                        </div>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                          <input
+                            type="tel"
+                            value={waPhone}
+                            onChange={e => setWaPhone(e.target.value)}
+                            placeholder="+549 11 1234-5678"
+                            className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                          />
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          {waPhone.trim()
+                            ? 'Con teléfono podés abrir WhatsApp directo con el operario.'
+                            : 'Sin teléfono: compartís el link y el número se registra cuando el operario lo activa.'}
+                        </p>
+                      </div>
+
+                      {/* Rol asignado */}
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Rol asignado</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['CAPATAZ', 'AYUDANTE', 'VETERINARIO', 'ADMIN'] as const).map(r => {
+                            const roleInfo: Record<string, { label: string; desc: string; color: string }> = {
+                              CAPATAZ:    { label: 'Capataz',      desc: 'Recorridas y bitácora', color: 'text-orange-600' },
+                              AYUDANTE:   { label: 'Operario',     desc: 'Solo bitácora y fotos',  color: 'text-gray-600'   },
+                              VETERINARIO:{ label: 'Veterinario',  desc: 'Agenda y eventos',       color: 'text-blue-600'   },
+                              ADMIN:      { label: 'Administrador',desc: 'Acceso completo',         color: 'text-violet-600' },
+                            }
+                            const info = roleInfo[r]
+                            const isSelected = waRole === r
+                            return (
+                              <button
+                                key={r}
+                                type="button"
+                                onClick={() => setWaRole(r)}
+                                className={`px-3 py-2.5 rounded-xl border text-left transition-all ${
+                                  isSelected ? 'border-gray-900 bg-white shadow-sm' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className={`text-xs font-black leading-none ${isSelected ? info.color : 'text-gray-700'}`}>{info.label}</p>
+                                    <p className="text-[9px] text-gray-400 mt-0.5">{info.desc}</p>
+                                  </div>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-gray-900 shrink-0" />}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Info */}
+                      <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
+                        <p className="text-xs font-black text-green-800 mb-2">¿Cómo funciona?</p>
+                        <ol className="text-[11px] text-green-700 space-y-1.5 list-decimal list-inside">
+                          <li>Generás el link y lo compartís con el operario</li>
+                          <li>El operario toca el link → se abre WhatsApp con el mensaje listo</li>
+                          <li>Presiona Enviar → queda vinculado automáticamente</li>
+                          <li>Puede enviar audios, fotos o textos que se guardan en la bitácora</li>
+                        </ol>
+                      </div>
+                    </>
+                  ) : (
+                    /* ── Panel post-generación ───────────────────────────── */
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-center w-14 h-14 bg-green-100 rounded-full mx-auto">
+                        <MessageCircle className="w-7 h-7 text-green-600" />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-black text-gray-900">¡Link generado!</p>
+                        <p className="text-xs text-gray-400 mt-0.5">Válido por 48 horas</p>
+                      </div>
+
+                      {/* CTA principal: Compartir */}
+                      <button
+                        onClick={shareWaLink}
+                        className="w-full flex items-center justify-center gap-2 py-3.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl text-sm font-black transition-all shadow-sm shadow-green-200"
+                      >
+                        {waShared
+                          ? <><CheckCheck className="w-4 h-4" /> ¡Compartido!</>
+                          : waCopied
+                            ? <><CheckCheck className="w-4 h-4" /> ¡Copiado!</>
+                            : <><ExternalLink className="w-4 h-4" /> Compartir link de invitación</>
+                        }
+                      </button>
+
+                      {/* CTA secundario: Abrir WhatsApp — siempre visible */}
+                      {/* Con teléfono: abre chat 1:1 con el operario */}
+                      {/* Sin teléfono: abre el bot de RODEO directamente */}
+                      <a
+                        href={waPhone.trim() ? waDirectLink : waBotLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-2 py-3 border-2 border-green-600 text-green-700 rounded-2xl text-sm font-black hover:bg-green-50 transition-all"
+                      >
+                        <Phone className="w-4 h-4" />
+                        {waPhone.trim() ? 'Enviar por WhatsApp directo' : 'Abrir bot de RODEO'}
+                      </a>
+
+                      {/* Copiar link siempre disponible */}
+                      <button
+                        onClick={copyWaLink}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-all"
+                      >
+                        <Copy className="w-3.5 h-3.5" /> Copiar link
+                      </button>
+
+                      <p className="text-[10px] text-gray-400 text-center px-2">
+                        Cualquier persona que toque este link quedará vinculada al campo con rol <strong>{waRole}</strong>.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer WA */}
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 shrink-0 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setModalOpen(false); setWaLink(''); setWaBotLink(''); setWaDirectLink(''); setWaShareText(''); setWaCopyText(''); setWaPhone(''); setWaOperatorName(''); setWaRole('CAPATAZ') }}
+                    className="flex-1 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-xl hover:bg-gray-50 transition-colors"
+                  >
+                    {waLink ? 'Cerrar' : 'Cancelar'}
+                  </button>
+                  {!waLink && (
+                    <button
+                      type="button"
+                      onClick={handleGenerateWaLink}
+                      disabled={waSending}
+                      className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-black text-sm rounded-xl shadow-sm shadow-green-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {waSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+                      {waSending ? 'Generando...' : 'Generar link'}
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <form onSubmit={handleInvite} className="flex flex-col flex-1 min-h-0">
@@ -930,9 +1261,6 @@ export default function EquipoPage() {
           </div>
         </div>
       , document.body)}
-
-
-
 
       {/* ── New Custom Role Modal ─────────────────────────────────────────────── */}
       {newRoleModalOpen && (

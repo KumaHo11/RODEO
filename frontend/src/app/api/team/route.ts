@@ -33,13 +33,14 @@ export async function GET(req: NextRequest) {
       [auth.orgId]
     )
 
-    // Return ALL statuses so UI can display Pending / Accepted / Revoked tabs
-    let invitations: any[] = []
+    // Invitaciones por email (team_invitations)
+    let emailInvitations: any[] = []
     try {
-      invitations = await serviceQuery(
+      emailInvitations = await serviceQuery(
         `SELECT ti.id, ti.email, ti.role, ti.team_role, ti.permissions,
                 ti.status, ti.token, ti.expires_at, ti.created_at, ti.invited_by,
-                p.first_name AS inviter_first_name, p.last_name AS inviter_last_name
+                p.first_name AS inviter_first_name, p.last_name AS inviter_last_name,
+                'email' AS channel
          FROM team_invitations ti
          LEFT JOIN profiles p ON p.id = ti.invited_by
          WHERE ti.org_id = $1
@@ -47,10 +48,39 @@ export async function GET(req: NextRequest) {
         [auth.orgId]
       )
     } catch (invErr: any) {
-      console.warn('[GET /api/team] team_invitations query failed (table may not exist):', invErr.message)
+      console.warn('[GET /api/team] team_invitations query failed:', invErr.message)
     }
 
+    // Invitaciones por WhatsApp pendientes (whatsapp_links con is_active=false)
+    let waInvitations: any[] = []
+    try {
+      waInvitations = await serviceQuery(
+        `SELECT id,
+                phone,
+                operator_name  AS email,        -- reutilizamos campo 'email' para nombre
+                role           AS team_role,
+                'PENDING'      AS status,
+                token_expires_at AS expires_at,
+                linked_at      AS created_at,
+                activation_token AS token,
+                'whatsapp'     AS channel,
+                operator_name
+         FROM whatsapp_links
+         WHERE org_id = $1
+           AND is_active = false
+           AND activation_token IS NOT NULL
+         ORDER BY linked_at DESC`,
+        [auth.orgId]
+      )
+    } catch (waErr: any) {
+      console.warn('[GET /api/team] whatsapp_links query failed:', waErr.message)
+    }
+
+    // Unir ambas listas: primero email, luego WA
+    const invitations = [...emailInvitations, ...waInvitations]
+
     return NextResponse.json({ members, invitations })
+
   } catch (err: any) {
     console.error('GET /api/team error:', err)
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })

@@ -1,15 +1,20 @@
 /**
  * lib/whatsapp.ts
- * Cliente mínimo para la Meta WhatsApp Cloud API v19.
+ * Cliente para la Meta WhatsApp Cloud API v20.
+ * Todas las operaciones de DB usan Prisma (sin raw SQL).
  */
 
-const BASE = `https://graph.facebook.com/v19.0`
+const BASE = `https://graph.facebook.com/v20.0`
 const TOKEN = process.env.WHATSAPP_ACCESS_TOKEN!
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID!
 
+// ── Media ─────────────────────────────────────────────────────────────────────
+
 /** Descarga el binario de un media_id de Meta y devuelve un Buffer */
-export async function downloadWhatsAppMedia(mediaId: string): Promise<{ buffer: Buffer; mimeType: string }> {
-  // 1. Obtener la URL de descarga
+export async function downloadWhatsAppMedia(
+  mediaId: string
+): Promise<{ buffer: Buffer; mimeType: string }> {
+  // 1. Obtener la URL temporal de descarga
   const metaRes = await fetch(`${BASE}/${mediaId}`, {
     headers: { Authorization: `Bearer ${TOKEN}` },
   })
@@ -26,9 +31,11 @@ export async function downloadWhatsAppMedia(mediaId: string): Promise<{ buffer: 
   return { buffer: Buffer.from(arrayBuffer), mimeType: mime_type as string }
 }
 
-/** Envía un mensaje de texto al remitente (acuse de recibo) */
-export async function sendWhatsAppText(to: string, text: string) {
-  await fetch(`${BASE}/${PHONE_NUMBER_ID}/messages`, {
+// ── Messaging ─────────────────────────────────────────────────────────────────
+
+/** Envía un mensaje de texto al número especificado */
+export async function sendWhatsAppText(to: string, text: string): Promise<void> {
+  const res = await fetch(`${BASE}/${PHONE_NUMBER_ID}/messages`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${TOKEN}`,
@@ -41,4 +48,8 @@ export async function sendWhatsAppText(to: string, text: string) {
       text: { body: text },
     }),
   })
+  if (!res.ok) {
+    const body = await res.text()
+    console.error(`[WhatsApp] sendText failed (${res.status}):`, body)
+  }
 }
