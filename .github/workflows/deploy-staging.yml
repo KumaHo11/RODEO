@@ -169,6 +169,10 @@ jobs:
             f'EMAIL_VERIFY_JWT_SECRET: {q(os.environ.get("EMAIL_VERIFY_JWT_SECRET",""))}',
             f'CONTACT_FORM_DESTINATION_EMAILS: {q(os.environ.get("CONTACT_FORM_DESTINATION_EMAILS",""))}',
             f'CRON_SECRET: {q(os.environ.get("CRON_SECRET",""))}',
+            f'WHATSAPP_VERIFY_TOKEN: {q(os.environ.get("WHATSAPP_VERIFY_TOKEN",""))}',
+            f'WHATSAPP_APP_SECRET: {q(os.environ.get("WHATSAPP_APP_SECRET",""))}',
+            f'WHATSAPP_TOKEN: {q(os.environ.get("WHATSAPP_TOKEN",""))}',
+            f'NEXT_PUBLIC_WA_BOT_NUMBER: {q(os.environ.get("NEXT_PUBLIC_WA_BOT_NUMBER",""))}',
           ]
           with open('/tmp/rodeo-staging-env.yaml','w') as f: f.write('\n'.join(lines))
           print('  ✓ /tmp/rodeo-staging-env.yaml generado')
@@ -192,6 +196,10 @@ jobs:
           EMAIL_VERIFY_JWT_SECRET: ${{ secrets.EMAIL_VERIFY_JWT_SECRET }}
           CONTACT_FORM_DESTINATION_EMAILS: ${{ secrets.CONTACT_FORM_DESTINATION_EMAILS }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
+          WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
+          WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+          NEXT_PUBLIC_WA_BOT_NUMBER: ${{ secrets.NEXT_PUBLIC_WA_BOT_NUMBER }}
 
       # 7. Despliegue en Cloud Run
       - name: 'Deploy to Cloud Run'
