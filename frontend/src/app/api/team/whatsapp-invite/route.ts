@@ -23,7 +23,7 @@ import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { serviceQueryOne, serviceQuery, serviceMutate } from '@/lib/db'
 import crypto from 'crypto'
 
-const WA_BOT_NUMBER = process.env.WHATSAPP_PHONE_NUMBER!
+const WA_BOT_NUMBER = process.env.NEXT_PUBLIC_WA_BOT_NUMBER!
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function getAuth(req: NextRequest) {

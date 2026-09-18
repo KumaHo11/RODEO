@@ -46,7 +46,7 @@ export async function GET(
     )
   }
 
-  const WA_NUMBER     = process.env.WHATSAPP_PHONE_NUMBER!
+  const WA_NUMBER     = process.env.NEXT_PUBLIC_WA_BOT_NUMBER!
   const activationMsg = `Vincular al campo TOKEN_${token}`
   // La landing muestra el botón "Conectar mi WhatsApp" que abre el bot con el mensaje listo
   const waLink = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(activationMsg)}`
