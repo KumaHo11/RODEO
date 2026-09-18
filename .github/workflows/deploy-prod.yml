@@ -117,6 +117,7 @@ jobs:
             --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID_PROD }}" \
             --build-arg NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY="${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY_PROD }}" \
             --build-arg NEXT_PUBLIC_APP_URL="${{ env.PROD_URL }}" \
+            --build-arg NEXT_PUBLIC_WA_BOT_NUMBER="${{ secrets.NEXT_PUBLIC_WA_BOT_NUMBER_PROD }}" \
             -t ${{ env.IMAGE }} \
             .
 
@@ -171,6 +172,10 @@ jobs:
             f'CONTACT_FORM_DESTINATION_EMAILS: {q(os.environ.get("CONTACT_FORM_DESTINATION_EMAILS",""))}',
             f'CRON_SECRET: {q(os.environ.get("CRON_SECRET",""))}',
             f'MERCADOPAGO_WEBHOOK_SECRET: {q(os.environ.get("MERCADOPAGO_WEBHOOK_SECRET",""))}',
+            f'WHATSAPP_VERIFY_TOKEN: {q(os.environ.get("WHATSAPP_VERIFY_TOKEN",""))}',
+            f'WHATSAPP_APP_SECRET: {q(os.environ.get("WHATSAPP_APP_SECRET",""))}',
+            f'WHATSAPP_TOKEN: {q(os.environ.get("WHATSAPP_TOKEN",""))}',
+            f'NEXT_PUBLIC_WA_BOT_NUMBER: {q(os.environ.get("NEXT_PUBLIC_WA_BOT_NUMBER",""))}',
           ]
           with open('/tmp/rodeo-prod-env.yaml','w') as f: f.write('\n'.join(lines))
           print('  ✓ /tmp/rodeo-prod-env.yaml generado')
@@ -195,6 +200,10 @@ jobs:
           EMAIL_VERIFY_JWT_SECRET: ${{ secrets.EMAIL_VERIFY_JWT_SECRET_PROD }}
           CONTACT_FORM_DESTINATION_EMAILS: ${{ secrets.CONTACT_FORM_DESTINATION_EMAILS_PROD }}
           CRON_SECRET: ${{ secrets.CRON_SECRET_PROD }}
+          WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN_PROD }}
+          WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET_PROD }}
+          WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN_PROD }}
+          NEXT_PUBLIC_WA_BOT_NUMBER: ${{ secrets.NEXT_PUBLIC_WA_BOT_NUMBER_PROD }}
 
       - name: 'Clear legacy Cloud Run secret bindings'
         run: |-
