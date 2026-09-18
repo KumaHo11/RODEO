@@ -95,13 +95,14 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   //   "Vincular al campo TOKEN_d32-b189-03a..." (con guiones visuales, tolerado)
   let tokenMatch: RegExpMatchArray | null = null
   if (/TOKEN_/i.test(textBody)) {
-    // Extraer todo lo que viene después de TOKEN_ y limpiar guiones
-    const afterToken = textBody.replace(/^.*TOKEN_/i, '').replace(/[-\s]/g, '')
-    if (/^[a-f0-9]{64}$/i.test(afterToken)) {
-      tokenMatch = [textBody, afterToken]
-      console.log(`[WA Webhook] Token de activación detectado: ${afterToken.slice(0, 16)}...`)
+    // Extraer todo lo que viene después de TOKEN_ y limpiar cualquier caracter que no sea hex (ej. paréntesis, espacios, guiones)
+    const afterToken = textBody.replace(/^.*TOKEN_/i, '').replace(/[^a-f0-9]/gi, '')
+    if (afterToken.length >= 64) {
+      const cleanToken = afterToken.slice(0, 64)
+      tokenMatch = [textBody, cleanToken]
+      console.log(`[WA Webhook] Token de activación detectado: ${cleanToken.slice(0, 16)}...`)
     } else {
-      console.warn(`[WA Webhook] Se detectó TOKEN_ pero el valor no es hex-64 válido: "${afterToken.slice(0, 40)}"`)
+      console.warn(`[WA Webhook] Se detectó TOKEN_ pero el valor no tiene 64 caracteres hex: "${afterToken.slice(0, 40)}"`)
     }
   }
   if (tokenMatch) {
