@@ -170,10 +170,10 @@ jobs:
             f'EMAIL_VERIFY_JWT_SECRET: {q(os.environ.get("EMAIL_VERIFY_JWT_SECRET",""))}',
             f'CONTACT_FORM_DESTINATION_EMAILS: {q(os.environ.get("CONTACT_FORM_DESTINATION_EMAILS",""))}',
             f'CRON_SECRET: {q(os.environ.get("CRON_SECRET",""))}',
-            f'WHATSAPP_VERIFY_TOKEN: {q(os.environ.get("WHATSAPP_VERIFY_TOKEN",""))}',
-            f'WHATSAPP_APP_SECRET: {q(os.environ.get("WHATSAPP_APP_SECRET",""))}',
-            f'WHATSAPP_TOKEN: {q(os.environ.get("WHATSAPP_TOKEN",""))}',
-            f'NEXT_PUBLIC_WA_BOT_NUMBER: {q(os.environ.get("NEXT_PUBLIC_WA_BOT_NUMBER",""))}',
+            f'WHATSAPP_VERIFY_TOKEN: {q(os.environ.get("WHATSAPP_VERIFY_TOKEN","").strip())}',
+            f'WHATSAPP_APP_SECRET: {q(os.environ.get("WHATSAPP_APP_SECRET","").strip())}',
+            f'WHATSAPP_TOKEN: {q(os.environ.get("WHATSAPP_TOKEN","").strip())}',
+            f'NEXT_PUBLIC_WA_BOT_NUMBER: {q(os.environ.get("NEXT_PUBLIC_WA_BOT_NUMBER","").strip())}',
           ]
           with open('/tmp/rodeo-staging-env.yaml','w') as f: f.write('\n'.join(lines))
           print('  ✓ /tmp/rodeo-staging-env.yaml generado')

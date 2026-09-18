@@ -46,7 +46,7 @@ RUN npm run build
 
 # ── Stage 3: Production runner ──────────────────────────────────────────────
 FROM base AS runner
-RUN apk add --no-cache cairo pango
+RUN apk add --no-cache cairo pango openssl
 WORKDIR /app
 
 ENV NODE_ENV=production
