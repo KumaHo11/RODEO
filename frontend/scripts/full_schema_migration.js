@@ -371,26 +371,29 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 -- field_notes (bitácora)
 CREATE TABLE IF NOT EXISTS field_notes (
-  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id          UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  created_by      UUID        REFERENCES profiles(id) ON DELETE SET NULL,
-  paddock_id      UUID        REFERENCES paddocks(id) ON DELETE SET NULL,
-  tags            TEXT[],
-  category        TEXT,
-  title           TEXT,
-  content         TEXT,
-  lat             DOUBLE PRECISION,
-  lng             DOUBLE PRECISION,
-  photo_url       TEXT,
-  photo_urls      TEXT[],
-  audio_url       TEXT,
-  analysis_result JSONB,
-  source          TEXT        NOT NULL DEFAULT 'APP',
-  status          TEXT        NOT NULL DEFAULT 'APPROVED',
-  whatsapp_from   TEXT,
-  raw_message     TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id              UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  created_by          UUID        REFERENCES profiles(id) ON DELETE SET NULL,
+  paddock_id          UUID        REFERENCES paddocks(id) ON DELETE SET NULL,
+  tags                TEXT[],
+  category            TEXT,
+  title               TEXT,
+  content             TEXT,
+  lat                 DOUBLE PRECISION,
+  lng                 DOUBLE PRECISION,
+  photo_url           TEXT,
+  photo_urls          TEXT[],
+  audio_url           TEXT,
+  audio_duration_secs INTEGER,
+  analysis_result     JSONB,
+  source              TEXT        NOT NULL DEFAULT 'APP',
+  status              TEXT        NOT NULL DEFAULT 'APPROVED',
+  whatsapp_phone      TEXT,
+  whatsapp_msg_id     VARCHAR(100),
+  occurred_at         TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT idx_field_notes_wa_msg_id UNIQUE (whatsapp_msg_id)
 );
 
 -- grazing_plan_entries
@@ -512,6 +515,24 @@ CREATE INDEX IF NOT EXISTS idx_team_inv_org_status        ON team_invitations(or
 ALTER TABLE team_invitations ADD COLUMN IF NOT EXISTS first_name TEXT;
 ALTER TABLE team_invitations ADD COLUMN IF NOT EXISTS last_name  TEXT;
 
+-- WhatsApp integration columns for field_notes (idempotent backfill)
+ALTER TABLE field_notes ADD COLUMN IF NOT EXISTS audio_duration_secs INTEGER;
+ALTER TABLE field_notes ADD COLUMN IF NOT EXISTS whatsapp_phone      TEXT;
+ALTER TABLE field_notes ADD COLUMN IF NOT EXISTS whatsapp_msg_id     VARCHAR(100);
+ALTER TABLE field_notes ADD COLUMN IF NOT EXISTS occurred_at         TIMESTAMPTZ;
+-- Índice único para deduplicación de mensajes WhatsApp (wamid)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_field_notes_wa_msg_id
+  ON field_notes (whatsapp_msg_id) WHERE whatsapp_msg_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_field_notes_pending
+  ON field_notes (org_id, status, created_at DESC) WHERE source = 'WHATSAPP';
+
+-- WhatsApp activation columns for whatsapp_links (idempotent backfill)
+ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS activation_token  VARCHAR(10);
+ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS token_expires_at  TIMESTAMPTZ;
+ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS is_active         BOOLEAN NOT NULL DEFAULT false;
+-- Marcar vínculos existentes (linked_at presente) como activos
+UPDATE whatsapp_links SET is_active = true WHERE linked_at IS NOT NULL AND is_active = false;
+
 -- custom_roles (RBAC)
 CREATE TABLE IF NOT EXISTS custom_roles (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -549,15 +570,17 @@ CREATE TABLE IF NOT EXISTS system_feature_flags (
   updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- whatsapp_links
+-- whatsapp_links: teléfono → perfil de la org (1:1)
 CREATE TABLE IF NOT EXISTS whatsapp_links (
-  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  profile_id  UUID        REFERENCES profiles(id) ON DELETE CASCADE,
-  org_id      UUID        REFERENCES organizations(id) ON DELETE CASCADE,
-  phone       TEXT        NOT NULL UNIQUE,
-  is_active   BOOLEAN     DEFAULT true,
-  linked_at   TIMESTAMPTZ DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ DEFAULT NOW()
+  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id       UUID        REFERENCES profiles(id) ON DELETE CASCADE,
+  org_id           UUID        REFERENCES organizations(id) ON DELETE CASCADE,
+  phone            VARCHAR(30) NOT NULL UNIQUE,
+  activation_token VARCHAR(10),
+  token_expires_at TIMESTAMPTZ,
+  is_active        BOOLEAN     NOT NULL DEFAULT false,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- movements

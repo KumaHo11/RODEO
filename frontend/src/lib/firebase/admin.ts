@@ -16,7 +16,7 @@ let _adminAuth: Auth | null = null
 function getAdminApp(): App {
   if (getApps().length > 0) return getApps()[0]
 
-  const projectId   = process.env.FIREBASE_ADMIN_PROJECT_ID
+  const projectId   = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
   if (!projectId) throw new Error('[Firebase Admin] FIREBASE_ADMIN_PROJECT_ID env var is required')
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL
   const privateKey  = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n')

@@ -22,6 +22,8 @@ const JWKS = createRemoteJWKSet(
 const rateLimitMap = new Map<string, { count: number, resetAt: number }>()
 
 function checkRateLimit(request: NextRequest): boolean {
+  if (process.env.NODE_ENV !== 'production') return true
+  
   const ip = request.headers.get('x-forwarded-for') || 'unknown'
   const now = Date.now()
   const windowMs = 60 * 1000 // 1 min

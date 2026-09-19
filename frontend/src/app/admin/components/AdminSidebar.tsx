@@ -44,7 +44,7 @@ export default function AdminSidebar() {
       <div className={`flex items-center px-4 h-16 border-b border-gray-100 ${collapsed ? 'justify-center' : ''}`}>
         {!collapsed ? (
           <Link href="/admin/dashboard" className="flex flex-col justify-center mt-1">
-            <RodeoLogo size="md" className="mb-1" />
+            <RodeoLogo size="lg" showTagline={false} className="mb-1" />
             <div className="text-[9px] text-green-700 font-bold tracking-widest leading-none ml-1">SUPER ADMIN</div>
           </Link>
         ) : (

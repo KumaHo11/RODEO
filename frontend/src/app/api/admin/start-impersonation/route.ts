@@ -66,11 +66,14 @@ const HTML = `<!DOCTYPE html>
       const auth = getAuth(app)
 
       signInWithCustomToken(auth, token)
-        .then(() => {
+        .then(async (credential) => {
+          const idToken = await credential.user.getIdToken()
+          const isHttps = window.location.protocol === 'https:'
+          document.cookie = '__session=' + idToken + '; path=/; max-age=604800; SameSite=Lax' + (isHttps ? '; Secure' : '')
           document.getElementById('subtitle').textContent =
             email ? 'Sesión iniciada como ' + email : 'Redirigiendo…'
           // Redirect to app dashboard
-          setTimeout(() => { window.location.href = '/app/dashboard' }, 800)
+          setTimeout(() => { window.location.href = '/dashboard' }, 800)
         })
         .catch(err => {
           document.getElementById('spinner').style.display = 'none'

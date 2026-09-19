@@ -76,6 +76,7 @@ export async function verifyFirebaseToken(idToken: string): Promise<FirebaseToke
     })
 
     return {
+      ...payload,
       uid: payload.sub!,
       email: payload['email'] as string | undefined,
       email_verified: payload['email_verified'] as boolean | undefined,

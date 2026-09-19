@@ -39,6 +39,8 @@ type AuthContextType = {
   profile: Profile | null
   isLoading: boolean
   isSuperAdmin: boolean
+  isImpersonating: boolean
+  stopImpersonation: () => Promise<void>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -48,6 +50,8 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   isLoading: true,
   isSuperAdmin: false,
+  isImpersonating: false,
+  stopImpersonation: async () => { },
   signOut: async () => { },
   refreshProfile: async () => { },
 })
@@ -56,6 +60,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isImpersonating, setIsImpersonating] = useState(false)
 
   const fetchProfile = useCallback(async (firebaseUser: User) => {
     // ── Offline fast path: use cached profile immediately ──
@@ -258,6 +263,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (firebaseUser) {
         // Guarda el token en cookie para el middleware
         const token = await firebaseUser.getIdToken()
+        const tokenResult = await firebaseUser.getIdTokenResult()
+        setIsImpersonating(!!tokenResult.claims.impersonation)
         // Cachear token en IndexedDB para login offline
         const expMs = decodeJwtExp(token)
         if (expMs) cacheAuthToken(token, expMs).catch(() => { })
@@ -274,6 +281,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         document.cookie = '__session=; path=/; max-age=0'
         clearAuthCache().catch(() => { })
         setProfile(null)
+        setIsImpersonating(false)
       }
       setIsLoading(false)
     })
@@ -315,10 +323,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     document.cookie = '__session=; path=/; max-age=0'
   }
 
+  const stopImpersonation = async () => {
+    if (!user) return
+    const token = await user.getIdToken()
+    const res = await fetch('/api/admin/stop-impersonation', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) {
+      alert('Error al volver al modo admin.')
+      return
+    }
+    const { customToken } = await res.json()
+    const { signInWithCustomToken } = await import('firebase/auth')
+    const credential = await signInWithCustomToken(auth, customToken)
+    const idToken = await credential.user.getIdToken()
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
+    document.cookie = '__session=' + idToken + '; path=/; max-age=604800; SameSite=Lax' + (isHttps ? '; Secure' : '')
+    window.location.href = '/admin/users'
+  }
+
   const isSuperAdmin = profile?.system_role === 'SUPER_ADMIN'
 
   return (
-    <AuthContext.Provider value={{ user, profile, isLoading, isSuperAdmin, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, isLoading, isSuperAdmin, isImpersonating, stopImpersonation, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

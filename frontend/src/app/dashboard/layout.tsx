@@ -57,7 +57,7 @@ const PAGE_NAMES: Record<string, string> = {
 
 // ── Layout ─────────────────────────────────────────────────────────────────────
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, signOut, profile: authProfile } = useAuth()
+  const { user, isLoading, signOut, profile: authProfile, isImpersonating, stopImpersonation } = useAuth()
   const { can, isOwner, teamRole, roleLabel, roleColors } = usePermissions()
   const router = useRouter()
   const pathname = usePathname()
@@ -420,8 +420,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Logo + collapse toggle */}
           <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-gray-100">
             {sidebarOpen && (
-              <Link href="/landing" className="flex items-center h-full justify-start">
-                <img src="/RODEO.LogoHeader.svg" alt="RODEO" style={{ width: 250, height: 50 }} className="object-contain p-1" />
+              <Link href="/landing" className="flex items-center h-full justify-start px-2">
+                <RodeoLogo size="lg" className="mt-1" showTagline={false} />
               </Link>
             )}
             <button
@@ -487,8 +487,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-72 bg-white flex flex-col shadow-2xl">
             <div className="flex h-14 items-center justify-between px-4 border-b border-gray-100">
-              <Link href="/landing" className="flex items-center h-full justify-start">
-                <img src="/RODEO.LogoHeader.svg" alt="RODEO" style={{ width: 250, height: 50 }} className="object-contain p-1" />
+              <Link href="/landing" className="flex items-center h-full justify-start px-2">
+                <RodeoLogo size="lg" className="mt-1" showTagline={false} />
               </Link>
               <button onClick={() => setMobileMenuOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500">
                 <X className="w-4 h-4" />
@@ -575,6 +575,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* ── Main column ────────────────────────────────────────────────────────── */}
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+
+        {isImpersonating && (
+          <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between z-[9999] shrink-0">
+            <span className="text-xs font-bold">
+              Estás navegando como {profile?.first_name || user.email}. (Modo Emulación)
+            </span>
+            <button 
+              onClick={stopImpersonation}
+              className="bg-amber-700 hover:bg-amber-800 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+            >
+              Volver a Superadmin
+            </button>
+          </div>
+        )}
 
         {/* ── Top header ──────────────────────────────────────────────────── */}
         <header className="h-14 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 z-[2000]">
