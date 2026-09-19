@@ -10,7 +10,7 @@ import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio
 import {
   Mic, Camera, Loader2, Image as ImageIcon,
   CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp, Lock, MessageCircle, Filter, FileText,
-  Pencil, Trash2, Sparkles, Check, X, AlertTriangle, ArrowRight
+  Pencil, Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
@@ -63,175 +63,26 @@ function Waveform({ active }: { active: boolean }) {
   )
 }
 
-// ── WhatsApp intent helpers ──────────────────────────────────────────────────
-const INTENT_META: Record<string, { label: string; color: string; bg: string }> = {
-  HERD_MOVE:   { label: 'Movimiento',  color: 'text-blue-700',   bg: 'bg-blue-50' },
-  BIRTH:       { label: 'Nacimiento',  color: 'text-green-700',  bg: 'bg-green-50' },
-  DEATH:       { label: 'Mortandad',   color: 'text-red-700',    bg: 'bg-red-50' },
-  RAINFALL:    { label: 'Lluvia',      color: 'text-sky-700',    bg: 'bg-sky-50' },
-  OBSERVATION: { label: 'Observación', color: 'text-gray-700',   bg: 'bg-gray-100' },
-  TASK:        { label: 'Tarea',       color: 'text-amber-700',  bg: 'bg-amber-50' },
-  UNKNOWN:     { label: 'Sin intent',  color: 'text-gray-500',   bg: 'bg-gray-50' },
-}
-
-// ── WhatsApp AI Banner ───────────────────────────────────────────────────
-function WhatsAppBanner({ note, onApply, onDismiss }: {
-  note: any
-  onApply: () => void
-  onDismiss: () => void
-}) {
-  const ar = note.analysis_result ?? note.analysisResult
-  if (!ar) return null
-
-  const intent  = ar.intent  ?? 'UNKNOWN'
-  const conf    = ar.confidence ?? 0
-  const needsReview = ar.needsReview ?? (conf < 85)
-  const meta    = INTENT_META[intent] ?? INTENT_META.UNKNOWN
-  const entities = ar.entities ?? {}
-
-  return (
-    <div className={`mt-3 rounded-xl border p-3 ${
-      needsReview
-        ? 'border-amber-200 bg-amber-50'
-        : 'border-green-200 bg-green-50'
-    }`}>
-      {/* Top row: icon + badge + confidence */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5">
-          <Sparkles className={`w-3.5 h-3.5 ${needsReview ? 'text-amber-500' : 'text-green-600'}`} />
-          <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">IA</span>
-        </div>
-        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${meta.bg} ${meta.color}`}>
-          {meta.label}
-        </span>
-        {/* Confidence pill */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          {needsReview
-            ? <AlertTriangle className="w-3 h-3 text-amber-500" />
-            : <Check className="w-3 h-3 text-green-600" />}
-          <span className={`text-[10px] font-black ${
-            needsReview ? 'text-amber-600' : 'text-green-700'
-          }`}>{conf}% confianza</span>
-        </div>
-      </div>
-
-      {/* Entities summary */}
-      {(entities.to_paddock_name || entities.from_paddock_name || entities.herd_name ||
-        entities.head_count || entities.rainfall_mm || entities.birth_count || entities.death_count) && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {entities.herd_name && (
-            <span className="text-[10px] bg-white border border-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-lg">
-              🐄 {entities.herd_name}
-            </span>
-          )}
-          {entities.from_paddock_name && (
-            <span className="text-[10px] bg-white border border-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-lg">
-              {entities.from_paddock_name}
-            </span>
-          )}
-          {(entities.from_paddock_name && entities.to_paddock_name) && (
-            <ArrowRight className="w-3 h-3 text-gray-400 self-center" />
-          )}
-          {entities.to_paddock_name && (
-            <span className="text-[10px] bg-white border border-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-lg">
-              {entities.to_paddock_name}
-            </span>
-          )}
-          {entities.head_count != null && (
-            <span className="text-[10px] bg-white border border-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-lg">
-              {entities.head_count} cabezas
-            </span>
-          )}
-          {entities.rainfall_mm != null && (
-            <span className="text-[10px] bg-sky-100 border border-sky-200 text-sky-700 font-bold px-2 py-0.5 rounded-lg">
-              🌧 {entities.rainfall_mm} mm
-            </span>
-          )}
-          {entities.birth_count != null && (
-            <span className="text-[10px] bg-green-100 border border-green-200 text-green-700 font-bold px-2 py-0.5 rounded-lg">
-              +{entities.birth_count} nacimientos
-            </span>
-          )}
-          {entities.death_count != null && (
-            <span className="text-[10px] bg-red-100 border border-red-200 text-red-700 font-bold px-2 py-0.5 rounded-lg">
-              -{entities.death_count} bajas
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Suggestion */}
-      {ar.suggestion && (
-        <p className="mt-2 text-[11px] text-gray-600 italic">"
-          {ar.suggestion}
-        "</p>
-      )}
-
-      {/* Actions */}
-      <div className="mt-3 flex gap-2">
-        <button
-          onClick={onDismiss}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-black text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 transition-all"
-        >
-          <X className="w-3 h-3" /> Descartar
-        </button>
-        <button
-          onClick={onApply}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-black text-white transition-all ${
-            needsReview
-              ? 'bg-amber-500 hover:bg-amber-600'
-              : 'bg-green-600 hover:bg-green-700'
-          }`}
-        >
-          <Check className="w-3 h-3" />
-          {needsReview ? 'Validar y Aplicar' : 'Aplicar al Planificador'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ── Note row ──────────────────────────────────────────────────────────────────
-function NoteRow({ note, onDelete, onEdit, onApplyWA, onDismissWA }: {
-  note: any
-  onDelete: (id: string, isPending: boolean) => void
-  onEdit: (note: any) => void
-  onApplyWA?: (note: any) => void
-  onDismissWA?: (note: any) => void
-}) {
+function NoteRow({ note, onDelete, onEdit }: { note: any, onDelete: (id: string, isPending: boolean) => void, onEdit: (note: any) => void }) {
   const [expanded, setExpanded] = useState(false)
   const isAudio = !!note.audio_url
   const isPhoto = !!note.photo_url
   const hasTranscript = !!note.content
-  const isWhatsApp = note.source === 'WHATSAPP'
-  const hasAI = isWhatsApp && !!(note.analysis_result ?? note.analysisResult)
-  const needsReview = hasAI && ((note.analysis_result ?? note.analysisResult)?.needsReview ?? false)
 
   return (
-    <div className={`group bg-white rounded-2xl border shadow-sm p-4 mb-3 ${
-      needsReview ? 'border-amber-200' : 'border-gray-100'
-    }`} style={{ maxWidth: '100%' }}>
+    <div className="group bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3" style={{ maxWidth: '100%' }}>
       <div className="flex items-start justify-between gap-3" style={{ minWidth: 0 }}>
         <div className="flex-1 min-w-0" style={{ overflow: 'hidden' }}>
           <p className="text-base font-bold text-gray-950 tracking-tight leading-snug" style={{ overflowWrap: 'break-word', wordBreak: 'break-word', maxWidth: '100%' }}>
             {note.title.replace('Audio · ', '').replace('Foto · ', '')}
           </p>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <div className="flex items-center gap-2 mt-0.5">
             <span className="text-sm text-gray-400">{fmtTime(note.created_at)}</span>
             {note.paddock_name && (
               <><span className="w-1 h-1 rounded-full bg-gray-200" /><span className="text-xs font-bold text-gray-500 uppercase tracking-tighter">{note.paddock_name}</span></>
             )}
             {isAudio && <span className="text-[9px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full uppercase tracking-widest">Audio</span>}
-            {isWhatsApp && (
-              <span className="flex items-center gap-0.5 text-[9px] font-black text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full uppercase tracking-widest">
-                <MessageCircle className="w-2.5 h-2.5" /> WA
-              </span>
-            )}
-            {needsReview && (
-              <span className="flex items-center gap-0.5 text-[9px] font-black text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full uppercase tracking-widest">
-                <AlertTriangle className="w-2.5 h-2.5" /> Revisar
-              </span>
-            )}
             {note.is_pending && (
               <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1" title="Se sincronizará cuando tengas internet">
                 <WifiOff className="w-2.5 h-2.5" /> Pendiente
@@ -275,15 +126,6 @@ function NoteRow({ note, onDelete, onEdit, onApplyWA, onDismissWA }: {
           ) : null}
         </div>
       </div>
-
-      {/* WhatsApp AI Banner */}
-      {hasAI && onApplyWA && onDismissWA && (
-        <WhatsAppBanner
-          note={note}
-          onApply={() => onApplyWA(note)}
-          onDismiss={() => onDismissWA(note)}
-        />
-      )}
       
       {/* Actions */}
       <div className="mt-3 flex items-center justify-end gap-1.5 pt-3 border-t border-gray-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
@@ -804,13 +646,11 @@ export default function BitacoraPage() {
         let type = 'texto';
         if (n.audio_url) type = 'audio';
         else if (n.photo_url) type = 'foto';
-        else if (n.source === 'WHATSAPP') type = 'whatsapp';
 
         if (historyTypeFilter) {
           if (historyTypeFilter === 'audio' && type !== 'audio') return false;
           if (historyTypeFilter === 'foto' && type !== 'foto') return false;
           if (historyTypeFilter === 'texto' && type !== 'texto') return false;
-          if (historyTypeFilter === 'whatsapp' && n.source !== 'WHATSAPP') return false;
         }
 
         if (historyMonthFilter) {
@@ -822,38 +662,6 @@ export default function BitacoraPage() {
       })
     : sorted
   const grouped = groupByDate(filtered)
-
-  // ── WhatsApp: aplicar sugerencia al planificador ─────────────────────────────────
-  const handleApplyWA = async (note: any) => {
-    const ar = note.analysis_result ?? note.analysisResult
-    if (!ar) return
-    try {
-      await apiFetch(`/api/field-notes/${note.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'APPROVED' }),
-      })
-      // Actualizar localmente
-      setNotes(prev => prev.map(n =>
-        n.id === note.id ? { ...n, status: 'APPROVED', analysis_result: { ...ar, needsReview: false } } : n
-      ))
-      toast.success('✅ Novedad aplicada al planificador')
-    } catch {
-      toast.error('No se pudo aplicar la sugerencia')
-    }
-  }
-
-  const handleDismissWA = async (note: any) => {
-    try {
-      await apiFetch(`/api/field-notes/${note.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'DISMISSED', analysis_result: null }),
-      })
-      setNotes(prev => prev.filter(n => n.id !== note.id))
-      toast.success('Novedad descartada')
-    } catch {
-      toast.error('No se pudo descartar la sugerencia')
-    }
-  }
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -886,21 +694,15 @@ export default function BitacoraPage() {
               {(() => {
                 const ac = notes.filter(n => !!n.audio_url).length;
                 const ic = notes.filter(n => !!n.photo_url).length;
-                const tc = notes.filter(n => !n.audio_url && !n.photo_url && n.source !== 'WHATSAPP').length;
-                const wc = notes.filter(n => n.source === 'WHATSAPP').length;
-                const pr = notes.filter(n => n.source === 'WHATSAPP' && (n.analysis_result ?? n.analysisResult)?.needsReview).length
+                const tc = notes.filter(n => !n.audio_url && !n.photo_url).length;
                 return [
                   { label: 'Audios', count: ac },
                   { label: 'Imágenes', count: ic },
                   { label: 'Textos', count: tc },
-                  ...(wc > 0 ? [{ label: 'WhatsApp', count: wc, highlight: pr > 0 ? pr : null }] : []),
                 ].map(s => (
-                  <div key={s.label} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-white text-gray-900 shadow-sm pointer-events-none select-none`}>
+                  <div key={s.label} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-white text-gray-900 shadow-sm pointer-events-none select-none">
                     {s.label}
-                    <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${
-                      (s as any).highlight ? 'bg-amber-500 text-white' : 'bg-gray-900 text-white'
-                    }`}>{s.count}</span>
-                    {(s as any).highlight && <span className="text-[9px] font-black text-amber-600">{(s as any).highlight} revisiones</span>}
+                    <span className="w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center bg-gray-900 text-white">{s.count}</span>
                   </div>
                 ));
               })()}
@@ -932,14 +734,13 @@ export default function BitacoraPage() {
           <div className="flex items-center gap-2">
             <select
               value={historyTypeFilter || 'all'}
-              onChange={e => setHistoryTypeFilter(e.target.value === 'all' ? null : (e.target.value as any))}
+              onChange={e => setHistoryTypeFilter(e.target.value === 'all' ? null : (e.target.value as 'audio' | 'foto' | 'texto'))}
               className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none cursor-pointer focus:ring-1 focus:ring-green-600"
             >
               <option value="all">Tipo</option>
               <option value="audio">Audios</option>
               <option value="foto">Imágenes</option>
               <option value="texto">Textos</option>
-              <option value="whatsapp">WhatsApp</option>
             </select>
 
             {availableMonths.length > 0 && (
@@ -988,14 +789,7 @@ export default function BitacoraPage() {
               <div className="py-2 sticky top-0 z-10">
                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{dateLabel}</span>
               </div>
-              {dayNotes.map(note => <NoteRow
-                key={note.id}
-                note={note}
-                onDelete={deleteNote}
-                onEdit={setEditingTextNote}
-                onApplyWA={handleApplyWA}
-                onDismissWA={handleDismissWA}
-              />)}
+              {dayNotes.map(note => <NoteRow key={note.id} note={note} onDelete={deleteNote} onEdit={setEditingTextNote} />)}
             </div>
           ))
         )}
