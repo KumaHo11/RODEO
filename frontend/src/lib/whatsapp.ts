@@ -5,7 +5,7 @@
  */
 
 const BASE = `https://graph.facebook.com/v20.0`
-const TOKEN = process.env.WHATSAPP_ACCESS_TOKEN!
+const TOKEN = process.env.WHATSAPP_TOKEN!
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID!
 
 // ── Media ─────────────────────────────────────────────────────────────────────

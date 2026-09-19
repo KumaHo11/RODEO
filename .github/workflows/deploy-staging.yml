@@ -173,6 +173,7 @@ jobs:
             f'WHATSAPP_VERIFY_TOKEN: {q(os.environ.get("WHATSAPP_VERIFY_TOKEN","").strip())}',
             f'WHATSAPP_APP_SECRET: {q(os.environ.get("WHATSAPP_APP_SECRET","").strip())}',
             f'WHATSAPP_TOKEN: {q(os.environ.get("WHATSAPP_TOKEN","").strip())}',
+            f'WHATSAPP_PHONE_NUMBER_ID: {q(os.environ.get("WHATSAPP_PHONE_NUMBER_ID","").strip())}',
             f'NEXT_PUBLIC_WA_BOT_NUMBER: {q(os.environ.get("NEXT_PUBLIC_WA_BOT_NUMBER","").strip())}',
           ]
           with open('/tmp/rodeo-staging-env.yaml','w') as f: f.write('\n'.join(lines))
@@ -200,6 +201,7 @@ jobs:
           WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
           WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
           WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
           NEXT_PUBLIC_WA_BOT_NUMBER: ${{ secrets.NEXT_PUBLIC_WA_BOT_NUMBER }}
 
       # 7. Despliegue en Cloud Run

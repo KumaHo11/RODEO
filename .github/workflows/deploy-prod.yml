@@ -175,6 +175,7 @@ jobs:
             f'WHATSAPP_VERIFY_TOKEN: {q(os.environ.get("WHATSAPP_VERIFY_TOKEN","").strip())}',
             f'WHATSAPP_APP_SECRET: {q(os.environ.get("WHATSAPP_APP_SECRET","").strip())}',
             f'WHATSAPP_TOKEN: {q(os.environ.get("WHATSAPP_TOKEN","").strip())}',
+            f'WHATSAPP_PHONE_NUMBER_ID: {q(os.environ.get("WHATSAPP_PHONE_NUMBER_ID","").strip())}',
             f'NEXT_PUBLIC_WA_BOT_NUMBER: {q(os.environ.get("NEXT_PUBLIC_WA_BOT_NUMBER","").strip())}',
           ]
           with open('/tmp/rodeo-prod-env.yaml','w') as f: f.write('\n'.join(lines))
@@ -203,6 +204,7 @@ jobs:
           WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN_PROD }}
           WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET_PROD }}
           WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN_PROD }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID_PROD }}
           NEXT_PUBLIC_WA_BOT_NUMBER: ${{ secrets.NEXT_PUBLIC_WA_BOT_NUMBER_PROD }}
 
       - name: 'Clear legacy Cloud Run secret bindings'
