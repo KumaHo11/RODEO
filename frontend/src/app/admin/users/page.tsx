@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import PageShell from '../components/PageShell'
 import { signInWithCustomToken } from 'firebase/auth'
@@ -365,21 +366,23 @@ export default function AdminUsersPage() {
         )}
       </div>
 
-      {impersonating && (
+      {impersonating && typeof document !== 'undefined' && createPortal(
         <ImpersonateModal
           targetUser={impersonating}
           onClose={() => setImpersonating(null)}
           onConfirm={reason => handleImpersonate(impersonating, reason)}
-        />
+        />,
+        document.body
       )}
 
-      {changingPlan && (
+      {changingPlan && typeof document !== 'undefined' && createPortal(
         <ChangePlanModal
           targetUser={changingPlan}
           plans={plans}
           onClose={() => setChangingPlan(null)}
           onConfirm={planId => handleChangePlan(changingPlan, planId)}
-        />
+        />,
+        document.body
       )}
     </PageShell>
   )
