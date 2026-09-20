@@ -118,6 +118,7 @@ jobs:
             --build-arg NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY="${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY_PROD }}" \
             --build-arg NEXT_PUBLIC_APP_URL="${{ env.PROD_URL }}" \
             --build-arg NEXT_PUBLIC_WA_BOT_NUMBER="${{ secrets.NEXT_PUBLIC_WA_BOT_NUMBER_PROD }}" \
+            --build-arg NEXT_PUBLIC_ENABLE_WHATSAPP="${{ secrets.NEXT_PUBLIC_ENABLE_WHATSAPP_PROD }}" \
             -t ${{ env.IMAGE }} \
             .
 
