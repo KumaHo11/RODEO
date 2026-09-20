@@ -178,7 +178,7 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     [
       linkByPhone.orgId,
       linkByPhone.profileId,
-      JSON.stringify(['GENERAL']),
+      ['GENERAL'],
       'GENERAL',
       title,
       content,

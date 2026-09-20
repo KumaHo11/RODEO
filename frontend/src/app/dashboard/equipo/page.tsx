@@ -1079,18 +1079,18 @@ export default function EquipoPage() {
                         }
                       </button>
 
-                      {/* CTA secundario: Abrir WhatsApp — siempre visible */}
-                      {/* Con teléfono: abre chat 1:1 con el operario */}
-                      {/* Sin teléfono: abre el bot de RODEO directamente */}
-                      <a
-                        href={waPhone.trim() ? waDirectLink : waBotLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full flex items-center justify-center gap-2 py-3 border-2 border-green-600 text-green-700 rounded-2xl text-sm font-black hover:bg-green-50 transition-all"
-                      >
-                        <Phone className="w-4 h-4" />
-                        {waPhone.trim() ? 'Enviar por WhatsApp directo' : 'Abrir bot de RODEO'}
-                      </a>
+                      {/* CTA secundario: Abrir WhatsApp — solo visible si hay teléfono */}
+                      {waPhone.trim() && (
+                        <a
+                          href={waDirectLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center justify-center gap-2 py-3 border-2 border-green-600 text-green-700 rounded-2xl text-sm font-black hover:bg-green-50 transition-all"
+                        >
+                          <Phone className="w-4 h-4" />
+                          Enviar por WhatsApp directo
+                        </a>
+                      )}
 
                       {/* Copiar link siempre disponible */}
                       <button
