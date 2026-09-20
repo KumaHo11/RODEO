@@ -182,7 +182,7 @@ export default function EquipoPage() {
 
   // ── WhatsApp invite state ──────────────────────────────────────────────────
   type InviteChannel = 'email' | 'whatsapp'
-  const [inviteChannel, setInviteChannel] = useState<InviteChannel>('whatsapp')
+  const [inviteChannel, setInviteChannel] = useState<InviteChannel>(process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' ? 'whatsapp' : 'email')
 
   const [waPhone, setWaPhone]           = useState('')
   const [waOperatorName, setWaOperatorName] = useState('')
@@ -406,6 +406,7 @@ export default function EquipoPage() {
 
   // Pre-load WA statuses for all members
   const loadWaStatuses = async (memberList: any[]) => {
+    if (process.env.NEXT_PUBLIC_ENABLE_WHATSAPP !== 'true') return;
     const nonOwners = memberList.filter(m => m.team_role && m.team_role !== 'OWNER')
     await Promise.all(nonOwners.map(async m => {
       const res = await apiFetch(`/api/team/whatsapp-invite?profileId=${m.id}`)
@@ -628,7 +629,7 @@ export default function EquipoPage() {
                             <span className="text-[9px] font-black bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Inactivo</span>
                           )}
                           {/* WhatsApp badge */}
-                          {!isOwnerRow && waStatuses[member.id] && (
+                          {process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' && !isOwnerRow && waStatuses[member.id] && (
                             <span className={`flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full ${
                               waStatuses[member.id]?.isActive
                                 ? 'bg-green-100 text-green-700'
@@ -925,6 +926,7 @@ export default function EquipoPage() {
             </div>
 
             {/* Channel tabs — WhatsApp primero */}
+            {process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' && (
             <div className="px-6 pt-4 pb-0 flex gap-2">
               <button
                 type="button"
@@ -949,6 +951,7 @@ export default function EquipoPage() {
                 <Mail className="w-3.5 h-3.5" /> Email
               </button>
             </div>
+            )}
 
 
             {inviteSent ? (
