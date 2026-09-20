@@ -51,6 +51,11 @@ export const metadata: Metadata = {
     title: 'RODEO — Gestión Ganadera Regenerativa',
     description: 'Plataforma AgTech para ganadería holística y regenerativa',
   },
+  verification: {
+    other: {
+      'facebook-domain-verification': ['d2x1hynis82bermn27oa8228h4dhlf'],
+    },
+  },
 }
 
 export const viewport: Viewport = {
@@ -77,7 +82,6 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="RODEO" />
-        <meta name="facebook-domain-verification" content="d2x1hynis82bermn27oa8228h4dhlf" />
         {/* Anti-ServiceWorker para desarrollo: Muerte súbita a cachés corruptas */}
         <Script
           id="sw-unregister"
