@@ -51,6 +51,11 @@ export const metadata: Metadata = {
     title: 'RODEO — Gestión Ganadera Regenerativa',
     description: 'Plataforma AgTech para ganadería holística y regenerativa',
   },
+  verification: {
+    other: {
+      'facebook-domain-verification': ['d2x1hynis82bermn27oa8228h4dhlf'],
+    },
+  },
 }
 
 export const viewport: Viewport = {
