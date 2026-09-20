@@ -887,8 +887,8 @@ export default function BitacoraPage() {
                 const ac = notes.filter(n => !!n.audio_url).length;
                 const ic = notes.filter(n => !!n.photo_url).length;
                 const tc = notes.filter(n => !n.audio_url && !n.photo_url && n.source !== 'WHATSAPP').length;
-                const wc = notes.filter(n => n.source === 'WHATSAPP').length;
-                const pr = notes.filter(n => n.source === 'WHATSAPP' && (n.analysis_result ?? n.analysisResult)?.needsReview).length
+                const wc = process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' ? notes.filter(n => n.source === 'WHATSAPP').length : 0;
+                const pr = process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' ? notes.filter(n => n.source === 'WHATSAPP' && (n.analysis_result ?? n.analysisResult)?.needsReview).length : 0;
                 return [
                   { label: 'Audios', count: ac },
                   { label: 'Imágenes', count: ic },
@@ -939,7 +939,7 @@ export default function BitacoraPage() {
               <option value="audio">Audios</option>
               <option value="foto">Imágenes</option>
               <option value="texto">Textos</option>
-              <option value="whatsapp">WhatsApp</option>
+              {process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' && <option value="whatsapp">WhatsApp</option>}
             </select>
 
             {availableMonths.length > 0 && (
