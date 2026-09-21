@@ -17,8 +17,7 @@ import crypto, { createHmac } from 'crypto'
 import { downloadWhatsAppMedia, sendWhatsAppText } from '@/lib/whatsapp'
 import { transcribeAudio } from '@/lib/speechToText'
 import { uploadBufferToStorage } from '@/lib/firebase/storage-admin'
-import { serviceMutate, serviceQueryOne } from '@/lib/db'
-import prisma from '@/lib/prisma'
+import { serviceMutate, serviceQueryOne, getServicePool } from '@/lib/db'
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN!
 const APP_SECRET   = process.env.WHATSAPP_APP_SECRET!
@@ -123,10 +122,11 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   }
 
   // ── 2. Flujo de novedades — canal debe estar activo ─────────────────────────
-  const linkByPhone = await prisma.whatsAppLink.findUnique({
-    where:  { phone },
-    select: { id: true, orgId: true, isActive: true, profileId: true },
-  })
+  // NOTA: Usa serviceQueryOne (BYPASSRLS) porque el webhook no tiene contexto RLS
+  const linkByPhone = await serviceQueryOne<{ id: string; org_id: string; is_active: boolean; profile_id: string | null }>(
+    'SELECT id, org_id, is_active, profile_id FROM whatsapp_links WHERE phone = $1',
+    [phone]
+  )
 
   if (!linkByPhone) {
     await sendWhatsAppText(
@@ -137,7 +137,7 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     return
   }
 
-  if (!linkByPhone.isActive) {
+  if (!linkByPhone.is_active) {
     await sendWhatsAppText(
       phone,
       'Tu canal está pendiente de activación. Usá el link de invitación que te envió el administrador.'
@@ -188,8 +188,8 @@ async function processMessage(msg: any, waDisplayName: string | null) {
         source, status, whatsapp_phone, whatsapp_msg_id)
      VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,'WHATSAPP','PENDING_REVIEW',$11,$12)`,
     [
-      linkByPhone.orgId,
-      linkByPhone.profileId,
+      linkByPhone.org_id,
+      linkByPhone.profile_id,
       ['GENERAL'],
       'GENERAL',
       title,
@@ -210,28 +210,27 @@ async function processMessage(msg: any, waDisplayName: string | null) {
 /**
  * Valida el token de invitación y activa el vínculo del operario.
  * Si el profileId del link es null, auto-provisiona un Profile mínimo (sin Firebase).
- * Todo se ejecuta dentro de una transacción atómica.
+ *
+ * IMPORTANTE: Usa getServicePool() (rodeo_service, BYPASSRLS) en lugar de prisma
+ * (rodeo_app, sujeto a RLS). Las políticas RLS bloquean INSERT en profiles
+ * desde el contexto del webhook ya que no hay sesión de usuario autenticada.
  */
 async function handleInvitationToken(
   phone:         string,
   token:         string,
   waDisplayName: string | null
 ) {
-  // Buscar el link pendiente por token
-  const pending = await prisma.whatsAppLink.findFirst({
-    where: {
-      activationToken: token,
-      isActive:        false,
-    },
-    select: {
-      id:             true,
-      orgId:          true,
-      profileId:      true,
-      operatorName:   true,
-      role:           true,
-      tokenExpiresAt: true,
-    },
-  })
+  // ── 1. Buscar el link pendiente por token ──────────────────────────────────
+  const pending = await serviceQueryOne<{
+    id: string; org_id: string; profile_id: string | null;
+    operator_name: string | null; role: string | null;
+    token_expires_at: Date | null;
+  }>(
+    `SELECT id, org_id, profile_id, operator_name, role, token_expires_at
+     FROM whatsapp_links
+     WHERE activation_token = $1 AND is_active = false`,
+    [token]
+  )
 
   if (!pending) {
     await sendWhatsAppText(
@@ -242,8 +241,8 @@ async function handleInvitationToken(
     return
   }
 
-  // Verificar expiración
-  if (pending.tokenExpiresAt && pending.tokenExpiresAt < new Date()) {
+  // ── 2. Verificar expiración ────────────────────────────────────────────────
+  if (pending.token_expires_at && new Date(pending.token_expires_at) < new Date()) {
     await sendWhatsAppText(
       phone,
       '⏰ Tu invitación expiró. Pedile al administrador del campo que genere un nuevo link.'
@@ -251,11 +250,11 @@ async function handleInvitationToken(
     return
   }
 
-  // Verificar que el teléfono no esté ya activo en otro vínculo de esta org
-  const alreadyActive = await prisma.whatsAppLink.findFirst({
-    where: { phone, isActive: true },
-    select: { id: true, orgId: true },
-  })
+  // ── 3. Verificar que el teléfono no esté ya activo ─────────────────────────
+  const alreadyActive = await serviceQueryOne<{ id: string }>(
+    'SELECT id FROM whatsapp_links WHERE phone = $1 AND is_active = true',
+    [phone]
+  )
   if (alreadyActive) {
     await sendWhatsAppText(
       phone,
@@ -264,69 +263,71 @@ async function handleInvitationToken(
     return
   }
 
-  // Obtener datos de la organización para el mensaje de bienvenida
-  const org = await prisma.organization.findUnique({
-    where:  { id: pending.orgId },
-    select: { name: true, fieldName: true },
-  })
-  // Prioridad: field_name > name > 'RODEO'
-  const fieldName = org?.fieldName?.trim() || org?.name?.trim() || 'RODEO'
+  // ── 4. Datos para el mensaje de bienvenida ─────────────────────────────────
+  const org = await serviceQueryOne<{ name: string; field_name: string | null }>(
+    'SELECT name, field_name FROM organizations WHERE id = $1',
+    [pending.org_id]
+  )
+  const fieldName = org?.field_name?.trim() || org?.name?.trim() || 'RODEO'
 
-  // Determinar nombre del operario: alias del admin > nombre de WA > genérico
-  const resolvedName = pending.operatorName || waDisplayName || null
+  const resolvedName = pending.operator_name || waDisplayName || null
   const firstName    = resolvedName ? resolvedName.split(' ')[0] : null
   const greeting     = firstName ? `, ${firstName}` : ''
 
-  // Transacción atómica: auto-provisioning de Profile + activación del link
-  await prisma.$transaction(async (tx) => {
-    let profileId = pending.profileId
+  // ── 5. Transacción atómica con rodeo_service (BYPASSRLS) ───────────────────
+  const pool = getServicePool()
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    let profileId = pending.profile_id
 
     if (!profileId) {
       // Auto-provisioning: crear Profile mínimo para operario WhatsApp-only
-      const newProfile = await tx.profile.create({
-        data: {
-          id:             crypto.randomUUID(),
-          organizationId: pending.orgId,
-          firstName:      resolvedName,
-          phone:          phone,
-          teamRole:       pending.role,
-          role:           'OPERATOR',  // CHECK constraint: solo acepta OWNER, MANAGER, OPERATOR
-          isActive:       true,
-        },
-        select: { id: true },
-      })
-      profileId = newProfile.id
+      const newId = crypto.randomUUID()
+      await client.query(
+        `INSERT INTO profiles (id, organization_id, first_name, phone, team_role, role, is_active)
+         VALUES ($1, $2, $3, $4, $5, 'OPERATOR', true)`,
+        [newId, pending.org_id, resolvedName, phone, pending.role]
+      )
+      profileId = newId
     } else {
       // Perfil existente: actualizar team_role y phone si no tenía
-      const existing = await tx.profile.findUnique({
-        where: { id: profileId },
-        select: { phone: true }
-      })
-      await tx.profile.update({
-        where: { id: profileId },
-        data: {
-          teamRole: pending.role,
-          phone:    existing?.phone || phone,
-        },
-      })
+      await client.query(
+        `UPDATE profiles SET team_role = $1, phone = COALESCE(NULLIF(phone, ''), $2)
+         WHERE id = $3`,
+        [pending.role, phone, profileId]
+      )
     }
 
-    // Activar el vínculo: asignar teléfono real, profile_id, borrar token
-    await tx.whatsAppLink.update({
-      where: { id: pending.id },
-      data: {
-        phone:           phone,
-        profileId:       profileId,
-        isActive:        true,
-        activationToken: null,
-        tokenExpiresAt:  null,
-        ...(waDisplayName && !pending.operatorName ? { operatorName: waDisplayName } : {}),
-      },
-    })
-  })
+    // Liberar phone de otros links inactivos (evitar UNIQUE violation)
+    await client.query(
+      `UPDATE whatsapp_links SET phone = NULL
+       WHERE phone = $1 AND id != $2 AND is_active = false`,
+      [phone, pending.id]
+    )
 
-  // Fix 4: log granular para detectar si la falla ocurre en la DB (transacción) o en Meta API
-  console.log(`[WA Webhook] Vínculo activado — phone=${phone} org=${pending.orgId} link=${pending.id}`)
+    // Activar el vínculo: asignar teléfono real, profile_id, borrar token
+    await client.query(
+      `UPDATE whatsapp_links
+       SET phone = $1, profile_id = $2, is_active = true,
+           activation_token = NULL, token_expires_at = NULL,
+           operator_name = COALESCE(operator_name, $3),
+           updated_at = NOW()
+       WHERE id = $4`,
+      [phone, profileId, waDisplayName, pending.id]
+    )
+
+    await client.query('COMMIT')
+  } catch (txErr) {
+    await client.query('ROLLBACK')
+    console.error('[WA Webhook] Transaction FAILED:', txErr)
+    throw txErr
+  } finally {
+    client.release()
+  }
+
+  console.log(`[WA Webhook] Vínculo activado — phone=${phone} org=${pending.org_id} link=${pending.id} profile=${profileId}`)
 
   // Enviar mensaje de bienvenida en try/catch independiente:
   // si Meta rechaza el mensaje (ej. fuera de ventana de 24hs o error de template),
@@ -340,7 +341,6 @@ async function handleInvitationToken(
     )
     console.log(`[WA Webhook] Mensaje de bienvenida enviado — phone=${phone}`)
   } catch (sendErr: any) {
-    // Log del error pero NO relanzar — la vinculación ya fue exitosa
     console.error(`[WA Webhook] Error al enviar bienvenida (activación OK en DB) — phone=${phone}:`, sendErr?.message)
   }
 }
