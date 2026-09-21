@@ -14,9 +14,21 @@ function makeGeminiTimeout(): Promise<never> {
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageBase64, mimeType, imagesBase64, species } = await req.json()
-    
-    const images = imagesBase64 || (imageBase64 ? [{ base64: imageBase64, mimeType: mimeType || 'image/jpeg' }] : [])
+    const { imageBase64, mimeType, imagesBase64, species, imageUrl } = await req.json()
+
+    // Support imageUrl: server fetches the image and converts to base64
+    let images = imagesBase64 || (imageBase64 ? [{ base64: imageBase64, mimeType: mimeType || 'image/jpeg' }] : [])
+    if (images.length === 0 && imageUrl) {
+      try {
+        const fetchRes = await fetch(imageUrl)
+        if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status} fetching image`)
+        const buf = Buffer.from(await fetchRes.arrayBuffer())
+        const detectedMime = fetchRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
+        images = [{ base64: buf.toString('base64'), mimeType: detectedMime }]
+      } catch (fetchErr: any) {
+        return NextResponse.json({ success: false, error: `No se pudo obtener la imagen: ${fetchErr.message}` }, { status: 400 })
+      }
+    }
 
     if (images.length === 0) {
       return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 })

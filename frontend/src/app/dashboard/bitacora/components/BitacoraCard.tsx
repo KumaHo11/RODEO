@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { MessageCircle, WifiOff, AlertTriangle, Pencil, Trash2, Check, X, ArrowRight, Sparkles } from 'lucide-react'
 import type { BitacoraEntry, BitacoraAiResult } from '@/types/bitacora'
 import { BitacoraMediaPreview } from './BitacoraMediaPreview'
@@ -192,6 +192,21 @@ export function BitacoraCard({
   const operatorName = note.operator?.name || note.user_display_name
   const hasMedia = note.mediaType !== 'text' || !!(note.content || note.text)
 
+  // Bidirectional state: selector updates propagate to AI button
+  const [localPaddockId, setLocalPaddockId] = useState(note.paddock_id ?? null)
+  const [localPaddockName, setLocalPaddockName] = useState(note.paddock_name ?? undefined)
+  const [localHerdId, setLocalHerdId] = useState(note.rodeo_id ?? null)
+
+  const handlePotreroChange = useCallback((id: string | null) => {
+    setLocalPaddockId(id)
+    const name = paddocks.find(p => p.id === id)?.name
+    setLocalPaddockName(name)
+  }, [paddocks])
+
+  const handleRodeoChange = useCallback((id: string | null) => {
+    setLocalHerdId(id)
+  }, [])
+
   return (
     <div className={`group bg-white rounded-2xl border shadow-sm transition-shadow hover:shadow-md flex flex-col ${
       needsReview ? 'border-amber-200' : 'border-gray-150'
@@ -261,11 +276,13 @@ export function BitacoraCard({
           <div className="mt-3">
             <PotreroRodeoSelector
               noteId={note.id}
-              potreroId={note.paddock_id}
-              potreroName={note.paddock_name}
-              rodeoId={note.rodeo_id}
+              potreroId={localPaddockId ?? undefined}
+              potreroName={localPaddockName}
+              rodeoId={localHerdId ?? undefined}
               paddocks={paddocks}
               herds={herds}
+              onPotreroChange={handlePotreroChange}
+              onRodeoChange={handleRodeoChange}
             />
           </div>
         )}
@@ -296,6 +313,8 @@ export function BitacoraCard({
           note={note}
           paddocks={paddocks}
           herds={herds}
+          externalPaddockId={localPaddockId}
+          externalHerdId={localHerdId}
           onAiResultSaved={onAiResultSaved}
         />
 

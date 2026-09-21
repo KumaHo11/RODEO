@@ -34,9 +34,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tu plan no incluye análisis de biomasa IA' }, { status: 403 })
     }
 
-    const { imageBase64, mimeType = 'image/jpeg', imagesBase64 } = await req.json()
+    const { imageBase64, mimeType = 'image/jpeg', imagesBase64, imageUrl } = await req.json()
 
-    const images = imagesBase64 || (imageBase64 ? [{ base64: imageBase64, mimeType }] : [])
+    // Support imageUrl: server fetches the image and converts to base64
+    // Used for direct analysis from a field_note's photo_url (GCS)
+    let images = imagesBase64 || (imageBase64 ? [{ base64: imageBase64, mimeType }] : [])
+    if (images.length === 0 && imageUrl) {
+      try {
+        const fetchRes = await fetch(imageUrl)
+        if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status} fetching image`)
+        const buf = Buffer.from(await fetchRes.arrayBuffer())
+        const detectedMime = fetchRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
+        images = [{ base64: buf.toString('base64'), mimeType: detectedMime }]
+      } catch (fetchErr: any) {
+        return NextResponse.json({ success: false, error: `No se pudo obtener la imagen: ${fetchErr.message}` }, { status: 400 })
+      }
+    }
 
     if (images.length === 0) {
       return NextResponse.json({ success: false, error: 'No images provided' }, { status: 400 })

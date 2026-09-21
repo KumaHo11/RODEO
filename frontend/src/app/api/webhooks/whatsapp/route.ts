@@ -151,6 +151,7 @@ async function processMessage(msg: any, waDisplayName: string | null) {
 
   let audioUrl:     string | null = null
   let photoUrl:     string | null = null
+  let videoUrl:     string | null = null
   let content:      string | null = null
   let durationSecs: number | null = null
   const title = buildTitle(msgType)
@@ -201,8 +202,9 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     if (mediaId) {
       try {
         const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
-        const path = `bitacora-photos/wa-video-${Date.now()}.mp4`
-        photoUrl = await uploadBufferToStorage(buffer, path, mimeType)
+        // Store as video (mp4) — NOT in photo_url
+        const path = `bitacora-media/videos/wa-${Date.now()}.mp4`
+        videoUrl = await uploadBufferToStorage(buffer, path, mimeType)
         content  = msg.video?.caption ?? null
       } catch (mediaErr: any) {
         console.error(`[WA Webhook] Error al procesar video wamid=${msgId}: ${mediaErr?.message}`)
@@ -218,9 +220,9 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   await serviceMutate(
     `INSERT INTO field_notes
        (org_id, created_by, paddock_id, tags, category, title, content,
-        audio_url, photo_url, audio_duration_secs, occurred_at,
-        source, status, whatsapp_phone, whatsapp_msg_id)
-     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,'WHATSAPP','APPROVED',$11,$12)`,
+        audio_url, photo_url, video_url, audio_duration_secs, occurred_at,
+        source, status, whatsapp_phone, whatsapp_msg_id, sender_name)
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,$11,'WHATSAPP','APPROVED',$12,$13,$14)`,
     [
       linkByPhone.org_id,
       linkByPhone.profile_id,
@@ -230,10 +232,12 @@ async function processMessage(msg: any, waDisplayName: string | null) {
       content,
       audioUrl,
       photoUrl,
+      videoUrl,
       durationSecs,
       occurredAt.toISOString(),
       phone,
       msgId,
+      waDisplayName,
     ]
   )
 
