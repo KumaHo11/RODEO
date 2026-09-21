@@ -277,10 +277,9 @@ async function handleInvitationToken(
   // ── 5. Transacción atómica con rodeo_service (BYPASSRLS) ───────────────────
   const pool = getServicePool()
   const client = await pool.connect()
+  let profileId: string | null = pending.profile_id  // declarado fuera del try para acceso en console.log
   try {
     await client.query('BEGIN')
-
-    let profileId = pending.profile_id
 
     if (!profileId) {
       // Auto-provisioning: crear Profile mínimo para operario WhatsApp-only
