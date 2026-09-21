@@ -290,7 +290,7 @@ async function handleInvitationToken(
           firstName:      resolvedName,
           phone:          phone,
           teamRole:       pending.role,
-          role:           'MEMBER',
+          role:           'OPERATOR',  // CHECK constraint: solo acepta OWNER, MANAGER, OPERATOR
           isActive:       true,
         },
         select: { id: true },
