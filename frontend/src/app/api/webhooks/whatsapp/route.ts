@@ -314,12 +314,24 @@ async function handleInvitationToken(
     })
   })
 
-  await sendWhatsAppText(
-    phone,
-    `✅ ¡Hola${greeting}! Ya quedaste vinculado al campo *${fieldName}*.\n\n` +
-    `A partir de ahora podés enviar audios, fotos o texto y se registrarán en la bitácora del campo.\n\n` +
-    `Guardá este número como "${fieldName}" para reconocerlo fácil. 🐄`
-  )
+  // Fix 4: log granular para detectar si la falla ocurre en la DB (transacción) o en Meta API
+  console.log(`[WA Webhook] Vínculo activado — phone=${phone} org=${pending.orgId} link=${pending.id}`)
+
+  // Enviar mensaje de bienvenida en try/catch independiente:
+  // si Meta rechaza el mensaje (ej. fuera de ventana de 24hs o error de template),
+  // la activación en DB ya está confirmada y no debe revertirse.
+  try {
+    await sendWhatsAppText(
+      phone,
+      `✅ ¡Hola${greeting}! Ya quedaste vinculado al campo *${fieldName}*.\n\n` +
+      `A partir de ahora podés enviar audios, fotos o texto y se registrarán en la bitácora del campo.\n\n` +
+      `Guardá este número como "${fieldName}" para reconocerlo fácil. 🐄`
+    )
+    console.log(`[WA Webhook] Mensaje de bienvenida enviado — phone=${phone}`)
+  } catch (sendErr: any) {
+    // Log del error pero NO relanzar — la vinculación ya fue exitosa
+    console.error(`[WA Webhook] Error al enviar bienvenida (activación OK en DB) — phone=${phone}:`, sendErr?.message)
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

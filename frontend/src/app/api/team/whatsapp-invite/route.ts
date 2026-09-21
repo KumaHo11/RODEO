@@ -212,16 +212,12 @@ export async function POST(req: NextRequest) {
     const activationMsg = `¡Hola! Envía este mensaje para vincularte al campo. (Código de seguridad: TOKEN_${token})`
 
     // ── URLs ─────────────────────────────────────────────────────────────────
-    // 1. wa.me al bot (Opción Directa - Zero Click Web) — URL que se COMPARTE
+    // 1. wa.me al bot (Zero Click Web) — URL que el operario toca para activarse
     const waBotLink    = `https://wa.me/${WA_BOT_NUMBER}?text=${encodeURIComponent(activationMsg)}`
-    // 2. wa.me al operario directo (con teléfono) o al bot (sin teléfono)
-    const waDirectLink = normalized
-      ? `https://wa.me/${normalized.replace('+', '')}?text=${encodeURIComponent(activationMsg)}`
-      : waBotLink
     // 3. Landing page visual de RODEO (alternativa, puede ser localhost en dev)
     const waLink       = `${baseUrl}/join-wa/${token}`
 
-    // ── Textos de invitación ─────────────────────────────────────────────────────────────────
+    // ── Textos de invitación ─────────────────────────────────────────────────
     // El nombre del campo va en negrita (*) para que WhatsApp lo resalte
     const inviterName = nameVal ? `a ${nameVal}` : ''
     const fieldTag    = `*${resolvedFieldName}*`
@@ -229,6 +225,13 @@ export async function POST(req: NextRequest) {
       ? `¡Hola ${nameVal}! Te invitaron a sumarte a ${fieldTag} en RODEO para reportar novedades del campo. Tocá este link para activar tu cuenta:`
       : `¡Hola! Te invitaron a sumarte a ${fieldTag} en RODEO para reportar novedades del campo. Tocá este link para activar tu cuenta:`
     const waCopyText  = `${waShareText}\n${waBotLink}`
+
+    // 2. wa.me al operario directo — PRE-CARGA la invitación completa (con link del bot)
+    //    CORRECCIÓN: antes usaba activationMsg (el TOKEN_ crudo), ahora usa waCopyText
+    //    para que el admin le comparta al operario el link legible, no el código interno.
+    const waDirectLink = normalized
+      ? `https://wa.me/${normalized.replace('+', '')}?text=${encodeURIComponent(waCopyText)}`
+      : waBotLink
 
     return NextResponse.json({
       link: {

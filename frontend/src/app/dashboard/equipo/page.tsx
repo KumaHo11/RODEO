@@ -280,6 +280,18 @@ export default function EquipoPage() {
 
   useEffect(() => { load() }, [load])
 
+  // ── Fix 3: Polling condicional para reflejar activaciones del webhook en tiempo real ──
+  // Cada 10 segundos, si hay invitaciones de WA en estado pendiente, refresca los datos.
+  // Esto permite que el chip de "Pendiente" cambie a "Miembro activo" sin recargar la página.
+  useEffect(() => {
+    const hasPendingWa = invitations.some(
+      (inv) => inv.status === 'PENDING' && inv.channel === 'whatsapp'
+    )
+    if (!hasPendingWa) return
+    const interval = setInterval(() => { load() }, 10_000)
+    return () => clearInterval(interval)
+  }, [invitations, load])
+
   // ── Derived data ──────────────────────────────────────────────────────────
   const pendingInvitations  = invitations.filter(i => i.status === 'PENDING')
   const historyInvitations  = invitations.filter(i => i.status !== 'PENDING')
@@ -369,10 +381,12 @@ export default function EquipoPage() {
     const data = await res.json()
     setWaLink(data.waLink)
     setWaBotLink(data.waBotLink)       // wa.me al bot — URL principal a compartir
-    setWaDirectLink(data.waDirectLink) // wa.me al operario directo
+    setWaDirectLink(data.waDirectLink) // wa.me al operario directo (ahora con invitación completa)
     setWaShareText(data.waShareText)
     setWaCopyText(data.waCopyText)     // texto completo con waBotLink
     setWaSending(false)
+    // Fix 2: recargar datos para que la nueva invitación aparezca en "Pendientes" sin F5
+    load()
   }
 
   // Compartir link — usa waBotLink (wa.me público) como URL
