@@ -227,6 +227,12 @@ function NoteRow({ note, onDelete, onEdit, onApplyWA, onDismissWA }: {
                 <MessageCircle className="w-2.5 h-2.5" /> WA
               </span>
             )}
+            {/* Nombre del operario que envió el mensaje WA */}
+            {isWhatsApp && note.user_display_name && (
+              <span className="text-[10px] font-semibold text-gray-500 truncate max-w-[120px]">
+                {note.user_display_name}
+              </span>
+            )}
             {needsReview && (
               <span className="flex items-center gap-0.5 text-[9px] font-black text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full uppercase tracking-widest">
                 <AlertTriangle className="w-2.5 h-2.5" /> Revisar
@@ -239,8 +245,8 @@ function NoteRow({ note, onDelete, onEdit, onApplyWA, onDismissWA }: {
             )}
           </div>
 
-          {/* Transcript preview */}
-          {hasTranscript && (
+          {/* Transcript preview — ocultar los placeholders de media fallido */}
+          {hasTranscript && !note.content?.startsWith('[') && (
             <div className="mt-2" style={{ maxWidth: '100%', overflow: 'hidden' }}>
               <p className={`text-sm text-gray-600 leading-relaxed ${!expanded ? 'line-clamp-2' : ''}`} style={{ overflowWrap: 'break-word', wordBreak: 'break-word', maxWidth: '100%' }}>
                 {note.content}
