@@ -96,8 +96,8 @@ export function BitacoraGrid({
             </span>
           </div>
 
-          {/* 2-column responsive grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* 2-column responsive grid — items-start prevents text cards from stretching */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
             {dayEntries.map(entry => (
               <BitacoraCard
                 key={entry.id}

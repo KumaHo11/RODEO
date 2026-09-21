@@ -292,7 +292,12 @@ export function BitacoraCard({
       {/* ── C. Footer Actions ──────────────────────────────────────────── */}
       <div className="px-4 pb-4 mt-auto">
         {/* AI Analysis (violet) */}
-        <AiAnalysisActions note={note} onAiResultSaved={onAiResultSaved} />
+        <AiAnalysisActions
+          note={note}
+          paddocks={paddocks}
+          herds={herds}
+          onAiResultSaved={onAiResultSaved}
+        />
 
         {/* Edit/Delete */}
         <div className="flex items-center justify-end gap-1 mt-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">

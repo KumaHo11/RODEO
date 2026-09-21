@@ -185,6 +185,7 @@ export default function EquipoPage() {
   const [inviteChannel, setInviteChannel] = useState<InviteChannel>(process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' ? 'whatsapp' : 'email')
 
   const [waPhone, setWaPhone]           = useState('')
+  const [waPhoneError, setWaPhoneError] = useState('')
   const [waOperatorName, setWaOperatorName] = useState('')
   const [waRole, setWaRole]             = useState<'CAPATAZ' | 'AYUDANTE' | 'VETERINARIO' | 'ADMIN'>('CAPATAZ')
   const [waLink, setWaLink]             = useState('')
@@ -934,7 +935,7 @@ export default function EquipoPage() {
                 <h2 className="modal-title tracking-tight">Invitar al equipo</h2>
                 <p className="text-xs text-gray-400 font-medium mt-0.5">Elegí cómo preferís invitar al miembro</p>
               </div>
-              <button onClick={() => { setModalOpen(false); setWaLink(''); setWaBotLink(''); setWaDirectLink(''); setWaShareText(''); setWaCopyText(''); setWaPhone(''); setWaOperatorName(''); setWaRole('CAPATAZ') }} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
+              <button onClick={() => { setModalOpen(false); setWaLink(''); setWaBotLink(''); setWaDirectLink(''); setWaShareText(''); setWaCopyText(''); setWaPhone(''); setWaPhoneError(''); setWaOperatorName(''); setWaRole('CAPATAZ') }} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-all">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1000,27 +1001,53 @@ export default function EquipoPage() {
                         <p className="text-[10px] text-gray-400 mt-1">Si no lo ingresás, se usará el nombre de perfil de WhatsApp del operario.</p>
                       </div>
 
-                      {/* Teléfono (opcional) */}
+                      {/* Teléfono (REQUERIDO) */}
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Teléfono WhatsApp</label>
-                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">Opcional</span>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            Teléfono WhatsApp
+                            <span className="text-red-500 ml-0.5">*</span>
+                          </label>
+                          <span className="text-[9px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full">Requerido</span>
                         </div>
                         <div className="relative">
                           <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                           <input
                             type="tel"
                             value={waPhone}
-                            onChange={e => setWaPhone(e.target.value)}
+                            onChange={e => {
+                              let v = e.target.value
+                              // Auto-prefix +549 if user starts typing digits without +
+                              if (v.length === 1 && /^[1-9]$/.test(v)) v = '+549' + v
+                              setWaPhone(v)
+                              // Clear error while typing
+                              if (waPhoneError) setWaPhoneError('')
+                            }}
+                            onBlur={() => {
+                              const digits = waPhone.replace(/\D/g, '')
+                              if (!waPhone.trim()) {
+                                setWaPhoneError('El teléfono es requerido para vincular al operario.')
+                              } else if (digits.length < 10) {
+                                setWaPhoneError('Ingresá un número válido (mínimo 10 dígitos).')
+                              } else {
+                                setWaPhoneError('')
+                              }
+                            }}
                             placeholder="+549 11 1234-5678"
-                            className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                            className={`w-full pl-9 pr-3 py-2.5 bg-gray-50 border rounded-xl text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all ${
+                              waPhoneError ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                            }`}
                           />
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1">
-                          {waPhone.trim()
-                            ? 'Con teléfono podés abrir WhatsApp directo con el operario.'
-                            : 'Sin teléfono: compartís el link y el número se registra cuando el operario lo activa.'}
-                        </p>
+                        {waPhoneError ? (
+                          <p className="text-[10px] text-red-500 font-semibold mt-1 flex items-center gap-1">
+                            <span>⚠</span> {waPhoneError}
+                          </p>
+                        ) : (
+                          <p className="text-[10px] text-gray-400 mt-1">
+                            Formato: +549 (código de área) (número). Ej: +549 11 12345678
+                          </p>
+                        )}
                       </div>
 
                       {/* Rol asignado */}
@@ -1133,9 +1160,21 @@ export default function EquipoPage() {
                   {!waLink && (
                     <button
                       type="button"
-                      onClick={handleGenerateWaLink}
-                      disabled={waSending}
-                      className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-black text-sm rounded-xl shadow-sm shadow-green-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                      onClick={() => {
+                        // Final validation before generating
+                        const digits = waPhone.replace(/\D/g, '')
+                        if (!waPhone.trim()) {
+                          setWaPhoneError('El teléfono es requerido para vincular al operario.')
+                          return
+                        }
+                        if (digits.length < 10) {
+                          setWaPhoneError('Ingresá un número válido (mínimo 10 dígitos).')
+                          return
+                        }
+                        handleGenerateWaLink()
+                      }}
+                      disabled={waSending || !!waPhoneError || !waPhone.trim()}
+                      className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-black text-sm rounded-xl shadow-sm shadow-green-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {waSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
                       {waSending ? 'Generando...' : 'Generar link'}

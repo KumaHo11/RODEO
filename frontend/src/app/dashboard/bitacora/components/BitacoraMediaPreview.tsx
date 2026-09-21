@@ -94,7 +94,7 @@ function VideoPreview({ note }: { note: BitacoraEntry }) {
   return (
     <>
       <div
-        className="relative aspect-video w-full rounded-xl overflow-hidden bg-black/5 cursor-pointer group"
+        className="relative w-full max-h-64 aspect-video rounded-xl overflow-hidden bg-black/5 cursor-pointer group"
         onClick={() => setShowModal(true)}
         role="button"
         tabIndex={0}
@@ -156,7 +156,7 @@ function PhotoPreview({ note }: { note: BitacoraEntry }) {
   return (
     <>
       <div
-        className="relative w-full aspect-video rounded-xl overflow-hidden border border-gray-100 cursor-pointer group"
+        className="relative w-full max-h-64 aspect-video rounded-xl overflow-hidden border border-gray-100 cursor-pointer group"
         onClick={() => setShowLightbox(true)}
         role="button"
         tabIndex={0}
