@@ -708,10 +708,10 @@ export default function EquipoPage() {
                   {pendingInvitations.map(inv => {
                     const isExpired = inv.expires_at ? new Date(inv.expires_at) < new Date() : false
                     const isWa      = inv.channel === 'whatsapp'
-                    // Para WA invites: reconstruir el waBotLink desde el token
+                    // Para WA invites: reconstruir el waBotLink con el nuevo mensaje amigable (sin TOKEN_)
                     const WA_BOT = process.env.NEXT_PUBLIC_WA_BOT_NUMBER || ''
-                    const waBotLink = isWa && inv.token
-                      ? `https://wa.me/${WA_BOT}?text=${encodeURIComponent(`¡Hola! Envía este mensaje para vincularte al campo ${orgName || 'RODEO'}. (Código de seguridad: TOKEN_${inv.token})`)}`
+                    const waBotLink = isWa && WA_BOT
+                      ? `https://wa.me/${WA_BOT}?text=${encodeURIComponent(`Envía este mensaje para vincularte a ${orgName || 'RODEO'} y registrar las novedades del día a día (audios, fotos, videos o textos) tal como enviás cualquier mensaje habitualmente.`)}`
                       : null
 
                     return (

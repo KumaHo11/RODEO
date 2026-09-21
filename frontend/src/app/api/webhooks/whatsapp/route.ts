@@ -95,18 +95,12 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   // Log de diagnóstico — útil para verificar que el webhook está recibiendo mensajes
   console.log(`[WA Webhook] from=${phone} type=${msgType} text=${textBody.slice(0, 80)}`)
 
-  // ── 1. Detectar patrón de activación por token criptográfico ───────────────────
+  // ── 1. Detectar patrón de activación por token criptográfico (legacy / fallback) ──
   //
-  // IMPORTANTE: WhatsApp puede insertar guiones de separación visual (soft hyphens)
-  // en strings largos al mostrarlos, pero el texto RAW enviado al webhook puede
-  // contenerlos o no (depende del cliente). Limpiamos el token antes de validar.
-  //
-  // Formatos aceptados:
-  //   "Vincular al campo TOKEN_d32b18903a..."  (64 hex sin guiones, ideal)
-  //   "Vincular al campo TOKEN_d32-b189-03a..." (con guiones visuales, tolerado)
+  // Backward compatible: links generados antes del cambio de UX siguen usando TOKEN_
+  // Los nuevos links usan activación por teléfono (ver bloque 2 más abajo).
   let tokenMatch: RegExpMatchArray | null = null
   if (/TOKEN_/i.test(textBody)) {
-    // Extraer todo lo que viene después de TOKEN_ y limpiar cualquier caracter que no sea hex (ej. paréntesis, espacios, guiones)
     const afterToken = textBody.replace(/[\s\S]*?TOKEN_/i, '').replace(/[^a-f0-9]/gi, '')
     if (afterToken.length >= 64) {
       const cleanToken = afterToken.slice(0, 64)
@@ -121,10 +115,10 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     return
   }
 
-  // ── 2. Flujo de novedades — canal debe estar activo ─────────────────────────
+  // ── 2. Buscar vínculo por teléfono ──────────────────────────────────────────
   // NOTA: Usa serviceQueryOne (BYPASSRLS) porque el webhook no tiene contexto RLS
-  const linkByPhone = await serviceQueryOne<{ id: string; org_id: string; is_active: boolean; profile_id: string | null }>(
-    'SELECT id, org_id, is_active, profile_id FROM whatsapp_links WHERE phone = $1',
+  const linkByPhone = await serviceQueryOne<{ id: string; org_id: string; is_active: boolean; profile_id: string | null; activation_token: string | null }>(
+    'SELECT id, org_id, is_active, profile_id, activation_token FROM whatsapp_links WHERE phone = $1 ORDER BY updated_at DESC LIMIT 1',
     [phone]
   )
 
@@ -137,11 +131,13 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     return
   }
 
+  // ── 2b. Invitación pendiente — activar por teléfono (nuevo flujo sin TOKEN) ─
+  // Si el link existe pero no está activo, cualquier mensaje del número confirma
+  // la intención y activa el vínculo (el token en DB garantiza que fue generado
+  // legítimamente para ese número).
   if (!linkByPhone.is_active) {
-    await sendWhatsAppText(
-      phone,
-      'Tu canal está pendiente de activación. Usá el link de invitación que te envió el administrador.'
-    )
+    console.log(`[WA Webhook] Activando vínculo por teléfono: phone=${phone} link=${linkByPhone.id}`)
+    await handleInvitationToken(phone, linkByPhone.activation_token ?? '', waDisplayName)
     return
   }
 
@@ -260,17 +256,34 @@ async function handleInvitationToken(
   token:         string,
   waDisplayName: string | null
 ) {
-  // ── 1. Buscar el link pendiente por token ──────────────────────────────────
-  const pending = await serviceQueryOne<{
+  type PendingLink = {
     id: string; org_id: string; profile_id: string | null;
     operator_name: string | null; role: string | null;
     token_expires_at: Date | null;
-  }>(
-    `SELECT id, org_id, profile_id, operator_name, role, token_expires_at
-     FROM whatsapp_links
-     WHERE activation_token = $1 AND is_active = false`,
-    [token]
-  )
+  }
+
+  // ── 1. Buscar el link pendiente: por token (legacy) o por teléfono (nuevo flujo) ──
+  let pending: PendingLink | null = null
+
+  if (token) {
+    // Flujo legacy / backward-compat: token en el mensaje (TOKEN_xxxx)
+    pending = await serviceQueryOne<PendingLink>(
+      `SELECT id, org_id, profile_id, operator_name, role, token_expires_at
+       FROM whatsapp_links
+       WHERE activation_token = $1 AND is_active = false`,
+      [token]
+    ) ?? null
+  } else {
+    // Nuevo flujo: activación por teléfono — el mensaje amigable no lleva TOKEN_
+    // El número ya está pre-registrado en la invitación; cualquier mensaje confirma la intención.
+    pending = await serviceQueryOne<PendingLink>(
+      `SELECT id, org_id, profile_id, operator_name, role, token_expires_at
+       FROM whatsapp_links
+       WHERE phone = $1 AND is_active = false
+       ORDER BY updated_at DESC LIMIT 1`,
+      [phone]
+    ) ?? null
+  }
 
   if (!pending) {
     await sendWhatsAppText(
