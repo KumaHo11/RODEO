@@ -85,7 +85,7 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   const rawPhone   = msg.from as string   // +5491112345678 (E.164 sin +, Meta lo envía sin +)
   const phone      = rawPhone.startsWith('+') ? rawPhone : `+${rawPhone}`
   const msgId      = msg.id  as string
-  const msgType    = msg.type as 'text' | 'audio' | 'image' | 'document'
+  const msgType    = msg.type as 'text' | 'audio' | 'image' | 'document' | 'video'
   const occurredAt = msg.timestamp
     ? new Date(Number(msg.timestamp) * 1000)
     : new Date()
@@ -159,34 +159,72 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   let durationSecs: number | null = null
   const title = buildTitle(msgType)
 
+  // Procesar media con try/catch individual: si falla el download/upload,
+  // la nota igual se guarda (sin media) — es mejor tener el registro que nada.
   if (msgType === 'audio' || msgType === 'document') {
     const mediaId = msg.audio?.id ?? msg.document?.id
     if (mediaId) {
-      const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
-      const ext    = mimeType.includes('ogg') ? 'ogg' : 'webm'
-      const path   = `bitacora-audio/wa-${Date.now()}.${ext}`
-      audioUrl     = await uploadBufferToStorage(buffer, path, mimeType)
-      content      = await transcribeAudio(buffer, mimeType)
-      durationSecs = msg.audio?.duration ?? null
+      try {
+        const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
+        // Detectar extensión: ogg (WhatsApp nativo), mp4, webm
+        let ext = 'ogg'
+        if (mimeType.includes('mp4') || mimeType.includes('mpeg')) ext = 'mp4'
+        else if (mimeType.includes('webm')) ext = 'webm'
+        const path = `bitacora-audio/wa-${Date.now()}.${ext}`
+        audioUrl     = await uploadBufferToStorage(buffer, path, mimeType)
+        durationSecs = msg.audio?.duration ?? null
+        try {
+          content = await transcribeAudio(buffer, mimeType)
+        } catch (txErr: any) {
+          console.warn(`[WA Webhook] Transcripción falló (audio guardado OK) — ${txErr?.message}`)
+        }
+      } catch (mediaErr: any) {
+        console.error(`[WA Webhook] Error al procesar audio wamid=${msgId}: ${mediaErr?.message}`)
+        content = '[Audio — no se pudo procesar]'
+      }
     }
   } else if (msgType === 'image') {
     const mediaId = msg.image?.id
     if (mediaId) {
-      const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
-      const path = `bitacora-photos/wa-${Date.now()}.jpg`
-      photoUrl   = await uploadBufferToStorage(buffer, path, mimeType)
-      content    = msg.image?.caption ?? null
+      try {
+        const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
+        // Normalizar extensión para storage (avif, heic → jpg)
+        let ext = 'jpg'
+        if (mimeType.includes('png')) ext = 'png'
+        else if (mimeType.includes('webp')) ext = 'webp'
+        const path = `bitacora-photos/wa-${Date.now()}.${ext}`
+        photoUrl = await uploadBufferToStorage(buffer, path, mimeType)
+        content  = msg.image?.caption ?? null
+      } catch (mediaErr: any) {
+        console.error(`[WA Webhook] Error al procesar imagen wamid=${msgId}: ${mediaErr?.message}`)
+        content = msg.image?.caption ?? '[Imagen — no se pudo procesar]'
+      }
+    }
+  } else if (msgType === 'video') {
+    const mediaId = msg.video?.id
+    if (mediaId) {
+      try {
+        const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
+        const path = `bitacora-photos/wa-video-${Date.now()}.mp4`
+        photoUrl = await uploadBufferToStorage(buffer, path, mimeType)
+        content  = msg.video?.caption ?? null
+      } catch (mediaErr: any) {
+        console.error(`[WA Webhook] Error al procesar video wamid=${msgId}: ${mediaErr?.message}`)
+        content = msg.video?.caption ?? '[Video — no se pudo procesar]'
+      }
     }
   } else if (msgType === 'text') {
     content = textBody || null
   }
 
+  // Status APPROVED para notas simples (sin IA de análisis)
+  // Solo las notas que pasen por análisis semántico futuro usarán PENDING_REVIEW
   await serviceMutate(
     `INSERT INTO field_notes
        (org_id, created_by, paddock_id, tags, category, title, content,
         audio_url, photo_url, audio_duration_secs, occurred_at,
         source, status, whatsapp_phone, whatsapp_msg_id)
-     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,'WHATSAPP','PENDING_REVIEW',$11,$12)`,
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,'WHATSAPP','APPROVED',$11,$12)`,
     [
       linkByPhone.org_id,
       linkByPhone.profile_id,
@@ -203,7 +241,9 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     ]
   )
 
+  console.log(`[WA Webhook] Nota guardada — wamid=${msgId} type=${msgType} audio=${!!audioUrl} photo=${!!photoUrl}`)
   await sendWhatsAppText(phone, '✅ Registro recibido. El administrador lo revisará pronto.')
+
 }
 
 // ── handleInvitationToken ─────────────────────────────────────────────────────
@@ -352,6 +392,7 @@ function buildTitle(type: string) {
     image:    `Foto WhatsApp - ${hora}`,
     text:     `Mensaje WhatsApp - ${hora}`,
     document: `Documento WhatsApp - ${hora}`,
+    video:    `Video WhatsApp - ${hora}`,
   }
   return map[type] ?? `WhatsApp - ${hora}`
 }
