@@ -33,8 +33,22 @@ export async function downloadWhatsAppMedia(
 
 // ── Messaging ─────────────────────────────────────────────────────────────────
 
-/** Envía un mensaje de texto al número especificado */
+/** Envía un mensaje de texto al número especificado.
+ *  LANZA error si Meta rechaza el mensaje — el caller debe manejar en try/catch.
+ *  Esto garantiza que los fallos de mensajería sean visibles y no silenciosos.
+ */
 export async function sendWhatsAppText(to: string, text: string): Promise<void> {
+  if (!TOKEN) {
+    const err = '[WhatsApp] WHATSAPP_TOKEN no configurado — no se puede enviar mensaje saliente.'
+    console.error(err)
+    throw new Error(err)
+  }
+  if (!PHONE_NUMBER_ID) {
+    const err = '[WhatsApp] WHATSAPP_PHONE_NUMBER_ID no configurado — no se puede enviar mensaje saliente.'
+    console.error(err)
+    throw new Error(err)
+  }
+
   const metaTo = to.replace('+', '')
   const res = await fetch(`${BASE}/${PHONE_NUMBER_ID}/messages`, {
     method: 'POST',
@@ -49,8 +63,11 @@ export async function sendWhatsAppText(to: string, text: string): Promise<void> 
       text: { body: text },
     }),
   })
+
   if (!res.ok) {
     const body = await res.text()
-    console.error(`[WhatsApp] sendText failed (${res.status}):`, body)
+    const errMsg = `[WhatsApp] sendText failed (${res.status}) to=${metaTo}: ${body.slice(0, 300)}`
+    console.error(errMsg)
+    throw new Error(errMsg)
   }
 }

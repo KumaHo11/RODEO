@@ -590,7 +590,7 @@ model WhatsAppLink {
   /// Rol asignado al operario — se stagea aquí y se copia a Profile.team_role al activar
   role            String    @default("CAPATAZ") @db.VarChar(50)
   /// Token criptográfico hex-64 para activación vía link wa.me. Nulo una vez activado.
-  activationToken String?   @map("activation_token") @db.VarChar(64)
+  activationToken String?   @map("activation_token") @db.Text
   /// Timestamp de expiración del token (48 horas desde generación)
   tokenExpiresAt  DateTime? @map("token_expires_at") @db.Timestamptz
   /// true = el operario activó el canal vía link wa.me

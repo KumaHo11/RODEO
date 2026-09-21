@@ -41,11 +41,13 @@ export async function POST(req: NextRequest) {
   const rawBody   = await req.text()
   const signature = req.headers.get('x-hub-signature-256') ?? ''
 
-  // Guard: si APP_SECRET no está configurado, el webhook no puede validar firmas.
-  // En ese caso logueamos una advertencia clara en lugar de rechazar silenciosamente.
+  // Guard: si APP_SECRET no está configurado, no podemos validar firmas.
+  // Retornamos 200 para evitar que Meta desactive el webhook por reintentos fallidos,
+  // pero NO procesamos el payload por razones de seguridad. Revisar GitHub Secrets.
   if (!APP_SECRET) {
-    console.error('[WA Webhook] WHATSAPP_APP_SECRET no está configurado — todas las requests serán rechazadas. Verificar GitHub Secrets del entorno de Staging.')
-    return NextResponse.json({ error: 'Webhook misconfigured' }, { status: 500 })
+    console.error('[WA Webhook] CRITICAL: WHATSAPP_APP_SECRET no configurado en el entorno de Cloud Run. ' +
+      'Verificar GitHub Secrets del entorno de staging. Payload descartado por seguridad.')
+    return NextResponse.json({ ok: true, warning: 'Signature validation disabled — payload discarded' })
   }
 
   const expected  = `sha256=${createHmac('sha256', APP_SECRET).update(rawBody).digest('hex')}`

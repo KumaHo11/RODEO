@@ -711,7 +711,7 @@ export default function EquipoPage() {
                     // Para WA invites: reconstruir el waBotLink desde el token
                     const WA_BOT = process.env.NEXT_PUBLIC_WA_BOT_NUMBER || ''
                     const waBotLink = isWa && inv.token
-                      ? `https://wa.me/${WA_BOT}?text=${encodeURIComponent(`¡Hola! Envía este mensaje para vincularte al campo. (Código de seguridad: TOKEN_${inv.token})`)}`
+                      ? `https://wa.me/${WA_BOT}?text=${encodeURIComponent(`¡Hola! Envía este mensaje para vincularte al campo ${orgName || 'RODEO'}. (Código de seguridad: TOKEN_${inv.token})`)}`
                       : null
 
                     return (

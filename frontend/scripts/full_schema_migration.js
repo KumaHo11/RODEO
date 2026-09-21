@@ -527,9 +527,15 @@ CREATE INDEX IF NOT EXISTS idx_field_notes_pending
   ON field_notes (org_id, status, created_at DESC) WHERE source = 'WHATSAPP';
 
 -- WhatsApp activation columns for whatsapp_links (idempotent backfill)
-ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS activation_token  VARCHAR(10);
+-- NOTA: activation_token debe ser TEXT (token hex de 64 chars). VARCHAR(10) era demasiado pequeño.
+ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS activation_token  TEXT;
 ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS token_expires_at  TIMESTAMPTZ;
 ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS is_active         BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS operator_name     TEXT;
+ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS role              VARCHAR(50) DEFAULT 'CAPATAZ';
+ALTER TABLE whatsapp_links ADD COLUMN IF NOT EXISTS linked_at         TIMESTAMPTZ;
+-- Ampliar activation_token a TEXT si existe como VARCHAR (DBs ya migradas con v22)
+ALTER TABLE whatsapp_links ALTER COLUMN activation_token TYPE TEXT;
 -- Marcar vínculos existentes (linked_at presente) como activos
 UPDATE whatsapp_links SET is_active = true WHERE linked_at IS NOT NULL AND is_active = false;
 
@@ -576,9 +582,12 @@ CREATE TABLE IF NOT EXISTS whatsapp_links (
   profile_id       UUID        REFERENCES profiles(id) ON DELETE CASCADE,
   org_id           UUID        REFERENCES organizations(id) ON DELETE CASCADE,
   phone            VARCHAR(30) NOT NULL UNIQUE,
-  activation_token VARCHAR(10),
+  operator_name    TEXT,
+  role             VARCHAR(50) DEFAULT 'CAPATAZ',
+  activation_token TEXT,
   token_expires_at TIMESTAMPTZ,
   is_active        BOOLEAN     NOT NULL DEFAULT false,
+  linked_at        TIMESTAMPTZ,
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   updated_at       TIMESTAMPTZ DEFAULT NOW()
 );

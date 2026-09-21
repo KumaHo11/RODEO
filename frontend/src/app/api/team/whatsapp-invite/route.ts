@@ -209,7 +209,7 @@ export async function POST(req: NextRequest) {
     }
 
     const baseUrl       = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const activationMsg = `¡Hola! Envía este mensaje para vincularte al campo. (Código de seguridad: TOKEN_${token})`
+    const activationMsg = `¡Hola! Envía este mensaje para vincularte al campo ${resolvedFieldName}. (Código de seguridad: TOKEN_${token})`
 
     // ── URLs ─────────────────────────────────────────────────────────────────
     // 1. wa.me al bot (Zero Click Web) — URL que el operario toca para activarse
