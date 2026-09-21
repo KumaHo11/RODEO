@@ -117,8 +117,9 @@ export function AiAnalysisActions({
     note.aiResult ?? null
   )
 
-  // Only show AI actions for image or video entries
-  if (note.mediaType !== 'image' && note.mediaType !== 'video') return null
+  // Only show AI actions for image entries.
+  // Videos need still photos for Gemini biomass/CC analysis — not yet supported from video frames.
+  if (note.mediaType !== 'image') return null
 
   // Determine mode and title
   const hasPotrero = !!localPaddockId

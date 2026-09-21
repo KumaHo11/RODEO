@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Play, Camera, X, Mic, Volume2, ChevronDown, ChevronUp, ZoomIn, ImageOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { BitacoraEntry } from '@/types/bitacora'
@@ -183,40 +183,42 @@ function LazyPhoto({
 // ─── Video Preview ────────────────────────────────────────────────────────────
 function VideoPreview({ note }: { note: BitacoraEntry }) {
   const [showModal, setShowModal] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const [thumbError, setThumbError] = useState(false)
   const videoSrc = note.video_url!
+
+  const hasThumbnail = !!note.thumbnailUrl && !thumbError
 
   return (
     <>
       <div
-        className="relative w-full max-h-64 aspect-video rounded-xl overflow-hidden bg-black/5 cursor-pointer group"
+        className="relative w-full aspect-video rounded-xl overflow-hidden bg-gray-900 cursor-pointer group"
         onClick={() => setShowModal(true)}
         role="button"
         tabIndex={0}
         aria-label="Reproducir video"
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShowModal(true) }}
       >
-        {note.thumbnailUrl ? (
-          <LazyPhoto
-            src={note.thumbnailUrl}
+        {/* Thumbnail if available */}
+        {hasThumbnail && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={note.thumbnailUrl!}
             alt="Miniatura de video"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          // Native video poster — browser grabs first frame
-          // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video
-            ref={videoRef}
-            src={videoSrc}
-            preload="metadata"
-            className="w-full h-full object-cover"
-            muted
-            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setThumbError(true)}
           />
         )}
 
+        {/* Placeholder gradient when no thumbnail */}
+        {!hasThumbnail && (
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex flex-col items-center justify-center gap-2">
+            <Camera className="w-8 h-8 text-gray-500" />
+            <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-widest">Video</span>
+          </div>
+        )}
+
         {/* Dark overlay + Play button */}
-        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/35 transition-colors flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
           <div className="w-14 h-14 rounded-full bg-white/90 shadow-lg flex items-center justify-center group-hover:scale-110 transition-transform">
             <Play className="w-6 h-6 text-gray-900 ml-0.5" fill="currentColor" />
           </div>
@@ -229,12 +231,10 @@ function VideoPreview({ note }: { note: BitacoraEntry }) {
           </span>
         )}
 
-        {/* Camera icon fallback if no thumbnail */}
-        {!note.thumbnailUrl && (
-          <div className="absolute top-2 left-2">
-            <Camera className="w-4 h-4 text-white/60" />
-          </div>
-        )}
+        {/* Video label badge */}
+        <span className="absolute top-2 left-2 bg-black/60 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
+          <Camera className="w-2.5 h-2.5" /> VIDEO
+        </span>
       </div>
 
       {showModal && <VideoPlayerModal src={videoSrc} onClose={() => setShowModal(false)} />}
@@ -420,6 +420,8 @@ function TextPreview({ note }: { note: BitacoraEntry }) {
 }
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
+// Only show AI actions for IMAGE entries.
+// Videos require still photos for Gemini analysis — not yet supported from video frames.
 export function BitacoraMediaPreview({ note }: { note: BitacoraEntry }) {
   switch (note.mediaType) {
     case 'video': return <VideoPreview note={note} />
