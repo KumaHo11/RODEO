@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Play, Camera, X, Mic, Volume2, ChevronDown, ChevronUp, ZoomIn } from 'lucide-react'
+import { Play, Camera, X, Mic, Volume2, ChevronDown, ChevronUp, ZoomIn, ImageOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { BitacoraEntry } from '@/types/bitacora'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -28,7 +28,6 @@ function VideoPlayerModal({ src, onClose }: { src: string; onClose: () => void }
         className="relative w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        {/* Close button */}
         <button
           onClick={onClose}
           className="absolute top-3 right-3 z-10 w-9 h-9 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full transition-all"
@@ -50,13 +49,27 @@ function VideoPlayerModal({ src, onClose }: { src: string; onClose: () => void }
   )
 }
 
-// ─── Image Lightbox ───────────────────────────────────────────────────────────
-function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+// ─── Image Lightbox (navigable) ──────────────────────────────────────────────
+function ImageLightbox({
+  photos,
+  initialIndex = 0,
+  onClose,
+}: {
+  photos: string[]
+  initialIndex?: number
+  onClose: () => void
+}) {
+  const [current, setCurrent] = useState(initialIndex)
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') setCurrent(i => Math.max(0, i - 1))
+      if (e.key === 'ArrowRight') setCurrent(i => Math.min(photos.length - 1, i + 1))
+    }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [onClose, photos.length])
 
   if (typeof document === 'undefined') return null
 
@@ -66,6 +79,7 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
       onClick={onClose}
     >
       <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>
+        {/* Close */}
         <button
           onClick={onClose}
           className="absolute top-3 right-3 z-10 w-9 h-9 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full transition-all"
@@ -73,15 +87,96 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
         >
           <X className="w-5 h-5" />
         </button>
+
+        {/* Prev / Next arrows — only when multiple photos */}
+        {photos.length > 1 && (
+          <>
+            <button
+              onClick={() => setCurrent(i => Math.max(0, i - 1))}
+              disabled={current === 0}
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full transition-all disabled:opacity-30"
+              aria-label="Anterior"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setCurrent(i => Math.min(photos.length - 1, i + 1))}
+              disabled={current === photos.length - 1}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full transition-all disabled:opacity-30"
+              aria-label="Siguiente"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </>
+        )}
+
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={src}
-          alt="Vista ampliada"
+          key={photos[current]}
+          src={photos[current]}
+          alt={`Foto ${current + 1} de ${photos.length}`}
           className="w-full h-auto max-h-[85vh] object-contain rounded-xl"
         />
+
+        {/* Counter */}
+        {photos.length > 1 && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+            {photos.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrent(i)}
+                className={`w-2 h-2 rounded-full transition-all ${i === current ? 'bg-white' : 'bg-white/40'}`}
+                aria-label={`Foto ${i + 1}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>,
     document.body
+  )
+}
+
+// ─── Single photo with loading/error state ───────────────────────────────────
+function LazyPhoto({
+  src,
+  alt,
+  className,
+  onClick,
+}: {
+  src: string
+  alt: string
+  className?: string
+  onClick?: () => void
+}) {
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
+
+  return (
+    <div className="relative w-full h-full" onClick={onClick}>
+      {/* Skeleton shimmer while loading */}
+      {status === 'loading' && (
+        <div className="absolute inset-0 bg-gray-100 animate-pulse rounded-inherit" />
+      )}
+
+      {/* Error placeholder */}
+      {status === 'error' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 gap-2">
+          <ImageOff className="w-7 h-7 text-gray-300" />
+          <span className="text-[10px] text-gray-400">Sin preview</span>
+        </div>
+      )}
+
+      {/* Actual image */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        className={`${className ?? ''} transition-opacity duration-300 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+        loading="lazy"
+        onLoad={() => setStatus('loaded')}
+        onError={() => setStatus('error')}
+      />
+    </div>
   )
 }
 
@@ -102,14 +197,13 @@ function VideoPreview({ note }: { note: BitacoraEntry }) {
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShowModal(true) }}
       >
         {note.thumbnailUrl ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
+          <LazyPhoto
             src={note.thumbnailUrl}
             alt="Miniatura de video"
             className="w-full h-full object-cover"
           />
         ) : (
-          /* Native video poster — browser grabs first frame */
+          // Native video poster — browser grabs first frame
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
             ref={videoRef}
@@ -148,37 +242,102 @@ function VideoPreview({ note }: { note: BitacoraEntry }) {
   )
 }
 
-// ─── Photo Preview ────────────────────────────────────────────────────────────
+// ─── Photo Preview (single or gallery) ───────────────────────────────────────
 function PhotoPreview({ note }: { note: BitacoraEntry }) {
-  const [showLightbox, setShowLightbox] = useState(false)
-  const src = note.photo_url!
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+
+  // Determine photo list: grouped album or single
+  const photos: string[] = note.groupedPhotos?.length
+    ? note.groupedPhotos
+    : note.photo_url
+      ? [note.photo_url]
+      : []
+
+  if (photos.length === 0) return null
+
+  const openLightbox = (idx: number) => setLightboxIndex(idx)
+  const closeLightbox = () => setLightboxIndex(null)
+
+  // ── Single photo ──
+  if (photos.length === 1) {
+    return (
+      <>
+        <div
+          className="relative w-full max-h-64 aspect-video rounded-xl overflow-hidden border border-gray-100 cursor-pointer group"
+          role="button"
+          tabIndex={0}
+          aria-label="Ver imagen ampliada"
+          onClick={() => openLightbox(0)}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openLightbox(0) }}
+        >
+          <LazyPhoto
+            src={photos[0]}
+            alt="Foto de bitácora"
+            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+          />
+          {/* Zoom hint */}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-end justify-end p-2">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 text-white rounded-lg p-1.5">
+              <ZoomIn className="w-3.5 h-3.5" />
+            </div>
+          </div>
+        </div>
+
+        {lightboxIndex !== null && (
+          <ImageLightbox photos={photos} initialIndex={lightboxIndex} onClose={closeLightbox} />
+        )}
+      </>
+    )
+  }
+
+  // ── Gallery (2–4+ photos) ──
+  const visible = photos.slice(0, 4)
+  const extra = photos.length - 4
 
   return (
     <>
       <div
-        className="relative w-full max-h-64 aspect-video rounded-xl overflow-hidden border border-gray-100 cursor-pointer group"
-        onClick={() => setShowLightbox(true)}
-        role="button"
-        tabIndex={0}
-        aria-label="Ver imagen ampliada"
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShowLightbox(true) }}
+        className={`grid gap-1 rounded-xl overflow-hidden ${
+          visible.length === 2 ? 'grid-cols-2' : 'grid-cols-2'
+        }`}
+        style={{ maxHeight: '256px' }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt="Foto de bitácora"
-          className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-          loading="lazy"
-        />
-        {/* Zoom hint */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-end justify-end p-2">
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 text-white rounded-lg p-1.5">
-            <ZoomIn className="w-3.5 h-3.5" />
+        {visible.map((url, idx) => (
+          <div
+            key={`${url}-${idx}`}
+            className="relative cursor-pointer group overflow-hidden"
+            style={{ aspectRatio: visible.length <= 2 ? '16/9' : '1/1' }}
+            role="button"
+            tabIndex={0}
+            aria-label={`Ver foto ${idx + 1}`}
+            onClick={() => openLightbox(idx)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openLightbox(idx) }}
+          >
+            <LazyPhoto
+              src={url}
+              alt={`Foto ${idx + 1}`}
+              className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-300"
+            />
+            {/* +N overlay on last visible if there are more */}
+            {idx === 3 && extra > 0 && (
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                <span className="text-white text-xl font-black">+{extra + 1}</span>
+              </div>
+            )}
           </div>
-        </div>
+        ))}
       </div>
 
-      {showLightbox && <ImageLightbox src={src} onClose={() => setShowLightbox(false)} />}
+      {/* Album badge */}
+      <div className="mt-1 flex items-center gap-1">
+        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+          {photos.length} fotos · álbum WA
+        </span>
+      </div>
+
+      {lightboxIndex !== null && (
+        <ImageLightbox photos={photos} initialIndex={lightboxIndex} onClose={closeLightbox} />
+      )}
     </>
   )
 }

@@ -38,15 +38,18 @@ interface AICameraModalProps {
   title: string
   mode: 'biomass' | 'body-condition'
   onApply: (data: any, uploadedUrls?: string[]) => void
+  /** URLs to preload as initial photos (e.g. from the card's photo_url / groupedPhotos) */
+  initialPhotoUrls?: string[]
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICameraModalProps) {
-  const [photos, setPhotos]         = useState<{ url: string; base64: string; mimeType: string }[]>([])
+export function AICameraModal({ isOpen, onClose, title, mode, onApply, initialPhotoUrls }: AICameraModalProps) {
+  const [photos, setPhotos]         = useState<{ url: string; base64: string; mimeType: string; preloaded?: boolean }[]>([])
   const [analyzing, setAnalyzing]   = useState(false)
   const [result, setResult]         = useState<any>(null)
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([])
   const [error, setError]           = useState<string | null>(null)
+  const [preloading, setPreloading] = useState(false)
 
   const cameraInputRef  = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -54,14 +57,43 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
   const MAX_PHOTOS = 3
   const slotGuides = mode === 'biomass' ? SLOT_GUIDES_BIOMASS : SLOT_GUIDES_BODY
 
+  // ── Reset + preload on open ──────────────────────────────────────────────
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return
+    setResult(null)
+    setError(null)
+    setAnalyzing(false)
+
+    if (!initialPhotoUrls?.length) {
       setPhotos([])
-      setResult(null)
-      setError(null)
-      setAnalyzing(false)
+      return
     }
-  }, [isOpen])
+
+    // Fetch each initial URL and convert to base64
+    setPreloading(true)
+    const urls = initialPhotoUrls.slice(0, MAX_PHOTOS)
+    Promise.all(
+      urls.map(async (url) => {
+        try {
+          const res = await fetch(url)
+          const blob = await res.blob()
+          const mimeType = blob.type || 'image/jpeg'
+          const objectUrl = URL.createObjectURL(blob)
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onload = (ev) => resolve((ev.target?.result as string).split(',')[1])
+            reader.readAsDataURL(blob)
+          })
+          return { url: objectUrl, base64, mimeType, preloaded: true }
+        } catch {
+          return null
+        }
+      })
+    ).then((results) => {
+      setPhotos(results.filter((r): r is NonNullable<typeof r> => r !== null))
+      setPreloading(false)
+    })
+  }, [isOpen, initialPhotoUrls])
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -292,9 +324,17 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
-                      <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
-                        {idx + 1}
-                      </span>
+                      {/* Preloaded badge */}
+                      {photo.preloaded && (
+                        <span className="absolute bottom-1.5 left-1.5 bg-purple-600/80 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">
+                          Del campo
+                        </span>
+                      )}
+                      {!photo.preloaded && (
+                        <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
+                          {idx + 1}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     /* Empty state limpio — gris, cámara + sugerencia */
@@ -315,6 +355,21 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply }: AICamer
                   )
                 })}
               </div>
+
+              {/* Preloading indicator */}
+              {preloading && (
+                <p className="text-center text-purple-500 font-bold mb-3" style={{ fontSize: '10px' }}>
+                  Cargando imagen del campo…
+                </p>
+              )}
+
+              {/* Hint when preloaded */}
+              {!preloading && photos.some(p => p.preloaded) && (
+                <p className="text-center text-purple-600 font-semibold mb-3 flex items-center justify-center gap-1" style={{ fontSize: '10px' }}>
+                  <Sparkles className="w-3 h-3" />
+                  Foto del registro precargada · podés agregar más tomas para mayor precisión
+                </p>
+              )}
 
               {/* Botones de captura adicionales */}
               <div className="flex gap-3 mb-4">

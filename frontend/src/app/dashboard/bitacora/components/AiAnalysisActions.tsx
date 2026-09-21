@@ -313,6 +313,13 @@ export function AiAnalysisActions({
         title={modalTitle}
         mode={mode}
         onApply={handleApply}
+        initialPhotoUrls={
+          note.groupedPhotos?.length
+            ? note.groupedPhotos.slice(0, 3)
+            : note.photo_url
+              ? [note.photo_url]
+              : undefined
+        }
       />
     </>
   )

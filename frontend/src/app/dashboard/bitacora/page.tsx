@@ -23,7 +23,7 @@ import OnboardingTour from '@/components/OnboardingTour'
 import { useConfirm } from '@/components/ui/ConfirmModal'
 
 import { BitacoraGrid } from './components/BitacoraGrid'
-import { mapRawNote } from '@/types/bitacora'
+import { mapRawNote, groupWaPhotoEntries } from '@/types/bitacora'
 import type { BitacoraEntry, BitacoraAiResult } from '@/types/bitacora'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,10 +204,10 @@ export default function BitacoraPage() {
         return noteData
       }))
 
-      setNotes([...localNotes, ...fetchedRaw].map(mapRawNote))
+      setNotes(groupWaPhotoEntries([...localNotes, ...fetchedRaw].map(mapRawNote)))
     } catch (e) {
       console.error('Error merging offline notes:', e)
-      setNotes(fetchedRaw.map(mapRawNote))
+      setNotes(groupWaPhotoEntries(fetchedRaw.map(mapRawNote)))
     }
 
     setLoading(false)
