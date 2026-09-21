@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Invitaciones por WhatsApp pendientes (whatsapp_links con is_active=false)
-    // CORRECCIÓN: el campo era `linked_at` (no existe) → corregido a `created_at`
+    // NOTA: whatsapp_links no tiene `created_at` — usa `linked_at` como timestamp de creación
     let waInvitations: any[] = []
     try {
       waInvitations = await serviceQuery(
@@ -63,14 +63,14 @@ export async function GET(req: NextRequest) {
                 role           AS team_role,
                 'PENDING'      AS status,
                 token_expires_at AS expires_at,
-                created_at,
+                linked_at      AS created_at,
                 activation_token AS token,
                 'whatsapp'     AS channel
          FROM whatsapp_links
          WHERE org_id = $1
            AND is_active = false
            AND activation_token IS NOT NULL
-         ORDER BY created_at DESC`,
+         ORDER BY linked_at DESC`,
         [auth.orgId]
       )
     } catch (waErr: any) {
