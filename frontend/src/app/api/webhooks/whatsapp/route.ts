@@ -13,7 +13,7 @@
  *  2. Se transcribe (audio) y se guarda en field_notes como PENDING_REVIEW
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac } from 'crypto'
+import crypto, { createHmac } from 'crypto'
 import { downloadWhatsAppMedia, sendWhatsAppText } from '@/lib/whatsapp'
 import { transcribeAudio } from '@/lib/speechToText'
 import { uploadBufferToStorage } from '@/lib/firebase/storage-admin'
@@ -72,7 +72,8 @@ async function processPayload(body: any) {
 
 // ── Lógica principal por mensaje ──────────────────────────────────────────────
 async function processMessage(msg: any, waDisplayName: string | null) {
-  const phone      = msg.from as string   // +5491112345678 (E.164 sin +, Meta lo envía sin +)
+  const rawPhone   = msg.from as string   // +5491112345678 (E.164 sin +, Meta lo envía sin +)
+  const phone      = rawPhone.startsWith('+') ? rawPhone : `+${rawPhone}`
   const msgId      = msg.id  as string
   const msgType    = msg.type as 'text' | 'audio' | 'image' | 'document'
   const occurredAt = msg.timestamp
@@ -96,7 +97,7 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   let tokenMatch: RegExpMatchArray | null = null
   if (/TOKEN_/i.test(textBody)) {
     // Extraer todo lo que viene después de TOKEN_ y limpiar cualquier caracter que no sea hex (ej. paréntesis, espacios, guiones)
-    const afterToken = textBody.replace(/^.*TOKEN_/i, '').replace(/[^a-f0-9]/gi, '')
+    const afterToken = textBody.replace(/[\s\S]*?TOKEN_/i, '').replace(/[^a-f0-9]/gi, '')
     if (afterToken.length >= 64) {
       const cleanToken = afterToken.slice(0, 64)
       tokenMatch = [textBody, cleanToken]
@@ -271,28 +272,32 @@ async function handleInvitationToken(
 
     if (!profileId) {
       // Auto-provisioning: crear Profile mínimo para operario WhatsApp-only
-      const newProfile = await tx.$queryRaw<[{ id: string }]>`
-        INSERT INTO profiles (id, organization_id, first_name, phone, team_role, role, is_active)
-        VALUES (
-          gen_random_uuid(),
-          ${pending.orgId}::uuid,
-          ${resolvedName},
-          ${phone},
-          ${pending.role},
-          'MEMBER',
-          true
-        )
-        RETURNING id
-      `
-      profileId = newProfile[0].id
+      const newProfile = await tx.profile.create({
+        data: {
+          id:             crypto.randomUUID(),
+          organizationId: pending.orgId,
+          firstName:      resolvedName,
+          phone:          phone,
+          teamRole:       pending.role,
+          role:           'MEMBER',
+          isActive:       true,
+        },
+        select: { id: true },
+      })
+      profileId = newProfile.id
     } else {
       // Perfil existente: actualizar team_role y phone si no tenía
-      await tx.$executeRaw`
-        UPDATE profiles
-        SET team_role = ${pending.role},
-            phone     = COALESCE(phone, ${phone})
-        WHERE id = ${profileId}::uuid
-      `
+      const existing = await tx.profile.findUnique({
+        where: { id: profileId },
+        select: { phone: true }
+      })
+      await tx.profile.update({
+        where: { id: profileId },
+        data: {
+          teamRole: pending.role,
+          phone:    existing?.phone || phone,
+        },
+      })
     }
 
     // Activar el vínculo: asignar teléfono real, profile_id, borrar token

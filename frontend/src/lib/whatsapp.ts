@@ -35,6 +35,7 @@ export async function downloadWhatsAppMedia(
 
 /** Envía un mensaje de texto al número especificado */
 export async function sendWhatsAppText(to: string, text: string): Promise<void> {
+  const metaTo = to.replace('+', '')
   const res = await fetch(`${BASE}/${PHONE_NUMBER_ID}/messages`, {
     method: 'POST',
     headers: {
@@ -43,7 +44,7 @@ export async function sendWhatsAppText(to: string, text: string): Promise<void> 
     },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
-      to,
+      to: metaTo,
       type: 'text',
       text: { body: text },
     }),
