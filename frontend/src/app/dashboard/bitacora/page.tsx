@@ -1,45 +1,47 @@
 'use client'
 import { enqueue } from '@/lib/offline/outbox'
-import { dbGetAll, dbUpsertMany, outboxGetAll, metaGet, metaSet, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
+import { dbGetAll, dbUpsertMany, outboxGetAll, dbGetOrg } from '@/lib/offline/db'
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import { savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio, savePendingPhoto, getAllPendingPhotos, deletePendingPhoto, countPendingItems, getPendingPhoto, getPendingAudio } from '@/lib/audioOfflineStore'
+import {
+  savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio,
+  savePendingPhoto, getAllPendingPhotos, deletePendingPhoto,
+  countPendingItems, getPendingPhoto, getPendingAudio,
+} from '@/lib/audioOfflineStore'
 import {
   Mic, Camera, Loader2, Image as ImageIcon,
-  CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp, Lock, MessageCircle, Filter, FileText,
-  Pencil, Trash2, Sparkles, Check, X, AlertTriangle, ArrowRight
+  CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp,
+  Lock, MessageCircle, FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import OnboardingTour from '@/components/OnboardingTour'
 import { useConfirm } from '@/components/ui/ConfirmModal'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+import { BitacoraGrid } from './components/BitacoraGrid'
+import { mapRawNote } from '@/types/bitacora'
+import type { BitacoraEntry, BitacoraAiResult } from '@/types/bitacora'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+const fmtDuration = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
+
 const fmtDate = (iso: string) => {
-  const d = new Date(iso), today = new Date(), yesterday = new Date()
+  const d = new Date(iso)
+  const today = new Date()
+  const yesterday = new Date()
   yesterday.setDate(today.getDate() - 1)
   if (d.toDateString() === today.toDateString()) return 'Hoy'
   if (d.toDateString() === yesterday.toDateString()) return 'Ayer'
   return d.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })
 }
-const fmtDuration = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
-const groupByDate = (notes: any[]) => {
-  const map = new Map<string, any[]>()
-  for (const n of notes) {
-    const key = fmtDate(n.created_at)
-    if (!map.has(key)) map.set(key, [])
-    map.get(key)!.push(n)
-  }
-  return map
-}
 
-// ── Timer hook ────────────────────────────────────────────────────────────────
+// ─── Timer hook ───────────────────────────────────────────────────────────────
 function useTimer(active: boolean) {
   const [secs, setSecs] = useState(0)
   const ref = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -51,265 +53,19 @@ function useTimer(active: boolean) {
   return secs
 }
 
-// ── Waveform ──────────────────────────────────────────────────────────────────
+// ─── Waveform ─────────────────────────────────────────────────────────────────
 function Waveform({ active }: { active: boolean }) {
   return (
     <div className="flex items-center justify-center gap-[3px] h-7">
       {Array.from({ length: 11 }).map((_, i) => (
-        <div key={i} className={`w-[3px] rounded-full bg-red-500 transition-all duration-150 ${active ? 'animate-pulse' : ''}`}
-          style={{ height: active ? `${10 + Math.abs(Math.sin(i * 0.7)) * 16}px` : '3px', animationDelay: `${i * 60}ms`, animationDuration: `${500 + i * 70}ms` }} />
+        <div key={i}
+          className={`w-[3px] rounded-full bg-red-500 transition-all duration-150 ${active ? 'animate-pulse' : ''}`}
+          style={{
+            height: active ? `${10 + Math.abs(Math.sin(i * 0.7)) * 16}px` : '3px',
+            animationDelay: `${i * 60}ms`,
+            animationDuration: `${500 + i * 70}ms`,
+          }} />
       ))}
-    </div>
-  )
-}
-
-// ── WhatsApp intent helpers ──────────────────────────────────────────────────
-const INTENT_META: Record<string, { label: string; color: string; bg: string }> = {
-  HERD_MOVE:   { label: 'Movimiento',  color: 'text-blue-700',   bg: 'bg-blue-50' },
-  BIRTH:       { label: 'Nacimiento',  color: 'text-green-700',  bg: 'bg-green-50' },
-  DEATH:       { label: 'Mortandad',   color: 'text-red-700',    bg: 'bg-red-50' },
-  RAINFALL:    { label: 'Lluvia',      color: 'text-sky-700',    bg: 'bg-sky-50' },
-  OBSERVATION: { label: 'Observación', color: 'text-gray-700',   bg: 'bg-gray-100' },
-  TASK:        { label: 'Tarea',       color: 'text-amber-700',  bg: 'bg-amber-50' },
-  UNKNOWN:     { label: 'Sin intent',  color: 'text-gray-500',   bg: 'bg-gray-50' },
-}
-
-// ── WhatsApp AI Banner ───────────────────────────────────────────────────
-function WhatsAppBanner({ note, onApply, onDismiss }: {
-  note: any
-  onApply: () => void
-  onDismiss: () => void
-}) {
-  const ar = note.analysis_result ?? note.analysisResult
-  if (!ar) return null
-
-  const intent  = ar.intent  ?? 'UNKNOWN'
-  const conf    = ar.confidence ?? 0
-  const needsReview = ar.needsReview ?? (conf < 85)
-  const meta    = INTENT_META[intent] ?? INTENT_META.UNKNOWN
-  const entities = ar.entities ?? {}
-
-  return (
-    <div className={`mt-3 rounded-xl border p-3 ${
-      needsReview
-        ? 'border-amber-200 bg-amber-50'
-        : 'border-green-200 bg-green-50'
-    }`}>
-      {/* Top row: icon + badge + confidence */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5">
-          <Sparkles className={`w-3.5 h-3.5 ${needsReview ? 'text-amber-500' : 'text-green-600'}`} />
-          <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">IA</span>
-        </div>
-        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${meta.bg} ${meta.color}`}>
-          {meta.label}
-        </span>
-        {/* Confidence pill */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          {needsReview
-            ? <AlertTriangle className="w-3 h-3 text-amber-500" />
-            : <Check className="w-3 h-3 text-green-600" />}
-          <span className={`text-[10px] font-black ${
-            needsReview ? 'text-amber-600' : 'text-green-700'
-          }`}>{conf}% confianza</span>
-        </div>
-      </div>
-
-      {/* Entities summary */}
-      {(entities.to_paddock_name || entities.from_paddock_name || entities.herd_name ||
-        entities.head_count || entities.rainfall_mm || entities.birth_count || entities.death_count) && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {entities.herd_name && (
-            <span className="text-[10px] bg-white border border-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-lg">
-              🐄 {entities.herd_name}
-            </span>
-          )}
-          {entities.from_paddock_name && (
-            <span className="text-[10px] bg-white border border-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-lg">
-              {entities.from_paddock_name}
-            </span>
-          )}
-          {(entities.from_paddock_name && entities.to_paddock_name) && (
-            <ArrowRight className="w-3 h-3 text-gray-400 self-center" />
-          )}
-          {entities.to_paddock_name && (
-            <span className="text-[10px] bg-white border border-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-lg">
-              {entities.to_paddock_name}
-            </span>
-          )}
-          {entities.head_count != null && (
-            <span className="text-[10px] bg-white border border-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-lg">
-              {entities.head_count} cabezas
-            </span>
-          )}
-          {entities.rainfall_mm != null && (
-            <span className="text-[10px] bg-sky-100 border border-sky-200 text-sky-700 font-bold px-2 py-0.5 rounded-lg">
-              🌧 {entities.rainfall_mm} mm
-            </span>
-          )}
-          {entities.birth_count != null && (
-            <span className="text-[10px] bg-green-100 border border-green-200 text-green-700 font-bold px-2 py-0.5 rounded-lg">
-              +{entities.birth_count} nacimientos
-            </span>
-          )}
-          {entities.death_count != null && (
-            <span className="text-[10px] bg-red-100 border border-red-200 text-red-700 font-bold px-2 py-0.5 rounded-lg">
-              -{entities.death_count} bajas
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Suggestion */}
-      {ar.suggestion && (
-        <p className="mt-2 text-[11px] text-gray-600 italic">"
-          {ar.suggestion}
-        "</p>
-      )}
-
-      {/* Actions */}
-      <div className="mt-3 flex gap-2">
-        <button
-          onClick={onDismiss}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-black text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 transition-all"
-        >
-          <X className="w-3 h-3" /> Descartar
-        </button>
-        <button
-          onClick={onApply}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-black text-white transition-all ${
-            needsReview
-              ? 'bg-amber-500 hover:bg-amber-600'
-              : 'bg-green-600 hover:bg-green-700'
-          }`}
-        >
-          <Check className="w-3 h-3" />
-          {needsReview ? 'Validar y Aplicar' : 'Aplicar al Planificador'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── Note row ──────────────────────────────────────────────────────────────────
-function NoteRow({ note, onDelete, onEdit, onApplyWA, onDismissWA }: {
-  note: any
-  onDelete: (id: string, isPending: boolean) => void
-  onEdit: (note: any) => void
-  onApplyWA?: (note: any) => void
-  onDismissWA?: (note: any) => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const isAudio = !!note.audio_url
-  const isPhoto = !!note.photo_url
-  const hasTranscript = !!note.content
-  const isWhatsApp = note.source === 'WHATSAPP'
-  const hasAI = isWhatsApp && !!(note.analysis_result ?? note.analysisResult)
-  const needsReview = hasAI && ((note.analysis_result ?? note.analysisResult)?.needsReview ?? false)
-
-  return (
-    <div className={`group bg-white rounded-2xl border shadow-sm p-4 mb-3 ${
-      needsReview ? 'border-amber-200' : 'border-gray-100'
-    }`} style={{ maxWidth: '100%' }}>
-      <div className="flex items-start justify-between gap-3" style={{ minWidth: 0 }}>
-        <div className="flex-1 min-w-0" style={{ overflow: 'hidden' }}>
-          <p className="text-base font-bold text-gray-950 tracking-tight leading-snug" style={{ overflowWrap: 'break-word', wordBreak: 'break-word', maxWidth: '100%' }}>
-            {note.title.replace('Audio · ', '').replace('Foto · ', '')}
-          </p>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-sm text-gray-400">{fmtTime(note.created_at)}</span>
-            {note.paddock_name && (
-              <><span className="w-1 h-1 rounded-full bg-gray-200" /><span className="text-xs font-bold text-gray-500 uppercase tracking-tighter">{note.paddock_name}</span></>
-            )}
-            {isAudio && <span className="text-[9px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full uppercase tracking-widest">Audio</span>}
-            {isWhatsApp && (
-              <span className="flex items-center gap-0.5 text-[9px] font-black text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full uppercase tracking-widest">
-                <MessageCircle className="w-2.5 h-2.5" /> WA
-              </span>
-            )}
-            {/* Nombre del operario que envió el mensaje WA */}
-            {isWhatsApp && note.user_display_name && (
-              <span className="text-[10px] font-semibold text-gray-500 truncate max-w-[120px]">
-                {note.user_display_name}
-              </span>
-            )}
-            {needsReview && (
-              <span className="flex items-center gap-0.5 text-[9px] font-black text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full uppercase tracking-widest">
-                <AlertTriangle className="w-2.5 h-2.5" /> Revisar
-              </span>
-            )}
-            {note.is_pending && (
-              <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1" title="Se sincronizará cuando tengas internet">
-                <WifiOff className="w-2.5 h-2.5" /> Pendiente
-              </span>
-            )}
-          </div>
-
-          {/* Transcript preview — ocultar los placeholders de media fallido */}
-          {hasTranscript && !note.content?.startsWith('[') && (
-            <div className="mt-2" style={{ maxWidth: '100%', overflow: 'hidden' }}>
-              <p className={`text-sm text-gray-600 leading-relaxed ${!expanded ? 'line-clamp-2' : ''}`} style={{ overflowWrap: 'break-word', wordBreak: 'break-word', maxWidth: '100%' }}>
-                {note.content}
-              </p>
-              {note.content.length > 100 && (
-                <button onClick={() => setExpanded(e => !e)}
-                  className="flex items-center gap-1 text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1 hover:text-gray-600 transition-colors">
-                  {expanded ? <><ChevronUp className="w-3 h-3" />Ver menos</> : <><ChevronDown className="w-3 h-3" />Ver más</>}
-                </button>
-              )}
-            </div>
-          )}
-          {isAudio && !hasTranscript && (
-            <p className="text-xs text-gray-400 italic mt-1">Sin transcripción disponible</p>
-          )}
-        </div>
-
-        <div className="shrink-0 flex flex-col items-end gap-1">
-          {isAudio && note.audio_url ? (
-            <>
-              <audio src={note.audio_url} controls preload="none" className="h-8 w-36 rounded-lg" style={{ accentColor: '#ef4444' }} />
-              {note.audio_duration_secs != null && (
-                <span className="text-[10px] text-gray-300 tabular-nums">{fmtDuration(note.audio_duration_secs)}</span>
-              )}
-            </>
-          ) : isPhoto && note.photo_url ? (
-            <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 cursor-pointer hover:scale-105 transition-transform"
-              onClick={() => window.open(note.photo_url, '_blank')}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={note.photo_url} alt="foto" className="w-full h-full object-cover" />
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {/* WhatsApp AI Banner */}
-      {hasAI && onApplyWA && onDismissWA && (
-        <WhatsAppBanner
-          note={note}
-          onApply={() => onApplyWA(note)}
-          onDismiss={() => onDismissWA(note)}
-        />
-      )}
-      
-      {/* Actions */}
-      <div className="mt-3 flex items-center justify-end gap-1.5 pt-3 border-t border-gray-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
-        {!isAudio && !isPhoto && !note.is_pending && (
-          <button
-            onClick={() => onEdit(note)}
-            className="flex items-center justify-center p-2 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 transition-all"
-            title="Editar"
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
-        )}
-        <button
-          onClick={() => onDelete(note.id, !!note.is_pending)}
-          className="flex items-center justify-center p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all"
-          title="Eliminar"
-        >
-          <Trash2 className="w-4 h-4 text-red-500" />
-        </button>
-      </div>
     </div>
   )
 }
@@ -318,28 +74,34 @@ function NoteRow({ note, onDelete, onEdit, onApplyWA, onDismissWA }: {
 export default function BitacoraPage() {
   const { user } = useAuth()
   const { confirm, ConfirmModal } = useConfirm()
-  const pathname = usePathname()
   const router = useRouter()
   const { hasFeature } = usePlan()
   const canVoice = hasFeature('voice_bitacora')
-  const [notes, setNotes] = useState<any[]>([])
+
+  // ── Data ──────────────────────────────────────────────────────────────────
+  const [notes, setNotes] = useState<BitacoraEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [pendingOffline, setPendingOffline] = useState(0)
+
+  // ── Paddocks + Herds for selectors ────────────────────────────────────────
+  const [paddocks, setPaddocks] = useState<{ id: string; name: string }[]>([])
+  const [herds, setHerds] = useState<{ id: string; name: string }[]>([])
+
+  // ── UI state ──────────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [savingMsg, setSavingMsg] = useState('Subiendo...')
-  const [pendingOffline, setPendingOffline] = useState(0)
   const [search, setSearch] = useState('')
-  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
-  const [isFilterExpanded, setIsFilterExpanded] = useState(false)
-  const [showMobileHistory, setShowMobileHistory] = useState(true)
   const [historyTypeFilter, setHistoryTypeFilter] = useState<string | null>(null)
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
-  const [editingTextNote, setEditingTextNote] = useState<any | null>(null)
+  const [showMobileHistory, setShowMobileHistory] = useState(true)
+  const [editingTextNote, setEditingTextNote] = useState<BitacoraEntry | null>(null)
 
+  const monthNames = useMemo(() =>
+    ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+  , [])
 
-  const monthNames = useMemo(() => ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], []);
-
-  // Recording
+  // ── Recording ─────────────────────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -352,63 +114,61 @@ export default function BitacoraPage() {
   const [liveTranscript, setLiveTranscript] = useState('')
   const speechRef = useRef<any>(null)
 
-  // Photo
+  // ── Photo ──────────────────────────────────────────────────────────────────
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
-
-  // Text
   const [showTextMenu, setShowTextMenu] = useState(false)
   const [textNote, setTextNote] = useState('')
   const [showPhotoDetails, setShowPhotoDetails] = useState(false)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
-  // Ref to always access the latest saveNote without adding it to useEffect deps
   const saveNoteRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   // Geo
   const [lat, setLat] = useState<number | null>(null)
   const [lng, setLng] = useState<number | null>(null)
 
-  // ── Load notes ──────────────────────────────────────────────────────────────
+  // ─── Load paddocks + herds for selectors ───────────────────────────────────
+  useEffect(() => {
+    if (!user) return
+    apiFetch('/api/paddocks').then(r => r.ok && r.json()).then(d => {
+      if (d?.paddocks) setPaddocks(d.paddocks.map((p: any) => ({ id: p.id, name: p.name })))
+    }).catch(() => {})
+    apiFetch('/api/herds').then(r => r.ok && r.json()).then(d => {
+      if (d?.herds) setHerds(d.herds.map((h: any) => ({ id: h.id, name: h.name })))
+    }).catch(() => {})
+  }, [user])
+
+  // ─── Load notes ─────────────────────────────────────────────────────────────
   const loadNotes = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    let fetchedNotes: any[] = []
+    let fetchedRaw: any[] = []
 
-    // ── Paso 1: IndexedDB inmediata (única fuente de verdad) ──────────────
+    // Step 1: IndexedDB immediate
     try {
-      
       const localNotes = await dbGetAll('field_notes')
-      // Solo notas de bitácora (sin paddock_id)
       const bitacoraLocal = localNotes.filter((n: any) => !n.paddock_id)
       if (bitacoraLocal.length > 0) {
-        fetchedNotes = bitacoraLocal
-        setNotes(bitacoraLocal)
+        fetchedRaw = bitacoraLocal
+        setNotes(bitacoraLocal.map(mapRawNote))
         setLoading(false)
       }
     } catch { /* ignore */ }
 
-    // ── Paso 2: API en background ──────────────────────────────────────────
+    // Step 2: API background refresh
     try {
-      // bitacora_only=1 → solo notas sin paddock_id (notas de bitácora pura)
       const res = await apiFetch('/api/field-notes?bitacora_only=1')
       if (res.ok) {
-        fetchedNotes = (await res.json()).notes || []
-        // Guardar en IndexedDB — única fuente de verdad (sin localStorage)
-        
-        await dbUpsertMany('field_notes', fetchedNotes).catch(() => {})
-      } else {
-        throw new Error('API error')
+        fetchedRaw = (await res.json()).notes || []
+        await dbUpsertMany('field_notes', fetchedRaw).catch(() => {})
       }
-    } catch {
-      // fetchedNotes ya tiene lo que se cargó de IDB en el Paso 1
-    }
+    } catch { /* keep IDB data */ }
 
-    // ── Paso 3: Merge con pendientes del outbox (IndexedDB — sin localStorage) ─
+    // Step 3: Merge offline outbox
     try {
-      
       const pendingItems = await outboxGetAll()
       const pendingNotes = pendingItems.filter((item: any) => {
         try {
@@ -430,13 +190,10 @@ export default function BitacoraPage() {
           is_pending: true,
           title: body.title ?? 'Pendiente',
         }
-
         if (item.mediaType === 'photo' && item.mediaId) {
-          
           const photo = await getPendingPhoto(item.mediaId)
           if (photo?.blob) noteData.photo_url = URL.createObjectURL(photo.blob)
         } else if (item.mediaType === 'audio' && item.mediaId) {
-          
           const audio = await getPendingAudio(item.mediaId)
           if (audio?.blob) {
             noteData.audio_url = URL.createObjectURL(audio.blob)
@@ -447,10 +204,10 @@ export default function BitacoraPage() {
         return noteData
       }))
 
-      setNotes([...localNotes, ...fetchedNotes])
+      setNotes([...localNotes, ...fetchedRaw].map(mapRawNote))
     } catch (e) {
       console.error('Error merging offline notes:', e)
-      setNotes(fetchedNotes)
+      setNotes(fetchedRaw.map(mapRawNote))
     }
 
     setLoading(false)
@@ -458,7 +215,7 @@ export default function BitacoraPage() {
 
   useEffect(() => { loadNotes() }, [loadNotes])
 
-  // ── Count pending offline audios ────────────────────────────────────────────
+  // ─── Count pending offline ────────────────────────────────────────────────
   const refreshPending = useCallback(async () => {
     const count = await countPendingItems()
     setPendingOffline(count)
@@ -478,9 +235,9 @@ export default function BitacoraPage() {
       debounceTimer = setTimeout(() => {
         isLoadingRef = true
         loadNotes().finally(() => { isLoadingRef = false })
-      }, 3000) // 3s debounce
+      }, 3000)
     }
-    
+
     window.addEventListener('rodeo_queue_updated', queueHandler)
     window.addEventListener('rodeo_sync_completed', syncHandler)
     return () => {
@@ -490,7 +247,7 @@ export default function BitacoraPage() {
     }
   }, [refreshPending, loadNotes])
 
-  // ── Geo ─────────────────────────────────────────────────────────────────────
+  // ─── Geo ──────────────────────────────────────────────────────────────────
   const getLocation = () => {
     navigator.geolocation?.getCurrentPosition(
       pos => { setLat(pos.coords.latitude); setLng(pos.coords.longitude) },
@@ -498,14 +255,12 @@ export default function BitacoraPage() {
     )
   }
 
-  // ── Recording ───────────────────────────────────────────────────────────────
+  // ─── Recording ────────────────────────────────────────────────────────────
   const startRecording = async () => {
-    // Completely isolate audio state — clear everything before starting
     setAudioBlob(null); setAudioUrl(null); setLiveTranscript('')
-    setPhotoFile(null) // ensure photo state is clean
+    setPhotoFile(null)
     getLocation()
 
-    // Web Speech API for live transcript
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (SR) {
       const rec = new SR()
@@ -519,7 +274,6 @@ export default function BitacoraPage() {
       speechRef.current = rec
     }
 
-    // MediaRecorder for audio blob
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
@@ -548,11 +302,10 @@ export default function BitacoraPage() {
     setIsRecording(false)
   }
 
-  // ── Photo ───────────────────────────────────────────────────────────────────
+  // ─── Photo ────────────────────────────────────────────────────────────────
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    // Ensure audio state is clean before saving a photo note
     setAudioBlob(null); setAudioUrl(null); setLiveTranscript('')
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
@@ -561,21 +314,19 @@ export default function BitacoraPage() {
     getLocation()
   }
 
-  // ── Auto-save triggers — each guarded so they don't cross-fire ────────────
-  // Audio: only fires when we have a blob AND we are NOT recording (just stopped)
-  // It reads the blob directly; liveTranscript is always reset before recording starts
+  // ─── Auto-save audio on stop ──────────────────────────────────────────────
   useEffect(() => {
     if (audioBlob && !isRecording) saveNoteRef.current()
   }, [audioBlob, isRecording])
 
-  // ── Save ────────────────────────────────────────────────────────────────────
+  // ─── Save ──────────────────────────────────────────────────────────────────
   const saveNote = async () => {
     if (saving) return
     setSaving(true)
     const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
     const title = audioBlob ? `Audio · ${timestamp}` : photoFile ? `Foto · ${timestamp}` : 'Nota'
 
-    // ── OFFLINE path: audio
+    // OFFLINE path: audio
     if (!navigator.onLine && audioBlob) {
       setSavingMsg('Guardando sin conexión...')
       const id = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -585,14 +336,10 @@ export default function BitacoraPage() {
         transcript: liveTranscript,
       }
       await savePendingAudio(pa)
-      
       await enqueue({
-        type: 'field_note',
-        url: '/api/field-notes',
-        method: 'POST',
+        type: 'field_note', url: '/api/field-notes', method: 'POST',
         body: { paddock_id: null, tags: ['GENERAL'], title, content: liveTranscript || null, lat, lng, sync_status: 'PENDING' },
-        mediaType: 'audio',
-        mediaId: id,
+        mediaType: 'audio', mediaId: id,
         idempotency_key: `field_note-audio-${id}`,
       })
       await refreshPending()
@@ -600,20 +347,16 @@ export default function BitacoraPage() {
       flashSaved(); resetCapture(); return
     }
 
-    // ── OFFLINE path: photo
+    // OFFLINE path: photo
     if (!navigator.onLine && photoFile) {
       setSavingMsg('Guardando foto sin conexión...')
       const id = `local-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const blob = new Blob([await photoFile.arrayBuffer()], { type: photoFile.type })
       await savePendingPhoto({ id, blob, lat, lng, createdAt: new Date().toISOString(), title })
-      
       await enqueue({
-        type: 'field_note',
-        url: '/api/field-notes',
-        method: 'POST',
+        type: 'field_note', url: '/api/field-notes', method: 'POST',
         body: { paddock_id: null, tags: ['GENERAL'], title, content: textNote.trim() || null, lat, lng, sync_status: 'PENDING' },
-        mediaType: 'photo',
-        mediaId: id,
+        mediaType: 'photo', mediaId: id,
         idempotency_key: `field_note-photo-${id}`,
       })
       await refreshPending()
@@ -621,15 +364,12 @@ export default function BitacoraPage() {
       flashSaved(); resetCapture(); return
     }
 
-    // ── OFFLINE path: texto (y cualquier nota sin blob ni foto)
+    // OFFLINE path: text
     if (!navigator.onLine) {
       setSavingMsg('Guardando sin conexión...')
       const noteId = `field-note-text-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      
       await enqueue({
-        type: 'field_note',
-        url: '/api/field-notes',
-        method: 'POST',
+        type: 'field_note', url: '/api/field-notes', method: 'POST',
         body: { paddock_id: null, tags: ['GENERAL'], title, content: liveTranscript || null, lat, lng, sync_status: 'PENDING' },
         idempotency_key: `field_note-text-${noteId}`,
       })
@@ -638,13 +378,13 @@ export default function BitacoraPage() {
       flashSaved(); resetCapture(); return
     }
 
+    // ONLINE path
     try {
       let audio_url: string | null = null
       let photo_url: string | null = null
       let transcript = liveTranscript
 
       if (audioBlob) {
-        // 1. Upload blob
         setSavingMsg('Subiendo audio...')
         const ext = audioBlob.type.includes('mp4') ? 'mp4' : 'webm'
         const fd = new FormData()
@@ -653,7 +393,6 @@ export default function BitacoraPage() {
         const r = await apiFetch('/api/upload', { method: 'POST', body: fd })
         if (r.ok) { audio_url = (await r.json()).url }
 
-        // 2. Transcribe with Gemini (even if Speech API got something, Gemini is more accurate)
         setSavingMsg('Transcribiendo...')
         try {
           const tf = new FormData()
@@ -663,7 +402,7 @@ export default function BitacoraPage() {
             const d = await tr.json()
             if (d.transcript && !d.transcript.startsWith('[Sin voz detectable')) transcript = d.transcript
           }
-        } catch { /* keep Web Speech transcript as fallback */ }
+        } catch { /* keep Web Speech transcript */ }
       }
 
       if (photoFile) {
@@ -679,8 +418,8 @@ export default function BitacoraPage() {
         method: 'POST',
         body: JSON.stringify({
           paddock_id: null, tags: ['GENERAL'], title,
-          content: textNote.trim() || transcript || null, lat, lng,
-          audio_url, photo_url,
+          content: textNote.trim() || transcript || null,
+          lat, lng, audio_url, photo_url,
           audio_duration_secs: audioBlob ? recordSecsRef.current : null,
         }),
       })
@@ -701,11 +440,8 @@ export default function BitacoraPage() {
     if (!navigator.onLine) {
       setSavingMsg('Guardando sin conexión...')
       const txtId = `field-note-text-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      
       await enqueue({
-        type: 'field_note',
-        url: '/api/field-notes',
-        method: 'POST',
+        type: 'field_note', url: '/api/field-notes', method: 'POST',
         body: { paddock_id: null, tags: ['GENERAL'], title, content: textNote.trim(), lat, lng, sync_status: 'PENDING' },
         idempotency_key: `field_note-text-${txtId}`,
       })
@@ -717,35 +453,28 @@ export default function BitacoraPage() {
       setSavingMsg('Guardando nota...')
       await apiFetch('/api/field-notes', {
         method: 'POST',
-        body: JSON.stringify({
-          paddock_id: null, tags: ['GENERAL'], title,
-          content: textNote.trim(), lat, lng,
-        }),
+        body: JSON.stringify({ paddock_id: null, tags: ['GENERAL'], title, content: textNote.trim(), lat, lng }),
       })
       flashSaved(); resetCapture(); setShowTextMenu(false); setTextNote(''); loadNotes()
-    } catch (e) {
-      console.error('saveTextNote error:', e)
+    } catch {
       toast.error('No se pudo guardar la nota')
       setSaving(false)
     }
   }
 
   const updateTextNote = async () => {
-    if (saving || !editingTextNote || !editingTextNote.content.trim()) return
+    if (saving || !editingTextNote || !(editingTextNote.content || '').trim()) return
     setSaving(true)
     try {
       setSavingMsg('Actualizando nota...')
       await apiFetch(`/api/field-notes/${editingTextNote.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          content: editingTextNote.content.trim(),
-        }),
+        body: JSON.stringify({ content: (editingTextNote.content || '').trim() }),
       })
       toast.success('Nota actualizada')
       setEditingTextNote(null)
       loadNotes()
-    } catch (e) {
-      console.error('updateTextNote error:', e)
+    } catch {
       toast.error('No se pudo actualizar la nota')
     } finally {
       setSaving(false)
@@ -754,33 +483,26 @@ export default function BitacoraPage() {
 
   const deleteNote = async (id: string, isPending: boolean) => {
     if (isPending) {
-      // It's pending in offline queue, we should ideally remove it, but for simplicity we skip or notify
       toast.info('No se pueden eliminar notas pendientes hasta que se sincronicen.')
       return
     }
     const ok = await confirm({
       title: 'Eliminar nota',
-      description: '¿Estás seguro que deseas eliminar esta nota de la bitácora? Esta acción no se puede deshacer.',
+      description: '¿Estás seguro que deseas eliminar esta nota? Esta acción no se puede deshacer.',
       confirmLabel: 'Eliminar',
       cancelLabel: 'Cancelar',
-      variant: 'danger'
+      variant: 'danger',
     })
     if (!ok) return
-
     try {
       const res = await apiFetch(`/api/field-notes/${id}`, { method: 'DELETE' })
       if (res.ok) {
         setNotes(prev => prev.filter(n => n.id !== id))
         toast.success('Nota eliminada')
-      } else {
-        throw new Error('Error API')
-      }
-    } catch (e) {
-      toast.error('No se pudo eliminar la nota')
-    }
+      } else throw new Error('Error API')
+    } catch { toast.error('No se pudo eliminar la nota') }
   }
 
-  // Keep the ref in sync with the latest saveNote closure
   saveNoteRef.current = saveNote
 
   const flashSaved = () => { setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000) }
@@ -791,64 +513,25 @@ export default function BitacoraPage() {
     setShowPhotoDetails(false); setPhotoPreview(null)
   }
 
-  // ── Filtering ───────────────────────────────────────────────────────────────
-  const sorted = [...notes].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  
-  const availableMonths = useMemo(() => {
-    const months = new Set<string>();
-    notes.forEach(note => {
-      const d = new Date(note.created_at);
-      if (!isNaN(d.getTime())) months.add(monthNames[d.getMonth()]);
-    });
-    return Array.from(months);
-  }, [notes, monthNames]);
-
-  const filtered = search.trim() || historyTypeFilter || historyMonthFilter
-    ? sorted.filter(n => {
-        if (search.trim() && !(n.title?.toLowerCase().includes(search.toLowerCase()) || n.content?.toLowerCase().includes(search.toLowerCase()))) return false;
-        
-        let type = 'texto';
-        if (n.audio_url) type = 'audio';
-        else if (n.photo_url) type = 'foto';
-        else if (n.source === 'WHATSAPP') type = 'whatsapp';
-
-        if (historyTypeFilter) {
-          if (historyTypeFilter === 'audio' && type !== 'audio') return false;
-          if (historyTypeFilter === 'foto' && type !== 'foto') return false;
-          if (historyTypeFilter === 'texto' && type !== 'texto') return false;
-          if (historyTypeFilter === 'whatsapp' && n.source !== 'WHATSAPP') return false;
-        }
-
-        if (historyMonthFilter) {
-          const d = new Date(n.created_at);
-          if (!isNaN(d.getTime()) && monthNames[d.getMonth()] !== historyMonthFilter) return false;
-        }
-
-        return true;
-      })
-    : sorted
-  const grouped = groupByDate(filtered)
-
-  // ── WhatsApp: aplicar sugerencia al planificador ─────────────────────────────────
-  const handleApplyWA = async (note: any) => {
-    const ar = note.analysis_result ?? note.analysisResult
+  // ─── WhatsApp handlers ────────────────────────────────────────────────────
+  const handleApplyWA = async (note: BitacoraEntry) => {
+    const ar = note.analysis_result
     if (!ar) return
     try {
       await apiFetch(`/api/field-notes/${note.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: 'APPROVED' }),
       })
-      // Actualizar localmente
       setNotes(prev => prev.map(n =>
-        n.id === note.id ? { ...n, status: 'APPROVED', analysis_result: { ...ar, needsReview: false } } : n
+        n.id === note.id
+          ? { ...n, status: 'APPROVED', analysis_result: { ...ar, needsReview: false } }
+          : n
       ))
       toast.success('✅ Novedad aplicada al planificador')
-    } catch {
-      toast.error('No se pudo aplicar la sugerencia')
-    }
+    } catch { toast.error('No se pudo aplicar la sugerencia') }
   }
 
-  const handleDismissWA = async (note: any) => {
+  const handleDismissWA = async (note: BitacoraEntry) => {
     try {
       await apiFetch(`/api/field-notes/${note.id}`, {
         method: 'PATCH',
@@ -856,31 +539,97 @@ export default function BitacoraPage() {
       })
       setNotes(prev => prev.filter(n => n.id !== note.id))
       toast.success('Novedad descartada')
-    } catch {
-      toast.error('No se pudo descartar la sugerencia')
-    }
+    } catch { toast.error('No se pudo descartar la sugerencia') }
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  const handleAiResultSaved = (noteId: string, result: BitacoraAiResult) => {
+    setNotes(prev => prev.map(n =>
+      n.id === noteId ? { ...n, aiResult: result } : n
+    ))
+  }
+
+  // ─── Filtering ────────────────────────────────────────────────────────────
+  const sorted = [...notes].sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>()
+    notes.forEach(note => {
+      const d = new Date(note.createdAt)
+      if (!isNaN(d.getTime())) months.add(monthNames[d.getMonth()])
+    })
+    return Array.from(months)
+  }, [notes, monthNames])
+
+  const filtered = useMemo(() => {
+    return sorted.filter(n => {
+      if (search.trim() && !(
+        n.title?.toLowerCase().includes(search.toLowerCase()) ||
+        n.content?.toLowerCase().includes(search.toLowerCase())
+      )) return false
+
+      let type = 'texto'
+      if (n.mediaType === 'audio') type = 'audio'
+      else if (n.mediaType === 'image') type = 'foto'
+      else if (n.mediaType === 'video') type = 'video'
+      else if (n.source === 'WHATSAPP' || n.source === 'whatsapp') type = 'whatsapp'
+
+      if (historyTypeFilter) {
+        if (historyTypeFilter === 'audio' && type !== 'audio') return false
+        if (historyTypeFilter === 'foto' && type !== 'foto') return false
+        if (historyTypeFilter === 'video' && type !== 'video') return false
+        if (historyTypeFilter === 'texto' && type !== 'texto') return false
+        if (historyTypeFilter === 'whatsapp' && n.source !== 'WHATSAPP' && n.source !== 'whatsapp') return false
+      }
+
+      if (historyMonthFilter) {
+        const d = new Date(n.createdAt)
+        if (!isNaN(d.getTime()) && monthNames[d.getMonth()] !== historyMonthFilter) return false
+      }
+
+      return true
+    })
+  }, [sorted, search, historyTypeFilter, historyMonthFilter, monthNames])
+
+  // ─── Stats ────────────────────────────────────────────────────────────────
+  const ac = notes.filter(n => n.mediaType === 'audio').length
+  const ic = notes.filter(n => n.mediaType === 'image').length
+  const vc = notes.filter(n => n.mediaType === 'video').length
+  const tc = notes.filter(n => n.mediaType === 'text' && n.source !== 'WHATSAPP' && n.source !== 'whatsapp').length
+  const wc = process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true'
+    ? notes.filter(n => n.source === 'WHATSAPP' || n.source === 'whatsapp').length : 0
+  const pr = process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true'
+    ? notes.filter(n => (n.source === 'WHATSAPP' || n.source === 'whatsapp') && n.analysis_result?.needsReview).length : 0
+
+  const chips = [
+    { label: 'Audios', count: ac, key: 'audio' },
+    { label: 'Imágenes', count: ic, key: 'foto' },
+    ...(vc > 0 ? [{ label: 'Videos', count: vc, key: 'video' }] : []),
+    { label: 'Textos', count: tc, key: 'texto' },
+    ...(wc > 0 ? [{ label: 'WhatsApp', count: wc, key: 'whatsapp', highlight: pr > 0 ? pr : null }] : []),
+  ]
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="relative min-h-[calc(100vh-120px)] flex flex-col">
       <OnboardingTour
-        tourId="tour-bitacora-v1"
+        tourId="tour-bitacora-v2"
         steps={[
           {
             target: '.tour-bitacora-filtros',
             title: 'Busca y Filtra tus Notas',
-            content: 'Aquí puedes encontrar audios, fotos o notas de texto específicas en tu bitácora.'
+            content: 'Filtrá por audios, fotos, videos o mensajes de WhatsApp.',
           },
           {
             target: '.tour-bitacora-grabar',
             title: 'Graba una Nota de Voz',
-            content: 'Pulsa el botón rojo para grabar un audio. Se transcribirá automáticamente a texto si tienes conexión, o se guardará para sincronizarse más tarde.'
-          }
+            content: 'Pulsá el círculo rojo para grabar. Se transcribe automáticamente.',
+          },
         ]}
       />
 
-      {/* Header */}
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="pt-2 pb-2">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
@@ -888,39 +637,34 @@ export default function BitacoraPage() {
             <p className="text-sm font-semibold text-gray-500 mt-1">
               Registro de actividades · Notas de voz y fotos · Historial del campo
             </p>
-            <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit mt-3">
-              {(() => {
-                const ac = notes.filter(n => !!n.audio_url).length;
-                const ic = notes.filter(n => !!n.photo_url).length;
-                const tc = notes.filter(n => !n.audio_url && !n.photo_url && n.source !== 'WHATSAPP').length;
-                const wc = process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' ? notes.filter(n => n.source === 'WHATSAPP').length : 0;
-                const pr = process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' ? notes.filter(n => n.source === 'WHATSAPP' && (n.analysis_result ?? n.analysisResult)?.needsReview).length : 0;
-                return [
-                  { label: 'Audios', count: ac },
-                  { label: 'Imágenes', count: ic },
-                  { label: 'Textos', count: tc },
-                  ...(wc > 0 ? [{ label: 'WhatsApp', count: wc, highlight: pr > 0 ? pr : null }] : []),
-                ].map(s => (
-                  <div key={s.label} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-white text-gray-900 shadow-sm pointer-events-none select-none`}>
-                    {s.label}
-                    <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${
-                      (s as any).highlight ? 'bg-amber-500 text-white' : 'bg-gray-900 text-white'
-                    }`}>{s.count}</span>
-                    {(s as any).highlight && <span className="text-[9px] font-black text-amber-600">{(s as any).highlight} revisiones</span>}
-                  </div>
-                ));
-              })()}
+
+            {/* Stats chips */}
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-2xl w-fit mt-3 flex-wrap">
+              {chips.map(s => (
+                <div key={s.label} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-white text-gray-900 shadow-sm pointer-events-none select-none">
+                  {s.label}
+                  <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${
+                    (s as any).highlight ? 'bg-amber-500 text-white' : 'bg-gray-900 text-white'
+                  }`}>{s.count}</span>
+                  {(s as any).highlight && (
+                    <span className="text-[9px] font-black text-amber-600">{(s as any).highlight} revisiones</span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
+
           {pendingOffline > 0 && (
             <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
               <WifiOff className="w-3.5 h-3.5 text-amber-600" />
-              <span className="text-xs font-black text-amber-700">{pendingOffline} pendiente{pendingOffline > 1 ? 's' : ''}</span>
+              <span className="text-xs font-black text-amber-700">
+                {pendingOffline} pendiente{pendingOffline > 1 ? 's' : ''}
+              </span>
             </div>
           )}
         </div>
 
-        {/* Search & Filter Bar - unified like Agenda/Rodeos */}
+        {/* Search & Filter Bar */}
         <div className="tour-bitacora-filtros flex gap-3 flex-wrap items-center bg-white p-3 rounded-2xl border border-gray-100 shadow-sm mt-4">
           <div className="relative flex-1 min-w-[200px]">
             <div className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400">
@@ -938,14 +682,17 @@ export default function BitacoraPage() {
           <div className="flex items-center gap-2">
             <select
               value={historyTypeFilter || 'all'}
-              onChange={e => setHistoryTypeFilter(e.target.value === 'all' ? null : (e.target.value as any))}
+              onChange={e => setHistoryTypeFilter(e.target.value === 'all' ? null : e.target.value)}
               className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none cursor-pointer focus:ring-1 focus:ring-green-600"
             >
               <option value="all">Tipo</option>
               <option value="audio">Audios</option>
               <option value="foto">Imágenes</option>
+              {vc > 0 && <option value="video">Videos</option>}
               <option value="texto">Textos</option>
-              {process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' && <option value="whatsapp">WhatsApp</option>}
+              {process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' && (
+                <option value="whatsapp">WhatsApp</option>
+              )}
             </select>
 
             {availableMonths.length > 0 && (
@@ -955,65 +702,51 @@ export default function BitacoraPage() {
                 className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none cursor-pointer focus:ring-1 focus:ring-green-600"
               >
                 <option value="all">Mes</option>
-                {availableMonths.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
+                {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             )}
           </div>
         </div>
+
+        {/* Mobile toggle */}
         <div className="sm:hidden mt-6">
-          <button 
+          <button
             onClick={() => {
               setShowMobileHistory(!showMobileHistory)
               if (!showMobileHistory) {
                 setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100)
               }
-            }} 
-            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-200 shadow-sm rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-all">
+            }}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-200 shadow-sm rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-all"
+          >
             <span>{showMobileHistory ? 'Ocultar historial' : 'Ver historial de registros'} ({filtered.length})</span>
             {showMobileHistory ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
           </button>
         </div>
       </div>
 
-      {/* Notes list */}
+      {/* ── Grid ────────────────────────────────────────────────────────── */}
       <div className={`flex-1 pb-64 ${showMobileHistory ? 'block' : 'hidden sm:block'} mt-4 sm:mt-0`}>
-        {loading ? (
-          <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 text-gray-300 animate-spin" /></div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-32 text-gray-400">
-            <Mic2 className="w-12 h-12 mx-auto mb-4 opacity-10" />
-            <p className="text-sm font-bold text-gray-300 italic">
-              {search ? 'Sin resultados para esa búsqueda' : 'Presioná el círculo rojo para grabar'}
-            </p>
-          </div>
-        ) : (
-          Array.from(grouped.entries()).map(([dateLabel, dayNotes]) => (
-            <div key={dateLabel} className="mb-6">
-              <div className="py-2 sticky top-0 z-10">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{dateLabel}</span>
-              </div>
-              {dayNotes.map(note => <NoteRow
-                key={note.id}
-                note={note}
-                onDelete={deleteNote}
-                onEdit={setEditingTextNote}
-                onApplyWA={handleApplyWA}
-                onDismissWA={handleDismissWA}
-              />)}
-            </div>
-          ))
-        )}
+        <BitacoraGrid
+          entries={filtered}
+          loading={loading}
+          searchQuery={search}
+          paddocks={paddocks}
+          herds={herds}
+          onDelete={deleteNote}
+          onEdit={setEditingTextNote}
+          onApplyWA={handleApplyWA}
+          onDismissWA={handleDismissWA}
+          onAiResultSaved={handleAiResultSaved}
+        />
       </div>
 
-      {/* Capture area — pinned to bottom of viewport */}
+      {/* ── Capture area (FAB bottom) ────────────────────────────────── */}
       <div className="sticky bottom-0 left-0 right-0 mt-auto pb-24 sm:pb-6 px-8 pt-8 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent pointer-events-none z-50">
         <div className="max-w-md mx-auto flex flex-col items-center gap-8 pointer-events-auto">
 
           {isRecording ? (
             <div className="w-full flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
-              {/* Live transcript display */}
               {liveTranscript && (
                 <div className="w-full bg-gray-900/90 backdrop-blur-sm rounded-2xl px-4 py-3 max-h-24 overflow-y-auto">
                   <p className="text-xs text-gray-300 leading-relaxed">{liveTranscript}</p>
@@ -1055,14 +788,15 @@ export default function BitacoraPage() {
               </button>
             </div>
           ) : (
-            /* Plan no incluye voice — mostrar mensaje de upgrade */
             <div className="flex flex-col items-center gap-3 py-4">
               <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
                 <Lock className="w-7 h-7 text-gray-400" />
               </div>
               <div className="text-center">
                 <p className="text-sm font-black text-gray-700">Grabación de audio</p>
-                <p className="text-xs text-gray-400 mt-1">Disponible desde el plan <span className="font-bold text-gray-600">Planificador</span></p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Disponible desde el plan <span className="font-bold text-gray-600">Planificador</span>
+                </p>
               </div>
               <button onClick={() => router.push('/dashboard/planes')}
                 className="mt-1 px-5 py-2 text-xs font-black text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-all">
@@ -1073,7 +807,7 @@ export default function BitacoraPage() {
         </div>
       </div>
 
-      {/* Photo menu modal */}
+      {/* ── Photo menu modal ─────────────────────────────────────────── */}
       {showPhotoMenu && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/50 backdrop-blur-md px-4"
           onClick={() => setShowPhotoMenu(false)}>
@@ -1089,14 +823,12 @@ export default function BitacoraPage() {
               <h3 className="text-xl font-black text-gray-900 tracking-tight">Agregar imagen</h3>
               <p className="text-sm text-gray-500 mt-1">Seleccioná el origen de la foto</p>
             </div>
-            
             <div className="space-y-3">
               <button onClick={() => { setShowPhotoMenu(false); cameraRef.current?.click() }}
                 className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-600 text-white rounded-2xl hover:bg-green-700 transition-all font-bold">
                 <Camera className="w-4 h-4" />
                 <span>Tomar foto con la cámara</span>
               </button>
-              
               <button onClick={() => { setShowPhotoMenu(false); galleryRef.current?.click() }}
                 className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-50 text-green-700 rounded-2xl hover:bg-green-100 transition-all font-bold border border-green-200">
                 <ImageIcon className="w-4 h-4" />
@@ -1108,7 +840,7 @@ export default function BitacoraPage() {
         document.body
       )}
 
-      {/* Text menu modal */}
+      {/* ── Text menu modal ──────────────────────────────────────────── */}
       {showTextMenu && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/50 backdrop-blur-md px-4"
           onClick={() => setShowTextMenu(false)}>
@@ -1124,7 +856,6 @@ export default function BitacoraPage() {
               <h3 className="text-xl font-black text-gray-900 tracking-tight">Agregar texto</h3>
               <p className="text-sm text-gray-500 mt-1">Escribí tu nota de campo</p>
             </div>
-            
             <div className="space-y-4">
               <textarea
                 autoFocus
@@ -1133,8 +864,7 @@ export default function BitacoraPage() {
                 placeholder="Ej: Revisar el bebedero del fondo..."
                 className="w-full h-32 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
-              
-              <button 
+              <button
                 onClick={saveTextNote}
                 disabled={!textNote.trim() || saving}
                 className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-600 text-white rounded-2xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold">
@@ -1150,7 +880,7 @@ export default function BitacoraPage() {
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
       <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
 
-      {/* Photo details modal */}
+      {/* ── Photo details modal ──────────────────────────────────────── */}
       {showPhotoDetails && photoPreview && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/50 backdrop-blur-md px-4"
           onClick={() => resetCapture()}>
@@ -1159,17 +889,14 @@ export default function BitacoraPage() {
             <button onClick={() => resetCapture()} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors z-10">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
-            
             <div className="text-center mb-4 mt-2">
               <h3 className="text-xl font-black text-gray-900 tracking-tight">Detalles de la imagen</h3>
               <p className="text-sm text-gray-500 mt-1">Podés agregar una descripción (opcional)</p>
             </div>
-
             <div className="mb-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={photoPreview} alt="Vista previa" className="w-full h-40 object-cover rounded-xl border border-gray-200 shadow-sm" />
             </div>
-            
             <div className="space-y-4">
               <textarea
                 autoFocus
@@ -1178,8 +905,7 @@ export default function BitacoraPage() {
                 placeholder="Ej: Tranquera rota..."
                 className="w-full h-24 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
-              
-              <button 
+              <button
                 onClick={saveNote}
                 disabled={saving}
                 className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-600 text-white rounded-2xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold">
@@ -1192,7 +918,7 @@ export default function BitacoraPage() {
         document.body
       )}
 
-      {/* Edit text note modal */}
+      {/* ── Edit text note modal ──────────────────────────────────────── */}
       {editingTextNote && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/50 backdrop-blur-md px-4"
           onClick={() => setEditingTextNote(null)}>
@@ -1208,18 +934,16 @@ export default function BitacoraPage() {
               <h3 className="text-xl font-black text-gray-900 tracking-tight">Editar nota</h3>
               <p className="text-sm text-gray-500 mt-1">Modifica el texto guardado</p>
             </div>
-            
             <div className="space-y-4">
               <textarea
                 autoFocus
-                value={editingTextNote.content}
+                value={editingTextNote.content || ''}
                 onChange={e => setEditingTextNote({ ...editingTextNote, content: e.target.value })}
                 className="w-full h-32 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
-              
-              <button 
+              <button
                 onClick={updateTextNote}
-                disabled={saving || !editingTextNote.content.trim()}
+                disabled={saving || !(editingTextNote.content || '').trim()}
                 className="w-full flex items-center justify-center gap-3 py-3.5 bg-green-600 text-white rounded-2xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold">
                 {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
                 <span>Guardar cambios</span>

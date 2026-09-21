@@ -24,7 +24,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
-    const { paddock_id, tags, title, content, lat, lng, photo_url, audio_url, analysis_result, status } = body
+    const { paddock_id, tags, title, content, lat, lng, photo_url, audio_url, video_url, analysis_result, status } = body
     const category = Array.isArray(tags) && tags.length > 0 ? tags[0] : undefined
 
     // Build dynamic SET clause — only update fields that are explicitly provided in the request body
@@ -42,6 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if ('lng'             in body) push('lng',             lng ?? null)
     if ('photo_url'       in body) push('photo_url',       photo_url ?? null)
     if ('audio_url'       in body) push('audio_url',       audio_url ?? null)
+    if ('video_url'       in body) push('video_url',       video_url ?? null)
     if ('analysis_result' in body) push('analysis_result', analysis_result ? JSON.stringify(analysis_result) : null)
     if ('status'          in body) push('status',          status ?? null)
 
