@@ -40,8 +40,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const rawBody   = await req.text()
   const signature = req.headers.get('x-hub-signature-256') ?? ''
+
+  // Guard: si APP_SECRET no está configurado, el webhook no puede validar firmas.
+  // En ese caso logueamos una advertencia clara en lugar de rechazar silenciosamente.
+  if (!APP_SECRET) {
+    console.error('[WA Webhook] WHATSAPP_APP_SECRET no está configurado — todas las requests serán rechazadas. Verificar GitHub Secrets del entorno de Staging.')
+    return NextResponse.json({ error: 'Webhook misconfigured' }, { status: 500 })
+  }
+
   const expected  = `sha256=${createHmac('sha256', APP_SECRET).update(rawBody).digest('hex')}`
   if (signature !== expected) {
+    console.error(`[WA Webhook] Firma inválida — received="${signature.slice(0, 20)}..." expected="${expected.slice(0, 20)}..."`)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 

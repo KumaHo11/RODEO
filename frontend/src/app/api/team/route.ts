@@ -52,28 +52,30 @@ export async function GET(req: NextRequest) {
     }
 
     // Invitaciones por WhatsApp pendientes (whatsapp_links con is_active=false)
+    // CORRECCIÓN: el campo era `linked_at` (no existe) → corregido a `created_at`
     let waInvitations: any[] = []
     try {
       waInvitations = await serviceQuery(
         `SELECT id,
                 phone,
-                operator_name  AS email,        -- reutilizamos campo 'email' para nombre
+                operator_name  AS email,
+                operator_name,
                 role           AS team_role,
                 'PENDING'      AS status,
                 token_expires_at AS expires_at,
-                linked_at      AS created_at,
+                created_at,
                 activation_token AS token,
-                'whatsapp'     AS channel,
-                operator_name
+                'whatsapp'     AS channel
          FROM whatsapp_links
          WHERE org_id = $1
            AND is_active = false
            AND activation_token IS NOT NULL
-         ORDER BY linked_at DESC`,
+         ORDER BY created_at DESC`,
         [auth.orgId]
       )
     } catch (waErr: any) {
-      console.warn('[GET /api/team] whatsapp_links query failed:', waErr.message)
+      // Log completo del error SQL para diagnóstico — ya no es silencioso
+      console.error('[GET /api/team] whatsapp_links query FAILED:', waErr.message, waErr.code)
     }
 
     // Unir ambas listas: primero email, luego WA
