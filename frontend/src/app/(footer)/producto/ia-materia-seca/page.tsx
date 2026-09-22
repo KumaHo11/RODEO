@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { Camera, Brain, Satellite, Zap, CheckCircle, ArrowRight, TrendingUp, Clock, BarChart3 } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/producto/ia-materia-seca',
+  },
   title: 'IA Materia Seca por Foto | Rodeo AgTech',
   description: 'Estimá los kg de Materia Seca disponibles por hectárea con una simple foto desde el celular. Motor de IA Gemini calibrado con índices NDVI satelitales. Resultado en menos de 5 segundos.',
   keywords: ['materia seca', 'forraje disponible', 'pasturas', 'NDVI', 'inteligencia artificial ganadera', 'estimación de pasto', 'ganadería regenerativa', 'AgTech Argentina'],

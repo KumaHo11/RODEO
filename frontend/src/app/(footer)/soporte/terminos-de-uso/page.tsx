@@ -5,6 +5,9 @@ import { queryOne } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/soporte/terminos-de-uso',
+  },
   title: 'Términos de Uso | Rodeo AgTech',
   description: 'Términos y condiciones de uso de la plataforma Rodeo AgTech. Conocé tus derechos y obligaciones como usuario de la plataforma de gestión ganadera.',
 }

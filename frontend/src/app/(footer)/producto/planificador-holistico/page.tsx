@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { CalendarDays, ArrowRight, BarChart3, Brain, Sprout, TrendingUp, Target, Zap } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/producto/planificador-holistico',
+  },
   title: 'Planificador Holístico de Pastoreo | Rodeo AgTech',
   description: 'Planificá el pastoreo rotativo de tu establecimiento con vista Gantt anual. IA predictiva basada en Allan Savory para maximizar la recuperación de pasturas y la carga animal.',
   keywords: ['planificador holístico', 'pastoreo rotativo', 'ganado regenerativo', 'Allan Savory', 'planificación forrajera', 'rotación de potreros', 'ganadería sustentable'],

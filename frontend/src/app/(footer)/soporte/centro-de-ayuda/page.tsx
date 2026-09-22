@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowRight, ChevronDown, ChevronUp, MessageCircle } from 'lucide-react'
 
+
 const faqs = [
   {
     category: 'PRIMEROS PASOS',

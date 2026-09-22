@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { ArrowRight, Sprout, Globe, Zap, Heart } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/empresa/sobre-rodeo',
+  },
   title: 'Sobre Rodeo | La Plataforma AgTech de Ganadería Regenerativa',
   description: 'Conocé la historia de Rodeo AgTech: la plataforma latinoamericana de gestión ganadera con IA que está transformando el manejo holístico del campo.',
   keywords: ['Rodeo AgTech', 'empresa AgTech argentina', 'ganadería regenerativa tecnología', 'startups agro LATAM', 'software ganadero latinoamérica'],

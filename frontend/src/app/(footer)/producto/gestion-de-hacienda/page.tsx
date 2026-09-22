@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { Footprints, ArrowRight, BarChart3, Scale, Heart, Calendar, Users, TrendingUp } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/producto/gestion-de-hacienda',
+  },
   title: 'Gestión de Hacienda Digital | Rodeo AgTech',
   description: 'Gestioná rodeos, pesadas, pariciones, sanidad y Equivalente Vaca desde el celular. La planilla ganadera definitiva para el productor latinoamericano.',
   keywords: ['gestión de hacienda', 'rodeo ganadero', 'inventario bovino', 'equivalente vaca', 'software ganadero', 'manejo de rodeos'],

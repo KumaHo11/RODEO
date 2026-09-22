@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { ArrowRight, Download, Mail } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/empresa/prensa',
+  },
   title: 'Prensa | Rodeo AgTech — Kit de Medios y Contacto',
   description: 'Recursos de prensa de Rodeo AgTech: kit de medios, logotipos, datos de impacto y contacto para periodistas y medios especializados en agrotecnología y ganadería.',
   keywords: ['Rodeo AgTech prensa', 'AgTech Argentina medios', 'notas de prensa ganadería tecnología', 'kit de prensa agtech'],

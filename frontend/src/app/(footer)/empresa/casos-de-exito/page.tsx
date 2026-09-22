@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { ArrowRight, TrendingUp, MapPin, Quote } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/empresa/casos-de-exito',
+  },
   title: 'Casos de Éxito | Productores que Transformaron su Campo con Rodeo',
   description: 'Historias reales de ganaderos latinoamericanos que aumentaron su carga animal, optimizaron sus pasturas y adoptaron ganadería regenerativa con Rodeo AgTech.',
   keywords: ['casos de éxito ganadería', 'testimonios productores ganaderos', 'ganadería regenerativa resultados', 'pastoreo holístico resultados', 'AgTech casos de uso'],

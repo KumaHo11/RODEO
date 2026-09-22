@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { auth } from '@/lib/firebase/client'
 import { createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth'
 
+
 interface Country {
   name: { common: string }
   cca2: string

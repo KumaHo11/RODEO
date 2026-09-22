@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Calculator, ArrowRight, BarChart3, TrendingUp, CheckCircle, Smartphone, Zap, CheckCircle2 } from 'lucide-react'
 import { FormulasTab } from '@/app/dashboard/calculadora/components/FormulasTab'
 
+
 export default function CalculadoraGanaderaLanding() {
   const [calcTab, setCalcTab] = useState<'formulas'|'proyecciones'>('formulas')
 

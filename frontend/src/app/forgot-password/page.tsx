@@ -8,6 +8,7 @@ import RodeoLogo from '@/components/RodeoLogo'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Mail, Loader2, CheckCircle } from 'lucide-react'
 
+
 export default function ForgotPasswordPage() {
   const [email, setEmail]           = useState('')
   const [loading, setLoading]       = useState(false)

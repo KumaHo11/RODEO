@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { ArrowRight, ArrowLeft, Clock, User, Tag, WifiOff, Smartphone, Database, Zap } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/blog/tecnologia-campo-sin-internet',
+  },
   title: 'Tecnología para el Campo Real: Cómo Digitalizarte sin Depender de Internet | Blog Rodeo',
   description: 'El 65% del territorio ganadero de LATAM tiene conectividad limitada. La arquitectura Offline-First permite digitalizar tu campo independientemente de la señal.',
   keywords: ['app ganadera sin internet', 'digitalización campo rural', 'tecnología agro offline', 'software campo sin señal', 'AgTech zonas rurales', 'conectividad rural Argentina'],

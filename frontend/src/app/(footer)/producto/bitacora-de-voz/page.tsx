@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { Mic, WifiOff, ArrowRight, CheckCircle, Layers, Tag, ScanText, MapPin } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/producto/bitacora-de-voz',
+  },
   title: 'Bitácora de Voz con IA | Rodeo AgTech',
   description: 'Grabá notas de voz en campo sin internet. La IA transcribe y categoriza automáticamente tus observaciones de pasturas, sanidad, infraestructura y más. 100% offline.',
   keywords: ['bitácora de campo', 'notas de voz ganadería', 'gestión ganadera offline', 'transcripción IA', 'registro ganadero', 'planilla ganadera digital', 'AgTech Argentina Uruguay'],

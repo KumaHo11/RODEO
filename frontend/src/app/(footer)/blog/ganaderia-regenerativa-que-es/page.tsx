@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { ArrowRight, ArrowLeft, Clock, User, Tag, Sprout, TrendingUp, Leaf } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/blog/ganaderia-regenerativa-que-es',
+  },
   title: 'Ganadería Regenerativa: Cómo Aumentar tu Carga Animal mientras Regenerás el Suelo | Blog Rodeo',
   description: 'El manejo holístico de pastoreo puede duplicar la carga animal y regenerar suelos degradados al mismo tiempo. Todo sobre ganadería regenerativa y cómo aplicarla con tecnología.',
   keywords: ['ganadería regenerativa', 'pastoreo holístico', 'Allan Savory método', 'carbono ganadería', 'suelo ganadero', 'carga animal sostenible', 'pastizal regenerativo'],

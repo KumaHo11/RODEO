@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { WifiOff, ArrowRight, Zap, Shield, Database, RefreshCw, Smartphone, CheckCircle } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/producto/modo-offline',
+  },
   title: 'Modo Offline para Ganadería | Rodeo AgTech',
   description: 'Rodeo funciona 100% sin internet. Bitácora de voz, análisis de materia seca y gestión de hacienda disponibles en cualquier rincón del campo. Sincronización automática al recuperar señal.',
   keywords: ['app ganadera offline', 'software ganadero sin internet', 'gestión campo sin señal', 'app rural offline', 'sincronización de datos ganadería'],

@@ -6,6 +6,7 @@ import { auth } from '@/lib/firebase/client'
 import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth'
 import { Suspense } from 'react'
 
+
 function ResetPasswordForm() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')

@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { ArrowRight, ArrowLeft, Clock, User, Tag, Camera, TrendingDown, TrendingUp } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/blog/cuanto-pasto-tengo-hoy',
+  },
   title: '¿Cuánto pasto tenés hoy? La decisión que define la rentabilidad de tu campo | Blog Rodeo',
   description: 'El error en la estimación de materia seca le cuesta al ganadero latinoamericano entre el 20% y el 35% de su productividad anual. Descubrí cómo la IA está cambiando esto.',
   keywords: ['materia seca disponible', 'estimación de pasto', 'forraje bovino', 'pasturas rentables', 'manejo ganadero rentable', 'cuánto pasto tiene mi potrero'],

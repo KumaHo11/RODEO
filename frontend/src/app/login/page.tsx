@@ -13,6 +13,7 @@ import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { ArrowRight, Loader2, Eye, EyeOff, Mail, CheckCircle } from 'lucide-react'
 
+
 function LoginContent() {
   const { user, isLoading, profile } = useAuth()
   const router = useRouter()

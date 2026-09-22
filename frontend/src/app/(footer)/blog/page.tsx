@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { ArrowLeft, ArrowRight, Clock, User, Tag } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/blog',
+  },
   title: 'Blog | Rodeo AgTech — Ganadería, Pastoreo y Tecnología',
   description: 'Artículos sobre ganadería regenerativa, planificación holística de pastoreo, tecnología AgTech y gestión eficiente del establecimiento ganadero.',
   keywords: ['blog ganadería', 'ganadería regenerativa blog', 'pastoreo holístico artículos', 'AgTech noticias', 'manejo de campo'],

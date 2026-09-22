@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { CheckCircle, AlertCircle, Clock, ArrowRight } from 'lucide-react'
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: '/soporte/estado-del-servicio',
+  },
   title: 'Estado del Servicio | Rodeo AgTech',
   description: 'Monitoreo en tiempo real de todos los servicios de Rodeo AgTech: plataforma web, sincronización offline, análisis de IA y datos satelitales NDVI.',
 }
