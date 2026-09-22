@@ -582,19 +582,16 @@ export function AiAnalysisActions({
     let newHerdId    = activeHerdId
     try {
       if (pickerType === 'paddock') {
-        await apiFetch(`/api/field-notes/${note.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ paddock_id: id }),
-        })
+        // IMPORTANTE: NO hacemos PATCH paddock_id en la field_note.
+        // Si asignáramos paddock_id, la nota quedaría excluida del filtro
+        // bitacora_only=1 (WHERE paddock_id IS NULL) y desaparecería del feed
+        // tras recargar. El potrero seleccionado solo dirige el análisis IA.
         setLocalPaddockId(id)
         newPaddockId = id
         onAssignPaddock?.(note.id, id)
         setSelectedMode('biomass') // potrero → biomasa por defecto
       } else {
-        await apiFetch(`/api/field-notes/${note.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ rodeo_id: id }),
-        })
+        // Idem: NO persistimos rodeo_id en la field_note para no sacarla de Bitácora.
         setLocalHerdId(id)
         newHerdId = id
         onAssignHerd?.(note.id, id)
@@ -607,6 +604,7 @@ export function AiAnalysisActions({
     }
     handleDirectAnalyze(newPaddockId, newHerdId, selectedMode)
   }
+
 
   // ── Click del botón principal ─────────────────────────────────────────────
   const handleButtonClick = () => {
