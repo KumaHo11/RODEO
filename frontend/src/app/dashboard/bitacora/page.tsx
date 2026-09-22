@@ -1,6 +1,7 @@
 'use client'
 import { enqueue } from '@/lib/offline/outbox'
-import { dbGetAll, dbUpsertMany, outboxGetAll, dbGetOrg } from '@/lib/offline/db'
+import { dbGetAll, dbUpsertMany, dbUpsert, metaSet, outboxGetAll, dbGetOrg } from '@/lib/offline/db'
+
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
@@ -445,7 +446,7 @@ export default function BitacoraPage() {
       const photo_url = photo_urls.length > 0 ? photo_urls[0] : null
 
       setSavingMsg('Guardando nota...')
-      await apiFetch('/api/field-notes', {
+      const postRes = await apiFetch('/api/field-notes', {
         method: 'POST',
         body: JSON.stringify({
           paddock_id: null, tags: ['GENERAL'], title,
@@ -455,7 +456,21 @@ export default function BitacoraPage() {
         }),
       })
 
+      if (postRes.ok) {
+        // Upsert optimista en IDB: la nota nueva llega de inmediato al store local,
+        // sin depender del próximo prefetch ni de loadNotes() desde la red.
+        try {
+          const { note } = await postRes.clone().json()
+          if (note?.id) {
+            await dbUpsert('field_notes', note)
+            // Invalida el TTL para que el siguiente prefetch siempre refresque IDB
+            await metaSet('prefetch_ts_field_notes', 0)
+          }
+        } catch { /* no crítico — loadNotes() a continuación es el fallback */ }
+      }
+
       flashSaved(); resetCapture(); loadNotes()
+
     } catch (e) {
       console.error('saveNote error:', e)
       setSaving(false)
@@ -482,11 +497,21 @@ export default function BitacoraPage() {
 
     try {
       setSavingMsg('Guardando nota...')
-      await apiFetch('/api/field-notes', {
+      const postRes = await apiFetch('/api/field-notes', {
         method: 'POST',
         body: JSON.stringify({ paddock_id: null, tags: ['GENERAL'], title, content: textNote.trim(), lat, lng }),
       })
+      if (postRes.ok) {
+        try {
+          const { note } = await postRes.clone().json()
+          if (note?.id) {
+            await dbUpsert('field_notes', note)
+            await metaSet('prefetch_ts_field_notes', 0)
+          }
+        } catch { /* no crítico */ }
+      }
       flashSaved(); resetCapture(); setShowTextMenu(false); setTextNote(''); loadNotes()
+
     } catch {
       toast.error('No se pudo guardar la nota')
       setSaving(false)

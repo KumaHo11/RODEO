@@ -129,13 +129,16 @@ async function prefetchFarmEvents(token: string): Promise<void> {
 
 async function prefetchFieldNotes(token: string): Promise<void> {
   if (!(await needsRefresh('field_notes'))) return
-  const data = await safeFetch('/api/field-notes?limit=200', token)
+  // bitacora_only=1: solo notas sin paddock_id — evita contaminar el store IDB
+  // con notas de potrero que distorsionan el feed de Bitácora y los contadores.
+  const data = await safeFetch('/api/field-notes?bitacora_only=1&limit=200', token)
   if (!data) return
   const notes = data.notes ?? []
   await dbUpsertMany('field_notes', notes)
   await markFetched('field_notes')
-  console.log(`[prefetch] field_notes: ${notes.length} records`)
+  console.log(`[prefetch] field_notes (bitácora): ${notes.length} records`)
 }
+
 
 async function prefetchTasks(token: string): Promise<void> {
   if (!(await needsRefresh('tasks'))) return
