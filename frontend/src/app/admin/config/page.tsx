@@ -26,6 +26,12 @@ export default function AdminConfigPage() {
   const [saving, setSaving] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  // ── WhatsApp override por tenant ────────────────────────────────────────
+  type WaOverride = { id: string; name: string; plan_slug: string | null; whatsapp_enabled: boolean | null }
+  const [orgs, setOrgs] = useState<WaOverride[]>([])
+  const [orgsLoading, setOrgsLoading] = useState(false)
+  const [waSuccess, setWaSuccess] = useState<string | null>(null)
+
   const fetchConfig = useCallback(async () => {
     if (!user) return
     setLoading(true)
@@ -36,7 +42,17 @@ export default function AdminConfigPage() {
     } finally { setLoading(false) }
   }, [user])
 
-  useEffect(() => { fetchConfig() }, [fetchConfig])
+  const fetchOrgsWa = useCallback(async () => {
+    if (!user) return
+    setOrgsLoading(true)
+    try {
+      const token = await user.getIdToken()
+      const res = await fetch('/api/admin/organizations/whatsapp', { headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) setOrgs((await res.json()).orgs || [])
+    } finally { setOrgsLoading(false) }
+  }, [user])
+
+  useEffect(() => { fetchConfig(); fetchOrgsWa() }, [fetchConfig, fetchOrgsWa])
 
   async function handleSave(key: string) {
     if (!user) return
@@ -91,6 +107,70 @@ export default function AdminConfigPage() {
         </div>
       ) : (
         <div className="space-y-4 max-w-3xl">
+          {/* ── Override WhatsApp por tenant ────────────────────────────── */}
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div className="px-6 py-3.5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-gray-900 font-semibold text-sm">Módulo WhatsApp por Establecimiento</h3>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  Override manual del módulo WA por tenant. <code className="bg-gray-100 px-1 rounded">Hereda</code> = según el plan contratado.
+                </p>
+              </div>
+              {waSuccess && <span className="text-[10px] text-green-600 font-semibold">✓ Guardado</span>}
+            </div>
+            {orgsLoading ? (
+              <div className="px-6 py-6 text-center text-xs text-gray-400">Cargando establecimientos…</div>
+            ) : orgs.length === 0 ? (
+              <div className="px-6 py-6 text-center text-xs text-gray-400">No hay establecimientos para configurar.</div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {orgs.map(org => (
+                  <div key={org.id} className="px-6 py-3 flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{org.name}</p>
+                      <p className="text-[10px] text-gray-400">
+                        Plan: <strong>{org.plan_slug ?? 'sin plan'}</strong>
+                      </p>
+                    </div>
+                    {/* Tri-state: null (hereda) | true (activo) | false (inactivo) */}
+                    <div className="flex gap-1 flex-shrink-0">
+                      {([null, true, false] as const).map(val => {
+                        const labels: Record<string, string> = { 'null': 'Hereda', 'true': 'Activo', 'false': 'Inactivo' }
+                        const colors: Record<string, string> = {
+                          'null':  org.whatsapp_enabled === null  ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-500',
+                          'true':  org.whatsapp_enabled === true  ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500',
+                          'false': org.whatsapp_enabled === false ? 'bg-red-500 text-white'   : 'bg-gray-100 text-gray-500',
+                        }
+                        const k = String(val)
+                        return (
+                          <button
+                            key={k}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${colors[k]}`}
+                            onClick={async () => {
+                              if (!user) return
+                              const token = await user.getIdToken()
+                              await fetch(`/api/admin/organizations/whatsapp`, {
+                                method: 'PATCH',
+                                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ org_id: org.id, whatsapp_enabled: val }),
+                              })
+                              setOrgs(prev => prev.map(o => o.id === org.id ? { ...o, whatsapp_enabled: val } : o))
+                              setWaSuccess(org.id)
+                              setTimeout(() => setWaSuccess(null), 3000)
+                            }}
+                          >
+                            {labels[k]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Config items existentes ────────────────────────────────── */}
           {Object.entries(config).map(([category, items]) => (
             <div key={category} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
               <div className="px-6 py-3.5 border-b border-gray-100">

@@ -53,8 +53,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       vals.push(is_active)
     }
     if (permissions !== undefined) {
+      // Extraer el flag de WA de la matriz de permisos — se guarda en su propia columna
+      if (typeof permissions.whatsapp_bitacora === 'boolean') {
+        setClauses.push(`whatsapp_bitacora_enabled = $${i++}`)
+        vals.push(permissions.whatsapp_bitacora)
+      }
+      // El resto del objeto permissions va al JSONB
+      const { whatsapp_bitacora: _wa, ...restPerms } = permissions
       setClauses.push(`permissions = $${i++}::jsonb`)
-      vals.push(JSON.stringify(permissions))
+      vals.push(JSON.stringify(restPerms))
     }
     if (team_role !== undefined) {
       setClauses.push(`team_role = $${i++}`)

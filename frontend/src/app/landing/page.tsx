@@ -6,12 +6,13 @@ import Image from 'next/image'
 import {
   Map, Footprints, CalendarDays, Mic, Target, TrendingUp, Sprout,
   ArrowRight, Check, X, ChevronDown, ChevronLeft, ChevronRight, Building2, CheckCircle2,
-  Camera, WifiOff, Brain, BarChart3, Zap, Shield, Loader2, CloudRain, Leaf,
+  Camera, WifiOff, Brain, BarChart3, Zap, Shield, Loader2, CloudRain, Leaf, MessageCircle,
 } from 'lucide-react'
 import RodeoLogo from '@/components/RodeoLogo'
 import { FormulasTab } from '@/app/dashboard/calculadora/components/FormulasTab'
 import { event } from '@/lib/analytics'
 import { IconoRodeos } from '@/components/icons/IconoRodeos'
+
 
 interface ApiPlan {
   id: string; name: string; slug: string; description: string
@@ -159,6 +160,18 @@ export default function LandingPage() {
       accent: 'from-emerald-600 to-green-700',
     },
     {
+      Icon: MessageCircle,
+      tag: 'NUEVO · WHATSAPP',
+      title: 'Bitácora por WhatsApp — sin apps pesadas',
+      subtitle: 'Registrá desde el potrero como si mandaras un mensaje',
+      description:
+        'Envía audios, fotos y notas por WhatsApp directamente al campo, incluso sin señal. ' +
+        'Los mensajes se encolan y sincronizan automáticamente al recuperar cobertura. ' +
+        'Cero fricción, adopción inmediata por cualquier miembro del equipo — sin instalar nada.',
+      stats: [{ label: 'Canal', value: 'WhatsApp' }, { label: 'Modo', value: 'Online + Offline' }],
+      accent: 'from-green-500 to-emerald-700',
+    },
+    {
       Icon: Mic,
       tag: 'NUEVO · OFFLINE',
       title: 'Bitácora multimodal offline',
@@ -225,13 +238,14 @@ export default function LandingPage() {
 
   // Map API plans to display format
   const FLAG_LABELS: Record<string, string> = {
-    ndvi_access:      'Integración NDVI satelital',
-    ai_insights:      'IA Materia Seca por foto (Gemini)',
-    offline_mode:     'Modo Offline + sincronización diferida',
-    voice_bitacora:   'Bitácora de voz con transcripción IA',
-    advanced_reports: 'Reportes avanzados de producción',
-    api_access:       'Acceso API corporativa',
-    carbon_module:    'Módulo de Carbono y bonos (MRV)',
+    ndvi_access:        'Integración NDVI satelital',
+    ai_insights:        'IA Materia Seca por foto (Gemini)',
+    offline_mode:       'Modo Offline + sincronización diferida',
+    voice_bitacora:     'Bitácora de voz con transcripción IA',
+    whatsapp_bitacora:  'Bitácora directa por WhatsApp (online + offline)',
+    advanced_reports:   'Reportes avanzados de producción',
+    api_access:         'Acceso API corporativa',
+    carbon_module:      'Módulo de Carbono y bonos (MRV)',
   }
   const PLAN_META: Record<string, { cta: string; ctaStyle: string; icon: string }> = {
     brote:       { cta: 'Empezar gratis',         ctaStyle: 'border border-gray-300 text-gray-700 hover:bg-gray-50',                                         icon: '🌱' },

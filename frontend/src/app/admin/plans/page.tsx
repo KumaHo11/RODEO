@@ -34,6 +34,7 @@ const FLAG_TEMPLATES = [
   { flag_key: 'tareas',           label: 'Gestión de tareas',         flag_type: 'boolean' as const, default: false },
   { flag_key: 'equipo',           label: 'Gestión de equipo',         flag_type: 'boolean' as const, default: false },
   { flag_key: 'voice_bitacora',   label: 'Bitácora de voz + IA',      flag_type: 'boolean' as const, default: false },
+  { flag_key: 'whatsapp_bitacora', label: 'Bitácora por WhatsApp (canal WA)', flag_type: 'boolean' as const, default: false },
   // ─ Módulos avanzados (Holístico+) ─────────────────────────────────────────
   { flag_key: 'ai_insights',      label: 'Insights IA (Gemini)',      flag_type: 'boolean' as const, default: false },
   { flag_key: 'advanced_reports', label: 'Reportes avanzados',        flag_type: 'boolean' as const, default: false },

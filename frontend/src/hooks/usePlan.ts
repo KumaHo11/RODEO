@@ -10,6 +10,7 @@ export type FeatureKey =
   | 'ai_insights'           // Módulo Insights IA (Gemini)
   | 'offline_mode'          // App offline / caché
   | 'voice_bitacora'        // Audio en Bitácora
+  | 'whatsapp_bitacora'     // Bitácora por WhatsApp (canal WA)
   | 'advanced_reports'      // Reportes avanzados
   | 'api_access'            // Acceso API corporativa
   | 'carbon_module'         // Módulo Carbono (MRV)
@@ -41,6 +42,7 @@ const PLAN_DEFAULTS: Record<PlanType, Record<FeatureKey, boolean>> = {
     ai_insights:          false,
     offline_mode:         false,
     voice_bitacora:       false,
+    whatsapp_bitacora:    false,
     advanced_reports:     false,
     api_access:           false,
     carbon_module:        false,
@@ -57,6 +59,7 @@ const PLAN_DEFAULTS: Record<PlanType, Record<FeatureKey, boolean>> = {
     ai_insights:          false,
     offline_mode:         false,
     voice_bitacora:       true,
+    whatsapp_bitacora:    true,
     advanced_reports:     false,
     api_access:           false,
     carbon_module:        false,
@@ -73,6 +76,7 @@ const PLAN_DEFAULTS: Record<PlanType, Record<FeatureKey, boolean>> = {
     ai_insights:          true,
     offline_mode:         true,
     voice_bitacora:       true,
+    whatsapp_bitacora:    true,
     advanced_reports:     true,
     api_access:           false,
     carbon_module:        true,
@@ -89,6 +93,7 @@ const PLAN_DEFAULTS: Record<PlanType, Record<FeatureKey, boolean>> = {
     ai_insights:          true,
     offline_mode:         true,
     voice_bitacora:       true,
+    whatsapp_bitacora:    true,
     advanced_reports:     true,
     api_access:           true,
     carbon_module:        true,

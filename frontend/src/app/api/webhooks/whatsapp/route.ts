@@ -142,7 +142,50 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     return
   }
 
-  // ── 3. Canal activo — procesar novedad de campo ────────────────────────────
+  // ── 3. Validar permisos (Nivel 1: tenant, Nivel 2: miembro) ───────────────
+
+  // Nivel 1 — ¿el tenant tiene el módulo WhatsApp activo?
+  const orgRow = await serviceQueryOne<{
+    whatsapp_enabled: boolean | null
+    plan_slug: string | null
+  }>(
+    `SELECT o.whatsapp_enabled,
+            p.slug AS plan_slug
+     FROM organizations o
+     LEFT JOIN plans p ON p.id = o.plan_id
+     WHERE o.id = $1`,
+    [linkByPhone.org_id]
+  )
+  const WA_PLANS = ['planificador', 'pro_ganadero', 'holistico', 'pro_ganadero+', 'latifundio', 'enterprise']
+  const planDefaultEnabled = WA_PLANS.includes((orgRow?.plan_slug ?? '').toLowerCase())
+  const tenantEnabled = orgRow?.whatsapp_enabled ?? planDefaultEnabled
+
+  if (!tenantEnabled) {
+    await sendWhatsAppText(
+      phone,
+      '⚠️ El módulo de WhatsApp no está activo para este establecimiento. ' +
+      'Contactá al administrador o accedé desde un plan superior (Planificador, Holístico o Latifundio).'
+    )
+    return
+  }
+
+  // Nivel 2 — ¿el miembro tiene permiso individual de WA?
+  if (linkByPhone.profile_id) {
+    const profilePerms = await serviceQueryOne<{ whatsapp_bitacora_enabled: boolean }>(
+      'SELECT whatsapp_bitacora_enabled FROM profiles WHERE id = $1',
+      [linkByPhone.profile_id]
+    )
+    if (profilePerms?.whatsapp_bitacora_enabled === false) {
+      await sendWhatsAppText(
+        phone,
+        '⛔ Tu rol no tiene habilitado el canal de WhatsApp para este campo. ' +
+        'Contactá al administrador del establecimiento para que lo active.'
+      )
+      return
+    }
+  }
+
+  // ── 4. Canal activo — procesar novedad de campo ────────────────────
   // Deduplicación por wamid
   const existing = await serviceQueryOne<{ id: string }>(
     'SELECT id FROM field_notes WHERE whatsapp_msg_id = $1',

@@ -9,12 +9,14 @@ import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { toast } from 'sonner'
 import { usePermissions } from '@/lib/usePermissions'
+import { usePlan } from '@/hooks/usePlan'
+import { useRouter } from 'next/navigation'
 import {
   Users, Plus, Mail, Trash2, UserCheck, UserX,
   Shield, Wrench, Stethoscope, HelpCircle, Crown,
   Loader2, Check, X, Eye, Copy, CheckCheck,
   ChevronRight, Pencil, Save, Star, AlertCircle, BadgePlus,
-  MessageCircle, Phone, ExternalLink
+  MessageCircle, Phone, ExternalLink, Lock
 } from 'lucide-react'
 import { AppHeader } from '@/components/AppHeader'
 import { Button, FormField } from '@/design-system'
@@ -137,6 +139,9 @@ function RoleBadge({ roleId, customRoles }: { roleId?: string; customRoles: any[
 export default function EquipoPage() {
   const { user } = useAuth()
   const { isOwner } = usePermissions()
+  const { hasFeature } = usePlan()
+  const router = useRouter()
+  const hasWhatsApp = hasFeature('whatsapp_bitacora')
 
   const [members, setMembers]     = useState<any[]>([])
   const [invitations, setInvitations] = useState<any[]>([])
@@ -167,7 +172,7 @@ export default function EquipoPage() {
   // Copy link
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
-  // ── Invite modal state ─────────────────────────────────────────────────────
+  // ── Invite modal state ───────────────────────────────────────────────────
   const [modalOpen, setModalOpen]   = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteFirstName, setInviteFirstName] = useState('')
@@ -182,7 +187,10 @@ export default function EquipoPage() {
 
   // ── WhatsApp invite state ──────────────────────────────────────────────────
   type InviteChannel = 'email' | 'whatsapp'
-  const [inviteChannel, setInviteChannel] = useState<InviteChannel>(process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' ? 'whatsapp' : 'email')
+  // Default a WhatsApp solo si el plan tiene el feature Y la env var está habilitada
+  const [inviteChannel, setInviteChannel] = useState<InviteChannel>(
+    process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' && hasWhatsApp ? 'whatsapp' : 'email'
+  )
 
   const [waPhone, setWaPhone]           = useState('')
   const [waPhoneError, setWaPhoneError] = useState('')
@@ -905,6 +913,45 @@ export default function EquipoPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Canal WhatsApp — permiso individual por miembro */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">
+                  Canal WhatsApp
+                </label>
+                {hasWhatsApp ? (
+                  <div className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-gray-50 border border-gray-100">
+                    <div>
+                      <p className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                        <MessageCircle className="w-3.5 h-3.5 text-green-600" />
+                        Bitácora por WhatsApp
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        Puede enviar audios, fotos y textos al campo por WhatsApp
+                      </p>
+                    </div>
+                    <Toggle
+                      on={editPerms['whatsapp_bitacora'] !== false}
+                      onChange={() => setEditPerms(p => ({ ...p, whatsapp_bitacora: !p['whatsapp_bitacora'] }))}
+                    />
+                  </div>
+                ) : (
+                  <div className="px-3 py-3 rounded-xl bg-amber-50 border border-amber-100 flex items-start gap-2">
+                    <Lock className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-[11px] text-amber-700 leading-relaxed">
+                      <strong>Bitácora por WhatsApp</strong> está disponible en planes Planificador, Holístico y Latifundio.{' '}
+                      <button
+                        type="button"
+                        onClick={() => { setEditMember(null); router.push('/dashboard/planes') }}
+                        className="underline font-bold"
+                      >
+                        Ver planes →
+                      </button>
+                    </p>
+                  </div>
+                )}
+              </div>
+
 
               <div className="flex gap-3 pt-2">
                 <Button variant="secondary" className="flex-1 py-3" type="button" onClick={() => setEditMember(null)}>
