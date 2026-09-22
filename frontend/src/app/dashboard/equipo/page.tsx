@@ -179,7 +179,8 @@ export default function EquipoPage() {
   const [inviteLastName, setInviteLastName]   = useState('')
   const [inviteRole, setInviteRole]   = useState('CAPATAZ')
   const [invitePerms, setInvitePerms] = useState<Record<string, boolean>>(
-    ROLE_MAP['CAPATAZ'].defaultPermissions
+    { ...ROLE_MAP['CAPATAZ'].defaultPermissions }
+    // whatsapp_bitacora se agrega dinámicamente en el useEffect de abajo
   )
   const [inviting, setInviting]     = useState(false)
   const [inviteSent, setInviteSent] = useState(false)
@@ -289,6 +290,12 @@ export default function EquipoPage() {
 
   useEffect(() => { load() }, [load])
 
+  // Sincroniza whatsapp_bitacora en invitePerms cuando el plan resuelve
+  // (usePlan puede cargar async, por eso no podemos hacerlo en el useState inicial)
+  useEffect(() => {
+    setInvitePerms(prev => ({ ...prev, whatsapp_bitacora: hasWhatsApp }))
+  }, [hasWhatsApp])
+
   // ── Fix 3: Polling condicional para reflejar activaciones del webhook en tiempo real ──
   // Cada 10 segundos, si hay invitaciones de WA en estado pendiente, refresca los datos.
   // Esto permite que el chip de "Pendiente" cambie a "Miembro activo" sin recargar la página.
@@ -309,12 +316,11 @@ export default function EquipoPage() {
   const handleRoleChange = (roleId: string) => {
     setInviteRole(roleId)
     const preset = ROLE_MAP[roleId]
-    if (preset) {
-      setInvitePerms(preset.defaultPermissions)
-    } else {
-      const custom = customRoles.find(r => r.name === roleId)
-      setInvitePerms(custom?.permissions || EMPTY_PERMS)
-    }
+    const basePerms = preset
+      ? preset.defaultPermissions
+      : (customRoles.find(r => r.name === roleId)?.permissions || EMPTY_PERMS)
+    // Preservar el flag de WA según el plan — no lo pisamos al cambiar rol
+    setInvitePerms({ ...basePerms, whatsapp_bitacora: hasWhatsApp })
   }
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -1330,6 +1336,41 @@ export default function EquipoPage() {
                           />
                         </div>
                       ))}
+                      {/* WhatsApp Bitácora — solo visible si el plan lo incluye */}
+                      {process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === 'true' && (
+                        <div className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                          hasWhatsApp ? 'bg-white hover:bg-gray-50' : 'bg-gray-50 opacity-60'
+                        }`}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-gray-800 leading-tight flex items-center gap-1.5">
+                              {hasWhatsApp
+                                ? <MessageCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                                : <Lock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                              }
+                              Bitácora por WhatsApp
+                            </p>
+                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                              {hasWhatsApp
+                                ? 'Puede registrar notas de campo por WhatsApp'
+                                : 'Disponible desde el plan Planificador'
+                              }
+                            </p>
+                          </div>
+                          {hasWhatsApp ? (
+                            <Toggle
+                              on={invitePerms['whatsapp_bitacora'] !== false}
+                              onChange={() => setInvitePerms(p => ({ ...p, whatsapp_bitacora: !p['whatsapp_bitacora'] }))}
+                            />
+                          ) : (
+                            <span
+                              className="text-[9px] font-black px-2 py-1 rounded-full bg-amber-100 text-amber-600 cursor-pointer whitespace-nowrap"
+                              onClick={() => { setModalOpen(false); router.push('/dashboard/planes') }}
+                            >
+                              Upgrade →
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
