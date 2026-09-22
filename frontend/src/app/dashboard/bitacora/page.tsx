@@ -70,72 +70,6 @@ function Waveform({ active }: { active: boolean }) {
   )
 }
 
-// ─── Mobile FAB ───────────────────────────────────────────────────────────────
-function MobileFAB({
-  onRecord,
-  onPhoto,
-  onText,
-}: {
-  onRecord: () => void
-  onPhoto: () => void
-  onText: () => void
-}) {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <>
-      {open && <div className="fixed inset-0 z-40 bg-black/10 backdrop-blur-sm" onClick={() => setOpen(false)} />}
-      
-      {/* Action options — slide up when open */}
-      {open && (
-        <div className="fixed bottom-20 left-0 right-0 z-50 px-4 flex flex-col items-center gap-2.5 animate-in slide-in-from-bottom-8 fade-in duration-200 pointer-events-none">
-          <div className="flex flex-col gap-2.5 pointer-events-auto w-full max-w-[240px]">
-            <button
-              onClick={() => { setOpen(false); onRecord() }}
-              className="flex items-center gap-3 bg-white shadow-xl rounded-2xl pl-4 pr-5 py-3 border border-gray-100 active:scale-95 transition-all"
-            >
-              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
-                <Mic className="w-5 h-5 text-red-500" />
-              </div>
-              <span className="text-sm font-black text-gray-800 whitespace-nowrap">Grabar audio</span>
-            </button>
-            <button
-              onClick={() => { setOpen(false); onPhoto() }}
-              className="flex items-center gap-3 bg-white shadow-xl rounded-2xl pl-4 pr-5 py-3 border border-gray-100 active:scale-95 transition-all"
-            >
-              <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                <Camera className="w-5 h-5 text-green-600" />
-              </div>
-              <span className="text-sm font-black text-gray-800 whitespace-nowrap">Tomar foto</span>
-            </button>
-            <button
-              onClick={() => { setOpen(false); onText() }}
-              className="flex items-center gap-3 bg-white shadow-xl rounded-2xl pl-4 pr-5 py-3 border border-gray-100 active:scale-95 transition-all"
-            >
-              <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center shrink-0">
-                <FileText className="w-5 h-5 text-slate-600" />
-              </div>
-              <span className="text-sm font-black text-gray-800 whitespace-nowrap">Agregar texto</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Sticky bottom bar */}
-      <div className="sticky bottom-0 left-0 right-0 z-50 mt-auto bg-green-600 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] px-4 py-3 flex justify-center pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-black text-sm text-green-600 bg-white shadow-md active:scale-95 transition-all"
-          aria-label={open ? 'Cerrar menú' : 'Nuevo registro'}
-        >
-          {open ? <XIcon className="w-5 h-5" /> : <Plus className="w-5 h-5 stroke-[3]" />}
-          {open ? 'Cerrar' : 'Registrar'}
-        </button>
-      </div>
-    </>
-  )
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BitacoraPage() {
   const { user } = useAuth()
@@ -162,6 +96,7 @@ export default function BitacoraPage() {
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string | null>(null)
   const [showMobileHistory, setShowMobileHistory] = useState(true)
   const [editingTextNote, setEditingTextNote] = useState<BitacoraEntry | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const monthNames = useMemo(() =>
     ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -720,14 +655,53 @@ export default function BitacoraPage() {
             </div>
           </div>
 
-          {pendingOffline > 0 && (
-            <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
-              <WifiOff className="w-3.5 h-3.5 text-amber-600" />
-              <span className="text-xs font-black text-amber-700">
-                {pendingOffline} pendiente{pendingOffline > 1 ? 's' : ''}
-              </span>
+          <div className="flex items-center gap-2 shrink-0 self-start">
+            {pendingOffline > 0 && (
+              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 shrink-0">
+                <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                <span className="text-xs font-black text-amber-700 hidden sm:inline">
+                  {pendingOffline} pendiente{pendingOffline > 1 ? 's' : ''}
+                </span>
+                <span className="text-xs font-black text-amber-700 sm:hidden">
+                  {pendingOffline}
+                </span>
+              </div>
+            )}
+            
+            <div className="relative">
+              <button 
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-200 whitespace-nowrap shrink-0">
+                <Plus className="w-4 h-4 shrink-0" /> Nuevo registro
+              </button>
+              
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-50 flex flex-col gap-1">
+                     <button className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors" onClick={() => { setMenuOpen(false); startRecording() }}>
+                       <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                         <Mic className="w-4 h-4 text-red-500" />
+                       </div>
+                       <span className="text-sm font-bold text-gray-700">Grabar audio</span>
+                     </button>
+                     <button className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors" onClick={() => { setMenuOpen(false); setShowPhotoMenu(true) }}>
+                       <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center shrink-0">
+                         <Camera className="w-4 h-4 text-green-600" />
+                       </div>
+                       <span className="text-sm font-bold text-gray-700">Tomar foto</span>
+                     </button>
+                     <button className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors" onClick={() => { setMenuOpen(false); setShowTextMenu(true) }}>
+                       <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center shrink-0">
+                         <FileText className="w-4 h-4 text-slate-600" />
+                       </div>
+                       <span className="text-sm font-bold text-gray-700">Agregar texto</span>
+                     </button>
+                  </div>
+                </>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Search & Filter Bar */}
@@ -876,52 +850,37 @@ export default function BitacoraPage() {
         </div>
       </div>
 
-      {/* Mobile FAB — only on sm: and below */}
-      <div className="sm:hidden flex flex-col mt-auto">
-        {isRecording ? (
-          /* Full recording UI when active */
-          <div className="sticky bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 shadow-2xl px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5 flex flex-col items-center gap-4 animate-in slide-in-from-bottom-8 duration-300">
-            {liveTranscript && (
-              <div className="w-full bg-gray-900/90 rounded-2xl px-4 py-3 max-h-20 overflow-y-auto">
-                <p className="text-xs text-gray-300 leading-relaxed">{liveTranscript}</p>
-              </div>
-            )}
-            <Waveform active />
-            <span className="text-3xl font-black text-red-600 tabular-nums">{fmtDuration(recordSecs)}</span>
-            <button onClick={stopRecording}
-              className="w-20 h-20 rounded-full bg-white border-[6px] border-gray-100 flex items-center justify-center shadow-2xl active:scale-95 transition-all">
-              <div className="w-8 h-8 bg-red-600 rounded-sm shadow-inner" />
-            </button>
-          </div>
-        ) : saving ? (
-          <div className="sticky bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-2 shadow-2xl">
-            <Loader2 className="w-10 h-10 text-green-600 animate-spin" />
-            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{savingMsg}</p>
-          </div>
-        ) : saved ? (
-          <div className="sticky bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex justify-center animate-in zoom-in duration-300 shadow-2xl">
-            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center border border-green-100">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+      {/* Recording & Saving states - global overlays instead of fixed bottom bars */}
+      {(isRecording || saving || saved) && (
+        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col justify-end p-4 pointer-events-none">
+          {isRecording ? (
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-6 flex flex-col items-center gap-4 animate-in slide-in-from-bottom-8 duration-300 pointer-events-auto">
+              {liveTranscript && (
+                <div className="w-full bg-gray-900/90 rounded-2xl px-4 py-3 max-h-20 overflow-y-auto">
+                  <p className="text-xs text-gray-300 leading-relaxed">{liveTranscript}</p>
+                </div>
+              )}
+              <Waveform active />
+              <span className="text-3xl font-black text-red-600 tabular-nums">{fmtDuration(recordSecs)}</span>
+              <button onClick={stopRecording}
+                className="w-20 h-20 rounded-full bg-white border-[6px] border-gray-100 flex items-center justify-center shadow-2xl active:scale-95 transition-all">
+                <div className="w-8 h-8 bg-red-600 rounded-sm shadow-inner" />
+              </button>
             </div>
-          </div>
-        ) : canVoice ? (
-          /* FAB: sticky green bottom bar */
-          <MobileFAB
-            onRecord={startRecording}
-            onPhoto={() => setShowPhotoMenu(true)}
-            onText={() => setShowTextMenu(true)}
-          />
-        ) : (
-          /* Lock — plan upgrade */
-          <div className="sticky bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col items-center shadow-2xl">
-            <button onClick={() => router.push('/dashboard/planes')}
-              className="px-6 py-3 rounded-full bg-gray-900 text-white flex items-center gap-2 font-bold shadow-xl">
-              <Lock className="w-5 h-5" />
-              Ver planes
-            </button>
-          </div>
-        )}
-      </div>
+          ) : saving ? (
+            <div className="bg-white rounded-3xl border border-gray-100 p-6 flex flex-col items-center gap-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] pointer-events-auto w-fit mx-auto">
+              <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{savingMsg}</p>
+            </div>
+          ) : saved ? (
+            <div className="bg-white rounded-3xl border border-gray-100 p-6 flex justify-center animate-in zoom-in duration-300 shadow-[0_8px_30px_rgb(0,0,0,0.12)] pointer-events-auto w-fit mx-auto">
+              <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center border border-green-100">
+                <CheckCircle2 className="w-6 h-6 text-green-500" />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* ── Photo menu modal ─────────────────────────────────────────── */}
       {showPhotoMenu && typeof document !== 'undefined' && createPortal(
