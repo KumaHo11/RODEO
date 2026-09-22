@@ -14,7 +14,7 @@ import {
 import {
   Mic, Camera, Loader2, Image as ImageIcon,
   CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp,
-  Lock, MessageCircle, FileText,
+  Lock, MessageCircle, FileText, Plus, X as XIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
@@ -67,6 +67,68 @@ function Waveform({ active }: { active: boolean }) {
           }} />
       ))}
     </div>
+  )
+}
+
+// ─── Mobile FAB ───────────────────────────────────────────────────────────────
+function MobileFAB({
+  onRecord,
+  onPhoto,
+  onText,
+}: {
+  onRecord: () => void
+  onPhoto: () => void
+  onText: () => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
+      <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+        {open && (
+          <div className="flex flex-col items-end gap-2.5 animate-in slide-in-from-bottom-4 fade-in duration-200">
+            <button
+              onClick={() => { setOpen(false); onRecord() }}
+              className="flex items-center gap-3 bg-white shadow-xl rounded-2xl pl-4 pr-5 py-3 border border-gray-100 active:scale-95 transition-all"
+            >
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <Mic className="w-5 h-5 text-red-500" />
+              </div>
+              <span className="text-sm font-black text-gray-800 whitespace-nowrap">Grabar audio</span>
+            </button>
+            <button
+              onClick={() => { setOpen(false); onPhoto() }}
+              className="flex items-center gap-3 bg-white shadow-xl rounded-2xl pl-4 pr-5 py-3 border border-gray-100 active:scale-95 transition-all"
+            >
+              <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center shrink-0">
+                <Camera className="w-5 h-5 text-green-600" />
+              </div>
+              <span className="text-sm font-black text-gray-800 whitespace-nowrap">Tomar foto</span>
+            </button>
+            <button
+              onClick={() => { setOpen(false); onText() }}
+              className="flex items-center gap-3 bg-white shadow-xl rounded-2xl pl-4 pr-5 py-3 border border-gray-100 active:scale-95 transition-all"
+            >
+              <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5 text-slate-600" />
+              </div>
+              <span className="text-sm font-black text-gray-800 whitespace-nowrap">Agregar texto</span>
+            </button>
+          </div>
+        )}
+        <button
+          onClick={() => setOpen(o => !o)}
+          className={`flex items-center gap-2 px-5 py-3.5 rounded-full shadow-2xl font-black text-sm text-white transition-all active:scale-95 ${
+            open ? 'bg-gray-800 hover:bg-gray-700' : 'bg-emerald-600 hover:bg-emerald-500'
+          }`}
+          aria-label={open ? 'Cerrar menú' : 'Nuevo registro'}
+        >
+          {open ? <XIcon className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          {open ? 'Cerrar' : 'Registrar'}
+        </button>
+      </div>
+    </>
   )
 }
 
@@ -741,10 +803,13 @@ export default function BitacoraPage() {
         />
       </div>
 
-      {/* ── Capture area (FAB bottom) ────────────────────────────────── */}
-      <div className="sticky bottom-0 left-0 right-0 mt-auto pb-24 sm:pb-6 px-8 pt-8 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent pointer-events-none z-50">
-        <div className="max-w-md mx-auto flex flex-col items-center gap-8 pointer-events-auto">
+      {/* ── FAB (Floating Action Button) ─────────────────────────────── */}
+      {/* On mobile: single green "+" pill, expands to show record/photo/text.     */}
+      {/* On desktop: always-visible row (same as before, hidden behind sm:hidden). */}
 
+      {/* Desktop bar — unchanged, hidden on mobile */}
+      <div className="hidden sm:flex sticky bottom-0 left-0 right-0 mt-auto pb-6 px-8 pt-8 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent pointer-events-none z-50">
+        <div className="max-w-md mx-auto w-full flex flex-col items-center gap-8 pointer-events-auto">
           {isRecording ? (
             <div className="w-full flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
               {liveTranscript && (
@@ -805,6 +870,52 @@ export default function BitacoraPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Mobile FAB — only on sm: and below */}
+      <div className="sm:hidden">
+        {isRecording ? (
+          /* Full recording UI when active */
+          <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 shadow-2xl px-6 pb-8 pt-5 flex flex-col items-center gap-4 animate-in slide-in-from-bottom-8 duration-300">
+            {liveTranscript && (
+              <div className="w-full bg-gray-900/90 rounded-2xl px-4 py-3 max-h-20 overflow-y-auto">
+                <p className="text-xs text-gray-300 leading-relaxed">{liveTranscript}</p>
+              </div>
+            )}
+            <Waveform active />
+            <span className="text-3xl font-black text-red-600 tabular-nums">{fmtDuration(recordSecs)}</span>
+            <button onClick={stopRecording}
+              className="w-20 h-20 rounded-full bg-white border-[6px] border-gray-100 flex items-center justify-center shadow-2xl active:scale-95 transition-all">
+              <div className="w-8 h-8 bg-red-600 rounded-sm shadow-inner" />
+            </button>
+          </div>
+        ) : saving ? (
+          <div className="fixed bottom-6 inset-x-0 z-50 flex flex-col items-center gap-2">
+            <Loader2 className="w-10 h-10 text-gray-300 animate-spin" />
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{savingMsg}</p>
+          </div>
+        ) : saved ? (
+          <div className="fixed bottom-6 inset-x-0 z-50 flex justify-center animate-in zoom-in duration-300">
+            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center border border-green-100 shadow-lg">
+              <CheckCircle2 className="w-8 h-8 text-green-500" />
+            </div>
+          </div>
+        ) : canVoice ? (
+          /* FAB: single pill → expands */
+          <MobileFAB
+            onRecord={startRecording}
+            onPhoto={() => setShowPhotoMenu(true)}
+            onText={() => setShowTextMenu(true)}
+          />
+        ) : (
+          /* Lock — plan upgrade */
+          <div className="fixed bottom-6 right-5 z-50">
+            <button onClick={() => router.push('/dashboard/planes')}
+              className="w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-xl">
+              <Lock className="w-6 h-6" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Photo menu modal ─────────────────────────────────────────── */}

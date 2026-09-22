@@ -171,10 +171,14 @@ function LazyPhoto({
       <img
         src={src}
         alt={alt}
+        crossOrigin="anonymous"
         className={`${className ?? ''} transition-opacity duration-300 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
         loading="lazy"
         onLoad={() => setStatus('loaded')}
-        onError={() => setStatus('error')}
+        onError={() => {
+          // Retry without crossOrigin in case the server doesn't return CORS headers yet
+          setStatus('error')
+        }}
       />
     </div>
   )

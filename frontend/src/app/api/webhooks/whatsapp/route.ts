@@ -221,8 +221,8 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     `INSERT INTO field_notes
        (org_id, created_by, paddock_id, tags, category, title, content,
         audio_url, photo_url, video_url, audio_duration_secs, occurred_at,
-        source, status, whatsapp_phone, whatsapp_msg_id, sender_name)
-     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,$11,'WHATSAPP','APPROVED',$12,$13,$14)`,
+        source, status, whatsapp_phone, whatsapp_msg_id)
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,$11,'WHATSAPP','APPROVED',$12,$13)`,
     [
       linkByPhone.org_id,
       linkByPhone.profile_id,
@@ -237,12 +237,11 @@ async function processMessage(msg: any, waDisplayName: string | null) {
       occurredAt.toISOString(),
       phone,
       msgId,
-      waDisplayName,
     ]
   )
 
   console.log(`[WA Webhook] Nota guardada — wamid=${msgId} type=${msgType} audio=${!!audioUrl} photo=${!!photoUrl}`)
-  await sendWhatsAppText(phone, '✅ Registro recibido. El administrador lo revisará pronto.')
+  await sendWhatsAppText(phone, '✅ Registro recibido.')
 
 }
 
