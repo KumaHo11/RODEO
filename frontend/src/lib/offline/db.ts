@@ -108,102 +108,79 @@ let _dbPromise: Promise<IDBPDatabase<RodeoDBSchema>> | null = null
 
 function getDB(): Promise<IDBPDatabase<RodeoDBSchema>> {
   if (!_dbPromise) {
-    const doOpen = () => openDB<RodeoDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion) {
-        // ── v1 stores ──────────────────────────────────────────────────────
-        if (oldVersion < 1) {
-          // paddocks
-          const paddockStore = db.createObjectStore('paddocks', { keyPath: 'id' })
-          paddockStore.createIndex('by_updated', 'updated_at')
-
-          // herds
-          const herdStore = db.createObjectStore('herds', { keyPath: 'id' })
-          herdStore.createIndex('by_updated', 'updated_at')
-
-          // farm_events
-          const eventsStore = db.createObjectStore('farm_events', { keyPath: 'id' })
-          eventsStore.createIndex('by_updated', 'updated_at')
-          eventsStore.createIndex('by_date', 'data.event_date')
-
-          // field_notes
-          const notesStore = db.createObjectStore('field_notes', { keyPath: 'id' })
-          notesStore.createIndex('by_updated', 'updated_at')
-
-          // tasks
-          const tasksStore = db.createObjectStore('tasks', { keyPath: 'id' })
-          tasksStore.createIndex('by_updated', 'updated_at')
-
-          // organizations (single record per session)
-          db.createObjectStore('organizations', { keyPath: 'id' })
-
-          // grazing_plans
-          const plansStore = db.createObjectStore('grazing_plans', { keyPath: 'id' })
-          plansStore.createIndex('by_updated', 'updated_at')
-
-          // outbox
-          const outboxStore = db.createObjectStore('outbox', { keyPath: 'id' })
-          outboxStore.createIndex('by_created', 'created_at')
-          outboxStore.createIndex('by_type', 'type')
-
-          // meta
-          db.createObjectStore('meta', { keyPath: 'key' })
-        }
-
-        // ── v2 stores: calculadora + dashboard cache ─────────────────────
-        if (oldVersion < 2) {
-          // calculator_state — persistir inputs/resultados de la calculadora
-          if (!db.objectStoreNames.contains('calculator_state')) {
-            db.createObjectStore('calculator_state', { keyPath: 'id' })
-          }
-          // dashboard_cache — cachear datos computados del panel principal
-          if (!db.objectStoreNames.contains('dashboard_cache')) {
-            db.createObjectStore('dashboard_cache', { keyPath: 'id' })
-          }
-        }
-
-        // ── v3 stores: equipo + invitaciones ───────────────────────────
-        if (oldVersion < 3) {
-          // team_members — datos de miembros del equipo para uso offline
-          if (!db.objectStoreNames.contains('team_members')) {
-            const tmStore = db.createObjectStore('team_members', { keyPath: 'id' })
-            tmStore.createIndex('by_updated', 'updated_at')
-          }
-          // invitations — invitaciones pendientes (se envían al reconectar)
-          if (!db.objectStoreNames.contains('invitations')) {
-            const invStore = db.createObjectStore('invitations', { keyPath: 'id' })
-            invStore.createIndex('by_updated', 'updated_at')
-            invStore.createIndex('by_status', 'status')
-          }
-        }
-      },
-    })
-
-    _dbPromise = new Promise((resolve, reject) => {
-      let isResolved = false;
-      const timeout = setTimeout(() => {
-        if (!isResolved) {
-          console.warn('[DB] openDB timeout, dropping database and retrying...');
-          const req = indexedDB.deleteDatabase(DB_NAME);
-          req.onsuccess = () => resolve(doOpen());
-          req.onerror = () => reject(req.error);
-        }
-      }, 8000);
-
-      doOpen()
-        .then(db => {
-          isResolved = true;
-          clearTimeout(timeout);
-          resolve(db);
-        })
-        .catch(err => {
-          isResolved = true;
-          clearTimeout(timeout);
-          reject(err);
-        });
-    });
+    _dbPromise = openDBWithRetry()
   }
   return _dbPromise
 }
+
+function openDBWithRetry(attempt = 0): Promise<IDBPDatabase<RodeoDBSchema>> {
+  const promise = openDB<RodeoDBSchema>(DB_NAME, DB_VERSION, {
+    upgrade(db, oldVersion) {
+      // ── v1 stores ──────────────────────────────────────────────────────
+      if (oldVersion < 1) {
+        const paddockStore = db.createObjectStore('paddocks', { keyPath: 'id' })
+        paddockStore.createIndex('by_updated', 'updated_at')
+        const herdStore = db.createObjectStore('herds', { keyPath: 'id' })
+        herdStore.createIndex('by_updated', 'updated_at')
+        const eventsStore = db.createObjectStore('farm_events', { keyPath: 'id' })
+        eventsStore.createIndex('by_updated', 'updated_at')
+        eventsStore.createIndex('by_date', 'data.event_date')
+        const notesStore = db.createObjectStore('field_notes', { keyPath: 'id' })
+        notesStore.createIndex('by_updated', 'updated_at')
+        const tasksStore = db.createObjectStore('tasks', { keyPath: 'id' })
+        tasksStore.createIndex('by_updated', 'updated_at')
+        db.createObjectStore('organizations', { keyPath: 'id' })
+        const plansStore = db.createObjectStore('grazing_plans', { keyPath: 'id' })
+        plansStore.createIndex('by_updated', 'updated_at')
+        const outboxStore = db.createObjectStore('outbox', { keyPath: 'id' })
+        outboxStore.createIndex('by_created', 'created_at')
+        outboxStore.createIndex('by_type', 'type')
+        db.createObjectStore('meta', { keyPath: 'key' })
+      }
+      // ── v2 stores ──────────────────────────────────────────────────────
+      if (oldVersion < 2) {
+        if (!db.objectStoreNames.contains('calculator_state'))
+          db.createObjectStore('calculator_state', { keyPath: 'id' })
+        if (!db.objectStoreNames.contains('dashboard_cache'))
+          db.createObjectStore('dashboard_cache', { keyPath: 'id' })
+      }
+      // ── v3 stores ──────────────────────────────────────────────────────
+      if (oldVersion < 3) {
+        if (!db.objectStoreNames.contains('team_members')) {
+          const tmStore = db.createObjectStore('team_members', { keyPath: 'id' })
+          tmStore.createIndex('by_updated', 'updated_at')
+        }
+        if (!db.objectStoreNames.contains('invitations')) {
+          const invStore = db.createObjectStore('invitations', { keyPath: 'id' })
+          invStore.createIndex('by_updated', 'updated_at')
+          invStore.createIndex('by_status', 'status')
+        }
+      }
+    },
+  }).then(db => {
+    // ── Reset singleton cuando la conexión se cierra ────────────────────
+    // Esto ocurre en hot-reload, actualizaciones del SW, o cierres del navegador.
+    // Sin este handler, _dbPromise queda stale y todas las operaciones
+    // siguientes fallan con InvalidStateError: connection is closing.
+    db.addEventListener('close', () => {
+      console.warn('[db] Conexión IDB cerrada — reseteando singleton para reconexión.')
+      _dbPromise = null
+    })
+    return db
+  }).catch(err => {
+    // Resetear singleton en error para permitir reintento
+    _dbPromise = null
+    if (attempt < 2) {
+      console.warn(`[db] openDB falló (intento ${attempt + 1}), reintentando...`, err)
+      return new Promise<IDBPDatabase<RodeoDBSchema>>((resolve, reject) =>
+        setTimeout(() => openDBWithRetry(attempt + 1).then(resolve).catch(reject), 300 * (attempt + 1))
+      )
+    }
+    throw err
+  })
+  return promise
+}
+
 
 // ── Generic helpers ───────────────────────────────────────────────────────────
 

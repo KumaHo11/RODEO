@@ -28,7 +28,12 @@ export async function GET(req: NextRequest) {
     const paddockId     = searchParams.get('paddock_id')
     const source        = searchParams.get('source')        // 'WHATSAPP' | 'APP'
     const status        = searchParams.get('status')        // 'PENDING_REVIEW' | 'APPROVED'
-    const bitacoraOnly  = searchParams.get('bitacora_only') // '1' => paddock_id IS NULL only
+    // bitacora_only=1: feed cronológico unificado de la org.
+    // NO filtra por paddock_id IS NULL — la Bitácora muestra TODAS las notas
+    // del campo independientemente de si tienen potrero/rodeo asignado.
+    // El paddock_name se muestra como badge en la card (enriquecimiento),
+    // no como criterio de exclusión.
+    const bitacoraOnly  = searchParams.get('bitacora_only')
 
     let sql = `
       SELECT
@@ -45,14 +50,11 @@ export async function GET(req: NextRequest) {
     `
     const vals: any[] = [auth.orgId]
 
-    if (paddockId)    { sql += ` AND fn.paddock_id = $${vals.length + 1}`;   vals.push(paddockId) }
-    // bitacora_only: include ALL notes without a paddock assignment
-    // Notes that have a rodeo_id but no paddock_id still belong to the Bitácora feed.
-    // We do NOT filter by paddock_id IS NULL here — instead we exclude notes that belong
-    // exclusively to a paddock context (those are surfaced via the Potreros module).
-    if (bitacoraOnly === '1') { sql += ` AND fn.paddock_id IS NULL` }
-    if (source)       { sql += ` AND fn.source = $${vals.length + 1}`;      vals.push(source) }
-    if (status)       { sql += ` AND fn.status = $${vals.length + 1}`;      vals.push(status) }
+    if (paddockId) { sql += ` AND fn.paddock_id = $${vals.length + 1}`; vals.push(paddockId) }
+    // bitacoraOnly: no agrega filtro — devuelve todas las notas de la org.
+    // La exclusión por paddock ya se hace cuando se llama con ?paddock_id=X.
+    if (source)    { sql += ` AND fn.source = $${vals.length + 1}`;     vals.push(source) }
+    if (status)    { sql += ` AND fn.status = $${vals.length + 1}`;     vals.push(status) }
 
     sql += ` ORDER BY fn.created_at DESC LIMIT 200`
 

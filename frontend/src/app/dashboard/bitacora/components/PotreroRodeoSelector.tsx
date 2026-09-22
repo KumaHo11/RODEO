@@ -2,8 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { ChevronDown, MapPin } from 'lucide-react'
-import { apiFetch } from '@/lib/apiFetch'
-import { toast } from 'sonner'
+
 
 interface SelectorOption {
   id: string
@@ -110,35 +109,22 @@ export function PotreroRodeoSelector({
   const [localPotreroId, setLocalPotreroId] = useState(potreroId)
   const [localRodeoId, setLocalRodeoId] = useState(rodeoId)
 
-  const handlePotreroChange = useCallback(async (id: string) => {
-    const prev = localPotreroId
-    setLocalPotreroId(id) // optimistic
-    try {
-      await apiFetch(`/api/field-notes/${noteId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ paddock_id: id || null }),
-      })
-      onPotreroChange?.(id || null)
-    } catch {
-      setLocalPotreroId(prev)
-      toast.error('No se pudo actualizar el potrero')
-    }
-  }, [noteId, localPotreroId, onPotreroChange])
+  const handlePotreroChange = useCallback((id: string) => {
+    // Solo actualiza estado local.
+    // NO hacemos PATCH paddock_id en la field_note: si lo hiciéramos, la nota
+    // quedaría excluida del filtro bitacora_only=1 (WHERE paddock_id IS NULL)
+    // y desaparecería del feed de Bitácora tras recargar.
+    // El selector es puramente UI: enriquece la card y dirige el análisis IA.
+    setLocalPotreroId(id)
+    onPotreroChange?.(id || null)
+  }, [onPotreroChange])
 
-  const handleRodeoChange = useCallback(async (id: string) => {
-    const prev = localRodeoId
-    setLocalRodeoId(id) // optimistic
-    try {
-      await apiFetch(`/api/field-notes/${noteId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ rodeo_id: id || null }),
-      })
-      onRodeoChange?.(id || null)
-    } catch {
-      setLocalRodeoId(prev)
-      toast.error('No se pudo actualizar el rodeo')
-    }
-  }, [noteId, localRodeoId, onRodeoChange])
+  const handleRodeoChange = useCallback((id: string) => {
+    // Idem: solo estado local, sin PATCH en DB.
+    setLocalRodeoId(id)
+    onRodeoChange?.(id || null)
+  }, [onRodeoChange])
+
 
   if (paddocks.length === 0 && herds.length === 0) return null
 
