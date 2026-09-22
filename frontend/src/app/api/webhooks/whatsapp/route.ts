@@ -73,6 +73,7 @@ async function processPayload(body: any) {
   // Nombre del perfil de WA del primer contacto (puede ser null)
   const waDisplayName: string | null = value?.contacts?.[0]?.profile?.name ?? null
 
+  // Process messages sequentially to allow batch detection within the same payload
   for (const msg of value.messages) {
     await processMessage(msg, waDisplayName).catch(e =>
       console.error('[WhatsApp] processMessage error:', msg?.id, e?.message)
@@ -154,6 +155,8 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   let videoUrl:     string | null = null
   let content:      string | null = null
   let durationSecs: number | null = null
+  let waBatchId:    string | null = null
+  let isBatchFirst  = false   // true if this image is the first in a new batch
   const title = buildTitle(msgType)
 
   // Procesar media con try/catch individual: si falla el download/upload,
@@ -192,6 +195,39 @@ async function processMessage(msg: any, waDisplayName: string | null) {
         const path = `bitacora-photos/wa-${Date.now()}.${ext}`
         photoUrl = await uploadBufferToStorage(buffer, path, mimeType)
         content  = msg.image?.caption ?? null
+
+        // ── Image Batching ─────────────────────────────────────────────────
+        // Look for an existing batch from this sender in the last 30 seconds.
+        // If found and batch is not yet at max capacity (3), join it.
+        // Otherwise, start a new batch.
+        const BATCH_WINDOW_MS  = 30 * 1000
+        const MAX_BATCH_PHOTOS = 3
+        const cutoff = new Date(Date.now() - BATCH_WINDOW_MS).toISOString()
+
+        const existingBatch = await serviceQueryOne<{ wa_batch_id: string; batch_count: number }>(
+          `SELECT wa_batch_id,
+                  COUNT(*)::int AS batch_count
+           FROM field_notes
+           WHERE whatsapp_phone = $1
+             AND wa_batch_id IS NOT NULL
+             AND created_at >= $2
+             AND source = 'WHATSAPP'
+           GROUP BY wa_batch_id
+           ORDER BY MAX(created_at) DESC
+           LIMIT 1`,
+          [phone, cutoff]
+        )
+
+        if (existingBatch && existingBatch.batch_count < MAX_BATCH_PHOTOS) {
+          // Join existing batch — no ACK (the first image in the batch already sent it)
+          waBatchId  = existingBatch.wa_batch_id
+          isBatchFirst = false
+        } else {
+          // Start a new batch (or no grouping if batch is full)
+          waBatchId    = `wa-batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+          isBatchFirst = true
+        }
+
       } catch (mediaErr: any) {
         console.error(`[WA Webhook] Error al procesar imagen wamid=${msgId}: ${mediaErr?.message}`)
         content = msg.image?.caption ?? '[Imagen — no se pudo procesar]'
@@ -221,8 +257,8 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     `INSERT INTO field_notes
        (org_id, created_by, paddock_id, tags, category, title, content,
         audio_url, photo_url, video_url, audio_duration_secs, occurred_at,
-        source, status, whatsapp_phone, whatsapp_msg_id)
-     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,$11,'WHATSAPP','APPROVED',$12,$13)`,
+        source, status, whatsapp_phone, whatsapp_msg_id, wa_batch_id)
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,$11,'WHATSAPP','APPROVED',$12,$13,$14)`,
     [
       linkByPhone.org_id,
       linkByPhone.profile_id,
@@ -237,11 +273,16 @@ async function processMessage(msg: any, waDisplayName: string | null) {
       occurredAt.toISOString(),
       phone,
       msgId,
+      waBatchId,
     ]
   )
 
-  console.log(`[WA Webhook] Nota guardada — wamid=${msgId} type=${msgType} audio=${!!audioUrl} photo=${!!photoUrl}`)
-  await sendWhatsAppText(phone, '✅ Registro recibido.')
+  console.log(`[WA Webhook] Nota guardada — wamid=${msgId} type=${msgType} audio=${!!audioUrl} photo=${!!photoUrl} batch=${waBatchId ?? 'none'}`)
+
+  // Solo enviar ACK para: tipos que no son imagen, o primera imagen de un nuevo batch
+  if (msgType !== 'image' || isBatchFirst) {
+    await sendWhatsAppText(phone, '\u2705 Registro recibido.')
+  }
 
 }
 

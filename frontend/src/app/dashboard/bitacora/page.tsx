@@ -678,7 +678,7 @@ export default function BitacoraPage() {
               {menuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-50 flex flex-col gap-1">
+                  <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-50 flex flex-col gap-1">
                      <button className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors" onClick={() => { setMenuOpen(false); startRecording() }}>
                        <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center shrink-0">
                          <Mic className="w-4 h-4 text-red-500" />
@@ -781,101 +781,62 @@ export default function BitacoraPage() {
         />
       </div>
 
-      {/* ── FAB (Floating Action Button) ─────────────────────────────── */}
-      {/* On mobile: single green "+" pill, expands to show record/photo/text.     */}
-      {/* On desktop: always-visible row (same as before, hidden behind sm:hidden). */}
 
-      {/* Desktop bar — unchanged, hidden on mobile */}
-      <div className="hidden sm:flex sticky bottom-0 left-0 right-0 mt-auto pb-6 px-8 pt-8 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent pointer-events-none z-50">
-        <div className="max-w-md mx-auto w-full flex flex-col items-center gap-8 pointer-events-auto">
-          {isRecording ? (
-            <div className="w-full flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
-              {liveTranscript && (
-                <div className="w-full bg-gray-900/90 backdrop-blur-sm rounded-2xl px-4 py-3 max-h-24 overflow-y-auto">
-                  <p className="text-xs text-gray-300 leading-relaxed">{liveTranscript}</p>
-                </div>
-              )}
-              <div className="flex flex-col items-center gap-2">
-                <Waveform active />
-                <span className="text-3xl font-black text-red-600 tabular-nums tracking-tight">{fmtDuration(recordSecs)}</span>
-              </div>
-              <button onClick={stopRecording}
-                className="w-20 h-20 rounded-full bg-white border-[6px] border-gray-100 flex items-center justify-center shadow-2xl active:scale-95 transition-all">
-                <div className="w-8 h-8 bg-red-600 rounded-sm shadow-inner" />
-              </button>
-            </div>
-          ) : saving ? (
-            <div className="flex flex-col items-center gap-3 py-6">
-              <Loader2 className="w-10 h-10 text-gray-300 animate-spin" />
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{savingMsg}</p>
-            </div>
-          ) : saved ? (
-            <div className="flex flex-col items-center gap-4 py-8 animate-in zoom-in duration-300">
-              <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center border border-green-100">
-                <CheckCircle2 className="w-8 h-8 text-green-500" />
-              </div>
-            </div>
-          ) : canVoice ? (
-            <div className="flex items-center gap-14">
-              <button onClick={() => setShowPhotoMenu(true)}
-                className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all border border-gray-100 active:scale-95">
-                <Camera className="w-6 h-6" />
-              </button>
-              <button onClick={startRecording}
-                className="tour-bitacora-grabar w-24 h-24 rounded-full bg-white border-[6px] border-gray-100 flex items-center justify-center shadow-2xl hover:scale-105 active:scale-90 transition-all">
-                <div className="w-16 h-16 rounded-full bg-red-600 shadow-lg shadow-red-200" />
-              </button>
-              <button onClick={() => setShowTextMenu(true)}
-                className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all border border-gray-100 active:scale-95">
-                <FileText className="w-6 h-6" />
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-3 py-4">
-              <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
-                <Lock className="w-7 h-7 text-gray-400" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-black text-gray-700">Grabación de audio</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Disponible desde el plan <span className="font-bold text-gray-600">Planificador</span>
-                </p>
-              </div>
-              <button onClick={() => router.push('/dashboard/planes')}
-                className="mt-1 px-5 py-2 text-xs font-black text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-all">
-                Ver planes y contratar
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Recording & Saving states - global overlays instead of fixed bottom bars */}
+      {/* ── Recording & Saving overlays ──────────────────────────────── */}
       {(isRecording || saving || saved) && (
-        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col justify-end p-4 pointer-events-none">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center pointer-events-none">
+          {/* Backdrop — only when recording */}
+          {isRecording && (
+            <div className="absolute inset-0 bg-gray-950/30 backdrop-blur-[2px] pointer-events-auto" />
+          )}
+
           {isRecording ? (
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-6 flex flex-col items-center gap-4 animate-in slide-in-from-bottom-8 duration-300 pointer-events-auto">
+            <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-[0_20px_60px_-10px_rgba(0,0,0,0.25)] border border-gray-100/80 p-6 flex flex-col items-center gap-5 animate-in slide-in-from-bottom-6 duration-300 pointer-events-auto">
+              {/* Header */}
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Grabando</span>
+              </div>
+
+              {/* Live transcript */}
               {liveTranscript && (
-                <div className="w-full bg-gray-900/90 rounded-2xl px-4 py-3 max-h-20 overflow-y-auto">
+                <div className="w-full bg-gray-950 rounded-2xl px-4 py-3 max-h-24 overflow-y-auto">
                   <p className="text-xs text-gray-300 leading-relaxed">{liveTranscript}</p>
                 </div>
               )}
+
+              {/* Waveform */}
               <Waveform active />
-              <span className="text-3xl font-black text-red-600 tabular-nums">{fmtDuration(recordSecs)}</span>
-              <button onClick={stopRecording}
-                className="w-20 h-20 rounded-full bg-white border-[6px] border-gray-100 flex items-center justify-center shadow-2xl active:scale-95 transition-all">
-                <div className="w-8 h-8 bg-red-600 rounded-sm shadow-inner" />
+
+              {/* Timer */}
+              <span className="text-4xl font-black text-gray-900 tabular-nums tracking-tighter">
+                {fmtDuration(recordSecs)}
+              </span>
+
+              {/* Stop button — square red pill matching RODEO's button language */}
+              <button
+                onClick={stopRecording}
+                className="w-16 h-16 rounded-2xl bg-red-500 hover:bg-red-600 active:scale-95 transition-all shadow-lg shadow-red-200 flex items-center justify-center"
+                aria-label="Detener grabación"
+              >
+                <div className="w-6 h-6 bg-white rounded-[4px]" />
               </button>
+
+              <p className="text-[10px] text-gray-400 font-semibold">Toca para detener</p>
             </div>
           ) : saving ? (
-            <div className="bg-white rounded-3xl border border-gray-100 p-6 flex flex-col items-center gap-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] pointer-events-auto w-fit mx-auto">
-              <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
-              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{savingMsg}</p>
+            <div className="bg-white rounded-2xl border border-gray-100 px-6 py-5 flex items-center gap-4 shadow-[0_8px_30px_rgb(0,0,0,0.10)] pointer-events-auto animate-in slide-in-from-bottom-4 duration-200">
+              <Loader2 className="w-5 h-5 text-green-600 animate-spin shrink-0" />
+              <p className="text-sm font-bold text-gray-700">{savingMsg}</p>
             </div>
           ) : saved ? (
-            <div className="bg-white rounded-3xl border border-gray-100 p-6 flex justify-center animate-in zoom-in duration-300 shadow-[0_8px_30px_rgb(0,0,0,0.12)] pointer-events-auto w-fit mx-auto">
-              <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center border border-green-100">
-                <CheckCircle2 className="w-6 h-6 text-green-500" />
+            <div className="bg-white rounded-2xl border border-green-100 px-6 py-5 flex items-center gap-3 shadow-[0_8px_30px_rgb(0,0,0,0.10)] pointer-events-auto animate-in zoom-in-95 duration-300">
+              <div className="w-9 h-9 rounded-xl bg-green-50 border border-green-100 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-gray-900">¡Guardado!</p>
+                <p className="text-[10px] text-gray-400 font-medium">Registro en la bitácora</p>
               </div>
             </div>
           ) : null}

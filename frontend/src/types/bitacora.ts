@@ -53,8 +53,10 @@ export interface BitacoraEntry {
   video_url?: string
   thumbnailUrl?: string
   audio_duration_secs?: number
-  /** Multiple photos from a WhatsApp album send (same sender, ≤90s window) */
+  /** Multiple photos from a WhatsApp album send (same sender, ≤90s window or same wa_batch_id) */
   groupedPhotos?: string[]
+  /** Server-side batch ID assigned by the WhatsApp webhook to group album photos */
+  wa_batch_id?: string
 
   // Location
   paddock_id?: string
@@ -109,6 +111,7 @@ export function mapRawNote(raw: any): BitacoraEntry {
     photo_url: raw.photo_url,
     video_url: raw.video_url,
     audio_duration_secs: raw.audio_duration_secs,
+    wa_batch_id: raw.wa_batch_id ?? undefined,
     paddock_id: raw.paddock_id,
     paddock_name: raw.paddock_name,
     rodeo_id: raw.rodeo_id,
@@ -142,60 +145,103 @@ export function mapRawNote(raw: any): BitacoraEntry {
 }
 
 /**
- * Groups photo-only WA notes from the same sender within a 90-second window.
+ * Groups photo-only WA notes from the same sender.
+ *
+ * Primary strategy: group by wa_batch_id (server-assigned, max 3 photos).
+ * Fallback: group by sender + 90-second time window (for legacy entries without wa_batch_id).
+ *
  * Returns a deduplicated list where multi-photo sends become a single entry
  * with `groupedPhotos` populated.
  */
 export function groupWaPhotoEntries(entries: BitacoraEntry[]): BitacoraEntry[] {
-  const WINDOW_MS = 90 * 1000 // 90 seconds
+  const WINDOW_MS = 90 * 1000 // 90 seconds (fallback)
   const result: BitacoraEntry[] = []
   const consumed = new Set<string>()
 
-  for (let i = 0; i < entries.length; i++) {
-    const a = entries[i]
-    if (consumed.has(a.id)) continue
+  // ── Phase 1: group by wa_batch_id ─────────────────────────────────────────
+  const batchMap = new Map<string, BitacoraEntry[]>()
+  for (const entry of entries) {
+    const bid = entry.wa_batch_id
+    if (
+      bid &&
+      (entry.source === 'WHATSAPP' || entry.source === 'whatsapp') &&
+      entry.mediaType === 'image' &&
+      entry.photo_url
+    ) {
+      if (!batchMap.has(bid)) batchMap.set(bid, [])
+      batchMap.get(bid)!.push(entry)
+    }
+  }
 
-    const isWaPhoto =
-      (a.source === 'WHATSAPP' || a.source === 'whatsapp') &&
-      a.mediaType === 'image' &&
-      !!a.photo_url &&
-      !!a.sender_phone
+  for (const entry of entries) {
+    if (consumed.has(entry.id)) continue
 
-    if (!isWaPhoto) {
-      result.push(a)
+    const bid = entry.wa_batch_id
+    if (
+      bid &&
+      (entry.source === 'WHATSAPP' || entry.source === 'whatsapp') &&
+      entry.mediaType === 'image' &&
+      entry.photo_url
+    ) {
+      const group = batchMap.get(bid)!
+      // Mark all siblings as consumed
+      group.forEach(s => consumed.add(s.id))
+
+      if (group.length > 1) {
+        // Sort by createdAt asc so groupedPhotos array is chronological
+        const sorted = [...group].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        result.push({
+          ...sorted[0],
+          groupedPhotos: sorted.map(s => s.photo_url!),
+        })
+      } else {
+        result.push(entry)
+      }
       continue
     }
 
-    // Find siblings: same sender, same type, within 90s
-    const aTime = new Date(a.createdAt).getTime()
-    const siblings: BitacoraEntry[] = [a]
+    // ── Phase 2: fallback time-window grouping for entries without wa_batch_id ───
+    const isWaPhoto =
+      (entry.source === 'WHATSAPP' || entry.source === 'whatsapp') &&
+      entry.mediaType === 'image' &&
+      !!entry.photo_url &&
+      !!entry.sender_phone &&
+      !entry.wa_batch_id  // skip if already has a batch_id (handled above)
 
-    for (let j = i + 1; j < entries.length; j++) {
-      const b = entries[j]
-      if (consumed.has(b.id)) continue
+    if (!isWaPhoto) {
+      if (!consumed.has(entry.id)) result.push(entry)
+      consumed.add(entry.id)
+      continue
+    }
+
+    const aTime = new Date(entry.createdAt).getTime()
+    const siblings: BitacoraEntry[] = [entry]
+
+    for (const b of entries) {
+      if (consumed.has(b.id) || b.id === entry.id) continue
       const bTime = new Date(b.createdAt).getTime()
       if (Math.abs(bTime - aTime) > WINDOW_MS) continue
       if (
         (b.source === 'WHATSAPP' || b.source === 'whatsapp') &&
         b.mediaType === 'image' &&
-        b.sender_phone === a.sender_phone &&
-        b.photo_url
+        b.sender_phone === entry.sender_phone &&
+        b.photo_url &&
+        !b.wa_batch_id
       ) {
         siblings.push(b)
         consumed.add(b.id)
       }
     }
 
-    consumed.add(a.id)
+    consumed.add(entry.id)
 
     if (siblings.length > 1) {
-      // Merge into single entry with groupedPhotos
       result.push({
-        ...a,
+        ...entry,
         groupedPhotos: siblings.map(s => s.photo_url!),
       })
     } else {
-      result.push(a)
+      result.push(entry)
     }
   }
 

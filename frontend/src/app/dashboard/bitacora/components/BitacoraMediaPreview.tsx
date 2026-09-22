@@ -335,7 +335,7 @@ function PhotoPreview({ note }: { note: BitacoraEntry }) {
       {/* Album badge */}
       <div className="mt-1 flex items-center gap-1">
         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-          {photos.length} fotos · álbum WA
+          Álbum · {photos.length} fotos
         </span>
       </div>
 

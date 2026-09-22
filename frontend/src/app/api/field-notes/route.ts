@@ -35,15 +35,21 @@ export async function GET(req: NextRequest) {
         fn.*,
         COALESCE(p.first_name || ' ' || p.last_name, p.email) AS user_display_name,
         p.email         AS user_email,
-        pa.name         AS paddock_name
+        pa.name         AS paddock_name,
+        h.name          AS rodeo_name
       FROM field_notes fn
       LEFT JOIN profiles p  ON p.id = fn.created_by
       LEFT JOIN paddocks pa ON pa.id = fn.paddock_id
+      LEFT JOIN herds h     ON h.id  = fn.rodeo_id
       WHERE fn.org_id = $1
     `
     const vals: any[] = [auth.orgId]
 
     if (paddockId)    { sql += ` AND fn.paddock_id = $${vals.length + 1}`;   vals.push(paddockId) }
+    // bitacora_only: include ALL notes without a paddock assignment
+    // Notes that have a rodeo_id but no paddock_id still belong to the Bitácora feed.
+    // We do NOT filter by paddock_id IS NULL here — instead we exclude notes that belong
+    // exclusively to a paddock context (those are surfaced via the Potreros module).
     if (bitacoraOnly === '1') { sql += ` AND fn.paddock_id IS NULL` }
     if (source)       { sql += ` AND fn.source = $${vals.length + 1}`;      vals.push(source) }
     if (status)       { sql += ` AND fn.status = $${vals.length + 1}`;      vals.push(status) }
@@ -67,9 +73,9 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const {
-      paddock_id, tags, title, content,
+      paddock_id, rodeo_id, tags, title, content,
       lat, lng, photo_url, photo_urls, audio_url, video_url, analysis_result,
-      // audio_duration_secs — stored as comment until DB column is added
+      audio_duration_secs,
     } = body
 
     const normalizedTags: string[] = Array.isArray(tags) && tags.length > 0 ? tags : ['GENERAL']
@@ -77,22 +83,24 @@ export async function POST(req: NextRequest) {
 
     const { rows } = await serviceMutate(
       `INSERT INTO field_notes
-         (org_id, created_by, paddock_id, tags, category, title, content, lat, lng, photo_url, photo_urls, audio_url, video_url, analysis_result, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, NOW(), NOW())
+         (org_id, created_by, paddock_id, rodeo_id, tags, category, title, content, lat, lng, photo_url, photo_urls, audio_url, video_url, audio_duration_secs, analysis_result, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, NOW(), NOW())
        RETURNING *`,
       [
         auth.orgId, auth.profileId,
         paddock_id || null,
-        normalizedTags,              // ← native JS array → pg serializes as TEXT[] {GENERAL,...}
+        rodeo_id || null,
+        normalizedTags,
         category,
         title,
         content || null,
         lat || null,
         lng || null,
         photo_url || null,
-        photo_urls || [],            // ← native JS array for photo_urls TEXT[] column
+        photo_urls || [],
         audio_url || null,
         video_url || null,
+        audio_duration_secs || null,
         analysis_result ? JSON.stringify(analysis_result) : null,
       ]
     )
