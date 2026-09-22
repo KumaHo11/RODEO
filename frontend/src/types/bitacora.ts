@@ -109,7 +109,21 @@ export function mapRawNote(raw: any): BitacoraEntry {
     content: raw.content,
     audio_url: raw.audio_url,
     photo_url: raw.photo_url,
-    groupedPhotos: (raw.photo_urls && Array.isArray(raw.photo_urls) && raw.photo_urls.length > 0) ? raw.photo_urls : undefined,
+    groupedPhotos: (() => {
+      // Defensive: node-postgres may return text[] columns as a PG literal string
+      // like `{https://...,https://...}` instead of a real JS array.
+      // We normalize both representations so the UI always gets a proper string[].
+      let arr: any = raw.photo_urls
+      if (typeof arr === 'string' && arr.startsWith('{')) {
+        // PG text[] literal → strip braces, split on comma, handle quoted entries
+        arr = arr
+          .slice(1, -1)               // remove leading '{' and trailing '}'
+          .match(/(?:[^,"]|"[^"]*")+/g) // tokenize (handles quoted commas)
+          ?.map((s: string) => s.replace(/^"|"$/g, '').trim()) // strip quotes
+          .filter(Boolean) ?? []
+      }
+      return Array.isArray(arr) && arr.length > 0 ? (arr as string[]) : undefined
+    })(),
     video_url: raw.video_url,
     audio_duration_secs: raw.audio_duration_secs,
     wa_batch_id: raw.wa_batch_id ?? undefined,

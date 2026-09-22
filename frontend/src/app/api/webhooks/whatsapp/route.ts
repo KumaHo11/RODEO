@@ -19,12 +19,35 @@ import { transcribeAudio } from '@/lib/speechToText'
 import { uploadBufferToStorage } from '@/lib/firebase/storage-admin'
 import { serviceMutate, serviceQueryOne, getServicePool } from '@/lib/db'
 
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN!
-const APP_SECRET   = process.env.WHATSAPP_APP_SECRET!
+// Env vars declaradas al tope para usarlas en el health-check y en el handler
+const VERIFY_TOKEN    = process.env.WHATSAPP_VERIFY_TOKEN  ?? ''
+const APP_SECRET      = process.env.WHATSAPP_APP_SECRET    ?? ''
+const TOKEN           = process.env.WHATSAPP_TOKEN         ?? ''
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID ?? ''
 
-// ── GET: verificación del webhook ─────────────────────────────────────────────
+
+// ── GET: verificación del webhook + health-check ──────────────────────────────
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
+  const { searchParams, pathname } = new URL(req.url)
+
+  // ── Health-check rápido: GET /api/webhooks/whatsapp?health=1 ─────────────
+  // Permite verificar en segundos si las env vars críticas están presentes
+  // sin necesitar enviar un mensaje de WhatsApp real.
+  if (searchParams.get('health') === '1') {
+    const status = {
+      ok: true,
+      env: {
+        WHATSAPP_TOKEN:          TOKEN          ? `✅ configurado (${TOKEN.slice(0, 6)}…)`          : '❌ AUSENTE',
+        WHATSAPP_APP_SECRET:     APP_SECRET     ? `✅ configurado (${APP_SECRET.slice(0, 4)}…)`     : '❌ AUSENTE',
+        WHATSAPP_PHONE_NUMBER_ID: PHONE_NUMBER_ID ? `✅ configurado (${PHONE_NUMBER_ID.slice(0, 6)}…)` : '❌ AUSENTE',
+        WHATSAPP_VERIFY_TOKEN:   VERIFY_TOKEN   ? '✅ configurado' : '❌ AUSENTE',
+      },
+      ts: new Date().toISOString(),
+    }
+    const allOk = TOKEN && APP_SECRET && PHONE_NUMBER_ID && VERIFY_TOKEN
+    return NextResponse.json(status, { status: allOk ? 200 : 503 })
+  }
+
   const mode      = searchParams.get('hub.mode')
   const token     = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
@@ -34,6 +57,7 @@ export async function GET(req: NextRequest) {
   }
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 }
+
 
 // ── POST: mensajes entrantes ──────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -68,15 +92,29 @@ async function processPayload(body: any) {
   const entry   = body?.entry?.[0]
   const changes = entry?.changes?.[0]
   const value   = changes?.value
-  if (!value?.messages?.length) return
+
+  // Log completo del value para diagnóstico (status updates, reads receipts, etc.)
+  if (!value?.messages?.length) {
+    // Puede ser un status update (delivered, read) — no es un error, pero lo logueamos
+    // si viene algo inesperado para facilitar debugging.
+    const statusType = value?.statuses?.[0]?.status
+    if (statusType) {
+      console.log(`[WA Webhook] Status update recibido: ${statusType} — ignorado (no es un mensaje)`)
+    } else if (value) {
+      console.warn('[WA Webhook] Payload sin mensajes ni statuses conocidos:', JSON.stringify(value).slice(0, 300))
+    }
+    return
+  }
 
   // Nombre del perfil de WA del primer contacto (puede ser null)
   const waDisplayName: string | null = value?.contacts?.[0]?.profile?.name ?? null
 
+  console.log(`[WA Webhook] Procesando ${value.messages.length} mensaje(s) en payload`)
+
   // Process messages sequentially to allow batch detection within the same payload
   for (const msg of value.messages) {
     await processMessage(msg, waDisplayName).catch(e =>
-      console.error('[WhatsApp] processMessage error:', msg?.id, e?.message)
+      console.error('[WhatsApp] processMessage error:', msg?.id, e?.message, e?.stack?.slice(0, 500))
     )
   }
 }
@@ -323,8 +361,23 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   console.log(`[WA Webhook] Nota guardada — wamid=${msgId} type=${msgType} audio=${!!audioUrl} photo=${!!photoUrl} batch=${waBatchId ?? 'none'}`)
 
   // Solo enviar ACK para: tipos que no son imagen, o primera imagen de un nuevo batch
+  // Envuelto en try/catch propio: si el envío falla (token 401, límite de tasa, ventana 24h),
+  // el registro YA está guardado en DB — no revertir por error de confirmación.
   if (msgType !== 'image' || isBatchFirst) {
-    await sendWhatsAppText(phone, '\u2705 Registro recibido.')
+    try {
+      await sendWhatsAppText(phone, '\u2705 Registro recibido.')
+      console.log(`[WA Webhook] ACK enviado — phone=${phone} wamid=${msgId}`)
+    } catch (ackErr: any) {
+      // 401 = token expirado o inválido → pista explícita para el operador
+      const is401 = ackErr?.message?.includes('401') || ackErr?.message?.includes('190')
+      console.error(
+        `[WA Webhook] FALLO al enviar ACK (nota guardada OK) — phone=${phone} wamid=${msgId}\n` +
+        (is401
+          ? '  → CAUSA PROBABLE: WHATSAPP_TOKEN inválido o expirado. Verificar en Meta Business > System Users.'
+          : `  → ${ackErr?.message}`
+        )
+      )
+    }
   }
 
 }
