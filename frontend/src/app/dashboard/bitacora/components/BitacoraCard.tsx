@@ -316,6 +316,8 @@ export function BitacoraCard({
           externalPaddockId={localPaddockId}
           externalHerdId={localHerdId}
           onAiResultSaved={onAiResultSaved}
+          onAssignPaddock={handlePotreroChange}
+          onAssignHerd={handleRodeoChange}
         />
 
         {/* Edit/Delete */}

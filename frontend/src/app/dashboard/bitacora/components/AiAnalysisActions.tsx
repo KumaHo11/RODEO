@@ -511,6 +511,16 @@ export function AiAnalysisActions({
           method: 'PATCH',
           body: JSON.stringify({ dry_matter_kg_ha: inlineResult.dry_matter_kg_ha }),
         })
+        
+        await apiFetch(`/api/field-notes/${note.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            paddock_id: activePaddockId,
+            status: 'APPROVED',
+            analysis_result: { ...inlineResult, _mode: inlineMode, _source: 'bitacora_ai_committed' }
+          }),
+        })
+
         const aiResult: BitacoraAiResult = {
           analyzedAt: new Date().toISOString(),
           type: 'materia_seca',
@@ -521,6 +531,8 @@ export function AiAnalysisActions({
         }
         setLocalResult(aiResult)
         onAiResultSaved?.(note.id, aiResult)
+        onAssignPaddock?.(note.id, activePaddockId)
+        
         toast.success(
           `✅ ${(inlineResult.dry_matter_kg_ha ?? 0).toLocaleString('es')} kg MS/ha guardados en ${activePaddockName ?? 'el potrero'}`
         )
@@ -533,6 +545,16 @@ export function AiAnalysisActions({
             bcs_data:  inlineResult,
           }),
         })
+
+        await apiFetch(`/api/field-notes/${note.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            rodeo_id: activeHerdId,
+            status: 'APPROVED',
+            analysis_result: { ...inlineResult, _mode: inlineMode, _source: 'bitacora_ai_committed' }
+          }),
+        })
+
         const aiResult: BitacoraAiResult = {
           analyzedAt: new Date().toISOString(),
           type: 'condicion_corporal',
@@ -543,6 +565,8 @@ export function AiAnalysisActions({
         }
         setLocalResult(aiResult)
         onAiResultSaved?.(note.id, aiResult)
+        onAssignHerd?.(note.id, activeHerdId)
+
         toast.success(
           `✅ CC ${inlineResult.bcs_score}/5 guardado en ${activeHerdName ?? 'el rodeo'}`
         )
