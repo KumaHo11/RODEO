@@ -190,7 +190,7 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     `SELECT o.whatsapp_enabled,
             p.slug AS plan_slug
      FROM organizations o
-     LEFT JOIN plans p ON p.id = o.plan_id
+     LEFT JOIN subscriptions_plans p ON p.id = o.subscription_plan_id
      WHERE o.id = $1`,
     [linkByPhone.org_id]
   )
