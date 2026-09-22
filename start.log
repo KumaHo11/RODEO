@@ -6,22 +6,17 @@
 Frontend: http://localhost:3000
 Backend: http://localhost:3001
 Parser: http://localhost:8000
-[dotenv@17.3.1] injecting env (3) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+[dotenv@17.3.1] injecting env (3) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
 
 > frontend@0.1.0 dev
 > next dev --webpack
 
 Backend server listening on port 3001
-⚠ Port 3000 is in use by process 10380, using available port 3002 instead.
-▲ Next.js 16.2.1 (webpack)
-- Local:         http://localhost:3002
-- Network:       http://192.168.100.5:3002
+▲ Next.js 16.2.9 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.100.5:3000
 - Environments: .env.local, .env
-✓ Ready in 289ms
-/Users/javi/RODEO/parser_service/venv/lib/python3.9/site-packages/google/auth/__init__.py:54: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
-  warnings.warn(eol_message.format("3.9"), FutureWarning)
-/Users/javi/RODEO/parser_service/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
+✓ Ready in 287ms
 ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
  We detected multiple lockfiles and selected the directory of /Users/javi/RODEO/package-lock.json as the root directory.
  To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
@@ -29,24 +24,289 @@ Backend server listening on port 3001
  Detected additional lockfiles: 
    * /Users/javi/RODEO/frontend/package-lock.json
 
-⨯ Another next dev server is already running.
-
-- Local:        http://localhost:3000
-- PID:          10380
-- Dir:          /Users/javi/RODEO/frontend
-- Log:          .next/dev/logs/next-development.log
-
-Run kill 10380 to stop it.
-[?25h
+/Users/javi/RODEO/parser_service/venv/lib/python3.9/site-packages/google/auth/__init__.py:54: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/javi/RODEO/parser_service/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
 /Users/javi/RODEO/parser_service/venv/lib/python3.9/site-packages/google/oauth2/__init__.py:40: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
   warnings.warn(eol_message.format("3.9"), FutureWarning)
-INFO:     Started server process [12823]
+INFO:     Started server process [96911]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-./start_all.sh: line 15: 12822 Terminated: 15          node index.js
-INFO:     Shutting down
+ERROR:    [Errno 48] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [12823]
-./start_all.sh: line 31: 12823 Terminated: 15          uvicorn app.main:app --host 0.0.0.0 --port 8000
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+
+ HEAD /api/paddocks 401 in 2.4s (next.js: 2.3s, proxy.ts: 63ms, application-code: 14ms)
+○ Compiling /dashboard ...
+ GET /dashboard 200 in 4.2s (next.js: 3.9s, proxy.ts: 117ms, application-code: 171ms)
+ GET /api/config/menu 200 in 1344ms (next.js: 1005ms, proxy.ts: 3ms, application-code: 336ms)
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+ GET /api/notifications 200 in 790ms (next.js: 338ms, proxy.ts: 4ms, application-code: 448ms)
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790083217894 200 in 604ms (next.js: 277ms, proxy.ts: 4ms, application-code: 323ms)
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790083218477 200 in 91ms (next.js: 1076µs, proxy.ts: 3ms, application-code: 87ms)
+ GET /api/herds 200 in 1091ms (next.js: 942ms, proxy.ts: 12ms, application-code: 137ms)
+ GET /api/paddocks 200 in 1115ms (next.js: 942ms, proxy.ts: 12ms, application-code: 161ms)
+ GET /api/organizations 200 in 1152ms (next.js: 943ms, proxy.ts: 12ms, application-code: 197ms)
+ GET /api/grazing-plans 200 in 1319ms (next.js: 942ms, proxy.ts: 13ms, application-code: 364ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 1022ms (next.js: 494ms, proxy.ts: 74ms, application-code: 454ms)
+[mercado] SIO Carnes web fetch failed: fetch failed
+[mercado] Using hardcoded INMAG/INSC fallback value
+ GET /api/mercado 200 in 1614ms (next.js: 989ms, proxy.ts: 3ms, application-code: 621ms)
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+ GET /api/users/onboarding-status?tourId=dashboard-tour-v1 200 in 764ms (next.js: 685ms, proxy.ts: 10ms, application-code: 69ms)
+ GET /api/herds 200 in 552ms (next.js: 436ms, proxy.ts: 4ms, application-code: 113ms)
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790083218922 200 in 686ms (next.js: 569ms, proxy.ts: 4ms, application-code: 114ms)
+ GET /api/paddocks 200 in 93ms (next.js: 2ms, proxy.ts: 1726µs, application-code: 89ms)
+ GET /api/farm-events 200 in 1093ms (next.js: 925ms, proxy.ts: 2ms, application-code: 166ms)
+ GET /api/organizations 200 in 179ms (next.js: 3ms, proxy.ts: 7ms, application-code: 168ms)
+ GET /api/farm-events?limit=500 200 in 223ms (next.js: 5ms, proxy.ts: 7ms, application-code: 211ms)
+ GET /api/grazing-plans 200 in 488ms (next.js: 385ms, proxy.ts: 2ms, application-code: 101ms)
+ GET /api/field-notes?limit=200 200 in 666ms (next.js: 558ms, proxy.ts: 3ms, application-code: 105ms)
+ GET /api/tasks 200 in 665ms (next.js: 553ms, proxy.ts: 6ms, application-code: 105ms)
+ GET /api/herds 200 in 50ms (next.js: 1395µs, proxy.ts: 4ms, application-code: 44ms)
+ GET /api/team 200 in 617ms (next.js: 422ms, proxy.ts: 5ms, application-code: 190ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 91ms (next.js: 1224µs, proxy.ts: 5ms, application-code: 84ms)
+ GET /api/paddocks 200 in 52ms (next.js: 1198µs, proxy.ts: 1807µs, application-code: 49ms)
+ GET /api/grazing-plans 200 in 44ms (next.js: 701µs, proxy.ts: 2ms, application-code: 41ms)
+ GET /api/climate-adjustment 200 in 1902ms (next.js: 901ms, proxy.ts: 3ms, application-code: 998ms)
+ GET /api/organizations 200 in 87ms (next.js: 3ms, proxy.ts: 1339µs, application-code: 83ms)
+ GET /api/herds 200 in 44ms (next.js: 674µs, proxy.ts: 1558µs, application-code: 42ms)
+ GET /api/farm-events 200 in 142ms (next.js: 3ms, proxy.ts: 1603µs, application-code: 137ms)
+ GET /api/paddocks 200 in 48ms (next.js: 894µs, proxy.ts: 1584µs, application-code: 45ms)
+ GET /api/grazing-plans 200 in 44ms (next.js: 614µs, proxy.ts: 1470µs, application-code: 42ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 84ms (next.js: 656µs, proxy.ts: 1630µs, application-code: 82ms)
+ GET /api/paddocks 200 in 47ms (next.js: 597µs, proxy.ts: 1606µs, application-code: 44ms)
+ GET /api/organizations 200 in 89ms (next.js: 5ms, proxy.ts: 2ms, application-code: 82ms)
+ GET /api/farm-events 200 in 126ms (next.js: 621µs, proxy.ts: 1261µs, application-code: 124ms)
+ GET /api/weather/current 200 in 2.1s (next.js: 863ms, proxy.ts: 2ms, application-code: 1202ms)
+ GET /api/climate-adjustment 200 in 536ms (next.js: 4ms, proxy.ts: 1978µs, application-code: 530ms)
+ GET /api/weather/current 200 in 1167ms (next.js: 4ms, proxy.ts: 5ms, application-code: 1158ms)
+ GET /api/climate-adjustment 200 in 482ms (next.js: 740µs, proxy.ts: 1720µs, application-code: 479ms)
+ GET /api/paddocks 200 in 57ms (next.js: 1553µs, proxy.ts: 4ms, application-code: 51ms)
+ GET /api/herds 200 in 59ms (next.js: 4ms, proxy.ts: 4ms, application-code: 50ms)
+ GET /api/farm-events 200 in 146ms (next.js: 7ms, proxy.ts: 4ms, application-code: 135ms)
+ GET /api/climate-adjustment 200 in 532ms (next.js: 1736µs, proxy.ts: 3ms, application-code: 527ms)
+ GET /api/climate-adjustment 200 in 494ms (next.js: 1377µs, proxy.ts: 3ms, application-code: 490ms)
+ GET /api/climate-adjustment 200 in 491ms (next.js: 1438µs, proxy.ts: 3ms, application-code: 486ms)
+ GET /api/climate-adjustment 200 in 492ms (next.js: 1267µs, proxy.ts: 3ms, application-code: 488ms)
+ GET /api/climate-adjustment 200 in 490ms (next.js: 1009µs, proxy.ts: 2ms, application-code: 487ms)
+ GET /dashboard 200 in 86ms (next.js: 40ms, proxy.ts: 12ms, application-code: 33ms)
+ GET /dashboard 200 in 13ms (next.js: 1195µs, proxy.ts: 2ms, application-code: 9ms)
+ GET /dashboard 200 in 19ms (next.js: 4ms, proxy.ts: 4ms, application-code: 11ms)
+ GET /dashboard 200 in 76ms (next.js: 48ms, proxy.ts: 5ms, application-code: 23ms)
+ GET /dashboard 200 in 13ms (next.js: 1203µs, proxy.ts: 2ms, application-code: 9ms)
+ GET /dashboard 200 in 19ms (next.js: 1907µs, proxy.ts: 4ms, application-code: 13ms)
+ GET /dashboard 200 in 109ms (next.js: 78ms, proxy.ts: 3ms, application-code: 28ms)
+⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /dashboard 200 in 113ms (next.js: 1128µs, proxy.ts: 3ms, application-code: 109ms)
+ GET /api/config/menu 200 in 256ms (next.js: 207ms, proxy.ts: 3ms, application-code: 47ms)
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790083711959 200 in 87ms (next.js: 668µs, proxy.ts: 1701µs, application-code: 85ms)
+ GET /api/notifications 200 in 672ms (next.js: 149ms, proxy.ts: 1933µs, application-code: 521ms)
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790083711728 200 in 497ms (next.js: 127ms, proxy.ts: 1729µs, application-code: 369ms)
+ GET /api/herds 200 in 676ms (next.js: 564ms, proxy.ts: 3ms, application-code: 109ms)
+ GET /api/grazing-plans 200 in 676ms (next.js: 559ms, proxy.ts: 7ms, application-code: 109ms)
+ GET /api/paddocks 200 in 752ms (next.js: 565ms, proxy.ts: 3ms, application-code: 184ms)
+ GET /api/organizations 200 in 799ms (next.js: 566ms, proxy.ts: 3ms, application-code: 230ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 948ms (next.js: 551ms, proxy.ts: 9ms, application-code: 388ms)
+ GET /api/farm-events 200 in 1001ms (next.js: 546ms, proxy.ts: 11ms, application-code: 445ms)
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+ GET /api/users/onboarding-status?tourId=dashboard-tour-v1 200 in 668ms (next.js: 589ms, proxy.ts: 17ms, application-code: 62ms)
+ GET /api/herds 200 in 499ms (next.js: 393ms, proxy.ts: 4ms, application-code: 103ms)
+ GET /api/weather/current 200 in 786ms (next.js: 680ms, proxy.ts: 2ms, application-code: 104ms)
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790083712678 200 in 664ms (next.js: 557ms, proxy.ts: 3ms, application-code: 104ms)
+ GET /api/grazing-plans 200 in 428ms (next.js: 320ms, proxy.ts: 3ms, application-code: 105ms)
+ GET /api/paddocks 200 in 81ms (next.js: 2ms, proxy.ts: 1860µs, application-code: 78ms)
+ GET /api/herds 200 in 71ms (next.js: 8ms, proxy.ts: 2ms, application-code: 61ms)
+ GET /api/organizations 200 in 88ms (next.js: 2ms, proxy.ts: 1508µs, application-code: 84ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 92ms (next.js: 3ms, proxy.ts: 2ms, application-code: 87ms)
+ GET /api/grazing-plans 200 in 45ms (next.js: 629µs, proxy.ts: 1507µs, application-code: 43ms)
+ GET /api/weather/current 200 in 82ms (next.js: 672µs, proxy.ts: 1444µs, application-code: 80ms)
+ GET /api/paddocks 200 in 45ms (next.js: 546µs, proxy.ts: 1352µs, application-code: 43ms)
+ GET /api/farm-events 200 in 143ms (next.js: 7ms, proxy.ts: 2ms, application-code: 134ms)
+ GET /api/organizations 200 in 82ms (next.js: 552µs, proxy.ts: 1152µs, application-code: 80ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 81ms (next.js: 589µs, proxy.ts: 1468µs, application-code: 79ms)
+ GET /api/farm-events 200 in 130ms (next.js: 598µs, proxy.ts: 1359µs, application-code: 128ms)
+ GET /api/paddocks 200 in 50ms (next.js: 3ms, proxy.ts: 2ms, application-code: 44ms)
+ GET /api/herds 200 in 50ms (next.js: 4ms, proxy.ts: 3ms, application-code: 42ms)
+ GET /api/grazing-plans 200 in 50ms (next.js: 637µs, proxy.ts: 7ms, application-code: 43ms)
+ GET /api/organizations 200 in 90ms (next.js: 2ms, proxy.ts: 2ms, application-code: 86ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 89ms (next.js: 1692µs, proxy.ts: 7ms, application-code: 81ms)
+ GET /api/climate-adjustment 200 in 1268ms (next.js: 681ms, proxy.ts: 2ms, application-code: 585ms)
+ GET /api/farm-events 200 in 134ms (next.js: 688µs, proxy.ts: 1616µs, application-code: 132ms)
+ GET /api/herds 200 in 110ms (next.js: 3ms, proxy.ts: 4ms, application-code: 103ms)
+ GET /api/paddocks 200 in 111ms (next.js: 1817µs, proxy.ts: 4ms, application-code: 106ms)
+ GET /api/farm-events?limit=500 200 in 243ms (next.js: 5ms, proxy.ts: 4ms, application-code: 235ms)
+ GET /api/climate-adjustment 200 in 599ms (next.js: 738µs, proxy.ts: 1534µs, application-code: 597ms)
+ GET /api/grazing-plans 200 in 660ms (next.js: 551ms, proxy.ts: 4ms, application-code: 105ms)
+ GET /api/paddocks 200 in 446ms (next.js: 335ms, proxy.ts: 3ms, application-code: 108ms)
+ GET /api/tasks 200 in 778ms (next.js: 666ms, proxy.ts: 4ms, application-code: 108ms)
+ GET /api/field-notes?limit=200 200 in 818ms (next.js: 666ms, proxy.ts: 4ms, application-code: 148ms)
+ GET /api/organizations 200 in 706ms (next.js: 551ms, proxy.ts: 4ms, application-code: 151ms)
+ GET /api/team 200 in 607ms (next.js: 409ms, proxy.ts: 10ms, application-code: 189ms)
+ GET /api/climate-adjustment 200 in 571ms (next.js: 5ms, proxy.ts: 3ms, application-code: 564ms)
+ GET /api/climate-adjustment 200 in 490ms (next.js: 1494µs, proxy.ts: 2ms, application-code: 486ms)
+ GET /api/climate-adjustment 200 in 488ms (next.js: 852µs, proxy.ts: 1705µs, application-code: 486ms)
+ GET /api/climate-adjustment 200 in 491ms (next.js: 1570µs, proxy.ts: 4ms, application-code: 485ms)
+ GET /api/paddocks 200 in 54ms (next.js: 1468µs, proxy.ts: 5ms, application-code: 48ms)
+ GET /api/herds 200 in 57ms (next.js: 5ms, proxy.ts: 6ms, application-code: 46ms)
+ GET /api/farm-events 200 in 148ms (next.js: 5ms, proxy.ts: 12ms, application-code: 131ms)
+ GET /api/climate-adjustment 200 in 529ms (next.js: 1022µs, proxy.ts: 3ms, application-code: 524ms)
+ GET /api/climate-adjustment 200 in 501ms (next.js: 1954µs, proxy.ts: 5ms, application-code: 494ms)
+ GET /api/climate-adjustment 200 in 494ms (next.js: 2ms, proxy.ts: 5ms, application-code: 487ms)
+ GET /dashboard 200 in 103ms (next.js: 47ms, proxy.ts: 5ms, application-code: 51ms)
+ GET /dashboard 200 in 21ms (next.js: 2ms, proxy.ts: 5ms, application-code: 14ms)
+ GET /dashboard 200 in 19ms (next.js: 3ms, proxy.ts: 3ms, application-code: 13ms)
+ GET /dashboard 200 in 20ms (next.js: 3ms, proxy.ts: 3ms, application-code: 13ms)
+ GET /dashboard 200 in 25ms (next.js: 3ms, proxy.ts: 5ms, application-code: 17ms)
+ GET /dashboard 200 in 76ms (next.js: 4ms, proxy.ts: 62ms, application-code: 11ms)
+ GET /dashboard 200 in 16ms (next.js: 3ms, proxy.ts: 2ms, application-code: 10ms)
+ GET /dashboard 200 in 23ms (next.js: 3ms, proxy.ts: 3ms, application-code: 18ms)
+ GET /dashboard 200 in 24ms (next.js: 3ms, proxy.ts: 4ms, application-code: 16ms)
+ GET /dashboard 200 in 20ms (next.js: 4ms, proxy.ts: 3ms, application-code: 13ms)
+ GET /dashboard 200 in 19ms (next.js: 3ms, proxy.ts: 5ms, application-code: 12ms)
+ GET /dashboard 200 in 20ms (next.js: 3ms, proxy.ts: 3ms, application-code: 14ms)
+ GET /dashboard 200 in 65ms (next.js: 5ms, proxy.ts: 6ms, application-code: 54ms)
+ GET /dashboard 200 in 17ms (next.js: 3ms, proxy.ts: 3ms, application-code: 12ms)
+ GET /dashboard 200 in 50ms (next.js: 6ms, proxy.ts: 11ms, application-code: 33ms)
+ GET /dashboard 200 in 222ms (next.js: 6ms, proxy.ts: 177ms, application-code: 39ms)
+ GET /dashboard 200 in 167ms (next.js: 108ms, proxy.ts: 5ms, application-code: 55ms)
+ GET /dashboard 200 in 99ms (next.js: 3ms, proxy.ts: 82ms, application-code: 14ms)
+ GET /dashboard 200 in 17ms (next.js: 1913µs, proxy.ts: 3ms, application-code: 11ms)
+ GET /dashboard 200 in 17ms (next.js: 1441µs, proxy.ts: 3ms, application-code: 12ms)
+ GET /dashboard/agenda 200 in 1855ms (next.js: 1707ms, proxy.ts: 5ms, application-code: 143ms)
+ GET /dashboard 200 in 113ms (next.js: 26ms, proxy.ts: 9ms, application-code: 78ms)
+ GET /dashboard 200 in 1379ms (next.js: 1269ms, proxy.ts: 5ms, application-code: 106ms)
+ GET /api/config/menu 200 in 1408ms (next.js: 1293ms, proxy.ts: 9ms, application-code: 106ms)
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790086255393 200 in 845ms (next.js: 529ms, proxy.ts: 41ms, application-code: 275ms)
+ GET /api/notifications 200 in 1536ms (next.js: 1014ms, proxy.ts: 24ms, application-code: 498ms)
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790086255173 200 in 1307ms (next.js: 792ms, proxy.ts: 6ms, application-code: 509ms)
+ GET /api/config/menu 200 in 57ms (next.js: 3ms, proxy.ts: 8ms, application-code: 46ms)
+ GET /api/config/menu 200 in 47ms (next.js: 847µs, proxy.ts: 3ms, application-code: 44ms)
+ GET /api/notifications 200 in 99ms (next.js: 1452µs, proxy.ts: 7ms, application-code: 90ms)
+ GET /api/notifications 200 in 90ms (next.js: 1669µs, proxy.ts: 3ms, application-code: 86ms)
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790086257364 200 in 90ms (next.js: 922µs, proxy.ts: 2ms, application-code: 87ms)
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790086257486 200 in 99ms (next.js: 1771µs, proxy.ts: 5ms, application-code: 93ms)
+ GET /api/herds 200 in 885ms (next.js: 768ms, proxy.ts: 7ms, application-code: 110ms)
+ GET /api/grazing-plans 200 in 894ms (next.js: 768ms, proxy.ts: 7ms, application-code: 119ms)
+ GET /api/paddocks 200 in 895ms (next.js: 767ms, proxy.ts: 7ms, application-code: 120ms)
+ GET /api/organizations 200 in 990ms (next.js: 768ms, proxy.ts: 7ms, application-code: 215ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 1244ms (next.js: 760ms, proxy.ts: 14ms, application-code: 470ms)
+ GET /api/farm-events 200 in 1220ms (next.js: 669ms, proxy.ts: 31ms, application-code: 520ms)
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+[profile] Buscando UID: LiPsJKbx5CbUIE80BZECtv6Avsk1 email_token: javi.osorio.1@gmail.com
+ GET /api/users/onboarding-status?tourId=dashboard-tour-v1 200 in 1068ms (next.js: 999ms, proxy.ts: 2ms, application-code: 67ms)
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790086257673 200 in 1008ms (next.js: 894ms, proxy.ts: 6ms, application-code: 108ms)
+ GET /api/herds 200 in 649ms (next.js: 480ms, proxy.ts: 60ms, application-code: 109ms)
+✅ Profile found for UID: LiPsJKbx5CbUIE80BZECtv6Avsk1
+ GET /api/auth/profile?t=1790086257699 200 in 764ms (next.js: 638ms, proxy.ts: 11ms, application-code: 115ms)
+ GET /api/grazing-plans 200 in 77ms (next.js: 3ms, proxy.ts: 1953µs, application-code: 72ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 101ms (next.js: 3ms, proxy.ts: 12ms, application-code: 85ms)
+ GET /api/paddocks 200 in 110ms (next.js: 3ms, proxy.ts: 10ms, application-code: 97ms)
+ GET /api/organizations 200 in 116ms (next.js: 7ms, proxy.ts: 10ms, application-code: 99ms)
+ GET /api/farm-events 200 in 195ms (next.js: 3ms, proxy.ts: 1734µs, application-code: 190ms)
+ GET /api/farm-events?limit=500 200 in 205ms (next.js: 854µs, proxy.ts: 1857µs, application-code: 203ms)
+ GET /api/weather/current 200 in 1834ms (next.js: 998ms, proxy.ts: 2ms, application-code: 834ms)
+ GET /api/climate-adjustment 200 in 1919ms (next.js: 1009ms, proxy.ts: 2ms, application-code: 908ms)
+ GET /api/users/onboarding-status?tourId=dashboard-tour-v1 200 in 1146ms (next.js: 1034ms, proxy.ts: 5ms, application-code: 107ms)
+ GET /api/tasks 200 in 1358ms (next.js: 1234ms, proxy.ts: 8ms, application-code: 115ms)
+ GET /api/weather/current 200 in 679ms (next.js: 557ms, proxy.ts: 4ms, application-code: 118ms)
+ GET /api/field-notes?limit=200 200 in 1369ms (next.js: 1240ms, proxy.ts: 3ms, application-code: 126ms)
+ GET /api/herds 200 in 780ms (next.js: 625ms, proxy.ts: 10ms, application-code: 146ms)
+ GET /api/grazing-plans 200 in 50ms (next.js: 3ms, proxy.ts: 1811µs, application-code: 46ms)
+ GET /api/paddocks 200 in 53ms (next.js: 3ms, proxy.ts: 1994µs, application-code: 48ms)
+ GET /api/team 200 in 1329ms (next.js: 1089ms, proxy.ts: 33ms, application-code: 207ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 89ms (next.js: 1085µs, proxy.ts: 1957µs, application-code: 86ms)
+ GET /api/organizations 200 in 124ms (next.js: 3ms, proxy.ts: 1593µs, application-code: 119ms)
+ GET /api/tasks 200 in 116ms (next.js: 644µs, proxy.ts: 2ms, application-code: 114ms)
+ GET /api/weather/current 200 in 89ms (next.js: 772µs, proxy.ts: 3ms, application-code: 86ms)
+ GET /api/herds 200 in 47ms (next.js: 689µs, proxy.ts: 1551µs, application-code: 45ms)
+ GET /api/field-notes?limit=200 200 in 97ms (next.js: 2ms, proxy.ts: 3ms, application-code: 92ms)
+ GET /api/farm-events 200 in 171ms (next.js: 4ms, proxy.ts: 5ms, application-code: 162ms)
+ GET /api/grazing-plans 200 in 48ms (next.js: 1563µs, proxy.ts: 4ms, application-code: 43ms)
+ GET /api/paddocks 200 in 53ms (next.js: 4ms, proxy.ts: 3ms, application-code: 46ms)
+ GET /api/herds 200 in 47ms (next.js: 673µs, proxy.ts: 1328µs, application-code: 45ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 92ms (next.js: 901µs, proxy.ts: 1496µs, application-code: 90ms)
+ GET /api/organizations 200 in 87ms (next.js: 765µs, proxy.ts: 1822µs, application-code: 84ms)
+ GET /api/weather/current 200 in 83ms (next.js: 742µs, proxy.ts: 1634µs, application-code: 80ms)
+ GET /api/grazing-plans 200 in 49ms (next.js: 3ms, proxy.ts: 2ms, application-code: 45ms)
+ GET /api/paddocks 200 in 47ms (next.js: 709µs, proxy.ts: 1635µs, application-code: 45ms)
+ GET /api/team 200 in 169ms (next.js: 3ms, proxy.ts: 5ms, application-code: 161ms)
+ GET /api/herds 200 in 44ms (next.js: 932µs, proxy.ts: 1527µs, application-code: 41ms)
+ GET /api/grazing-plans 200 in 49ms (next.js: 3ms, proxy.ts: 3ms, application-code: 43ms)
+ GET /api/paddocks 200 in 54ms (next.js: 574µs, proxy.ts: 6ms, application-code: 47ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 89ms (next.js: 754µs, proxy.ts: 1815µs, application-code: 86ms)
+ GET /api/farm-events 200 in 143ms (next.js: 870µs, proxy.ts: 2ms, application-code: 140ms)
+ GET /api/organizations 200 in 83ms (next.js: 1500µs, proxy.ts: 1760µs, application-code: 80ms)
+ GET /api/herds 200 in 45ms (next.js: 857µs, proxy.ts: 3ms, application-code: 42ms)
+ GET /api/grazing-plans 200 in 46ms (next.js: 904µs, proxy.ts: 1771µs, application-code: 43ms)
+ GET /api/paddocks 200 in 55ms (next.js: 1679µs, proxy.ts: 1720µs, application-code: 51ms)
+ GET /api/herds 200 in 43ms (next.js: 796µs, proxy.ts: 1622µs, application-code: 40ms)
+ GET /api/tasks?from_date=2026-09-22&limit=4 200 in 84ms (next.js: 760µs, proxy.ts: 3ms, application-code: 80ms)
+ GET /api/grazing-plans 200 in 55ms (next.js: 757µs, proxy.ts: 7ms, application-code: 47ms)
+ GET /api/organizations 200 in 87ms (next.js: 2ms, proxy.ts: 2ms, application-code: 83ms)
+ GET /api/paddocks 200 in 47ms (next.js: 866µs, proxy.ts: 1955µs, application-code: 44ms)
+ GET /api/farm-events 200 in 140ms (next.js: 655µs, proxy.ts: 4ms, application-code: 135ms)
+ GET /api/paddocks 200 in 47ms (next.js: 921µs, proxy.ts: 1690µs, application-code: 45ms)
+ GET /api/climate-adjustment 200 in 558ms (next.js: 6ms, proxy.ts: 10ms, application-code: 542ms)
+ GET /api/organizations 200 in 84ms (next.js: 652µs, proxy.ts: 1520µs, application-code: 82ms)
+ GET /api/farm-events 200 in 133ms (next.js: 698µs, proxy.ts: 1589µs, application-code: 131ms)
+ GET /api/organizations 200 in 85ms (next.js: 753µs, proxy.ts: 1547µs, application-code: 83ms)
+ GET /api/climate-adjustment 200 in 494ms (next.js: 774µs, proxy.ts: 1527µs, application-code: 492ms)
+ GET /api/herds 200 in 54ms (next.js: 3ms, proxy.ts: 3ms, application-code: 48ms)
+ GET /api/paddocks 200 in 56ms (next.js: 932µs, proxy.ts: 3ms, application-code: 52ms)
+ GET /api/farm-events 200 in 150ms (next.js: 5ms, proxy.ts: 3ms, application-code: 142ms)
+ GET /api/climate-adjustment 200 in 497ms (next.js: 837µs, proxy.ts: 2ms, application-code: 495ms)
+ GET /api/climate-adjustment 200 in 497ms (next.js: 998µs, proxy.ts: 2ms, application-code: 494ms)
+ GET /api/paddocks 200 in 52ms (next.js: 846µs, proxy.ts: 2ms, application-code: 49ms)
+ GET /api/herds 200 in 53ms (next.js: 5ms, proxy.ts: 4ms, application-code: 44ms)
+ GET /api/paddocks 200 in 58ms (next.js: 3ms, proxy.ts: 3ms, application-code: 52ms)
+ GET /api/farm-events 200 in 143ms (next.js: 7ms, proxy.ts: 4ms, application-code: 132ms)
+ GET /api/climate-adjustment 200 in 534ms (next.js: 820µs, proxy.ts: 2ms, application-code: 532ms)
+ GET /api/climate-adjustment 200 in 490ms (next.js: 989µs, proxy.ts: 2ms, application-code: 487ms)
+ GET /api/climate-adjustment 200 in 496ms (next.js: 2ms, proxy.ts: 3ms, application-code: 490ms)
+ GET /api/climate-adjustment 200 in 496ms (next.js: 1054µs, proxy.ts: 2ms, application-code: 493ms)
+ GET /api/climate-adjustment 200 in 497ms (next.js: 1220µs, proxy.ts: 3ms, application-code: 493ms)
+ GET /api/climate-adjustment 200 in 504ms (next.js: 3ms, proxy.ts: 3ms, application-code: 498ms)
+ GET /api/climate-adjustment 200 in 494ms (next.js: 1234µs, proxy.ts: 2ms, application-code: 491ms)
+ GET /api/climate-adjustment 200 in 494ms (next.js: 1190µs, proxy.ts: 3ms, application-code: 490ms)
+ GET /api/climate-adjustment 200 in 494ms (next.js: 1373µs, proxy.ts: 3ms, application-code: 490ms)
+ GET /api/climate-adjustment 200 in 509ms (next.js: 1141µs, proxy.ts: 2ms, application-code: 505ms)
+ GET /api/climate-adjustment 200 in 498ms (next.js: 3ms, proxy.ts: 2ms, application-code: 493ms)
+ GET /dashboard 200 in 138ms (next.js: 61ms, proxy.ts: 8ms, application-code: 70ms)
+ GET /dashboard 200 in 33ms (next.js: 5ms, proxy.ts: 7ms, application-code: 21ms)
+ GET /dashboard 200 in 41ms (next.js: 5ms, proxy.ts: 5ms, application-code: 31ms)
+ GET /dashboard 200 in 16ms (next.js: 2ms, proxy.ts: 4ms, application-code: 10ms)
+ GET /dashboard 200 in 283ms (next.js: 1840µs, proxy.ts: 4ms, application-code: 277ms)
+ GET /dashboard 200 in 109ms (next.js: 21ms, proxy.ts: 35ms, application-code: 54ms)
+ GET /dashboard 200 in 38ms (next.js: 5ms, proxy.ts: 3ms, application-code: 30ms)
+ GET /dashboard 200 in 16ms (next.js: 1399µs, proxy.ts: 3ms, application-code: 12ms)
+ GET /dashboard 200 in 39ms (next.js: 4ms, proxy.ts: 5ms, application-code: 30ms)
+ GET /dashboard 200 in 19ms (next.js: 1139µs, proxy.ts: 2ms, application-code: 15ms)
+ GET /dashboard 200 in 127ms (next.js: 4ms, proxy.ts: 74ms, application-code: 49ms)
+ GET /dashboard 200 in 30ms (next.js: 3ms, proxy.ts: 4ms, application-code: 24ms)
+ GET /dashboard 200 in 33ms (next.js: 1935µs, proxy.ts: 4ms, application-code: 27ms)
+ GET /dashboard 200 in 15ms (next.js: 1223µs, proxy.ts: 2ms, application-code: 12ms)
+ GET /dashboard 200 in 26ms (next.js: 1329µs, proxy.ts: 1954µs, application-code: 23ms)
+ GET /dashboard 200 in 14ms (next.js: 1222µs, proxy.ts: 3ms, application-code: 10ms)
+ GET /dashboard 200 in 47ms (next.js: 4ms, proxy.ts: 13ms, application-code: 30ms)
+ GET /dashboard 200 in 16ms (next.js: 1677µs, proxy.ts: 3ms, application-code: 12ms)

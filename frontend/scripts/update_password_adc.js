@@ -19,9 +19,11 @@ initializeApp({
 
 async function run() {
   try {
+    const password = process.env.SUPERADMIN_PASSWORD;
+    if (!password) throw new Error('SUPERADMIN_PASSWORD missing');
     const user = await getAuth().getUserByEmail('superadmin@rodeo.app');
     await getAuth().updateUser(user.uid, {
-      password: 'Rodeo@Admin2026!'
+      password
     });
     console.log('Successfully updated user password');
   } catch (error) {

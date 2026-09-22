@@ -1,5 +1,10 @@
+require('dotenv').config({ path: '.env.local' });
 const crypto = require('crypto');
-const secret = 'e30ed4dfe2b2e4c64ead27e030e02166';
+const secret = process.env.WEBHOOK_SECRET;
+if (!secret) {
+  console.error('WEBHOOK_SECRET environment variable is missing.');
+  process.exit(1);
+}
 const payload = JSON.stringify({
   entry: [{
     changes: [{

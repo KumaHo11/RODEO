@@ -14,7 +14,7 @@ import {
 import {
   Mic, Camera, Loader2, Image as ImageIcon,
   CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp,
-  Lock, MessageCircle, FileText, Plus, X as XIcon,
+  Lock, MessageCircle, FileText, Plus, X as XIcon, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePlan } from '@/hooks/usePlan'
@@ -118,12 +118,12 @@ export default function BitacoraPage() {
   // ── Photo ──────────────────────────────────────────────────────────────────
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
   const [showTextMenu, setShowTextMenu] = useState(false)
   const [textNote, setTextNote] = useState('')
   const [showPhotoDetails, setShowPhotoDetails] = useState(false)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
 
   const saveNoteRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
@@ -259,7 +259,7 @@ export default function BitacoraPage() {
   // ─── Recording ────────────────────────────────────────────────────────────
   const startRecording = async () => {
     setAudioBlob(null); setAudioUrl(null); setLiveTranscript('')
-    setPhotoFile(null)
+    setPhotoFiles([])
     getLocation()
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -305,14 +305,27 @@ export default function BitacoraPage() {
 
   // ─── Photo ────────────────────────────────────────────────────────────────
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
     setAudioBlob(null); setAudioUrl(null); setLiveTranscript('')
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
+    
+    const newFiles = [...photoFiles, ...files].slice(0, 10)
+    setPhotoFiles(newFiles)
+    
+    const newPreviews = newFiles.map(f => URL.createObjectURL(f))
+    setPhotoPreviews(newPreviews)
+    
     setTextNote('')
     setShowPhotoDetails(true)
     getLocation()
+  }
+
+  const removePhoto = (idx: number) => {
+    const newFiles = [...photoFiles]
+    newFiles.splice(idx, 1)
+    setPhotoFiles(newFiles)
+    setPhotoPreviews(newFiles.map(f => URL.createObjectURL(f)))
+    if (newFiles.length === 0) resetCapture()
   }
 
   // ─── Auto-save audio on stop ──────────────────────────────────────────────
@@ -325,7 +338,7 @@ export default function BitacoraPage() {
     if (saving) return
     setSaving(true)
     const timestamp = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
-    const title = audioBlob ? `Audio · ${timestamp}` : photoFile ? `Foto · ${timestamp}` : 'Nota'
+    const title = audioBlob ? `Audio · ${timestamp}` : photoFiles.length > 0 ? `Foto · ${timestamp}` : 'Nota'
 
     // OFFLINE path: audio
     if (!navigator.onLine && audioBlob) {
@@ -349,17 +362,23 @@ export default function BitacoraPage() {
     }
 
     // OFFLINE path: photo
-    if (!navigator.onLine && photoFile) {
-      setSavingMsg('Guardando foto sin conexión...')
-      const id = `local-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const blob = new Blob([await photoFile.arrayBuffer()], { type: photoFile.type })
-      await savePendingPhoto({ id, blob, lat, lng, createdAt: new Date().toISOString(), title })
+    if (!navigator.onLine && photoFiles.length > 0) {
+      setSavingMsg(`Guardando foto${photoFiles.length > 1 ? 's' : ''} sin conexión...`)
+      
+      const photoIds = photoFiles.map(() => `local-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+      
+      for (let i = 0; i < photoFiles.length; i++) {
+        const blob = new Blob([await photoFiles[i].arrayBuffer()], { type: photoFiles[i].type })
+        await savePendingPhoto({ id: photoIds[i], blob, lat, lng, createdAt: new Date().toISOString(), title })
+      }
+      
       await enqueue({
         type: 'field_note', url: '/api/field-notes', method: 'POST',
         body: { paddock_id: null, tags: ['GENERAL'], title, content: textNote.trim() || null, lat, lng, sync_status: 'PENDING' },
-        mediaType: 'photo', mediaId: id,
-        idempotency_key: `field_note-photo-${id}`,
-      })
+        mediaType: 'photo', mediaId: photoIds[0],
+        mediaIds: { photo: photoIds[0], photos: photoIds }, // Extra data for sync
+        idempotency_key: `field_note-photo-${photoIds[0]}`,
+      } as any)
       await refreshPending()
       toast.success('📷 Foto guardada. Se subirá al servidor cuando tengas conexión.')
       flashSaved(); resetCapture(); return
@@ -382,7 +401,7 @@ export default function BitacoraPage() {
     // ONLINE path
     try {
       let audio_url: string | null = null
-      let photo_url: string | null = null
+      let photo_urls: string[] = []
       let transcript = liveTranscript
 
       if (audioBlob) {
@@ -398,21 +417,32 @@ export default function BitacoraPage() {
         try {
           const tf = new FormData()
           tf.append('file', new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: audioBlob.type }))
-          const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf })
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 60000)
+          const tr = await apiFetch('/api/transcribe-audio', { method: 'POST', body: tf, signal: controller.signal })
+          clearTimeout(timeoutId)
           if (tr.ok) {
             const d = await tr.json()
-            if (d.transcript && !d.transcript.startsWith('[Sin voz detectable')) transcript = d.transcript
+            if (d.transcript && d.transcript !== '[Sin voz detectable]') transcript = d.transcript
           }
-        } catch { /* keep Web Speech transcript */ }
+        } catch { /* fallback to live transcript */ }
       }
 
-      if (photoFile) {
-        setSavingMsg('Subiendo foto...')
-        const fd = new FormData()
-        fd.append('file', photoFile); fd.append('folder', 'bitacora-photos')
-        const r = await apiFetch('/api/upload', { method: 'POST', body: fd })
-        if (r.ok) { photo_url = (await r.json()).url }
+      if (photoFiles.length > 0) {
+        setSavingMsg(`Subiendo foto${photoFiles.length > 1 ? 's' : ''}...`)
+        const uploadPromises = photoFiles.map(async (file) => {
+          const fd = new FormData()
+          fd.append('file', file)
+          fd.append('folder', 'bitacora-photos')
+          const r = await apiFetch('/api/upload', { method: 'POST', body: fd })
+          if (r.ok) return (await r.json()).url
+          return null
+        })
+        const results = await Promise.all(uploadPromises)
+        photo_urls = results.filter(Boolean) as string[]
       }
+      
+      const photo_url = photo_urls.length > 0 ? photo_urls[0] : null
 
       setSavingMsg('Guardando nota...')
       await apiFetch('/api/field-notes', {
@@ -420,7 +450,7 @@ export default function BitacoraPage() {
         body: JSON.stringify({
           paddock_id: null, tags: ['GENERAL'], title,
           content: textNote.trim() || transcript || null,
-          lat, lng, audio_url, photo_url,
+          lat, lng, audio_url, photo_url, photo_urls,
           audio_duration_secs: audioBlob ? recordSecsRef.current : null,
         }),
       })
@@ -509,10 +539,12 @@ export default function BitacoraPage() {
   const flashSaved = () => { setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000) }
   const resetCapture = () => {
     setAudioBlob(null); setAudioUrl(null)
-    setPhotoFile(null); setLiveTranscript('')
+    setPhotoFiles([])
+    setPhotoPreviews([])
     setLat(null); setLng(null)
-    setShowPhotoDetails(false); setPhotoPreview(null)
+    setShowPhotoDetails(false)
   }
+  const handleCancelCapture = resetCapture
 
   // ─── WhatsApp handlers ────────────────────────────────────────────────────
   const handleApplyWA = async (note: BitacoraEntry) => {
@@ -913,11 +945,11 @@ export default function BitacoraPage() {
         document.body
       )}
 
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
-      <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handlePhotoChange} />
+      <input ref={galleryRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoChange} />
 
       {/* ── Photo details modal ──────────────────────────────────────── */}
-      {showPhotoDetails && photoPreview && typeof document !== 'undefined' && createPortal(
+      {showPhotoDetails && photoPreviews.length > 0 && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/50 backdrop-blur-md px-4"
           onClick={() => resetCapture()}>
           <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-6 relative animate-in zoom-in-95 duration-200"
@@ -930,8 +962,17 @@ export default function BitacoraPage() {
               <p className="text-sm text-gray-500 mt-1">Podés agregar una descripción (opcional)</p>
             </div>
             <div className="mb-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photoPreview} alt="Vista previa" className="w-full h-40 object-cover rounded-xl border border-gray-200 shadow-sm" />
+              <div className="flex gap-2 overflow-x-auto pb-2 snap-x">
+                {photoPreviews.map((preview, idx) => (
+                  <div key={idx} className="relative w-40 h-32 shrink-0 snap-center group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={preview} alt="Vista previa" className="w-full h-full object-cover rounded-xl border border-gray-200 shadow-sm" />
+                    <button onClick={() => removePhoto(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-md sm:scale-0 sm:group-hover:scale-100 transition-all z-10">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="space-y-4">
               <textarea

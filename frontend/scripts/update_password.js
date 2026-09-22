@@ -1,15 +1,18 @@
-const admin = require('firebase-admin');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 const serviceAccount = require('../rodeo-sa-key.json');
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+initializeApp({
+  credential: cert(serviceAccount)
 });
 
 async function run() {
   try {
-    const user = await admin.auth().getUserByEmail('superadmin@rodeo.app');
-    await admin.auth().updateUser(user.uid, {
-      password: 'Rodeo@Admin2026!'
+    const password = process.env.SUPERADMIN_PASSWORD;
+    if (!password) throw new Error('SUPERADMIN_PASSWORD missing');
+    const user = await getAuth().getUserByEmail('superadmin@rodeo.app');
+    await getAuth().updateUser(user.uid, {
+      password
     });
     console.log('Successfully updated user password');
   } catch (error) {

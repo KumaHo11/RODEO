@@ -13,7 +13,11 @@ const pool = new Pool({
 
 async function run() {
   const email = 'superadmin@rodeo.app';
-  const password = 'Rodeo@Admin2026!';
+  const password = process.env.SUPERADMIN_PASSWORD;
+  if (!password) {
+    console.error('SUPERADMIN_PASSWORD environment variable is missing.');
+    process.exit(1);
+  }
   
   let userRecord;
   try {
