@@ -16,6 +16,8 @@ if (!sqlFile) {
 
 // Candidatos en orden de preferencia
 const CANDIDATES = [
+  // rodeo_service (BYPASSRLS + permisos DDL para migrations)
+  'postgresql://rodeo_service:rodeo_svc_staging_pass_123@127.0.0.1:5432/rodeo',
   // postgres superuser local (sin contraseña — auth por peer/trust)
   'postgresql://postgres@127.0.0.1:5432/rodeo',
   'postgresql://postgres@localhost:5432/rodeo',

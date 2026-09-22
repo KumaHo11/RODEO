@@ -537,6 +537,7 @@ export function AiAnalysisActions({
           `✅ ${(inlineResult.dry_matter_kg_ha ?? 0).toLocaleString('es')} kg MS/ha guardados en ${activePaddockName ?? 'el potrero'}`
         )
       } else if (inlineMode === 'body-condition' && activeHerdId) {
+        // ── 1. Actualizar valor actual del rodeo ─────────────────────────────
         await apiFetch(`/api/herds/${activeHerdId}`, {
           method: 'PATCH',
           body: JSON.stringify({
@@ -546,6 +547,7 @@ export function AiAnalysisActions({
           }),
         })
 
+        // ── 2. Vincular field_note al rodeo y marcar como aprobada ───────────
         await apiFetch(`/api/field-notes/${note.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
@@ -554,6 +556,39 @@ export function AiAnalysisActions({
             analysis_result: { ...inlineResult, _mode: inlineMode, _source: 'bitacora_ai_committed' }
           }),
         })
+
+        // ── 3. Insertar en historial_rodeo (serie temporal) ──────────────────
+        apiFetch('/api/historial-rodeo', {
+          method: 'POST',
+          body: JSON.stringify({
+            rodeo_id:              activeHerdId,
+            bcs_score:             inlineResult.bcs_score      ?? null,
+            bcs_label:             inlineResult.condition_label ?? null,
+            estimated_weight_kg:   inlineResult.estimated_weight_kg ?? null,
+            animal_count_visible:  inlineResult.animal_count_visible ?? null,
+            alert_level:           inlineResult.alert_level    ?? 'NINGUNA',
+            confidence:            inlineResult.confidence     ?? null,
+            analysis_data:         inlineResult,
+            source:                'BITACORA_AI',
+            entry_id:              note.id,
+          }),
+        }).catch(err => console.warn('[AiAnalysis] historial_rodeo insert failed (non-critical):', err?.message))
+
+        // ── 4. Insertar en movements (event_type: 'bcs') ─────────────────────
+        apiFetch('/api/movements', {
+          method: 'POST',
+          body: JSON.stringify({
+            entity_type:  'herd',
+            entity_id:    activeHerdId,
+            entity_name:  activeHerdName ?? null,
+            event_type:   'bcs',
+            bcs_score:    inlineResult.bcs_score    ?? null,
+            weight_kg:    inlineResult.estimated_weight_kg ?? null,
+            quantity:     inlineResult.animal_count_visible ?? null,
+            notes:        inlineResult.recommendation ?? null,
+            metadata:     { source: 'BITACORA_AI', entry_id: note.id, alert_level: inlineResult.alert_level },
+          }),
+        }).catch(err => console.warn('[AiAnalysis] movements insert failed (non-critical):', err?.message))
 
         const aiResult: BitacoraAiResult = {
           analyzedAt: new Date().toISOString(),

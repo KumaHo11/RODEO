@@ -240,9 +240,24 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   let isBatchFirst  = false   // true if this image is the first in a new batch
   const title = buildTitle(msgType)
 
+  let actualMsgType = msgType
+  if (msgType === 'document') {
+    const mime = msg.document?.mime_type || ''
+    if (mime.startsWith('image/')) {
+      actualMsgType = 'image'
+      msg.image = msg.document
+    } else if (mime.startsWith('video/')) {
+      actualMsgType = 'video'
+      msg.video = msg.document
+    } else if (mime.startsWith('audio/')) {
+      actualMsgType = 'audio'
+      msg.audio = msg.document
+    }
+  }
+
   // Procesar media con try/catch individual: si falla el download/upload,
   // la nota igual se guarda (sin media) — es mejor tener el registro que nada.
-  if (msgType === 'audio' || msgType === 'document') {
+  if (actualMsgType === 'audio') {
     const mediaId = msg.audio?.id ?? msg.document?.id
     if (mediaId) {
       try {
@@ -264,7 +279,7 @@ async function processMessage(msg: any, waDisplayName: string | null) {
         content = '[Audio — no se pudo procesar]'
       }
     }
-  } else if (msgType === 'image') {
+  } else if (actualMsgType === 'image') {
     const mediaId = msg.image?.id
     if (mediaId) {
       try {
@@ -314,7 +329,7 @@ async function processMessage(msg: any, waDisplayName: string | null) {
         content = msg.image?.caption ?? '[Imagen — no se pudo procesar]'
       }
     }
-  } else if (msgType === 'video') {
+  } else if (actualMsgType === 'video') {
     const mediaId = msg.video?.id
     if (mediaId) {
       try {
@@ -328,7 +343,9 @@ async function processMessage(msg: any, waDisplayName: string | null) {
         content = msg.video?.caption ?? '[Video — no se pudo procesar]'
       }
     }
-  } else if (msgType === 'text') {
+  } else if (actualMsgType === 'document') {
+    content = msg.document?.caption || msg.document?.filename || '[Documento adjunto no soportado]'
+  } else if (actualMsgType === 'text') {
     content = textBody || null
   }
 

@@ -29,6 +29,7 @@ import LoteCard, { type LoteData } from '@/components/LoteCard'
 import { IconoRodeos } from '@/components/icons/IconoRodeos'
 import OnboardingTour from '@/components/OnboardingTour'
 import { AICameraModal } from '@/components/AICameraModal'
+import { BcsHistorialChart } from './components/BcsHistorialChart'
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SortKey = 'name' | 'head_count' | 'avg_weight_kg' | 'admission_date' | 'total_ev'
 
@@ -346,6 +347,8 @@ export default function HerdsPage() {
   const [modalOpen,   setModalOpen]   = useState(false)
   const [editingHerd, setEditingHerd] = useState<HerdData | null>(null)
   const [aiTargetHerd, setAiTargetHerd] = useState<HerdData | null>(null)
+  // BCS chart: rodeo seleccionado en la vista de historial
+  const [bcsRodeoId, setBcsRodeoId] = useState<string | null>(null)
 
   const { getLimit } = usePlan()
   const maxHerds = getLimit('max_herds')
@@ -1119,6 +1122,45 @@ export default function HerdsPage() {
       {/* ════ HISTORIAL VIEW ════ */}
       {view === 'historial' && (
         <div className="space-y-4">
+
+          {/* ── Sección BCS: selector de rodeo + gráfico ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-2 flex-wrap">
+              <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+              <p className="text-xs font-black text-gray-700 flex-1">Evolución de Condición Corporal</p>
+              <div className="relative">
+                <select
+                  id="bcs-rodeo-selector"
+                  value={bcsRodeoId ?? ''}
+                  onChange={e => setBcsRodeoId(e.target.value || null)}
+                  className="bg-amber-50 border border-amber-200 rounded-xl pl-3 pr-8 py-1.5 text-xs font-bold text-amber-700 outline-none focus:ring-1 focus:ring-amber-400 appearance-none cursor-pointer min-w-[160px]"
+                >
+                  <option value="">Seleccioná un rodeo</option>
+                  {herds.map(h => (
+                    <option key={h.id} value={h.id!}>{h.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-amber-500 pointer-events-none" />
+              </div>
+            </div>
+            <div className="p-4">
+              {bcsRodeoId ? (
+                <BcsHistorialChart
+                  rodeoId={bcsRodeoId}
+                  rodeoName={herds.find(h => h.id === bcsRodeoId)?.name}
+                  currentBcs={herds.find(h => h.id === bcsRodeoId)?.bcs_score as number | null | undefined}
+                />
+              ) : (
+                <div className="py-8 text-center">
+                  <p className="text-sm font-bold text-gray-300">Seleccioná un rodeo para ver su tendencia de CC</p>
+                  <p className="text-[10px] text-gray-200 mt-1">
+                    Los registros se generan al analizar fotos desde Bitácora con IA
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Toolbar historial */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 flex flex-wrap gap-3 items-center">
             <div className="relative flex-1 min-w-[200px]">
