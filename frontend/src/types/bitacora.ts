@@ -109,6 +109,7 @@ export function mapRawNote(raw: any): BitacoraEntry {
     content: raw.content,
     audio_url: raw.audio_url,
     photo_url: raw.photo_url,
+    groupedPhotos: (raw.photo_urls && Array.isArray(raw.photo_urls) && raw.photo_urls.length > 0) ? raw.photo_urls : undefined,
     video_url: raw.video_url,
     audio_duration_secs: raw.audio_duration_secs,
     wa_batch_id: raw.wa_batch_id ?? undefined,

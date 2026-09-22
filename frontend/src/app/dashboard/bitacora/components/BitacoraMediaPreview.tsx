@@ -242,6 +242,13 @@ function VideoPreview({ note }: { note: BitacoraEntry }) {
       </div>
 
       {showModal && <VideoPlayerModal src={videoSrc} onClose={() => setShowModal(false)} />}
+      
+      {/* ── Text Content ── */}
+      {(note.content || note.text) && !(note.content || note.text)?.startsWith('[') && (
+        <div className="mt-3 px-1">
+          <TextPreview note={note} />
+        </div>
+      )}
     </>
   )
 }
@@ -341,6 +348,13 @@ function PhotoPreview({ note }: { note: BitacoraEntry }) {
 
       {lightboxIndex !== null && (
         <ImageLightbox photos={photos} initialIndex={lightboxIndex} onClose={closeLightbox} />
+      )}
+
+      {/* ── Text Content ── */}
+      {(note.content || note.text) && !(note.content || note.text)?.startsWith('[') && (
+        <div className="mt-3 px-1">
+          <TextPreview note={note} />
+        </div>
       )}
     </>
   )

@@ -126,8 +126,8 @@ export default function BitacoraModal({
   const isRecordingRef = useRef(false)
 
   // Photo State
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoFiles, setPhotoFiles] = useState<File[]>([])
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
@@ -137,7 +137,7 @@ export default function BitacoraModal({
     setIsRecording(false); setRecordSecs(0); setAudioBlob(null); setMediaStream(null); setLiveTranscript('')
     if (timerRef.current) clearInterval(timerRef.current)
     speechRef.current?.stop(); mediaRecorderRef.current?.stop()
-    setPhotoFile(null); setPhotoPreview(null); setShowPhotoMenu(false)
+    setPhotoFiles([]); setPhotoPreviews([]); setShowPhotoMenu(false)
   }, [])
 
   useEffect(() => {
@@ -236,22 +236,31 @@ export default function BitacoraModal({
 
   // ── PHOTO ───────────────────────────────────────────────────────────────
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    
+    // Add new files, limit to 10
+    const newFiles = [...photoFiles, ...files].slice(0, 10)
+    setPhotoFiles(newFiles)
+    
+    // Create preview URLs
+    const newPreviews = newFiles.map(f => URL.createObjectURL(f))
+    setPhotoPreviews(newPreviews)
+    
     e.target.value = ''
   }
 
-  const removePhoto = () => {
-    setPhotoFile(null)
-    setPhotoPreview(null)
+  const removePhoto = (idx: number) => {
+    const newFiles = [...photoFiles]
+    newFiles.splice(idx, 1)
+    setPhotoFiles(newFiles)
+    setPhotoPreviews(newFiles.map(f => URL.createObjectURL(f)))
   }
 
   // ── SAVE ────────────────────────────────────────────────────────────────
   const canSave = () => {
     if (saving || isRecording) return false
-    return !!audioBlob || !!photoFile || textContent.trim().length > 0
+    return !!audioBlob || photoFiles.length > 0 || textContent.trim().length > 0
   }
 
   const handleSave = async () => {
@@ -262,20 +271,18 @@ export default function BitacoraModal({
 
     if (!isOnline) {
       const audioId = audioBlob ? crypto.randomUUID() : undefined
-      const photoId = photoFile ? crypto.randomUUID() : undefined
+      const photoIds = photoFiles.map(() => crypto.randomUUID())
 
       if (audioBlob && audioId) {
-        
         await savePendingAudio({
           id: audioId, blob: audioBlob, durationSecs: recordSecsSnap.current,
           lat: null, lng: null, createdAt: new Date().toISOString(), title: genTitle, transcript: ''
         })
       }
 
-      if (photoFile && photoId) {
-        
+      for (let i = 0; i < photoFiles.length; i++) {
         await savePendingPhoto({
-          id: photoId, blob: photoFile, lat: null, lng: null, createdAt: new Date().toISOString(), title: genTitle
+          id: photoIds[i], blob: photoFiles[i], lat: null, lng: null, createdAt: new Date().toISOString(), title: genTitle
         })
       }
 
@@ -287,9 +294,10 @@ export default function BitacoraModal({
           sync_status: 'PENDING',
         },
         timestamp: Date.now(),
-        mediaIds: { audio: audioId, photo: photoId },
+        // Note: The offline syncer might only process the first photo currently
+        mediaIds: { audio: audioId, photo: photoIds[0], photos: photoIds },
         hasAudio: !!audioBlob,
-        hasPhoto: !!photoFile
+        hasPhoto: photoFiles.length > 0
       } as any)
       toast.success('Nota guardada en el dispositivo. Se sincronizará automáticamente.')
       setSaving(false); onSaved(); onClose(); return
@@ -298,7 +306,7 @@ export default function BitacoraModal({
     try {
       setSavingMsg('Guardando...')
       let audio_url: string | null = null
-      let photo_url: string | null = null
+      let photo_urls: string[] = []
 
       if (audioBlob) {
         setSavingMsg('Subiendo audio...')
@@ -309,14 +317,21 @@ export default function BitacoraModal({
         if (uploadRes.ok) audio_url = (await uploadRes.json()).url || null
       }
 
-      if (photoFile) {
-        setSavingMsg('Subiendo foto...')
-        const compressedImage = await compressImage(photoFile)
-        const fd = new FormData()
-        fd.append('file', compressedImage); fd.append('folder', 'bitacora-photos')
-        const r = await apiFetch('/api/upload', { method: 'POST', body: fd, timeout: 60000 })
-        if (r.ok) photo_url = (await r.json()).url || null
+      if (photoFiles.length > 0) {
+        setSavingMsg(`Subiendo foto${photoFiles.length > 1 ? 's' : ''}...`)
+        const uploadPromises = photoFiles.map(async (file) => {
+          const compressed = await compressImage(file)
+          const fd = new FormData()
+          fd.append('file', compressed); fd.append('folder', 'bitacora-photos')
+          const r = await apiFetch('/api/upload', { method: 'POST', body: fd, timeout: 60000 })
+          if (r.ok) return (await r.json()).url
+          return null
+        })
+        const results = await Promise.all(uploadPromises)
+        photo_urls = results.filter(Boolean) as string[]
       }
+
+      const photo_url = photo_urls.length > 0 ? photo_urls[0] : null
 
       setSavingMsg('Analizando nota...')
       const response = await apiFetch('/api/field-notes', {
@@ -324,7 +339,7 @@ export default function BitacoraModal({
         body: JSON.stringify({
           paddock_id: paddockId || null, tags: ['GENERAL'],
           title: genTitle, content: textContent || null,
-          audio_url, photo_url, audio_duration_secs: recordSecsSnap.current,
+          audio_url, photo_url, photo_urls, audio_duration_secs: recordSecsSnap.current,
           analysis_result: null,
         }),
       })
@@ -426,15 +441,19 @@ export default function BitacoraModal({
           </div>
 
           {/* Media Previews */}
-          {(photoPreview || audioBlob) && (
+          {(photoPreviews.length > 0 || audioBlob) && (
             <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-gray-50">
-              {photoPreview && (
-                <div className="relative inline-block w-24 h-24 group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photoPreview} alt="Adjunto" className="w-full h-full object-cover rounded-xl border border-gray-200 shadow-sm" />
-                  <button onClick={removePhoto} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-md scale-0 group-hover:scale-100 transition-all">
-                    <X className="w-3 h-3" />
-                  </button>
+              {photoPreviews.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {photoPreviews.map((preview, idx) => (
+                    <div key={idx} className="relative inline-block w-24 h-24 group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={preview} alt="Adjunto" className="w-full h-full object-cover rounded-xl border border-gray-200 shadow-sm" />
+                      <button onClick={() => removePhoto(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-md scale-0 sm:group-hover:scale-100 transition-all">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
               {audioBlob && !isRecording && (
@@ -485,8 +504,8 @@ export default function BitacoraModal({
               className="w-10 h-10 rounded-full bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-500 flex items-center justify-center transition-colors">
               <Camera className="w-5 h-5" />
             </button>
-            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={handlePhotoChange} />
-            <input ref={galleryRef} type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple className="sr-only" onChange={handlePhotoChange} />
+            <input ref={galleryRef} type="file" accept="image/*" multiple className="sr-only" onChange={handlePhotoChange} />
           </div>
 
           <button type="button" onClick={handleSave} disabled={!canSave()}
