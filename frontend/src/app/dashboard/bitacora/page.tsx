@@ -84,10 +84,12 @@ function MobileFAB({
 
   return (
     <>
-      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
-        {open && (
-          <div className="flex flex-col items-end gap-2.5 animate-in slide-in-from-bottom-4 fade-in duration-200">
+      {open && <div className="fixed inset-0 z-40 bg-black/10 backdrop-blur-sm" onClick={() => setOpen(false)} />}
+      
+      {/* Action options — slide up when open */}
+      {open && (
+        <div className="fixed bottom-20 left-0 right-0 z-50 px-4 flex flex-col items-center gap-2.5 animate-in slide-in-from-bottom-8 fade-in duration-200 pointer-events-none">
+          <div className="flex flex-col gap-2.5 pointer-events-auto w-full max-w-[240px]">
             <button
               onClick={() => { setOpen(false); onRecord() }}
               className="flex items-center gap-3 bg-white shadow-xl rounded-2xl pl-4 pr-5 py-3 border border-gray-100 active:scale-95 transition-all"
@@ -116,15 +118,17 @@ function MobileFAB({
               <span className="text-sm font-black text-gray-800 whitespace-nowrap">Agregar texto</span>
             </button>
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Sticky bottom bar */}
+      <div className="sticky bottom-0 left-0 right-0 z-50 mt-auto bg-green-600 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] px-4 py-3 flex justify-center pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <button
           onClick={() => setOpen(o => !o)}
-          className={`flex items-center gap-2 px-5 py-3.5 rounded-full shadow-2xl font-black text-sm text-white transition-all active:scale-95 ${
-            open ? 'bg-gray-800 hover:bg-gray-700' : 'bg-emerald-600 hover:bg-emerald-500'
-          }`}
+          className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-black text-sm text-green-600 bg-white shadow-md active:scale-95 transition-all"
           aria-label={open ? 'Cerrar menú' : 'Nuevo registro'}
         >
-          {open ? <XIcon className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          {open ? <XIcon className="w-5 h-5" /> : <Plus className="w-5 h-5 stroke-[3]" />}
           {open ? 'Cerrar' : 'Registrar'}
         </button>
       </div>
@@ -873,10 +877,10 @@ export default function BitacoraPage() {
       </div>
 
       {/* Mobile FAB — only on sm: and below */}
-      <div className="sm:hidden">
+      <div className="sm:hidden flex flex-col mt-auto">
         {isRecording ? (
           /* Full recording UI when active */
-          <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 shadow-2xl px-6 pb-8 pt-5 flex flex-col items-center gap-4 animate-in slide-in-from-bottom-8 duration-300">
+          <div className="sticky bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 shadow-2xl px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5 flex flex-col items-center gap-4 animate-in slide-in-from-bottom-8 duration-300">
             {liveTranscript && (
               <div className="w-full bg-gray-900/90 rounded-2xl px-4 py-3 max-h-20 overflow-y-auto">
                 <p className="text-xs text-gray-300 leading-relaxed">{liveTranscript}</p>
@@ -890,18 +894,18 @@ export default function BitacoraPage() {
             </button>
           </div>
         ) : saving ? (
-          <div className="fixed bottom-6 inset-x-0 z-50 flex flex-col items-center gap-2">
-            <Loader2 className="w-10 h-10 text-gray-300 animate-spin" />
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{savingMsg}</p>
+          <div className="sticky bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-2 shadow-2xl">
+            <Loader2 className="w-10 h-10 text-green-600 animate-spin" />
+            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{savingMsg}</p>
           </div>
         ) : saved ? (
-          <div className="fixed bottom-6 inset-x-0 z-50 flex justify-center animate-in zoom-in duration-300">
-            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center border border-green-100 shadow-lg">
+          <div className="sticky bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex justify-center animate-in zoom-in duration-300 shadow-2xl">
+            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center border border-green-100">
               <CheckCircle2 className="w-8 h-8 text-green-500" />
             </div>
           </div>
         ) : canVoice ? (
-          /* FAB: single pill → expands */
+          /* FAB: sticky green bottom bar */
           <MobileFAB
             onRecord={startRecording}
             onPhoto={() => setShowPhotoMenu(true)}
@@ -909,10 +913,11 @@ export default function BitacoraPage() {
           />
         ) : (
           /* Lock — plan upgrade */
-          <div className="fixed bottom-6 right-5 z-50">
+          <div className="sticky bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col items-center shadow-2xl">
             <button onClick={() => router.push('/dashboard/planes')}
-              className="w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-xl">
-              <Lock className="w-6 h-6" />
+              className="px-6 py-3 rounded-full bg-gray-900 text-white flex items-center gap-2 font-bold shadow-xl">
+              <Lock className="w-5 h-5" />
+              Ver planes
             </button>
           </div>
         )}

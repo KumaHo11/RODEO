@@ -208,8 +208,8 @@ export function BitacoraCard({
   }, [])
 
   return (
-    <div className={`group bg-white rounded-2xl border shadow-sm transition-shadow hover:shadow-md flex flex-col ${
-      needsReview ? 'border-amber-200' : 'border-gray-150'
+    <div className={`group bg-white rounded-2xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.12)] transition-all flex flex-col ${
+      needsReview ? 'border border-amber-200' : 'border border-gray-100/50'
     }`}>
 
       {/* ── A. Header ───────────────────────────────────────────────────── */}
