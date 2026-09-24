@@ -206,14 +206,64 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply, initialPh
           <div className="p-4">
             {mode === 'biomass' ? (
               <div className="grid grid-cols-2 gap-2">
-                <ResultRow label="Especie dominante" value={result.dominant_species || result.pasture_type || '—'} fullWidth />
-                <ResultRow label="Altura media" value={result.grass_height_cm != null ? `${result.grass_height_cm} cm` : '—'} />
-                <ResultRow label="Cobertura de suelo" value={result.coverage_pct != null ? `${result.coverage_pct}%` : '—'} />
-                <ResultRow label="Estado fenológico" value={result.phenological_stage || '—'} />
-                <ResultRow label="Material verde" value={result.green_ratio_pct != null ? `${result.green_ratio_pct}%` : '—'} />
-                <ResultRow label="Disponibilidad forrajera" value={result.dry_matter_kg_ha != null ? `${result.dry_matter_kg_ha.toLocaleString('es')} kg MS/ha` : '—'} highlight />
-                <ResultRow label="Proteína cruda (% PC)" value={result.protein_content_pct != null ? `${result.protein_content_pct}%` : '—'} />
-                <ResultRow label="Remanente sugerido" value={result.suggested_remnant_pct != null ? `${result.suggested_remnant_pct}%` : '—'} />
+                {/* PastureAIResult fields (primary) with legacy fallbacks */}
+                <ResultRow
+                  label="Especie dominante"
+                  value={
+                    (result.predominant_species?.length ? result.predominant_species.join(', ') : null)
+                    ?? result.dominant_species ?? result.pasture_type ?? '—'
+                  }
+                  fullWidth
+                />
+                <ResultRow
+                  label="Disponibilidad forrajera"
+                  value={
+                    result.estimated_dry_matter_kg_ha != null
+                      ? `${result.estimated_dry_matter_kg_ha.toLocaleString('es')} kg MS/ha`
+                      : result.dry_matter_kg_ha != null
+                        ? `${result.dry_matter_kg_ha.toLocaleString('es')} kg MS/ha`
+                        : '—'
+                  }
+                  highlight
+                  fullWidth
+                />
+                {/* Confidence interval — below the main value */}
+                {result.confidence_interval && (
+                  <div className="col-span-2 -mt-1.5 mb-1">
+                    <span className="text-[10px] text-gray-400">
+                      Intervalo: {result.confidence_interval.min.toLocaleString('es')} –{' '}
+                      {result.confidence_interval.max.toLocaleString('es')} kg/ha
+                    </span>
+                  </div>
+                )}
+                <ResultRow
+                  label="Altura media"
+                  value={
+                    result.average_height_cm != null ? `${result.average_height_cm} cm`
+                    : result.grass_height_cm != null ? `${result.grass_height_cm} cm`
+                    : '—'
+                  }
+                />
+                <ResultRow
+                  label="Cobertura de suelo"
+                  value={
+                    result.ground_cover_percentage != null ? `${result.ground_cover_percentage}%`
+                    : result.coverage_pct != null ? `${result.coverage_pct}%`
+                    : '—'
+                  }
+                />
+                <ResultRow
+                  label="Estado fenológico"
+                  value={
+                    result.growth_stage
+                    ?? result.phenological_stage
+                    ?? '—'
+                  }
+                />
+                <ResultRow
+                  label="Estado pastura"
+                  value={result.pasture_status ?? '—'}
+                />
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
@@ -245,6 +295,13 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply, initialPh
             )}
           </div>
         </div>
+
+        {/* Regional context note (INTA) */}
+        {result.regional_context_note && (
+          <p className="text-center text-purple-500 italic font-medium flex items-center justify-center gap-1" style={{ fontSize: '10px' }}>
+            <span>📍</span> {result.regional_context_note}
+          </p>
+        )}
 
         {/* Error estimado — texto gris pequeño debajo del resultado */}
         {result.estimated_error_pct != null && (

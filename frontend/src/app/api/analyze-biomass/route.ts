@@ -8,6 +8,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
 import { checkFeatureAccess } from '@/lib/plan-limits'
+import { queryOne } from '@/lib/db'
+import { IntaContextService } from '@/services/IntaContextService'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
@@ -34,18 +36,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tu plan no incluye análisis de biomasa IA' }, { status: 403 })
     }
 
-    const { imageBase64, mimeType = 'image/jpeg', imagesBase64, imageUrl } = await req.json()
+    const { imageBase64, mimeType = 'image/jpeg', imagesBase64, imageUrl, imageUrls, paddockId, herdId } = await req.json()
 
-    // Support imageUrl: server fetches the image and converts to base64
-    // Used for direct analysis from a field_note's photo_url (GCS)
+    // Support imageUrls
+    let urlsToFetch = imageUrls || (imageUrl ? [imageUrl] : [])
     let images = imagesBase64 || (imageBase64 ? [{ base64: imageBase64, mimeType }] : [])
-    if (images.length === 0 && imageUrl) {
+
+    if (images.length === 0 && urlsToFetch.length > 0) {
       try {
-        const fetchRes = await fetch(imageUrl)
-        if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status} fetching image`)
-        const buf = Buffer.from(await fetchRes.arrayBuffer())
-        const detectedMime = fetchRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
-        images = [{ base64: buf.toString('base64'), mimeType: detectedMime }]
+        images = await Promise.all(urlsToFetch.map(async (url: string) => {
+          const fetchRes = await fetch(url)
+          if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status} fetching image: ${url}`)
+          const buf = Buffer.from(await fetchRes.arrayBuffer())
+          const detectedMime = fetchRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
+          return { base64: buf.toString('base64'), mimeType: detectedMime }
+        }))
       } catch (fetchErr: any) {
         return NextResponse.json({ success: false, error: `No se pudo obtener la imagen: ${fetchErr.message}` }, { status: 400 })
       }
@@ -58,28 +63,45 @@ export async function POST(req: NextRequest) {
     // gemini-2.5-flash — multimodal, supports vision and audio
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
-    const prompt = `Eres un experto agronómico especializado en pasturas y forraje del cono sur de América Latina.
-Analizá esta(s) foto(s) de pastura/potrero y respondé SOLO con un objeto JSON válido, sin texto adicional, con exactamente estos campos:
+    let lat: number | null = null
+    let lng: number | null = null
+
+    if (paddockId) {
+      try {
+        const row = await queryOne<{ lat: number, lng: number }>(`
+          SELECT ST_Y(ST_Centroid(geom)) as lat, ST_X(ST_Centroid(geom)) as lng 
+          FROM paddocks 
+          WHERE id = $1
+        `, [paddockId])
+        if (row) {
+          lat = row.lat
+          lng = row.lng
+        }
+      } catch (e) {
+        console.error("Error fetching paddock location:", e)
+      }
+    }
+
+    const currentMonth = new Date().toLocaleString('es', { month: 'long' });
+    const intaContext = await IntaContextService.getContext(lat, lng)
+
+    const prompt = `Eres un experto agronómico evaluando un lote en la región: ${intaContext.region}.
+Mes actual: ${currentMonth}.
+Especies INTA predominantes de la zona: ${intaContext.species}.
+REGLA ESTRICTA DE CONVERSIÓN (Base INTA): ${intaContext.conversionRules} (Usa esta regla para calcular la Materia Seca a partir de la altura y cobertura visual).
+Analiza las imágenes proporcionadas y extrae la información requerida cumpliendo ESTRICTAMENTE el esquema JSON definido. No justifiques ni uses markdown.
+
 {
-  "dominant_species": texto en español (especie o familia dominante visible, ej: "Festuca arundinacea", "Agropiro", "Campo natural - gramíneas estivales", "Alfalfa"),
-  "grass_height_cm": número (altura promedio del pasto en centímetros, estimado visualmente),
-  "coverage_pct": número (cobertura vegetal en %, de 0 a 100),
-  "phenological_stage": texto en español (estado fenológico, ej: "Vegetativo", "Elongación", "Espigazon", "Floración", "Senescencia", "Reposo invernal"),
-  "green_ratio_pct": número (porcentaje de material verde respecto al total de biomasa visible, de 0 a 100),
-  "dry_matter_kg_ha": número (materia seca disponible en kg/ha, rango típico 500-4000),
-  "protein_content_pct": número (estimación del porcentaje de proteína cruda en la materia seca según estado fenológico y especie),
-  "suggested_remnant_pct": número (porcentaje de remanente objetivo sugerido tras el pastoreo, de 0 a 100),
-  "weeds_detected": arreglo de strings (nombres comunes de malezas detectadas, o arreglo vacío),
-  "condition": "OPTIMO" o "BUENO" o "REGULAR" o "BAJO",
-  "condition_label": texto breve describiendo el estado fenológico y de cobertura (ej: "Vegetativo con alta cobertura", "Elongación temprana, buen verde"),
-  "confidence": número de 0 a 100 indicando tu confianza en el análisis,
-  "recommendation": texto en español con UNA recomendación práctica de manejo. DEBE ser accionable y referirse a: (a) momento de ingreso o salida de animales, (b) remanente objetivo en cm o % de biomasa a dejar para garantizar la recuperación del forraje, y/o (c) período de descanso estimado. Ejemplos correctos: "Retirar los animales cuando el remanente llegue a 10 cm de altura (\u224040% de biomasa) para asegurar una rápida rebrota." / "Ingresar ahora y mantener un descanso de 25 días tras el pastoreo para permitir la recuperación completa." / "Esperar 12-15 días más antes del ingreso para que el forraje alcance altura óptima de consumo." NUNCA describir el estado del pasto en positivo (como ‘el pasto está excelente’ o ‘alta calidad’) sino dar una acción concreta de manejo rotativo o de recuperación.,
-  "alert_level": "NINGUNA" o "MODERADA" o "URGENTE" (si hay algún problema urgente de manejo),
-  "alert_reason": texto breve explicando la alerta si alert_level no es NINGUNA, o null,
-  "estimated_grazing_days": número estimado de días de pastoreo posibles con 1 EV/ha,
-  "notes": texto breve con observaciones adicionales sobre especie, malezas u otras condiciones observadas
+  "estimated_dry_matter_kg_ha": número (materia seca disponible en kg/ha),
+  "confidence_interval": { "min": número, "max": número },
+  "predominant_species": arreglo de strings (especies detectadas),
+  "average_height_cm": número (altura promedio del pasto en cm),
+  "ground_cover_percentage": número (cobertura vegetal de 0 a 100),
+  "growth_stage": "vegetativo" | "reproductivo" | "senescente",
+  "pasture_status": "optimo" | "bajo" | "pasado",
+  "regional_context_note": "Cálculo base INTA - ${intaContext.region} (${currentMonth})",
+  "recommendation": texto (recomendación práctica)
 }
-Si la imagen NO es de una pastura o pasto, devolvé: {"error": "La imagen no parece ser de una pastura"}
 Respondé SOLO con el JSON, sin markdown, sin bloques de código, sin explicaciones.`
 
     const imageParts = images.map((img: any) => ({

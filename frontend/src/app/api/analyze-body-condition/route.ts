@@ -2,6 +2,9 @@ export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
+import { checkFeatureAccess } from '@/lib/plan-limits'
+import { queryOne } from '@/lib/db'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
@@ -14,17 +17,35 @@ function makeGeminiTimeout(): Promise<never> {
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageBase64, mimeType, imagesBase64, species, imageUrl } = await req.json()
+    // ── Auth check ────────────────────────────────────────────────────────────
+    const authHeader = req.headers.get('authorization') || ''
+    const token = authHeader.replace('Bearer ', '').trim()
+    if (!token) return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 })
 
-    // Support imageUrl: server fetches the image and converts to base64
+    const decoded = await verifyFirebaseToken(token)
+    if (!decoded) return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
+
+    // ── Plan check ────────────────────────────────────────────────────────────
+    const hasAccess = await checkFeatureAccess(decoded.uid, 'ai_insights')
+    if (!hasAccess) {
+      return NextResponse.json({ success: false, error: 'Tu plan no incluye análisis de condición corporal IA' }, { status: 403 })
+    }
+
+    const { imageBase64, mimeType, imagesBase64, species, imageUrl, imageUrls, herdId } = await req.json()
+
+    // ── Resolve images: prefer URL arrays → fetch server-side ─────────────────
+    const urlsToFetch: string[] = imageUrls || (imageUrl ? [imageUrl] : [])
     let images = imagesBase64 || (imageBase64 ? [{ base64: imageBase64, mimeType: mimeType || 'image/jpeg' }] : [])
-    if (images.length === 0 && imageUrl) {
+
+    if (images.length === 0 && urlsToFetch.length > 0) {
       try {
-        const fetchRes = await fetch(imageUrl)
-        if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status} fetching image`)
-        const buf = Buffer.from(await fetchRes.arrayBuffer())
-        const detectedMime = fetchRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
-        images = [{ base64: buf.toString('base64'), mimeType: detectedMime }]
+        images = await Promise.all(urlsToFetch.map(async (url: string) => {
+          const fetchRes = await fetch(url)
+          if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status} fetching image: ${url}`)
+          const buf = Buffer.from(await fetchRes.arrayBuffer())
+          const detectedMime = fetchRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
+          return { base64: buf.toString('base64'), mimeType: detectedMime }
+        }))
       } catch (fetchErr: any) {
         return NextResponse.json({ success: false, error: `No se pudo obtener la imagen: ${fetchErr.message}` }, { status: 400 })
       }
@@ -34,11 +55,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 })
     }
 
+    // ── Geolocalización desde rodeo → organización ──────────────────────────
+    let resolvedSpecies = species || 'bovino'
+    if (herdId) {
+      try {
+        const row = await queryOne<{ species_description: string }>(`
+          SELECT h.species_description
+          FROM herds h
+          WHERE h.id = $1
+        `, [herdId])
+        if (row?.species_description) resolvedSpecies = row.species_description
+      } catch (e) {
+        console.warn('[analyze-body-condition] Could not resolve species from herdId:', e)
+      }
+    }
+
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `Eres un veterinario y nutricionista animal experto en ganadería bovina, ovina y equina del Cono Sur de América Latina, especializado en evaluación de condición corporal (CC / BCS - Body Condition Score).
 
-Analizá esta(s) imagen(es) de un animal o rebaño (especie principal: ${species || 'bovino'}) y respondé SOLO con un objeto JSON válido, sin texto adicional, sin markdown, sin comillas de bloque de código.
+Analizá esta(s) imagen(es) de un animal o rebaño (especie principal: ${resolvedSpecies}) y respondé SOLO con un objeto JSON válido, sin texto adicional, sin markdown, sin comillas de bloque de código.
 
 El JSON debe tener exactamente estos campos:
 {

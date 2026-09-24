@@ -8,7 +8,8 @@ import {
 import { toast } from 'sonner'
 import { AICameraModal } from '@/components/AICameraModal'
 import { apiFetch } from '@/lib/apiFetch'
-import type { BitacoraEntry, BitacoraAiResult } from '@/types/bitacora'
+import type { BitacoraEntry, BitacoraAiResult, PastureAIResult } from '@/types/bitacora'
+import { AiPhotoSelectionModal } from './AiPhotoSelectionModal'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -101,7 +102,7 @@ function AnalysisModeToggle({
 }
 
 // ─── Resultado inline — Biomasa ────────────────────────────────────────────────
-function BiomassResult({ data }: { data: any }) {
+function BiomassResult({ data }: { data: PastureAIResult }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -111,65 +112,60 @@ function BiomassResult({ data }: { data: any }) {
         <div className="flex flex-col">
           <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">MS disponible</span>
           <span className="text-xl font-black text-purple-800 tabular-nums leading-tight">
-            {data.dry_matter_kg_ha?.toLocaleString('es') ?? '—'}{' '}
+            {data.estimated_dry_matter_kg_ha?.toLocaleString('es') ?? '—'}{' '}
             <span className="text-[11px] font-semibold text-purple-500">kg/ha</span>
           </span>
+          {data.confidence_interval && (
+            <span className="text-[10px] text-gray-500 leading-none mt-0.5">
+              ({data.confidence_interval.min} - {data.confidence_interval.max} kg/ha)
+            </span>
+          )}
         </div>
 
-        {data.grass_height_cm != null && (
+        {data.average_height_cm != null && (
           <div className="flex flex-col">
             <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Altura</span>
-            <span className="text-sm font-black text-purple-700">{data.grass_height_cm} cm</span>
+            <span className="text-sm font-black text-purple-700">{data.average_height_cm} cm</span>
           </div>
         )}
 
-        {data.protein_content_pct != null && (
-          <div className="flex flex-col">
-            <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">PC%</span>
-            <span className="text-sm font-black text-purple-700">{data.protein_content_pct}%</span>
-          </div>
-        )}
-
-        {data.condition && (
+        {data.pasture_status && (
           <span className={`ml-auto text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
-            data.condition === 'OPTIMO'  ? 'bg-green-200 text-green-800'
-            : data.condition === 'BUENO'   ? 'bg-lime-200 text-lime-800'
-            : data.condition === 'REGULAR' ? 'bg-amber-200 text-amber-800'
+            data.pasture_status === 'optimo'  ? 'bg-green-200 text-green-800'
+            : data.pasture_status === 'bajo' ? 'bg-amber-200 text-amber-800'
             : 'bg-red-200 text-red-800'
           }`}>
-            {data.condition}
+            {data.pasture_status}
           </span>
         )}
       </div>
 
       {/* Métricas secundarias */}
       <div className="px-4 pb-3 grid grid-cols-2 gap-x-4 gap-y-1">
-        {data.dominant_species && (
+        {data.predominant_species && data.predominant_species.length > 0 && (
           <p className="text-[10px] text-purple-700 col-span-2">
-            <span className="font-black">Especie:</span> {data.dominant_species}
+            <span className="font-black">Especie:</span> {data.predominant_species.join(', ')}
           </p>
         )}
-        {data.phenological_stage && (
+        {data.growth_stage && (
           <p className="text-[10px] text-purple-700">
-            <span className="font-black">Fenología:</span> {data.phenological_stage}
+            <span className="font-black">Fenología:</span> {data.growth_stage}
           </p>
         )}
-        {data.coverage_pct != null && (
+        {data.ground_cover_percentage != null && (
           <p className="text-[10px] text-purple-700">
-            <span className="font-black">Cobertura:</span> {data.coverage_pct}%
-          </p>
-        )}
-        {data.suggested_remnant_pct != null && (
-          <p className="text-[10px] text-purple-700">
-            <span className="font-black">Remanente:</span> {data.suggested_remnant_pct}%
-          </p>
-        )}
-        {data.estimated_grazing_days != null && (
-          <p className="text-[10px] text-purple-700">
-            <span className="font-black">Días pastoreo:</span> {data.estimated_grazing_days}d
+            <span className="font-black">Cobertura:</span> {data.ground_cover_percentage}%
           </p>
         )}
       </div>
+
+      {/* Contexto Regional INTA */}
+      {data.regional_context_note && (
+        <div className="px-4 pb-3 flex items-start gap-1.5 text-[10px] text-purple-600/80 italic">
+          <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5" />
+          <span>{data.regional_context_note}</span>
+        </div>
+      )}
 
       {/* Recomendación — colapsable */}
       {data.recommendation && (
@@ -442,6 +438,7 @@ export function AiAnalysisActions({
 
   // Modal fallback (sin photo_url)
   const [modalOpen, setModalOpen] = useState(false)
+  const [photoSelection, setPhotoSelection] = useState<string[] | null>(null)
 
   // Solo aplica a entradas de tipo imagen
   if (note.mediaType !== 'image') return null
@@ -461,10 +458,19 @@ export function AiAnalysisActions({
     paddockId: string | null,
     herdId: string | null,
     mode: AnalysisMode,
+    selectedPhotosOverride?: string[]
   ) => {
-    const photoUrl = note.photo_url
-    if (!photoUrl) {
+    const allPhotos = note.groupedPhotos?.length ? note.groupedPhotos : (note.photo_url ? [note.photo_url] : [])
+
+    if (allPhotos.length === 0) {
       setModalOpen(true)
+      return
+    }
+
+    const photosToAnalyze = selectedPhotosOverride || allPhotos
+
+    if (!selectedPhotosOverride && photosToAnalyze.length > 5) {
+      setPhotoSelection(photosToAnalyze)
       return
     }
 
@@ -476,7 +482,12 @@ export function AiAnalysisActions({
     try {
       const res = await apiFetch(endpoint, {
         method: 'POST',
-        body: JSON.stringify({ imageUrl: photoUrl }),
+        body: JSON.stringify({
+          imageUrl: photosToAnalyze.length === 1 ? photosToAnalyze[0] : undefined,
+          imageUrls: photosToAnalyze.length > 1 ? photosToAnalyze : undefined,
+          paddockId,
+          herdId
+        }),
         timeout: 65000,
       })
       const json = await res.json()
@@ -498,7 +509,7 @@ export function AiAnalysisActions({
       toast.error(`Error al analizar: ${err?.message || 'Error desconocido'}`)
       setAnalysisState('IDLE')
     }
-  }, [note.photo_url, note.id])
+  }, [note.photo_url, note.groupedPhotos, note.id])
 
   // ── FASE 2A: Confirmar → persistir en potrero/rodeo ─────────────────────
   const handleCommit = useCallback(async () => {
@@ -509,7 +520,7 @@ export function AiAnalysisActions({
       if (inlineMode === 'biomass' && activePaddockId) {
         await apiFetch(`/api/paddocks/${activePaddockId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ dry_matter_kg_ha: inlineResult.dry_matter_kg_ha }),
+          body: JSON.stringify({ dry_matter_kg_ha: inlineResult.estimated_dry_matter_kg_ha }),
         })
         
         await apiFetch(`/api/field-notes/${note.id}`, {
@@ -524,17 +535,16 @@ export function AiAnalysisActions({
         const aiResult: BitacoraAiResult = {
           analyzedAt: new Date().toISOString(),
           type: 'materia_seca',
-          value: inlineResult.dry_matter_kg_ha ?? 0,
+          value: inlineResult.estimated_dry_matter_kg_ha ?? 0,
           unit: 'kg MS/ha',
           targetId: activePaddockId,
-          confidence: inlineResult.confidence,
         }
         setLocalResult(aiResult)
         onAiResultSaved?.(note.id, aiResult)
         onAssignPaddock?.(note.id, activePaddockId)
         
         toast.success(
-          `✅ ${(inlineResult.dry_matter_kg_ha ?? 0).toLocaleString('es')} kg MS/ha guardados en ${activePaddockName ?? 'el potrero'}`
+          `✅ ${(inlineResult.estimated_dry_matter_kg_ha ?? 0).toLocaleString('es')} kg MS/ha guardados en ${activePaddockName ?? 'el potrero'}`
         )
       } else if (inlineMode === 'body-condition' && activeHerdId) {
         // ── 1. Actualizar valor actual del rodeo ─────────────────────────────
@@ -719,6 +729,16 @@ export function AiAnalysisActions({
 
   return (
     <>
+      {photoSelection && (
+        <AiPhotoSelectionModal
+          photos={photoSelection}
+          onCancel={() => setPhotoSelection(null)}
+          onContinue={(selected) => {
+            setPhotoSelection(null)
+            handleDirectAnalyze(activePaddockId, activeHerdId, selectedMode, selected)
+          }}
+        />
+      )}
       <div className="pt-2 border-t border-gray-50 space-y-1">
 
         {/* ── Toggle Biomasa / CC (visible solo cuando hay ambos targets) ── */}
@@ -778,6 +798,7 @@ export function AiAnalysisActions({
               ? <BiomassResult data={inlineResult} />
               : <BodyConditionResult data={inlineResult} />
             }
+            {/* isCommitting=false here: the COMMITTING block below handles the spinner state */}
             <ReviewActions
               mode={inlineMode}
               paddockName={activePaddockName}
