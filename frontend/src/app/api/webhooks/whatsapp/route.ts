@@ -12,11 +12,12 @@
  *  1. Operario vinculado envía audio/foto/texto
  *  2. Se transcribe (audio) y se guarda en field_notes como APPROVED
  *
- * Agrupación de fotos (Photo Album Debounce):
- *  - Meta Cloud API dispara un webhook por cada imagen del álbum (milisegundos de diferencia)
- *  - Al recibir la primera imagen de un sender, se inicia un buffer y un timer de 2.5s
- *  - Cada imagen adicional del mismo sender reinicia el timer y acumula la URL
- *  - Al expirar el timer se escribe UN SOLO registro con todas las fotos en photo_urls[]
+ * Agrupación de fotos (Photo Album Debounce — DB-backed):
+ *  - Meta Cloud API dispara un webhook por cada imagen del álbum en paralelo
+ *  - Un pg_advisory_lock serializa los writes; cada imagen se acumula en la misma fila
+ *  - Tras el commit, cada handler espera 3 s y chequea si llegó alguna imagen más nueva
+ *  - Solo el ÚLTIMO handler (ninguna imagen posterior) envía el ACK final único: "✅ Registro recibido."
+ *  - NO se envían mensajes intermedios (cero spam de "Recibiendo álbum...")
  *  - Audio y texto NO entran en el buffer y se insertan de forma inmediata
  */
 import { NextRequest, NextResponse } from 'next/server'
@@ -257,7 +258,11 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   }
 }
 
-// ── Image handler with DB-level grouping ──────────────────────────────────────
+// ── Image handler with DB-level grouping ─────────────────────────────────────
+// Strategy: serialize concurrent webhooks via pg_advisory_lock, accumulate all
+// photos from the same sender into a single field_notes row, then wait 3 s and
+// send ONE final ACK only if no newer image arrived (DB-backed debounce).
+// IMPORTANT: NO intermediate ACK is sent — only "✅ Registro recibido." once.
 async function handleImageMessage(
   msg:           any,
   phone:         string,
@@ -272,7 +277,7 @@ async function handleImageMessage(
 
   const caption = msg.image?.caption?.trim() || null
 
-  // 1. Download and upload the media
+  // 1. Download and upload the media to storage
   let photoUrl: string | null = null
   try {
     const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
@@ -282,7 +287,7 @@ async function handleImageMessage(
     const path = `bitacora-photos/wa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`
     photoUrl = await uploadBufferToStorage(buffer, path, mimeType)
   } catch (mediaErr: any) {
-    console.error(`[WA Webhook] Error al procesar imagen wamid=${msgId}: ${mediaErr?.message}`)
+    console.error(`[WhatsApp Webhook Error] Descarga/subida de imagen fallida — wamid=${msgId} phone=${phone}: ${mediaErr?.message}`)
     return
   }
 
@@ -291,16 +296,17 @@ async function handleImageMessage(
   // 2. Insert or append to recent album using a DB transaction with advisory lock
   const pool = getServicePool()
   const client = await pool.connect()
-  let isNewNote = false
+  let noteId: string | null = null
+  let processedAt: Date | null = null
 
   try {
     await client.query('BEGIN')
 
-    // Use phone digits as a lock key to avoid race conditions with concurrent image webhooks from the same sender
+    // Lock key based on phone digits to serialize concurrent image webhooks from the same sender
     const lockKey = phone.replace(/\D/g, '').slice(-15)
     await client.query('SELECT pg_advisory_xact_lock($1)', [lockKey])
 
-    // Find a recent image note from this sender in the last 5 minutes
+    // Find a recent image note from this sender within the last 5 minutes
     const recentRes = await client.query(`
       SELECT id, photo_urls FROM field_notes
       WHERE source = 'WHATSAPP'
@@ -312,51 +318,78 @@ async function handleImageMessage(
     `, [phone])
 
     if ((recentRes.rowCount ?? 0) > 0 && Array.isArray(recentRes.rows[0].photo_urls)) {
-      // Append to existing
-      const noteId = recentRes.rows[0].id
+      // Append photo to existing album row
+      noteId = recentRes.rows[0].id
       await client.query(`
         UPDATE field_notes
         SET photo_urls = photo_urls || $1::jsonb,
-            content = COALESCE(field_notes.content, $2)
+            content    = COALESCE(field_notes.content, $2),
+            updated_at = NOW()
         WHERE id = $3
       `, [JSON.stringify([photoUrl]), caption, noteId])
-      console.log(`[WA Webhook] Imagen agregada a álbum existente — phone=${phone} wamid=${msgId}`)
+      console.log(`[WA Webhook] Imagen agregada a álbum existente — phone=${phone} wamid=${msgId} note=${noteId}`)
     } else {
-      // Insert new note
-      isNewNote = true
-      const title = buildTitle('image')
+      // Start a new album row
+      const title   = buildTitle('image')
       const content = caption || null
-      await client.query(`
+      const insertRes = await client.query(`
         INSERT INTO field_notes
            (org_id, created_by, paddock_id, tags, category, title, content,
             photo_url, photo_urls, occurred_at, source, status, whatsapp_phone, whatsapp_msg_id)
         VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, $8, $9, 'WHATSAPP', 'APPROVED', $10, $11)
+        RETURNING id
       `, [
         orgId, profileId, ['GENERAL'], 'GENERAL', title, content,
-        photoUrl, JSON.stringify([photoUrl]), occurredAt.toISOString(), phone, msgId
+        photoUrl, JSON.stringify([photoUrl]), occurredAt.toISOString(), phone, msgId,
       ])
-      console.log(`[WA Webhook] Nuevo álbum iniciado — phone=${phone} wamid=${msgId}`)
+      noteId = insertRes.rows[0]?.id ?? null
+      console.log(`[WA Webhook] Nuevo álbum iniciado — phone=${phone} wamid=${msgId} note=${noteId}`)
     }
 
+    processedAt = new Date()
     await client.query('COMMIT')
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('[WA Webhook] DB Error agrupando fotos:', err)
+    console.error('[WhatsApp Webhook Error] Fallo en transacción DB al agrupar fotos:', err)
+    return
   } finally {
     client.release()
   }
 
-  // 3. Send ACK only if it's the first image in the batch (to avoid spamming)
-  if (isNewNote) {
-    try {
-      await sendWhatsAppText(phone, '✅ Recibiendo álbum de fotos...')
-      console.log(`[WA Webhook] ACK inicial de álbum enviado — phone=${phone} wamid=${msgId}`)
-    } catch (ackErr: any) {
-      console.error(`[WA Webhook] FALLO al enviar ACK — phone=${phone}`)
+  // 3. DB-backed debounce (3 s): wait, then check if a NEWER image from this
+  // phone arrived after we committed. If yes, that request will send the ACK.
+  // If no, we are the last photo → send the single consolidated confirmation.
+  await new Promise<void>(resolve => setTimeout(resolve, 3000))
+
+  try {
+    const laterRes = await pool.query(`
+      SELECT id FROM field_notes
+      WHERE source = 'WHATSAPP'
+        AND whatsapp_phone = $1
+        AND created_at > $2
+        AND category = 'GENERAL'
+      LIMIT 1
+    `, [phone, processedAt!.toISOString()])
+
+    if ((laterRes.rowCount ?? 0) > 0) {
+      // A newer image arrived → delegate the ACK responsibility to that request
+      console.log(`[WA Webhook] Debounce: imagen más reciente detectada, delegando ACK — phone=${phone}`)
+      return
     }
+
+    // We are the last image in the burst → send the single final ACK
+    await sendWhatsAppText(phone, '✅ Registro recibido.')
+    console.log(`[WA Webhook] ACK único enviado tras álbum completo — phone=${phone} note=${noteId}`)
+  } catch (ackErr: any) {
+    const is401 = ackErr?.message?.includes('401') || ackErr?.message?.includes('190')
+    console.error(
+      `[WhatsApp Webhook Error] FALLO al enviar ACK de álbum — phone=${phone} note=${noteId}\n` +
+      (is401
+        ? '  → CAUSA: WHATSAPP_TOKEN inválido o expirado. Renovar en Meta Developers.'
+        : `  → ${ackErr?.message}`)
+    )
   }
 }
-
 
 // ── Non-image messages (audio, video, text, document) ────────────────────────
 async function handleNonImageMessage(
