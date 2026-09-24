@@ -20,7 +20,6 @@
  *  - Audio y texto NO entran en el buffer y se insertan de forma inmediata
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { waitUntil } from '@vercel/functions'
 import crypto, { createHmac } from 'crypto'
 import { downloadWhatsAppMedia, sendWhatsAppText } from '@/lib/whatsapp'
 import { transcribeAudio } from '@/lib/speechToText'
@@ -33,9 +32,27 @@ const APP_SECRET      = process.env.WHATSAPP_APP_SECRET    ?? ''
 const TOKEN           = process.env.WHATSAPP_TOKEN         ?? ''
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID ?? ''
 
-// ── Photo Album Grouping ──────────────────────────────────────────────────────
-// WhatsApp triggers parallel webhooks for albums. To group them reliably across
-// multiple Vercel serverless instances, we rely on the database with a lock.
+// ── Photo Album Debounce Buffer ───────────────────────────────────────────────
+// Keyed by whatsapp phone number (E.164). Accumulates images from the same
+// sender within a DEBOUNCE_MS window and flushes them as a single DB row.
+const DEBOUNCE_MS = 6000  // 6 s window to collect images from the same sender
+
+interface PhotoBuffer {
+  orgId:      string
+  profileId:  string | null
+  phone:      string
+  waDisplayName: string | null
+  mediaItems: { mediaId: string, msgId: string }[]
+  caption:    string | null       // first non-null caption wins
+  msgIds:     string[]            // all wamids in the batch (for dedup)
+  occurredAt: Date                // timestamp of the first image
+  timer:      ReturnType<typeof setTimeout>
+  batchId:    string
+}
+
+// Global buffer — persists across requests within the same process.
+// eslint-disable-next-line prefer-const
+let photoBuffers: Map<string, PhotoBuffer> = new Map()
 
 // ── GET: verificación del webhook + health-check ──────────────────────────────
 export async function GET(req: NextRequest) {
@@ -86,10 +103,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Responder 200 a Meta inmediato (SLA < 20s) — procesar de forma asíncrona
-  waitUntil(
-    processPayload(JSON.parse(rawBody)).catch(e =>
-      console.error('[WhatsApp Webhook] processPayload error:', e)
-    )
+  processPayload(JSON.parse(rawBody)).catch(e =>
+    console.error('[WhatsApp Webhook] processPayload error:', e)
   )
 
   return NextResponse.json({ ok: true })
@@ -240,14 +255,25 @@ async function processMessage(msg: any, waDisplayName: string | null) {
 
   // ── 5. Enrutar según tipo ─────────────────────────────────────────────────
   if (actualMsgType === 'image') {
-    // ── 5a. Fotos — pasan por DB transaction con advisory lock ────────────────
-    await handleImageMessage(
+    // ── 5a. Fotos — pasan por el buffer de debounce ───────────────────────
+    await handleImageWithDebounce(
       msg, phone, msgId, occurredAt,
       linkByPhone.org_id, linkByPhone.profile_id,
       waDisplayName
     )
   } else {
     // ── 5b. Audio / Video / Texto — inserción inmediata ───────────────────
+    // Si hay un buffer de fotos activo para este sender, hay que flushearlo
+    // primero para no mezclar el álbum con el mensaje posterior.
+    const existingBuffer = photoBuffers.get(phone)
+    if (existingBuffer) {
+      clearTimeout(existingBuffer.timer)
+      photoBuffers.delete(phone)
+      await flushPhotoBuffer(existingBuffer).catch(e =>
+        console.error('[WA Webhook] Error flushing photo buffer before non-image:', e)
+      )
+    }
+
     await handleNonImageMessage(
       msg, actualMsgType, phone, msgId, msgType, occurredAt,
       linkByPhone.org_id, linkByPhone.profile_id,
@@ -256,8 +282,8 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   }
 }
 
-// ── Image handler with DB-level grouping ──────────────────────────────────────
-async function handleImageMessage(
+// ── Image debounce handler ────────────────────────────────────────────────────
+async function handleImageWithDebounce(
   msg:           any,
   phone:         string,
   msgId:         string,
@@ -270,89 +296,129 @@ async function handleImageMessage(
   if (!mediaId) return
 
   const caption = msg.image?.caption?.trim() || null
+  const existing = photoBuffers.get(phone)
 
-  // 1. Eagerly download and upload the media
-  let photoUrl: string | null = null
-  try {
-    const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
-    let ext = 'jpg'
-    if (mimeType.includes('png'))  ext = 'png'
-    else if (mimeType.includes('webp')) ext = 'webp'
-    const path = `bitacora-photos/wa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`
-    photoUrl = await uploadBufferToStorage(buffer, path, mimeType)
-  } catch (mediaErr: any) {
-    console.error(`[WA Webhook] Error al procesar imagen wamid=${msgId}: ${mediaErr?.message}`)
+  if (existing) {
+    // Extend existing buffer
+    clearTimeout(existing.timer)
+    existing.mediaItems.push({ mediaId, msgId })
+    if (caption && !existing.caption) existing.caption = caption
+    existing.msgIds.push(msgId)
+
+    existing.timer = setTimeout(async () => {
+      photoBuffers.delete(phone)
+      await flushPhotoBuffer(existing).catch(e =>
+        console.error('[WA Webhook] flushPhotoBuffer error:', e)
+      )
+    }, DEBOUNCE_MS)
+
+    console.log(`[WA Webhook] Imagen acumulada en buffer — phone=${phone} total=${existing.mediaItems.length} wamid=${msgId}`)
+  } else {
+    // Start a new buffer
+    const batchId = `wa-batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+    const buf: PhotoBuffer = {
+      orgId,
+      profileId,
+      phone,
+      waDisplayName,
+      mediaItems: [{ mediaId, msgId }],
+      caption,
+      msgIds: [msgId],
+      occurredAt,
+      timer: setTimeout(async () => {
+        photoBuffers.delete(phone)
+        await flushPhotoBuffer(buf).catch(e =>
+          console.error('[WA Webhook] flushPhotoBuffer error:', e)
+        )
+      }, DEBOUNCE_MS),
+      batchId,
+    }
+
+    photoBuffers.set(phone, buf)
+    console.log(`[WA Webhook] Nuevo buffer iniciado — phone=${phone} batchId=${batchId} wamid=${msgId}`)
+  }
+}
+
+// ── Flush: escribir UN registro con todas las fotos acumuladas ────────────────
+async function flushPhotoBuffer(buf: PhotoBuffer) {
+  if (buf.mediaItems.length === 0) {
+    console.warn('[WA Webhook] flushPhotoBuffer: buffer vacío, nada que guardar')
     return
   }
 
-  if (!photoUrl) return
+  const batchId   = buf.batchId
+  const primaryMsgId = buf.msgIds[0]
+  const title     = buildTitle('image')
 
-  // 2. Insert or append to recent album using a DB transaction with advisory lock
-  const pool = getServicePool()
-  const client = await pool.connect()
-  let isNewNote = false
+  console.log(`[WA Webhook] Flushing buffer — phone=${buf.phone} photos=${buf.mediaItems.length} batchId=${batchId}`)
 
-  try {
-    await client.query('BEGIN')
-
-    // Use phone digits as a lock key to avoid race conditions with concurrent image webhooks from the same sender
-    const lockKey = phone.replace(/\D/g, '').slice(-15)
-    await client.query('SELECT pg_advisory_xact_lock($1)', [lockKey])
-
-    // Find a recent image note from this sender in the last 5 minutes
-    const recentRes = await client.query(`
-      SELECT id, photo_urls FROM field_notes
-      WHERE source = 'WHATSAPP'
-        AND whatsapp_phone = $1
-        AND created_at > NOW() - INTERVAL '5 minutes'
-        AND category = 'GENERAL'
-      ORDER BY created_at DESC
-      LIMIT 1
-    `, [phone])
-
-    if ((recentRes.rowCount ?? 0) > 0 && Array.isArray(recentRes.rows[0].photo_urls)) {
-      // Append to existing
-      const noteId = recentRes.rows[0].id
-      await client.query(`
-        UPDATE field_notes
-        SET photo_urls = photo_urls || $1::jsonb,
-            content = COALESCE(field_notes.content, $2)
-        WHERE id = $3
-      `, [JSON.stringify([photoUrl]), caption, noteId])
-      console.log(`[WA Webhook] Imagen agregada a álbum existente — phone=${phone} wamid=${msgId}`)
-    } else {
-      // Insert new note
-      isNewNote = true
-      const title = buildTitle('image')
-      const content = caption || null
-      await client.query(`
-        INSERT INTO field_notes
-           (org_id, created_by, paddock_id, tags, category, title, content,
-            photo_url, photo_urls, occurred_at, source, status, whatsapp_phone, whatsapp_msg_id)
-        VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, $8, $9, 'WHATSAPP', 'APPROVED', $10, $11)
-      `, [
-        orgId, profileId, ['GENERAL'], 'GENERAL', title, content,
-        photoUrl, JSON.stringify([photoUrl]), occurredAt.toISOString(), phone, msgId
-      ])
-      console.log(`[WA Webhook] Nuevo álbum iniciado — phone=${phone} wamid=${msgId}`)
+  // Download all media in parallel
+  const photoUrls: string[] = []
+  const uploadPromises = buf.mediaItems.map(async (item) => {
+    try {
+      const { buffer, mimeType } = await downloadWhatsAppMedia(item.mediaId)
+      let ext = 'jpg'
+      if (mimeType.includes('png'))  ext = 'png'
+      else if (mimeType.includes('webp')) ext = 'webp'
+      const path = `bitacora-photos/wa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`
+      const url = await uploadBufferToStorage(buffer, path, mimeType)
+      photoUrls.push(url)
+    } catch (mediaErr: any) {
+      console.error(`[WA Webhook] Error al procesar imagen wamid=${item.msgId}: ${mediaErr?.message}`)
     }
+  })
 
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK')
-    console.error('[WA Webhook] DB Error agrupando fotos:', err)
-  } finally {
-    client.release()
+  await Promise.all(uploadPromises)
+
+  if (photoUrls.length === 0) {
+    console.warn('[WA Webhook] flushPhotoBuffer: todas las descargas fallaron, no se guardará el registro')
+    return
   }
 
-  // 3. Send ACK only if it's the first image in the batch (to avoid spamming)
-  if (isNewNote) {
-    try {
-      await sendWhatsAppText(phone, '✅ Recibiendo álbum de fotos...')
-      console.log(`[WA Webhook] ACK inicial de álbum enviado — phone=${phone} wamid=${msgId}`)
-    } catch (ackErr: any) {
-      console.error(`[WA Webhook] FALLO al enviar ACK — phone=${phone}`)
-    }
+  const n = photoUrls.length
+  const photoUrl = photoUrls[0]
+  const content = buf.caption || (n > 1 ? '[Álbum de fotos]' : null)
+
+  await serviceMutate(
+    `INSERT INTO field_notes
+       (org_id, created_by, paddock_id, tags, category, title, content,
+        audio_url, photo_url, photo_urls, video_url, audio_duration_secs, occurred_at,
+        source, status, whatsapp_phone, whatsapp_msg_id, wa_batch_id)
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,NULL,$7,$8,NULL,NULL,$9,'WHATSAPP','APPROVED',$10,$11,$12)`,
+    [
+      buf.orgId,
+      buf.profileId,
+      ['GENERAL'],
+      'GENERAL',
+      title,
+      content,               // description from WA caption
+      photoUrl,              // photo_url = first image (legacy field)
+      JSON.stringify(photoUrls), // photo_urls = all images
+      buf.occurredAt.toISOString(),
+      buf.phone,
+      primaryMsgId,
+      batchId,
+    ]
+  )
+
+  console.log(`[WA Webhook] Álbum guardado — phone=${buf.phone} fotos=${n} batchId=${batchId}`)
+
+  // Send a single ACK for the whole album
+  try {
+    const msg = n === 1
+      ? '✅ Registro recibido (1 foto).'
+      : `✅ Registro recibido (${n} fotos).`
+    await sendWhatsAppText(buf.phone, msg)
+    console.log(`[WA Webhook] ACK álbum enviado — phone=${buf.phone} fotos=${n}`)
+  } catch (ackErr: any) {
+    const is401 = ackErr?.message?.includes('401') || ackErr?.message?.includes('190')
+    console.error(
+      `[WA Webhook] FALLO al enviar ACK de álbum — phone=${buf.phone}\n` +
+      (is401
+        ? '  → CAUSA: WHATSAPP_TOKEN inválido o expirado.'
+        : `  → ${ackErr?.message}`)
+    )
   }
 }
 
