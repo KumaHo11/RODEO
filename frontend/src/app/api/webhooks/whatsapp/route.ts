@@ -10,7 +10,14 @@
  *
  * Flujo de novedades (canal activo):
  *  1. Operario vinculado envía audio/foto/texto
- *  2. Se transcribe (audio) y se guarda en field_notes como PENDING_REVIEW
+ *  2. Se transcribe (audio) y se guarda en field_notes como APPROVED
+ *
+ * Agrupación de fotos (Photo Album Debounce):
+ *  - Meta Cloud API dispara un webhook por cada imagen del álbum (milisegundos de diferencia)
+ *  - Al recibir la primera imagen de un sender, se inicia un buffer y un timer de 2.5s
+ *  - Cada imagen adicional del mismo sender reinicia el timer y acumula la URL
+ *  - Al expirar el timer se escribe UN SOLO registro con todas las fotos en photo_urls[]
+ *  - Audio y texto NO entran en el buffer y se insertan de forma inmediata
  */
 import { NextRequest, NextResponse } from 'next/server'
 import crypto, { createHmac } from 'crypto'
@@ -25,14 +32,36 @@ const APP_SECRET      = process.env.WHATSAPP_APP_SECRET    ?? ''
 const TOKEN           = process.env.WHATSAPP_TOKEN         ?? ''
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID ?? ''
 
+// ── Photo Album Debounce Buffer ───────────────────────────────────────────────
+// Keyed by whatsapp phone number (E.164). Accumulates images from the same
+// sender within a DEBOUNCE_MS window and flushes them as a single DB row.
+//
+// NOTE: This is an in-process Map — works correctly for a single Cloud Run
+// instance (which is the typical deployment). If you ever need multi-instance
+// support, replace with a Redis-backed store using NX+PX atomic SET.
+const DEBOUNCE_MS = 2500  // 2.5 s window to collect images from the same sender
+
+interface PhotoBuffer {
+  orgId:      string
+  profileId:  string | null
+  phone:      string
+  waDisplayName: string | null
+  photoUrls:  string[]
+  caption:    string | null       // first non-null caption wins
+  msgIds:     string[]            // all wamids in the batch (for dedup)
+  occurredAt: Date                // timestamp of the first image
+  timer:      ReturnType<typeof setTimeout>
+}
+
+// Global buffer — persists across requests within the same process.
+// eslint-disable-next-line prefer-const
+let photoBuffers: Map<string, PhotoBuffer> = new Map()
 
 // ── GET: verificación del webhook + health-check ──────────────────────────────
 export async function GET(req: NextRequest) {
-  const { searchParams, pathname } = new URL(req.url)
+  const { searchParams } = new URL(req.url)
 
   // ── Health-check rápido: GET /api/webhooks/whatsapp?health=1 ─────────────
-  // Permite verificar en segundos si las env vars críticas están presentes
-  // sin necesitar enviar un mensaje de WhatsApp real.
   if (searchParams.get('health') === '1') {
     const status = {
       ok: true,
@@ -65,11 +94,8 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get('x-hub-signature-256') ?? ''
 
   // Guard: si APP_SECRET no está configurado, no podemos validar firmas.
-  // Retornamos 200 para evitar que Meta desactive el webhook por reintentos fallidos,
-  // pero NO procesamos el payload por razones de seguridad. Revisar GitHub Secrets.
   if (!APP_SECRET) {
-    console.error('[WA Webhook] CRITICAL: WHATSAPP_APP_SECRET no configurado en el entorno de Cloud Run. ' +
-      'Verificar GitHub Secrets del entorno de staging. Payload descartado por seguridad.')
+    console.error('[WA Webhook] CRITICAL: WHATSAPP_APP_SECRET no configurado. Payload descartado.')
     return NextResponse.json({ ok: true, warning: 'Signature validation disabled — payload discarded' })
   }
 
@@ -93,25 +119,20 @@ async function processPayload(body: any) {
   const changes = entry?.changes?.[0]
   const value   = changes?.value
 
-  // Log completo del value para diagnóstico (status updates, reads receipts, etc.)
   if (!value?.messages?.length) {
-    // Puede ser un status update (delivered, read) — no es un error, pero lo logueamos
-    // si viene algo inesperado para facilitar debugging.
     const statusType = value?.statuses?.[0]?.status
     if (statusType) {
-      console.log(`[WA Webhook] Status update recibido: ${statusType} — ignorado (no es un mensaje)`)
+      console.log(`[WA Webhook] Status update recibido: ${statusType} — ignorado`)
     } else if (value) {
-      console.warn('[WA Webhook] Payload sin mensajes ni statuses conocidos:', JSON.stringify(value).slice(0, 300))
+      console.warn('[WA Webhook] Payload sin mensajes ni statuses:', JSON.stringify(value).slice(0, 300))
     }
     return
   }
 
-  // Nombre del perfil de WA del primer contacto (puede ser null)
   const waDisplayName: string | null = value?.contacts?.[0]?.profile?.name ?? null
 
   console.log(`[WA Webhook] Procesando ${value.messages.length} mensaje(s) en payload`)
 
-  // Process messages sequentially to allow batch detection within the same payload
   for (const msg of value.messages) {
     await processMessage(msg, waDisplayName).catch(e =>
       console.error('[WhatsApp] processMessage error:', msg?.id, e?.message, e?.stack?.slice(0, 500))
@@ -121,7 +142,7 @@ async function processPayload(body: any) {
 
 // ── Lógica principal por mensaje ──────────────────────────────────────────────
 async function processMessage(msg: any, waDisplayName: string | null) {
-  const rawPhone   = msg.from as string   // +5491112345678 (E.164 sin +, Meta lo envía sin +)
+  const rawPhone   = msg.from as string
   const phone      = rawPhone.startsWith('+') ? rawPhone : `+${rawPhone}`
   const msgId      = msg.id  as string
   const msgType    = msg.type as 'text' | 'audio' | 'image' | 'document' | 'video'
@@ -131,13 +152,9 @@ async function processMessage(msg: any, waDisplayName: string | null) {
 
   const textBody = msg.text?.body?.trim() ?? ''
 
-  // Log de diagnóstico — útil para verificar que el webhook está recibiendo mensajes
   console.log(`[WA Webhook] from=${phone} type=${msgType} text=${textBody.slice(0, 80)}`)
 
-  // ── 1. Detectar patrón de activación por token criptográfico (legacy / fallback) ──
-  //
-  // Backward compatible: links generados antes del cambio de UX siguen usando TOKEN_
-  // Los nuevos links usan activación por teléfono (ver bloque 2 más abajo).
+  // ── 1. Detectar patrón de activación por token criptográfico (legacy) ──────
   let tokenMatch: RegExpMatchArray | null = null
   if (/TOKEN_/i.test(textBody)) {
     const afterToken = textBody.replace(/[\s\S]*?TOKEN_/i, '').replace(/[^a-f0-9]/gi, '')
@@ -146,7 +163,7 @@ async function processMessage(msg: any, waDisplayName: string | null) {
       tokenMatch = [textBody, cleanToken]
       console.log(`[WA Webhook] Token de activación detectado: ${cleanToken.slice(0, 16)}...`)
     } else {
-      console.warn(`[WA Webhook] Se detectó TOKEN_ pero el valor no tiene 64 caracteres hex: "${afterToken.slice(0, 40)}"`)
+      console.warn(`[WA Webhook] TOKEN_ detectado pero inválido: "${afterToken.slice(0, 40)}"`)
     }
   }
   if (tokenMatch) {
@@ -155,7 +172,6 @@ async function processMessage(msg: any, waDisplayName: string | null) {
   }
 
   // ── 2. Buscar vínculo por teléfono ──────────────────────────────────────────
-  // NOTA: Usa serviceQueryOne (BYPASSRLS) porque el webhook no tiene contexto RLS
   const linkByPhone = await serviceQueryOne<{ id: string; org_id: string; is_active: boolean; profile_id: string | null; activation_token: string | null }>(
     'SELECT id, org_id, is_active, profile_id, activation_token FROM whatsapp_links WHERE phone = $1 ORDER BY updated_at DESC LIMIT 1',
     [phone]
@@ -170,19 +186,14 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     return
   }
 
-  // ── 2b. Invitación pendiente — activar por teléfono (nuevo flujo sin TOKEN) ─
-  // Si el link existe pero no está activo, cualquier mensaje del número confirma
-  // la intención y activa el vínculo (el token en DB garantiza que fue generado
-  // legítimamente para ese número).
+  // ── 2b. Invitación pendiente — activar por teléfono ─────────────────────────
   if (!linkByPhone.is_active) {
     console.log(`[WA Webhook] Activando vínculo por teléfono: phone=${phone} link=${linkByPhone.id}`)
     await handleInvitationToken(phone, linkByPhone.activation_token ?? '', waDisplayName)
     return
   }
 
-  // ── 3. Validar permisos (Nivel 1: tenant, Nivel 2: miembro) ───────────────
-
-  // Nivel 1 — ¿el tenant tiene el módulo WhatsApp activo?
+  // ── 3. Validar permisos ───────────────────────────────────────────────────
   const orgRow = await serviceQueryOne<{
     whatsapp_enabled: boolean | null
     plan_slug: string | null
@@ -202,12 +213,11 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     await sendWhatsAppText(
       phone,
       '⚠️ El módulo de WhatsApp no está activo para este establecimiento. ' +
-      'Contactá al administrador o accedé desde un plan superior (Planificador, Holístico o Latifundio).'
+      'Contactá al administrador o accedé desde un plan superior.'
     )
     return
   }
 
-  // Nivel 2 — ¿el miembro tiene permiso individual de WA?
   if (linkByPhone.profile_id) {
     const profilePerms = await serviceQueryOne<{ whatsapp_bitacora_enabled: boolean }>(
       'SELECT whatsapp_bitacora_enabled FROM profiles WHERE id = $1',
@@ -216,30 +226,21 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     if (profilePerms?.whatsapp_bitacora_enabled === false) {
       await sendWhatsAppText(
         phone,
-        '⛔ Tu rol no tiene habilitado el canal de WhatsApp para este campo. ' +
-        'Contactá al administrador del establecimiento para que lo active.'
+        '⛔ Tu rol no tiene habilitado el canal de WhatsApp. ' +
+        'Contactá al administrador del establecimiento.'
       )
       return
     }
   }
 
-  // ── 4. Canal activo — procesar novedad de campo ────────────────────
-  // Deduplicación por wamid
+  // ── 4. Deduplicación por wamid ────────────────────────────────────────────
   const existing = await serviceQueryOne<{ id: string }>(
     'SELECT id FROM field_notes WHERE whatsapp_msg_id = $1',
     [msgId]
   )
   if (existing) return
 
-  let audioUrl:     string | null = null
-  let photoUrl:     string | null = null
-  let videoUrl:     string | null = null
-  let content:      string | null = null
-  let durationSecs: number | null = null
-  let waBatchId:    string | null = null
-  let isBatchFirst  = false   // true if this image is the first in a new batch
-  const title = buildTitle(msgType)
-
+  // Normalizar tipo de documento
   let actualMsgType = msgType
   if (msgType === 'document') {
     const mime = msg.document?.mime_type || ''
@@ -255,14 +256,194 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     }
   }
 
-  // Procesar media con try/catch individual: si falla el download/upload,
-  // la nota igual se guarda (sin media) — es mejor tener el registro que nada.
+  // ── 5. Enrutar según tipo ─────────────────────────────────────────────────
+  if (actualMsgType === 'image') {
+    // ── 5a. Fotos — pasan por el buffer de debounce ───────────────────────
+    await handleImageWithDebounce(
+      msg, phone, msgId, occurredAt,
+      linkByPhone.org_id, linkByPhone.profile_id,
+      waDisplayName
+    )
+  } else {
+    // ── 5b. Audio / Video / Texto — inserción inmediata ───────────────────
+    // Si hay un buffer de fotos activo para este sender, hay que flushearlo
+    // primero para no mezclar el álbum con el mensaje posterior.
+    const existingBuffer = photoBuffers.get(phone)
+    if (existingBuffer) {
+      clearTimeout(existingBuffer.timer)
+      photoBuffers.delete(phone)
+      await flushPhotoBuffer(existingBuffer).catch(e =>
+        console.error('[WA Webhook] Error flushing photo buffer before non-image:', e)
+      )
+    }
+
+    await handleNonImageMessage(
+      msg, actualMsgType, phone, msgId, msgType, occurredAt,
+      linkByPhone.org_id, linkByPhone.profile_id,
+      waDisplayName
+    )
+  }
+}
+
+// ── Image debounce handler ────────────────────────────────────────────────────
+async function handleImageWithDebounce(
+  msg:           any,
+  phone:         string,
+  msgId:         string,
+  occurredAt:    Date,
+  orgId:         string,
+  profileId:     string | null,
+  waDisplayName: string | null,
+) {
+  const mediaId = msg.image?.id
+  if (!mediaId) return
+
+  // Download + upload the image eagerly (do NOT wait for the debounce timer —
+  // we need the storage URL now before the buffer flushes).
+  let photoUrl: string | null = null
+  try {
+    const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
+    let ext = 'jpg'
+    if (mimeType.includes('png'))  ext = 'png'
+    else if (mimeType.includes('webp')) ext = 'webp'
+    const path = `bitacora-photos/wa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`
+    photoUrl = await uploadBufferToStorage(buffer, path, mimeType)
+  } catch (mediaErr: any) {
+    console.error(`[WA Webhook] Error al procesar imagen wamid=${msgId}: ${mediaErr?.message}`)
+    // Even if the download failed, keep the entry in the buffer for ACK purposes
+  }
+
+  const caption = msg.image?.caption?.trim() || null
+
+  const existing = photoBuffers.get(phone)
+
+  if (existing) {
+    // Extend existing buffer
+    clearTimeout(existing.timer)
+    if (photoUrl) existing.photoUrls.push(photoUrl)
+    if (caption && !existing.caption) existing.caption = caption
+    existing.msgIds.push(msgId)
+
+    existing.timer = setTimeout(async () => {
+      photoBuffers.delete(phone)
+      await flushPhotoBuffer(existing).catch(e =>
+        console.error('[WA Webhook] flushPhotoBuffer error:', e)
+      )
+    }, DEBOUNCE_MS)
+
+    console.log(`[WA Webhook] Imagen acumulada en buffer — phone=${phone} total=${existing.photoUrls.length} wamid=${msgId}`)
+  } else {
+    // Start a new buffer
+    const batchId = `wa-batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+    const buf: PhotoBuffer = {
+      orgId,
+      profileId,
+      phone,
+      waDisplayName,
+      photoUrls: photoUrl ? [photoUrl] : [],
+      caption,
+      msgIds: [msgId],
+      occurredAt,
+      timer: setTimeout(async () => {
+        photoBuffers.delete(phone)
+        await flushPhotoBuffer(buf).catch(e =>
+          console.error('[WA Webhook] flushPhotoBuffer error:', e)
+        )
+      }, DEBOUNCE_MS),
+    }
+    // Attach batchId so we can reference it in the flush
+    ;(buf as any).batchId = batchId
+
+    photoBuffers.set(phone, buf)
+    console.log(`[WA Webhook] Nuevo buffer iniciado — phone=${phone} batchId=${batchId} wamid=${msgId}`)
+  }
+}
+
+// ── Flush: escribir UN registro con todas las fotos acumuladas ────────────────
+async function flushPhotoBuffer(buf: PhotoBuffer) {
+  if (buf.photoUrls.length === 0 && buf.msgIds.length === 0) {
+    console.warn('[WA Webhook] flushPhotoBuffer: buffer vacío, nada que guardar')
+    return
+  }
+
+  const batchId   = (buf as any).batchId as string
+  const n         = buf.photoUrls.length
+  const photoUrl  = buf.photoUrls[0] ?? null
+  // photo_urls: store all URLs as a JSONB array
+  const photoUrls = buf.photoUrls
+  const title     = buildTitle('image')
+  // Use the first wamid as the dedup key for this compound record
+  const primaryMsgId = buf.msgIds[0]
+
+  console.log(`[WA Webhook] Flushing buffer — phone=${buf.phone} photos=${n} batchId=${batchId}`)
+
+  await serviceMutate(
+    `INSERT INTO field_notes
+       (org_id, created_by, paddock_id, tags, category, title, content,
+        audio_url, photo_url, photo_urls, video_url, audio_duration_secs, occurred_at,
+        source, status, whatsapp_phone, whatsapp_msg_id, wa_batch_id)
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,NULL,$7,$8,NULL,NULL,$9,'WHATSAPP','APPROVED',$10,$11,$12)`,
+    [
+      buf.orgId,
+      buf.profileId,
+      ['GENERAL'],
+      'GENERAL',
+      title,
+      buf.caption,           // description from WA caption
+      photoUrl,              // photo_url = first image (legacy field)
+      photoUrls,             // photo_urls = all images (JSONB array, pg serializes automatically)
+      buf.occurredAt.toISOString(),
+      buf.phone,
+      primaryMsgId,
+      batchId,
+    ]
+  )
+
+  console.log(`[WA Webhook] Álbum guardado — phone=${buf.phone} fotos=${n} batchId=${batchId}`)
+
+  // Send a single ACK for the whole album
+  try {
+    const msg = n === 1
+      ? '✅ Registro recibido (1 foto).'
+      : `✅ Registro recibido (${n} fotos).`
+    await sendWhatsAppText(buf.phone, msg)
+    console.log(`[WA Webhook] ACK álbum enviado — phone=${buf.phone} fotos=${n}`)
+  } catch (ackErr: any) {
+    const is401 = ackErr?.message?.includes('401') || ackErr?.message?.includes('190')
+    console.error(
+      `[WA Webhook] FALLO al enviar ACK de álbum — phone=${buf.phone}\n` +
+      (is401
+        ? '  → CAUSA: WHATSAPP_TOKEN inválido o expirado.'
+        : `  → ${ackErr?.message}`)
+    )
+  }
+}
+
+// ── Non-image messages (audio, video, text, document) ────────────────────────
+async function handleNonImageMessage(
+  msg:           any,
+  actualMsgType: string,
+  phone:         string,
+  msgId:         string,
+  originalType:  string,
+  occurredAt:    Date,
+  orgId:         string,
+  profileId:     string | null,
+  waDisplayName: string | null,
+) {
+  const textBody = msg.text?.body?.trim() ?? ''
+  let audioUrl:     string | null = null
+  let videoUrl:     string | null = null
+  let content:      string | null = null
+  let durationSecs: number | null = null
+  const title = buildTitle(actualMsgType)
+
   if (actualMsgType === 'audio') {
     const mediaId = msg.audio?.id ?? msg.document?.id
     if (mediaId) {
       try {
         const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
-        // Detectar extensión: ogg (WhatsApp nativo), mp4, webm
         let ext = 'ogg'
         if (mimeType.includes('mp4') || mimeType.includes('mpeg')) ext = 'mp4'
         else if (mimeType.includes('webm')) ext = 'webm'
@@ -272,61 +453,11 @@ async function processMessage(msg: any, waDisplayName: string | null) {
         try {
           content = await transcribeAudio(buffer, mimeType)
         } catch (txErr: any) {
-          console.warn(`[WA Webhook] Transcripción falló (audio guardado OK) — ${txErr?.message}`)
+          console.warn(`[WA Webhook] Transcripción falló — ${txErr?.message}`)
         }
       } catch (mediaErr: any) {
         console.error(`[WA Webhook] Error al procesar audio wamid=${msgId}: ${mediaErr?.message}`)
         content = '[Audio — no se pudo procesar]'
-      }
-    }
-  } else if (actualMsgType === 'image') {
-    const mediaId = msg.image?.id
-    if (mediaId) {
-      try {
-        const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
-        // Normalizar extensión para storage (avif, heic → jpg)
-        let ext = 'jpg'
-        if (mimeType.includes('png')) ext = 'png'
-        else if (mimeType.includes('webp')) ext = 'webp'
-        const path = `bitacora-photos/wa-${Date.now()}.${ext}`
-        photoUrl = await uploadBufferToStorage(buffer, path, mimeType)
-        content  = msg.image?.caption ?? null
-
-        // ── Image Batching ─────────────────────────────────────────────────
-        // Look for an existing batch from this sender in the last 30 seconds.
-        // If found and batch is not yet at max capacity (3), join it.
-        // Otherwise, start a new batch.
-        const BATCH_WINDOW_MS  = 30 * 1000
-        const MAX_BATCH_PHOTOS = 3
-        const cutoff = new Date(Date.now() - BATCH_WINDOW_MS).toISOString()
-
-        const existingBatch = await serviceQueryOne<{ wa_batch_id: string; batch_count: number }>(
-          `SELECT wa_batch_id,
-                  COUNT(*)::int AS batch_count
-           FROM field_notes
-           WHERE whatsapp_phone = $1
-             AND wa_batch_id IS NOT NULL
-             AND created_at >= $2
-             AND source = 'WHATSAPP'
-           GROUP BY wa_batch_id
-           ORDER BY MAX(created_at) DESC
-           LIMIT 1`,
-          [phone, cutoff]
-        )
-
-        if (existingBatch && existingBatch.batch_count < MAX_BATCH_PHOTOS) {
-          // Join existing batch — no ACK (the first image in the batch already sent it)
-          waBatchId  = existingBatch.wa_batch_id
-          isBatchFirst = false
-        } else {
-          // Start a new batch (or no grouping if batch is full)
-          waBatchId    = `wa-batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-          isBatchFirst = true
-        }
-
-      } catch (mediaErr: any) {
-        console.error(`[WA Webhook] Error al procesar imagen wamid=${msgId}: ${mediaErr?.message}`)
-        content = msg.image?.caption ?? '[Imagen — no se pudo procesar]'
       }
     }
   } else if (actualMsgType === 'video') {
@@ -334,7 +465,6 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     if (mediaId) {
       try {
         const { buffer, mimeType } = await downloadWhatsAppMedia(mediaId)
-        // Store as video (mp4) — NOT in photo_url
         const path = `bitacora-media/videos/wa-${Date.now()}.mp4`
         videoUrl = await uploadBufferToStorage(buffer, path, mimeType)
         content  = msg.video?.caption ?? null
@@ -349,64 +479,48 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     content = textBody || null
   }
 
-  // Status APPROVED para notas simples (sin IA de análisis)
-  // Solo las notas que pasen por análisis semántico futuro usarán PENDING_REVIEW
   await serviceMutate(
     `INSERT INTO field_notes
        (org_id, created_by, paddock_id, tags, category, title, content,
-        audio_url, photo_url, video_url, audio_duration_secs, occurred_at,
+        audio_url, photo_url, photo_urls, video_url, audio_duration_secs, occurred_at,
         source, status, whatsapp_phone, whatsapp_msg_id, wa_batch_id)
-     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,$11,'WHATSAPP','APPROVED',$12,$13,$14)`,
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,NULL,'[]',$8,$9,$10,'WHATSAPP','APPROVED',$11,$12,NULL)`,
     [
-      linkByPhone.org_id,
-      linkByPhone.profile_id,
+      orgId,
+      profileId,
       ['GENERAL'],
       'GENERAL',
       title,
       content,
       audioUrl,
-      photoUrl,
       videoUrl,
       durationSecs,
       occurredAt.toISOString(),
       phone,
       msgId,
-      waBatchId,
     ]
   )
 
-  console.log(`[WA Webhook] Nota guardada — wamid=${msgId} type=${msgType} audio=${!!audioUrl} photo=${!!photoUrl} batch=${waBatchId ?? 'none'}`)
+  console.log(`[WA Webhook] Nota guardada — wamid=${msgId} type=${actualMsgType} audio=${!!audioUrl} video=${!!videoUrl}`)
 
-  // Solo enviar ACK para: tipos que no son imagen, o primera imagen de un nuevo batch
-  // Envuelto en try/catch propio: si el envío falla (token 401, límite de tasa, ventana 24h),
-  // el registro YA está guardado en DB — no revertir por error de confirmación.
-  if (msgType !== 'image' || isBatchFirst) {
-    try {
-      await sendWhatsAppText(phone, '\u2705 Registro recibido.')
-      console.log(`[WA Webhook] ACK enviado — phone=${phone} wamid=${msgId}`)
-    } catch (ackErr: any) {
-      // 401 = token expirado o inválido → pista explícita para el operador
-      const is401 = ackErr?.message?.includes('401') || ackErr?.message?.includes('190')
-      console.error(
-        `[WA Webhook] FALLO al enviar ACK (nota guardada OK) — phone=${phone} wamid=${msgId}\n` +
-        (is401
-          ? '  → CAUSA PROBABLE: WHATSAPP_TOKEN inválido o expirado. Verificar en Meta Business > System Users.'
-          : `  → ${ackErr?.message}`
-        )
-      )
-    }
+  try {
+    await sendWhatsAppText(phone, '✅ Registro recibido.')
+    console.log(`[WA Webhook] ACK enviado — phone=${phone} wamid=${msgId}`)
+  } catch (ackErr: any) {
+    const is401 = ackErr?.message?.includes('401') || ackErr?.message?.includes('190')
+    console.error(
+      `[WA Webhook] FALLO al enviar ACK — phone=${phone} wamid=${msgId}\n` +
+      (is401
+        ? '  → CAUSA: WHATSAPP_TOKEN inválido o expirado.'
+        : `  → ${ackErr?.message}`)
+    )
   }
-
 }
+
 
 // ── handleInvitationToken ─────────────────────────────────────────────────────
 /**
  * Valida el token de invitación y activa el vínculo del operario.
- * Si el profileId del link es null, auto-provisiona un Profile mínimo (sin Firebase).
- *
- * IMPORTANTE: Usa getServicePool() (rodeo_service, BYPASSRLS) en lugar de prisma
- * (rodeo_app, sujeto a RLS). Las políticas RLS bloquean INSERT en profiles
- * desde el contexto del webhook ya que no hay sesión de usuario autenticada.
  */
 async function handleInvitationToken(
   phone:         string,
@@ -419,11 +533,9 @@ async function handleInvitationToken(
     token_expires_at: Date | null;
   }
 
-  // ── 1. Buscar el link pendiente: por token (legacy) o por teléfono (nuevo flujo) ──
   let pending: PendingLink | null = null
 
   if (token) {
-    // Flujo legacy / backward-compat: token en el mensaje (TOKEN_xxxx)
     pending = await serviceQueryOne<PendingLink>(
       `SELECT id, org_id, profile_id, operator_name, role, token_expires_at
        FROM whatsapp_links
@@ -431,8 +543,6 @@ async function handleInvitationToken(
       [token]
     ) ?? null
   } else {
-    // Nuevo flujo: activación por teléfono — el mensaje amigable no lleva TOKEN_
-    // El número ya está pre-registrado en la invitación; cualquier mensaje confirma la intención.
     pending = await serviceQueryOne<PendingLink>(
       `SELECT id, org_id, profile_id, operator_name, role, token_expires_at
        FROM whatsapp_links
@@ -451,7 +561,6 @@ async function handleInvitationToken(
     return
   }
 
-  // ── 2. Verificar expiración ────────────────────────────────────────────────
   if (pending.token_expires_at && new Date(pending.token_expires_at) < new Date()) {
     await sendWhatsAppText(
       phone,
@@ -460,7 +569,6 @@ async function handleInvitationToken(
     return
   }
 
-  // ── 3. Verificar que el teléfono no esté ya activo ─────────────────────────
   const alreadyActive = await serviceQueryOne<{ id: string }>(
     'SELECT id FROM whatsapp_links WHERE phone = $1 AND is_active = true',
     [phone]
@@ -473,7 +581,6 @@ async function handleInvitationToken(
     return
   }
 
-  // ── 4. Datos para el mensaje de bienvenida ─────────────────────────────────
   const org = await serviceQueryOne<{ name: string; field_name: string | null }>(
     'SELECT name, field_name FROM organizations WHERE id = $1',
     [pending.org_id]
@@ -484,15 +591,13 @@ async function handleInvitationToken(
   const firstName    = resolvedName ? resolvedName.split(' ')[0] : null
   const greeting     = firstName ? `, ${firstName}` : ''
 
-  // ── 5. Transacción atómica con rodeo_service (BYPASSRLS) ───────────────────
   const pool = getServicePool()
   const client = await pool.connect()
-  let profileId: string | null = pending.profile_id  // declarado fuera del try para acceso en console.log
+  let profileId: string | null = pending.profile_id
   try {
     await client.query('BEGIN')
 
     if (!profileId) {
-      // Auto-provisioning: crear Profile mínimo para operario WhatsApp-only
       const newId = crypto.randomUUID()
       await client.query(
         `INSERT INTO profiles (id, organization_id, first_name, phone, team_role, role, is_active)
@@ -501,7 +606,6 @@ async function handleInvitationToken(
       )
       profileId = newId
     } else {
-      // Perfil existente: actualizar team_role y phone si no tenía
       await client.query(
         `UPDATE profiles SET team_role = $1, phone = COALESCE(NULLIF(phone, ''), $2)
          WHERE id = $3`,
@@ -509,14 +613,12 @@ async function handleInvitationToken(
       )
     }
 
-    // Liberar phone de otros links inactivos (evitar UNIQUE violation)
     await client.query(
       `UPDATE whatsapp_links SET phone = NULL
        WHERE phone = $1 AND id != $2 AND is_active = false`,
       [phone, pending.id]
     )
 
-    // Activar el vínculo: asignar teléfono real, profile_id, borrar token
     await client.query(
       `UPDATE whatsapp_links
        SET phone = $1, profile_id = $2, is_active = true,
@@ -538,9 +640,6 @@ async function handleInvitationToken(
 
   console.log(`[WA Webhook] Vínculo activado — phone=${phone} org=${pending.org_id} link=${pending.id} profile=${profileId}`)
 
-  // Enviar mensaje de bienvenida en try/catch independiente:
-  // si Meta rechaza el mensaje (ej. fuera de ventana de 24hs o error de template),
-  // la activación en DB ya está confirmada y no debe revertirse.
   try {
     await sendWhatsAppText(
       phone,

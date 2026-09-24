@@ -15,6 +15,18 @@ export interface BitacoraOperator {
   avatarUrl?: string
 }
 
+export interface PastureAIResult {
+  estimated_dry_matter_kg_ha: number;
+  confidence_interval: { min: number; max: number };
+  predominant_species: string[];
+  average_height_cm: number;
+  ground_cover_percentage: number;
+  growth_stage: 'vegetativo' | 'reproductivo' | 'senescente';
+  pasture_status: 'optimo' | 'bajo' | 'pasado';
+  regional_context_note: string;
+  recommendation: string;
+}
+
 export interface BitacoraAiResult {
   analyzedAt: string
   type: 'materia_seca' | 'condicion_corporal'
@@ -37,7 +49,6 @@ export interface BitacoraEntry {
   user_display_name?: string
   user_email?: string
   sender_phone?: string      // WA: número del remitente (E.164)
-  sender_name?: string       // WA: nombre de perfil
 
   // Content
   title?: string
@@ -104,23 +115,31 @@ export function mapRawNote(raw: any): BitacoraEntry {
     user_display_name: raw.user_display_name,
     user_email: raw.user_email,
     sender_phone: raw.sender_phone,
-    sender_name: raw.sender_name,
     title: raw.title,
     content: raw.content,
     audio_url: raw.audio_url,
     photo_url: raw.photo_url,
     groupedPhotos: (() => {
-      // Defensive: node-postgres may return text[] columns as a PG literal string
-      // like `{https://...,https://...}` instead of a real JS array.
-      // We normalize both representations so the UI always gets a proper string[].
+      // Defensive: node-postgres may return photo_urls (JSONB) in different shapes:
+      //  1. Native JS array (most common with pg JSONB): ["url1","url2"]
+      //  2. PG text[] literal: {https://...,https://...}
+      //  3. JSON string (stringified JSONB): '["url1","url2"]'
+      //  4. null / undefined / empty array
       let arr: any = raw.photo_urls
-      if (typeof arr === 'string' && arr.startsWith('{')) {
-        // PG text[] literal → strip braces, split on comma, handle quoted entries
-        arr = arr
-          .slice(1, -1)               // remove leading '{' and trailing '}'
-          .match(/(?:[^,"]|"[^"]*")+/g) // tokenize (handles quoted commas)
-          ?.map((s: string) => s.replace(/^"|"$/g, '').trim()) // strip quotes
-          .filter(Boolean) ?? []
+      if (typeof arr === 'string') {
+        if (arr.startsWith('{')) {
+          // PG text[] literal -> strip braces, split, unquote
+          arr = arr
+            .slice(1, -1)
+            .match(/(?:[^,"]|"[^"]*")+/g)
+            ?.map((s: string) => s.replace(/^"|"$/g, '').trim())
+            .filter(Boolean) ?? []
+        } else if (arr.startsWith('[')) {
+          // JSON array string from JSONB serialization
+          try { arr = JSON.parse(arr) } catch { arr = [] }
+        } else {
+          arr = []
+        }
       }
       return Array.isArray(arr) && arr.length > 0 ? (arr as string[]) : undefined
     })(),
@@ -140,10 +159,9 @@ export function mapRawNote(raw: any): BitacoraEntry {
   entry.mediaType = inferMediaType(entry)
 
   // ── Operator resolution (Fix 1): fallback chain ─────────────────────────
-  // Priority: user_display_name > sender_name > formatted phone > undefined
+  // Priority: user_display_name > formatted phone > undefined
   const operatorName =
     raw.user_display_name?.trim() ||
-    raw.sender_name?.trim() ||
     (raw.sender_phone ? formatPhoneDisplay(raw.sender_phone) : undefined)
 
   if (operatorName) {
@@ -162,11 +180,13 @@ export function mapRawNote(raw: any): BitacoraEntry {
 /**
  * Groups photo-only WA notes from the same sender.
  *
- * Primary strategy: group by wa_batch_id (server-assigned, max 3 photos).
- * Fallback: group by sender + 90-second time window (for legacy entries without wa_batch_id).
+ * New architecture (v28+): The webhook debounce buffer now writes ONE row per album
+ * with all photos in photo_urls[]. mapRawNote() already converts that into groupedPhotos.
+ * Those entries pass through this function untouched (groupedPhotos is already set).
  *
- * Returns a deduplicated list where multi-photo sends become a single entry
- * with `groupedPhotos` populated.
+ * Legacy support (pre-v28): Multiple rows were created with the same wa_batch_id.
+ * Phase 1 groups by wa_batch_id. Phase 2 is a 90-second time-window fallback for
+ * even older entries without a batch_id.
  */
 export function groupWaPhotoEntries(entries: BitacoraEntry[]): BitacoraEntry[] {
   const WINDOW_MS = 90 * 1000 // 90 seconds (fallback)
@@ -181,7 +201,8 @@ export function groupWaPhotoEntries(entries: BitacoraEntry[]): BitacoraEntry[] {
       bid &&
       (entry.source === 'WHATSAPP' || entry.source === 'whatsapp') &&
       entry.mediaType === 'image' &&
-      entry.photo_url
+      entry.photo_url &&
+      !entry.groupedPhotos  // skip new-style single-row albums (already consolidated)
     ) {
       if (!batchMap.has(bid)) batchMap.set(bid, [])
       batchMap.get(bid)!.push(entry)
@@ -196,7 +217,8 @@ export function groupWaPhotoEntries(entries: BitacoraEntry[]): BitacoraEntry[] {
       bid &&
       (entry.source === 'WHATSAPP' || entry.source === 'whatsapp') &&
       entry.mediaType === 'image' &&
-      entry.photo_url
+      entry.photo_url &&
+      !entry.groupedPhotos  // new-style albums already have groupedPhotos, skip
     ) {
       const group = batchMap.get(bid)!
       // Mark all siblings as consumed
