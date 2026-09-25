@@ -15,6 +15,18 @@ export interface BitacoraOperator {
   avatarUrl?: string
 }
 
+export interface PastureAIResult {
+  estimated_dry_matter_kg_ha: number;
+  confidence_interval: { min: number; max: number };
+  predominant_species: string[];
+  average_height_cm: number;
+  ground_cover_percentage: number;
+  growth_stage: 'vegetativo' | 'reproductivo' | 'senescente';
+  pasture_status: 'optimo' | 'bajo' | 'pasado';
+  regional_context_note: string;
+  recommendation: string;
+}
+
 export interface BitacoraAiResult {
   analyzedAt: string
   type: 'materia_seca' | 'condicion_corporal'
@@ -110,17 +122,26 @@ export function mapRawNote(raw: any): BitacoraEntry {
     audio_url: raw.audio_url,
     photo_url: raw.photo_url,
     groupedPhotos: (() => {
-      // Defensive: node-postgres may return text[] columns as a PG literal string
-      // like `{https://...,https://...}` instead of a real JS array.
-      // We normalize both representations so the UI always gets a proper string[].
+      // ── Priority 1: photo_urls on THIS row (new single-row batch flush) ──
+      // The webhook now writes all album photos into one field_notes row using
+      // photo_urls JSONB.  node-postgres returns JSONB as a parsed JS value
+      // (array) or sometimes as a raw string depending on driver config.
       let arr: any = raw.photo_urls
-      if (typeof arr === 'string' && arr.startsWith('{')) {
-        // PG text[] literal → strip braces, split on comma, handle quoted entries
-        arr = arr
-          .slice(1, -1)               // remove leading '{' and trailing '}'
-          .match(/(?:[^,"]|"[^"]*")+/g) // tokenize (handles quoted commas)
-          ?.map((s: string) => s.replace(/^"|"$/g, '').trim()) // strip quotes
-          .filter(Boolean) ?? []
+      if (typeof arr === 'string') {
+        try {
+          arr = JSON.parse(arr)  // JSONB stored as JSON string
+        } catch {
+          // Fallback: PG text[] literal  {url1,url2}
+          if (arr.startsWith('{')) {
+            arr = arr
+              .slice(1, -1)
+              .match(/(?:[^,"]|"[^"]*")+/g)
+              ?.map((s: string) => s.replace(/^"|"$/g, '').trim())
+              .filter(Boolean) ?? []
+          } else {
+            arr = []
+          }
+        }
       }
       return Array.isArray(arr) && arr.length > 0 ? (arr as string[]) : undefined
     })(),
