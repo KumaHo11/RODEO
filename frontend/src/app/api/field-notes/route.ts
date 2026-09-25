@@ -39,10 +39,9 @@ export async function GET(req: NextRequest) {
       SELECT
         fn.*,
         COALESCE(p.first_name || ' ' || p.last_name, p.email) AS user_display_name,
-        p.email              AS user_email,
-        pa.name              AS paddock_name,
-        h.name               AS rodeo_name,
-        fn.whatsapp_phone    AS sender_phone
+        p.email         AS user_email,
+        pa.name         AS paddock_name,
+        h.name          AS rodeo_name
       FROM field_notes fn
       LEFT JOIN profiles p  ON p.id = fn.created_by
       LEFT JOIN paddocks pa ON pa.id = fn.paddock_id
