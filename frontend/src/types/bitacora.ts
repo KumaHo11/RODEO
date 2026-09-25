@@ -122,28 +122,26 @@ export function mapRawNote(raw: any): BitacoraEntry {
     audio_url: raw.audio_url,
     photo_url: raw.photo_url,
     groupedPhotos: (() => {
-      // ── Priority 1: photo_urls on THIS row (new single-row batch flush) ──
-      // The webhook now writes all album photos into one field_notes row using
-      // photo_urls JSONB.  node-postgres returns JSONB as a parsed JS value
-      // (array) or sometimes as a raw string depending on driver config.
+      // photo_urls is TEXT[] — node-postgres returns it as a JS string[] directly.
+      // Fallback: if the driver returns the PG literal string '{url1,url2}' (rare),
+      // we parse it manually.
       let arr: any = raw.photo_urls
+      if (Array.isArray(arr) && arr.length > 0) return arr as string[]
       if (typeof arr === 'string') {
-        try {
-          arr = JSON.parse(arr)  // JSONB stored as JSON string
-        } catch {
-          // Fallback: PG text[] literal  {url1,url2}
-          if (arr.startsWith('{')) {
-            arr = arr
-              .slice(1, -1)
-              .match(/(?:[^,"]|"[^"]*")+/g)
-              ?.map((s: string) => s.replace(/^"|"$/g, '').trim())
-              .filter(Boolean) ?? []
-          } else {
-            arr = []
-          }
+        // Try JSON parse first (legacy JSONB rows)
+        try { arr = JSON.parse(arr) } catch { /* not JSON */ }
+        if (Array.isArray(arr) && arr.length > 0) return arr as string[]
+        // PG text[] literal: {url1,url2}
+        if (arr.startsWith('{')) {
+          const parsed = arr
+            .slice(1, -1)
+            .match(/(?:[^,"]|"[^"]*")+/g)
+            ?.map((s: string) => s.replace(/^"|"$/g, '').trim())
+            .filter(Boolean) ?? []
+          if (parsed.length > 0) return parsed as string[]
         }
       }
-      return Array.isArray(arr) && arr.length > 0 ? (arr as string[]) : undefined
+      return undefined
     })(),
     video_url: raw.video_url,
     audio_duration_secs: raw.audio_duration_secs,

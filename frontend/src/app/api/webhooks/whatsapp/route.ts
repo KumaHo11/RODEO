@@ -11,6 +11,15 @@
  * Flujo de novedades (canal activo):
  *  1. Operario vinculado envía audio/foto/texto
  *  2. Se transcribe (audio) y se guarda en field_notes como PENDING_REVIEW
+ *
+ * ── Batching de fotos (álbum WhatsApp) ───────────────────────────────────────
+ * Meta Cloud API emite un webhook payload separado por cada imagen de un álbum.
+ * Para consolidarlas en una sola entrada de Bitácora usamos un buffer en memoria:
+ *   - Cada foto que llega de un remitente se acumula en photoBatchBuffer[phone]
+ *   - Si hay un timer activo para ese phone, se resetea (debounce de 5s)
+ *   - Cuando el timer dispara, se escribe UNA sola row con photo_urls[] completo
+ *   - Soporta hasta MAX_ALBUM_PHOTOS fotos (15 por defecto, configurable)
+ *   - La caption de cualquiera de las imágenes se usa como description del lote
  */
 import { NextRequest, NextResponse } from 'next/server'
 import crypto, { createHmac } from 'crypto'
@@ -24,6 +33,131 @@ const VERIFY_TOKEN    = process.env.WHATSAPP_VERIFY_TOKEN  ?? ''
 const APP_SECRET      = process.env.WHATSAPP_APP_SECRET    ?? ''
 const TOKEN           = process.env.WHATSAPP_TOKEN         ?? ''
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID ?? ''
+
+// ── In-memory photo album buffer ─────────────────────────────────────────────
+// Accumulates photos from rapid-fire WhatsApp album sends (same sender).
+// Each entry is debounced for DEBOUNCE_MS; when the timer fires, ONE row is
+// written to field_notes with the full photo_urls[] array.
+//
+// NOTE: Works correctly in single-instance deployments (Cloud Run with
+// min-instances=1 or the Next.js dev server). If running multiple instances,
+// consider replacing with Redis or Postgres LISTEN/NOTIFY.
+const MAX_ALBUM_PHOTOS = 15
+const DEBOUNCE_MS      = 5_000 // 5 seconds — covers typical WA album delivery lag
+
+interface PhotoBatch {
+  orgId:       string
+  profileId:   string | null
+  phone:       string
+  senderName:  string | null
+  occurredAt:  Date
+  caption:     string | null   // first non-null caption wins
+  photos:      string[]        // accumulated URLs (in arrival order)
+  wamids:      string[]        // for dedup logging
+  timerId:     ReturnType<typeof setTimeout>
+}
+
+// phone → active batch
+const photoBatchBuffer = new Map<string, PhotoBatch>()
+
+/**
+ * Adds a photo URL to the in-memory batch for `phone`, resetting the debounce
+ * timer.  When the timer fires, `flushPhotoBatch` is called automatically.
+ *
+ * Returns `true` if this is the FIRST photo of a new batch (so the caller can
+ * send a single ACK confirmation to the user).
+ */
+function bufferPhoto(opts: {
+  orgId:      string
+  profileId:  string | null
+  phone:      string
+  senderName: string | null
+  occurredAt: Date
+  caption:    string | null
+  photoUrl:   string
+  wamid:      string
+}): boolean {
+  const existing = photoBatchBuffer.get(opts.phone)
+
+  if (existing && existing.photos.length < MAX_ALBUM_PHOTOS) {
+    // Join existing batch: reset timer, append photo, keep first caption
+    clearTimeout(existing.timerId)
+    existing.photos.push(opts.photoUrl)
+    existing.wamids.push(opts.wamid)
+    if (!existing.caption && opts.caption) existing.caption = opts.caption
+    existing.timerId = setTimeout(() => flushPhotoBatch(opts.phone), DEBOUNCE_MS)
+    return false // not the first
+  }
+
+  // Flush any full batch immediately before starting a new one
+  if (existing) {
+    clearTimeout(existing.timerId)
+    flushPhotoBatch(opts.phone)
+  }
+
+  // Start a new batch
+  const timerId = setTimeout(() => flushPhotoBatch(opts.phone), DEBOUNCE_MS)
+  photoBatchBuffer.set(opts.phone, {
+    orgId:      opts.orgId,
+    profileId:  opts.profileId,
+    phone:      opts.phone,
+    senderName: opts.senderName,
+    occurredAt: opts.occurredAt,
+    caption:    opts.caption,
+    photos:     [opts.photoUrl],
+    wamids:     [opts.wamid],
+    timerId,
+  })
+  return true // first in a new batch
+}
+
+/**
+ * Writes the accumulated batch to field_notes as a SINGLE row and removes it
+ * from the buffer.  Called when the debounce timer fires OR when MAX_ALBUM_PHOTOS
+ * is reached.
+ */
+async function flushPhotoBatch(phone: string) {
+  const batch = photoBatchBuffer.get(phone)
+  if (!batch) return
+  photoBatchBuffer.delete(phone)
+
+  const hora  = batch.occurredAt.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  const title = `Fotos WhatsApp - ${hora}`
+  const batchId = `wa-batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+  try {
+    await serviceMutate(
+      `INSERT INTO field_notes
+         (org_id, created_by, paddock_id, tags, category, title, content,
+          photo_url, photo_urls, audio_url, video_url, audio_duration_secs,
+          occurred_at, source, status, whatsapp_phone, whatsapp_msg_id,
+          wa_batch_id, sender_name)
+       VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,NULL,NULL,NULL,$9,
+               'WHATSAPP','APPROVED',$10,$11,$12,$13)`,
+      [
+        batch.orgId,
+        batch.profileId,
+        ['GENERAL'],
+        'GENERAL',
+        title,
+        batch.caption,
+        batch.photos[0],                         // photo_url = first image (legacy compat)
+        batch.photos,                             // photo_urls TEXT[] — pass as native JS array
+        batch.occurredAt.toISOString(),
+        batch.phone,
+        batch.wamids[0],                         // whatsapp_msg_id = first wamid
+        batchId,
+        batch.senderName,
+      ]
+    )
+    console.log(
+      `[WA Webhook] Batch flushed — phone=${phone} photos=${batch.photos.length} ` +
+      `caption=${batch.caption?.slice(0, 40) ?? 'none'} batchId=${batchId}`
+    )
+  } catch (err: any) {
+    console.error(`[WA Webhook] ERROR flushing photo batch for ${phone}:`, err?.message)
+  }
+}
 
 
 // ── GET: verificación del webhook + health-check ──────────────────────────────
@@ -290,39 +424,26 @@ async function processMessage(msg: any, waDisplayName: string | null) {
         else if (mimeType.includes('webp')) ext = 'webp'
         const path = `bitacora-photos/wa-${Date.now()}.${ext}`
         photoUrl = await uploadBufferToStorage(buffer, path, mimeType)
-        content  = msg.image?.caption ?? null
+        const caption = msg.image?.caption ?? null
+        content = caption  // for single-image fallback path (non-batch)
 
-        // ── Image Batching ─────────────────────────────────────────────────
-        // Look for an existing batch from this sender in the last 30 seconds.
-        // If found and batch is not yet at max capacity (3), join it.
-        // Otherwise, start a new batch.
-        const BATCH_WINDOW_MS  = 30 * 1000
-        const MAX_BATCH_PHOTOS = 3
-        const cutoff = new Date(Date.now() - BATCH_WINDOW_MS).toISOString()
+        // ── Image Batching (in-memory debounce) ────────────────────────────
+        // Buffer the photo and let flushPhotoBatch() write one consolidated row.
+        // We do NOT write a row here — bufferPhoto() returns control immediately.
+        isBatchFirst = bufferPhoto({
+          orgId:      linkByPhone.org_id,
+          profileId:  linkByPhone.profile_id,
+          phone,
+          senderName: waDisplayName,
+          occurredAt,
+          caption,
+          photoUrl:   photoUrl!,
+          wamid:      msgId,
+        })
 
-        const existingBatch = await serviceQueryOne<{ wa_batch_id: string; batch_count: number }>(
-          `SELECT wa_batch_id,
-                  COUNT(*)::int AS batch_count
-           FROM field_notes
-           WHERE whatsapp_phone = $1
-             AND wa_batch_id IS NOT NULL
-             AND created_at >= $2
-             AND source = 'WHATSAPP'
-           GROUP BY wa_batch_id
-           ORDER BY MAX(created_at) DESC
-           LIMIT 1`,
-          [phone, cutoff]
-        )
-
-        if (existingBatch && existingBatch.batch_count < MAX_BATCH_PHOTOS) {
-          // Join existing batch — no ACK (the first image in the batch already sent it)
-          waBatchId  = existingBatch.wa_batch_id
-          isBatchFirst = false
-        } else {
-          // Start a new batch (or no grouping if batch is full)
-          waBatchId    = `wa-batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-          isBatchFirst = true
-        }
+        // Signal to the caller that no DB INSERT should happen for this image
+        // (flushPhotoBatch handles it asynchronously).
+        photoUrl = null   // suppress the generic INSERT below
 
       } catch (mediaErr: any) {
         console.error(`[WA Webhook] Error al procesar imagen wamid=${msgId}: ${mediaErr?.message}`)
@@ -349,14 +470,30 @@ async function processMessage(msg: any, waDisplayName: string | null) {
     content = textBody || null
   }
 
+  // ── Images are handled exclusively by flushPhotoBatch() ──────────────────
+  // photoUrl is set to null after bufferPhoto() is called; skip the INSERT.
+  if (photoUrl === null && actualMsgType === 'image') {
+    // Only ACK on first photo of a new batch — avoid spamming the user.
+    if (isBatchFirst) {
+      try {
+        await sendWhatsAppText(phone, '\u2705 Fotos recibidas.')
+        console.log(`[WA Webhook] ACK (primer foto de álbum) — phone=${phone} wamid=${msgId}`)
+      } catch (ackErr: any) {
+        console.error(`[WA Webhook] Error al enviar ACK de foto — phone=${phone}: ${(ackErr as any)?.message}`)
+      }
+    }
+    return
+  }
+
   // Status APPROVED para notas simples (sin IA de análisis)
   // Solo las notas que pasen por análisis semántico futuro usarán PENDING_REVIEW
   await serviceMutate(
     `INSERT INTO field_notes
        (org_id, created_by, paddock_id, tags, category, title, content,
-        audio_url, photo_url, video_url, audio_duration_secs, occurred_at,
-        source, status, whatsapp_phone, whatsapp_msg_id, wa_batch_id)
-     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,$11,'WHATSAPP','APPROVED',$12,$13,$14)`,
+        audio_url, photo_url, photo_urls, video_url, audio_duration_secs,
+        occurred_at, source, status, whatsapp_phone, whatsapp_msg_id,
+        wa_batch_id, sender_name)
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'WHATSAPP','APPROVED',$13,$14,$15,$16)`,
     [
       linkByPhone.org_id,
       linkByPhone.profile_id,
@@ -366,21 +503,23 @@ async function processMessage(msg: any, waDisplayName: string | null) {
       content,
       audioUrl,
       photoUrl,
+      [],                // photo_urls TEXT[]: empty array for non-photo entries
       videoUrl,
       durationSecs,
       occurredAt.toISOString(),
       phone,
       msgId,
       waBatchId,
+      waDisplayName,
     ]
   )
 
-  console.log(`[WA Webhook] Nota guardada — wamid=${msgId} type=${msgType} audio=${!!audioUrl} photo=${!!photoUrl} batch=${waBatchId ?? 'none'}`)
+  console.log(`[WA Webhook] Nota guardada — wamid=${msgId} type=${msgType} audio=${!!audioUrl} video=${!!videoUrl}`)
 
-  // Solo enviar ACK para: tipos que no son imagen, o primera imagen de un nuevo batch
+  // Enviar ACK para todos los tipos excepto imágenes (que ya tienen su propio ACK arriba).
   // Envuelto en try/catch propio: si el envío falla (token 401, límite de tasa, ventana 24h),
   // el registro YA está guardado en DB — no revertir por error de confirmación.
-  if (msgType !== 'image' || isBatchFirst) {
+  if (actualMsgType !== 'image') {
     try {
       await sendWhatsAppText(phone, '\u2705 Registro recibido.')
       console.log(`[WA Webhook] ACK enviado — phone=${phone} wamid=${msgId}`)

@@ -301,26 +301,29 @@ function PhotoPreview({ note }: { note: BitacoraEntry }) {
     )
   }
 
-  // ── Gallery (2–4+ photos) ──
-  const visible = photos.slice(0, 4)
-  const extra = photos.length - 4
+  // ── Gallery (2+ photos) ──
+  // ≤ 2 → show all thumbnails side by side
+  // > 2 → show first 2 + "+N" badge on the second tile (over a dimmed overlay)
+  const visibleCount = photos.length <= 2 ? photos.length : 2
+  const visible      = photos.slice(0, visibleCount)
+  const extra        = photos.length - visibleCount  // e.g. 7 photos → extra = 5
 
   return (
     <>
       <div
         className={`grid gap-1 rounded-xl overflow-hidden ${
-          visible.length === 2 ? 'grid-cols-2' : 'grid-cols-2'
+          visible.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
         }`}
-        style={{ maxHeight: '256px' }}
+        style={{ maxHeight: '220px' }}
       >
         {visible.map((url, idx) => (
           <div
             key={`${url}-${idx}`}
             className="relative cursor-pointer group overflow-hidden"
-            style={{ aspectRatio: visible.length <= 2 ? '16/9' : '1/1' }}
+            style={{ aspectRatio: '1/1' }}
             role="button"
             tabIndex={0}
-            aria-label={`Ver foto ${idx + 1}`}
+            aria-label={`Ver foto ${idx + 1} de ${photos.length}`}
             onClick={() => openLightbox(idx)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openLightbox(idx) }}
           >
@@ -329,10 +332,12 @@ function PhotoPreview({ note }: { note: BitacoraEntry }) {
               alt={`Foto ${idx + 1}`}
               className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-300"
             />
-            {/* +N overlay on last visible if there are more */}
-            {idx === 3 && extra > 0 && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                <span className="text-white text-xl font-black">+{extra + 1}</span>
+            {/* +N overlay on SECOND tile when there are more photos */}
+            {idx === 1 && extra > 0 && (
+              <div className="absolute inset-0 bg-black/55 backdrop-blur-[1px] flex items-center justify-center">
+                <span className="text-white text-2xl font-black tracking-tight drop-shadow-lg">
+                  +{extra}
+                </span>
               </div>
             )}
           </div>
