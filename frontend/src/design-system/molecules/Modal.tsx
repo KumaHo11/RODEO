@@ -67,14 +67,15 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4"
+      className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-4"
       aria-modal="true"
       role="dialog"
       aria-labelledby="modal-title"
     >
       {/* Overlay */}
       <div
-        className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50"
+        style={{ backdropFilter: 'blur(8px) saturate(0.8)', WebkitBackdropFilter: 'blur(8px) saturate(0.8)' }}
         onClick={onClose}
         aria-hidden="true"
       />

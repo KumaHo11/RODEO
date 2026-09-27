@@ -11,6 +11,7 @@
  * Sin dependencias externas: funciona 100% offline con la librería xlsx.
  */
 import React, { useCallback, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import {
   Upload, FileSpreadsheet, X, Check, Loader2, AlertTriangle,
@@ -398,8 +399,10 @@ export default function ExcelImporter({ paddocks, herds, onClose, onImported }: 
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
 
         {/* Header */}
@@ -901,6 +904,7 @@ export default function ExcelImporter({ paddocks, herds, onClose, onImported }: 
         )}
 
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -12,7 +12,7 @@ import { apiFetch } from '@/lib/apiFetch'
 import { FeatureGate } from '@/components/FeatureGate'
 import {
   Calendar, Plus, CheckCircle2, Clock, MapPin, Search, Filter,
-  AlignJustify, CalendarDays, Lightbulb, CloudRain, Sun, ChevronLeft, ChevronRight,
+  AlignJustify, CalendarDays, Lightbulb, CloudRain, Sun, ChevronLeft, ChevronRight, ChevronDown,
   X, Check, Loader2, Droplets, AlertTriangle, Camera, Leaf, Users, Sparkles, HistoryIcon, Download,
   Zap, TrendingUp, BarChart3, Target, ArrowDown, Share, Trash2, BookOpen, Upload, Lock, HelpCircle,
   Eye, EyeOff, Layers, MessageSquare, ToggleLeft, ToggleRight, Send
@@ -1566,25 +1566,21 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     plans.filter(p => {
       const matchSearch = (p.paddocks?.name || '').toLowerCase().includes(search.toLowerCase()) ||
                          (p.herds?.name || '').toLowerCase().includes(search.toLowerCase())
-      // In History mode, default to showing COMPLETED, unless user overrides
-      const isHistoryMode = viewMode === 'history'
-      const matchStatus = filterStatus === 'all' ? (isHistoryMode ? p.status === 'COMPLETED' : true) : p.status === filterStatus
+      const matchStatus = filterStatus === 'all' ? true : p.status === filterStatus
       // ── Track filter: filter by active tab in Gantt view ──────────────
       let matchTab = true
       if (viewMode === 'gantt') {
         if (activeGanttTab === 'suggested') {
-          // Suggested tab: only show suggested plans
           matchTab = (p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested')
         } else {
-          // Manual tab: show all non-suggested plans
           matchTab = (p.plan_type !== 'suggested' && p.ai_analysis?.plan_source !== 'suggested')
         }
       } else if (viewMode === 'history') {
-        if (historyTab === 'suggested') {
-          matchTab = (p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested')
-        } else if (historyTab === 'manual') {
+        // Historial: tab 'manual' muestra solo planes no-sugeridos
+        if (historyTab === 'manual') {
           matchTab = (p.plan_type !== 'suggested' && p.ai_analysis?.plan_source !== 'suggested')
         }
+        // tab 'all' muestra todos → matchTab = true
       }
 
       // Mostrar todos los planes del track activo, sin filtrar por temporada.
@@ -1897,10 +1893,10 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
   // ── Mapas de color e identidad para planificaciones sugeridas (gradiente púrpura) ──
   const seasonPlanColorMap = useMemo(() => {
-    const map: Record<string, number> = {}
-    // Ordenar por start_date para asignación estable de índices
+    const map: Record<string, string> = {}
+    const colors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899']
     const sorted = [...seasonPlans].sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''))
-    sorted.forEach((sp, i) => { map[sp.id] = i })
+    sorted.forEach((sp, i) => { map[sp.id] = colors[i % colors.length] })
     return map
   }, [seasonPlans])
 
@@ -2120,156 +2116,97 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           ]}
         />
 
-      {/* ─── Header simplificado ─── */}
-      <div className="space-y-2">
 
-        {/* Row 1: Modo Dropdown */}
-        <div className="relative inline-block shrink-0">
-            <button
-              onClick={() => setShowGanttModeDropdown(v => !v)}
-              className="tour-planificador-modo group flex items-center justify-between gap-4 px-4 py-2 bg-white border border-gray-200 shadow-sm hover:shadow hover:border-gray-300 rounded-2xl transition-all duration-200"
-            >
-              <div className="flex flex-col items-start text-left">
-                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
-                  <Layers className="w-3 h-3" />
-                  Modo de planificación
+      {/* ─── Header unificado — persiste en Gantt, Lista e Historial ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+
+        {/* Lado Izquierdo: Nombre del plan activo + selector */}
+        <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+          {seasonPlans.length > 0 && (
+            <>
+              {/* Nombre del plan activo — siempre visible si hay plan */}
+              {activeSeasonPlanId && (
+                <span className="text-[11px] font-bold text-gray-800 bg-gray-100/80 px-2 py-0.5 rounded-md truncate max-w-[200px]">
+                  {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan Forrajero'}
                 </span>
-                <h1 className="text-sm font-black tracking-tight text-gray-950 leading-none">
-                  {activeGanttTab === 'suggested' ? 'Planificación Sugerida' : 'Planificación Manual'}
-                </h1>
-              </div>
-              <div className="w-6 h-6 rounded-full bg-gray-50 group-hover:bg-gray-100 flex items-center justify-center shrink-0 border border-gray-100 transition-colors">
-                <svg
-                  width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
-                  className={`transition-transform duration-200 text-gray-700 ${showGanttModeDropdown ? 'rotate-180' : ''}`}
-                ><path d="m6 9 6 6 6-6"/></svg>
-              </div>
-            </button>
-
-            {showGanttModeDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowGanttModeDropdown(false)} />
-                <div className="absolute left-0 right-0 sm:right-auto top-full mt-2 z-50 min-w-[280px] sm:min-w-[320px] max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
-                  {/* Manual */}
-                  <button
-                    onClick={() => {
-                      setActiveGanttTab('manual')
-                      setActiveSeasonPlanId(null)
-                      setDrawingMode(false)
-                      setDrawingHerdIds([])
-                      setShowSeasonPlan(false)
-                      setSeasonPlanToEdit(null)
-                      setShowGanttModeDropdown(false)
-                    }}
-                    className={`w-full flex items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 ${activeGanttTab === 'manual' ? 'bg-gray-50' : ''}`}
-                  >
-                    <div>
-                      <p className="text-sm font-bold text-gray-800">Planificación Manual</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Planificación libre y seguimiento operativo</p>
+              )}
+              {/* Dropdown selector de planes — siempre visible */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowSeasonPlanSelector(p => !p)}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-all"
+                  title="Cambiar plan activo"
+                >
+                  <ChevronDown className="w-3 h-3" />
+                  {seasonPlans.length} plan{seasonPlans.length !== 1 ? 'es' : ''}
+                </button>
+                {showSeasonPlanSelector && typeof document !== 'undefined' && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[8999]" onClick={() => setShowSeasonPlanSelector(false)} />
+                    <div
+                      className="fixed z-[9000] bg-white border border-gray-100 shadow-2xl rounded-2xl w-64 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                      style={{
+                        top: 60,
+                        left: 16,
+                      }}
+                    >
+                      <div className="px-4 py-3 border-b border-gray-100">
+                        <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Planes disponibles</span>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto py-1">
+                        {[...seasonPlans].sort((a, b) => (b.year ?? 0) - (a.year ?? 0)).map(sp => (
+                          <button
+                            key={sp.id}
+                            onClick={() => {
+                              setActiveSeasonPlanId(sp.id)
+                              if (sp.start_date) setGanttWindow(sp.start_date)
+                              setShowSeasonPlanSelector(false)
+                            }}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors ${sp.id === activeSeasonPlanId ? 'bg-green-50' : ''}`}
+                          >
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${sp.id === activeSeasonPlanId ? 'bg-green-500' : 'bg-gray-300'}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-bold truncate ${sp.id === activeSeasonPlanId ? 'text-green-800' : 'text-gray-800'}`}>{sp.name}</p>
+                              <p className="text-[9px] text-gray-400 font-medium">{sp.year} · {sp.season_type === 'cerrado' ? 'Cerrada' : 'Abierta'}</p>
+                            </div>
+                            {sp.id === activeSeasonPlanId && <Check className="w-3 h-3 text-green-600 shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    {activeGanttTab === 'manual' && (
-                      <svg className="ml-auto mt-1 shrink-0 text-gray-600" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    )}
-                  </button>
-                  <div className="h-px bg-gray-100" />
-                  {/* Suggested */}
-                  <button
-                    onClick={() => {
-                      setActiveGanttTab('suggested')
-                      setDrawingMode(false)
-                      setDrawingHerdIds([])
-                      setShowSeasonPlan(false)
-                      setSeasonPlanToEdit(null)
-                      setShowGanttModeDropdown(false)
-                    }}
-                    className={`w-full flex items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 ${activeGanttTab === 'suggested' ? 'bg-gray-50' : ''}`}
-                  >
-                    <div>
-                      <p className="text-sm font-bold text-gray-800">Planificación Sugerida</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Recorrido óptimo geográfico e inteligente</p>
-                    </div>
-                    {activeGanttTab === 'suggested' && (
-                      <svg className="ml-auto mt-1 shrink-0 text-purple-600" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    )}
-                  </button>
-                </div>
-              </>
-            )}
+                  </>,
+                  document.body
+                )}
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Row 2: Nombre del plan activo */}
-        {activeSeasonPlanId && viewMode === 'gantt' && (
-          <div className="flex items-center gap-1.5 px-1">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Nombre del plan:</span>
-            <span className="text-[11px] font-bold text-gray-800 bg-gray-100/80 px-2 py-0.5 rounded-md truncate max-w-[240px]">
-              {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan Forrajero'}
-            </span>
+        {/* Lado Derecho: chips + acciones persistentes */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {/* View toggle: Gantt / Lista / Historial */}
+          <div className="tour-planificador-vista bg-white border border-gray-200 rounded-xl p-1 flex items-center shadow-sm gap-0.5">
+            {[
+              { id: 'gantt',   Icon: CalendarDays, label: 'Gantt'     },
+              { id: 'list',    Icon: AlignJustify,  label: 'Lista'     },
+              { id: 'history', Icon: HistoryIcon,   label: 'Historial' },
+            ].map(({ id, Icon, label }) => (
+              <button
+                key={id}
+                onClick={() => setViewMode(id as any)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  viewMode === id ? 'bg-green-50 text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            ))}
           </div>
-        )}
 
-        {/* Row 3: Controls bar — all on one line */}
-        <div className="flex items-center gap-2 flex-wrap">
-
-          {/* LEFT side: Season filters + trash + eye + csv (only in gantt mode) */}
+          {/* ── Eye (capas): solo relevante en Gantt, se oculta en otras vistas ── */}
           {viewMode === 'gantt' && (
-            <div className={`flex items-center gap-1.5 shrink-0 ${drawingMode ? 'opacity-40 pointer-events-none' : ''}`}>
-              <div className="flex bg-gray-100 rounded-xl p-0.5 gap-0.5">
-                <button
-                  onClick={() => setSeasonalFilters(['abierta', 'cerrada'])}
-                  className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
-                    seasonalFilters.length === 2
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  Anual
-                </button>
-                <div className="w-[1px] bg-gray-200 mx-0.5" />
-                <button
-                  onClick={() => setSeasonalFilters(['abierta'])}
-                  className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
-                    seasonalFilters.length === 1 && seasonalFilters.includes('abierta')
-                      ? 'bg-green-600 text-white shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  Temporada abierta
-                </button>
-                <button
-                  onClick={() => setSeasonalFilters(['cerrada'])}
-                  className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg transition-all ${
-                    seasonalFilters.length === 1 && seasonalFilters.includes('cerrada')
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  Temporada cerrada
-                </button>
-              </div>
-
-              {/* Borrar planificadas */}
-              {(() => {
-                const tabPlansToDelete = plans.filter(p =>
-                  p.status === 'PLANNED' &&
-                  (activeGanttTab === 'suggested'
-                    ? (p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested')
-                    : (p.plan_type !== 'suggested' && p.ai_analysis?.plan_source !== 'suggested')
-                  )
-                )
-                if (tabPlansToDelete.length === 0) return null
-                return (
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    disabled={saving}
-                    title={`Eliminar ${tabPlansToDelete.length} planificaciones ${activeGanttTab === 'suggested' ? 'sugeridas' : 'manuales'}`}
-                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-all disabled:opacity-40"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )
-              })()}
-
-              {/* Toggles de Capas Visuales */}
+            <div className={`flex items-center gap-1.5 ${drawingMode ? 'opacity-40 pointer-events-none' : ''}`}>
               <div className="relative">
                 <button
                   ref={(el) => { if (el) (el as any).__layersBtnRef = el }}
@@ -2283,7 +2220,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                     showLayersPanel ? 'bg-green-50 text-green-700 border-green-200' : 'text-gray-400 hover:text-green-600 hover:bg-green-50 border-transparent hover:border-green-100'
                   }`}
                 >
-                  <Eye className="w-3.5 h-3.5" />
+                  <Eye className="w-4 h-4" />
                 </button>
                 {showLayersPanel && typeof document !== 'undefined' && createPortal(
                   <>
@@ -2306,12 +2243,11 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                           { key: 'showOriginal', label: 'Plan Original',            striped: true,  color: '#22c55e', extraKey: null },
                           { key: 'showPlanned',  label: 'Plan Modificable/Sugerido', striped: true,  color: '#38bdf8', extraKey: null },
                           { key: 'showReal',     label: 'Plan Real',                striped: false, color: '#22c55e', extraKey: null },
-                          { key: 'showEvents',   label: 'Eventos',                  striped: false, color: '#8b5cf6', extraKey: 'showAgenda' as keyof typeof ganttLayers },
+                          { key: 'showEvents',   label: 'Eventos',                  striped: false, color: '#8b5cf6', extraKey: 'showAgenda' },
                           { key: 'showRemnant',  label: 'Alerta Sin Remanente',     striped: false, color: '#ef4444', extraKey: null },
                           { key: 'showAnimals',  label: 'Panel de Animales',        striped: false, color: '#eab308', extraKey: null },
                         ].map(layer => {
-                          const active = ganttLayers[layer.key as keyof typeof ganttLayers] ||
-                            (layer.extraKey ? ganttLayers[layer.extraKey] : false)
+                          const active = ganttLayers[layer.key as keyof typeof ganttLayers] || (layer.extraKey ? ganttLayers[layer.extraKey as keyof typeof ganttLayers] : false)
                           const dotStyle = active
                             ? layer.striped
                               ? { background: `repeating-linear-gradient(45deg, ${layer.color}, ${layer.color} 2px, transparent 2px, transparent 5px)`, border: `1.5px solid ${layer.color}` }
@@ -2322,161 +2258,42 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                               key={layer.key}
                               onClick={() => {
                                 toggleGanttLayer(layer.key as keyof typeof ganttLayers)
-                                if (layer.extraKey) toggleGanttLayer(layer.extraKey)
+                                if (layer.extraKey) toggleGanttLayer(layer.extraKey as keyof typeof ganttLayers)
                               }}
                               className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${active ? '' : 'opacity-50'}`}
                             >
-                              <span
-                                className="w-3 h-3 rounded-sm shrink-0 transition-all"
-                                style={dotStyle}
-                              />
+                              <span className="w-3 h-3 rounded-sm shrink-0 transition-all" style={dotStyle} />
                               <span className={`flex-1 text-[12px] font-bold transition-colors ${active ? 'text-gray-800' : 'text-gray-400'}`}>
                                 {layer.label}
                               </span>
-                              <div className={`w-7 h-3.5 rounded-full transition-colors relative shrink-0 ${active ? 'bg-green-500' : 'bg-gray-200'}`}>
-                                <div className={`absolute top-0.5 bottom-0.5 w-2.5 bg-white rounded-full transition-all shadow-sm ${active ? 'left-[14px]' : 'left-0.5'}`} />
-                              </div>
                             </button>
                           )
                         })}
-                        <div className="mx-4 my-1 border-t border-gray-100" />
-                        <button
-                          onClick={toggleClimateView}
-                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${climateViewEnabled ? '' : 'opacity-50'}`}
-                        >
-                          <span
-                            className="w-3 h-3 rounded-sm shrink-0"
-                            style={climateViewEnabled ? { backgroundColor: '#10b981' } : { backgroundColor: '#d1d5db' }}
-                          />
-                          <span className={`flex-1 text-[12px] font-bold ${climateViewEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
-                            Ajuste Climático
-                          </span>
-                          <div className={`w-7 h-3.5 rounded-full relative shrink-0 ${climateViewEnabled ? 'bg-emerald-500' : 'bg-gray-200'}`}>
-                            <div className={`absolute top-0.5 bottom-0.5 w-2.5 bg-white rounded-full transition-all shadow-sm ${climateViewEnabled ? 'left-[14px]' : 'left-0.5'}`} />
-                          </div>
-                        </button>
                       </div>
                     </div>
                   </>,
                   document.body
                 )}
               </div>
-
-              {/* Exportar CSV */}
-              <button
-                onClick={handleExportHistory}
-                title="Exportar planificaciones como CSV"
-                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg border border-transparent hover:border-green-100 transition-all"
-              >
-                <Download className="w-3.5 h-3.5" />
-              </button>
             </div>
           )}
 
-          {/* Spacer */}
-          <div className="flex-1" />
+          {/* ── Descargar CSV — persistente en todas las vistas ── */}
+          <button
+            onClick={handleExportHistory}
+            title="Exportar planificaciones como CSV"
+            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg border border-transparent hover:border-green-100 transition-all"
+          >
+            <Download className="w-4 h-4" />
+          </button>
 
-          {/* RIGHT side: View toggle + Planificar */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* View toggle: Gantt / Lista / Historial */}
-            <div className="tour-planificador-vista bg-white border border-gray-200 rounded-xl p-1 flex items-center shadow-sm gap-0.5 shrink-0">
-              {[
-                { id: 'gantt',   Icon: CalendarDays, label: 'Gantt'     },
-                { id: 'list',    Icon: AlignJustify,  label: 'Lista'     },
-                { id: 'history', Icon: HistoryIcon,   label: 'Historial' },
-              ].map(({ id, Icon, label }) => (
-                <button
-                  key={id}
-                  onClick={() => setViewMode(id as any)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    viewMode === id ? 'bg-green-50 text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* + Planificar button */}
-            <div className="relative shrink-0">
-              <button
-                onClick={async () => {
-                  if (activeGanttTab === 'suggested') {
-                    const existingSuggested = plans.filter(p =>
-                      p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested'
-                    )
-                    if (existingSuggested.length > 0) {
-                      const sameSheet = await confirm({
-                        title: '¿Agregar a la planificación actual?',
-                        description: `Ya tenés ${existingSuggested.length} bloques de planificación sugerida en el Gantt. ¿Querés agregar la nueva planificación en la misma hoja (conviven visualmente) o limpiar y empezar de cero?`,
-                        confirmLabel: 'Misma hoja',
-                        cancelLabel: 'Nueva hoja',
-                        variant: 'primary',
-                      })
-                      if (sameSheet === null) {
-                        return
-                      }
-                      if (sameSheet === false) {
-                        setSaving(true)
-                        try {
-                          await apiFetch('/api/grazing-plans/bulk-delete?status=PLANNED&plan_type=suggested', { method: 'DELETE' })
-                          setPlans(prev => prev.filter(p => !(p.status === 'PLANNED' && (p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested'))))
-                          setActiveSeasonPlanId(null)
-                        } catch { /* continua aunque falle */ }
-                        setSaving(false)
-                      } else {
-                        const recentSuggested = seasonPlans.find(sp => sp.source === 'suggested' && sp.status !== 'COMPLETED')
-                        if (recentSuggested) {
-                          setSeasonPlanToEdit(recentSuggested)
-                        }
-                      }
-                    }
-                    setShowSeasonPlan(true)
-                  } else {
-                    const recentManualPlans = seasonPlans.filter(sp => sp.source !== 'suggested' && sp.status !== 'COMPLETED')
-                    
-                    if (recentManualPlans.length > 0) {
-                      const planIdToContinue = activeSeasonPlanId || recentManualPlans[0].id
-                      const planName = seasonPlans.find(p => p.id === planIdToContinue)?.name || 'Plan Forrajero'
-                      const continueCurrent = await confirm({
-                        title: '¿Continuar plan o empezar uno nuevo?',
-                        description: `Tenés un plan en curso: ${planName}. ¿Querés continuar agregando trazados a este plan o preferís empezar uno desde cero?`,
-                        confirmLabel: 'Continuar actual',
-                        cancelLabel: 'Nueva hoja',
-                        variant: 'success',
-                      })
-                      if (continueCurrent === null) {
-                        return
-                      }
-                      if (continueCurrent) {
-                        setActiveSeasonPlanId(planIdToContinue)
-                        setViewMode('gantt')
-                        setShowContinuePlanModal(true)
-                      } else {
-                        // Nueva hoja: abrir SeasonPlanModal para crear un plan nuevo
-                        setActiveSeasonPlanId(null)
-                        setSeasonPlanToEdit(null)
-                        setViewMode('gantt')
-                        setShowSeasonPlan(true)
-                      }
-                    } else {
-                      setShowSeasonPlan(true)
-                    }
-                  }
-                }}
-                disabled={loading}
-                className={`tour-planificador-nuevo flex items-center gap-2 px-4 py-2 text-white font-bold text-sm rounded-xl shadow-sm transition-all disabled:opacity-50 ${
-                  activeGanttTab === 'suggested'
-                    ? 'bg-purple-600 hover:bg-purple-700'
-                    : (drawingMode ? 'bg-green-700' : 'bg-green-600 hover:bg-green-700')
-                }`}
-              >
-                <Plus className="w-4 h-4" /> Planificar
-              </button>
-            </div>
-          </div>
-
+          {/* ── Ir a Planificar — persistente en todas las vistas ── */}
+          <Link
+            href="/dashboard/grazing/sandbox"
+            className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-sm whitespace-nowrap"
+          >
+            Ir a Planificar
+          </Link>
         </div>
       </div>
 
@@ -2536,7 +2353,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
         </div>
-      ) : plans.length === 0 && viewMode === 'gantt' && !drawingMode ? (
+      ) : seasonPlans.length === 0 && viewMode === 'gantt' && !drawingMode ? (
         <div className="relative rounded-2xl overflow-hidden" style={{ minHeight: 360 }}>
           {/* Gantt borroso de fondo */}
           <div className="pointer-events-none select-none" style={{ filter: 'blur(3px)', opacity: 0.4 }}>
@@ -2571,27 +2388,21 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             <div className="text-center">
               <p className="text-sm font-black text-gray-950">Sin planificaciones aún</p>
               <p className="text-xs text-gray-500 mt-0.5">
-                {activeGanttTab === 'suggested'
-                  ? 'Generá un plan sugerido con recorrido inteligente de potreros.'
-                  : 'Seleccioná tus rodeos y empezá a trazar el primer pastoreo.'}
+                Usá la Mesa de Arena para configurar rodeos, potreros y generar tu primer plan.
               </p>
             </div>
-            <button
-              onClick={() => {
-                setShowSeasonPlan(true)
-              }}
-              disabled={loading}
-              className={`flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50 ${
-                activeGanttTab === 'suggested'
-                  ? 'bg-purple-600 hover:bg-purple-500'
-                  : 'bg-green-600 hover:bg-green-500'
-              }`}
+            {/* BUG FIX: Redirigir a la Mesa de Arena — el wizard legacy fue eliminado.
+                Todo el flujo de creación de planes se hace en /dashboard/grazing/sandbox */}
+            <Link
+              href="/dashboard/grazing/sandbox"
+              className="flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl bg-green-600 hover:bg-green-500"
             >
               <Plus className="w-4 h-4" />
-              {activeGanttTab === 'suggested' ? 'Generar Plan Sugerido' : 'Comenzar a planificar'}
-            </button>
+              Ir a la Mesa de Arena
+            </Link>
           </div>
         </div>
+
       ) : viewMode === 'gantt' ? (
         <div className="space-y-3">
 
@@ -2966,13 +2777,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                     onClick={() => setHistoryTab('all')}
                     className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${historyTab === 'all' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                   >
-                    Todas
-                  </button>
-                  <button
-                    onClick={() => setHistoryTab('suggested')}
-                    className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1 ${historyTab === 'suggested' ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-purple-600'}`}
-                  >
-                    Sugeridas
+                    Todos
                   </button>
                   <button
                     onClick={() => setHistoryTab('manual')}

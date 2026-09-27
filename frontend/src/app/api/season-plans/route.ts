@@ -87,6 +87,11 @@ export async function POST(req: NextRequest) {
       supply_snapshot,
       metrics,
       notes,
+      // Multi-rodeo fields (v30)
+      herd_ids,
+      cell_paddock_ids,
+      target_remnant_kg_ha,
+      recovery_days,
     } = body
 
     if (!name || !year) {
@@ -102,10 +107,12 @@ export async function POST(req: NextRequest) {
         cell_name, total_ha,
         source, source_filename, status,
         demand_snapshot, supply_snapshot, metrics,
-        notes, created_by
+        notes, created_by,
+        herd_ids, cell_paddock_ids, target_remnant_kg_ha, recovery_days
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+        $21,$22,$23,$24
       ) RETURNING
         id, created_at,
         org_id, name, season_type, year,
@@ -115,7 +122,8 @@ export async function POST(req: NextRequest) {
         TO_CHAR(no_growth_to,   'YYYY-MM-DD') AS no_growth_to,
         drought_reserve_days, daily_allocation_kg,
         cell_name, total_ha, source, source_filename, status,
-        demand_snapshot, supply_snapshot, metrics, notes`,
+        demand_snapshot, supply_snapshot, metrics, notes,
+        herd_ids, cell_paddock_ids, target_remnant_kg_ha, recovery_days`,
       [
         auth.orgId, name, season_type, year,
         start_date || null, end_date || null,
@@ -128,17 +136,19 @@ export async function POST(req: NextRequest) {
         metrics ? JSON.stringify(metrics) : null,
         notes || null,
         auth.profileId,
+        herd_ids ? JSON.stringify(herd_ids) : null,
+        cell_paddock_ids ? JSON.stringify(cell_paddock_ids) : null,
+        target_remnant_kg_ha ?? null,
+        recovery_days ? JSON.stringify(recovery_days) : null,
       ]
     )
 
-    // Return the full row so the frontend can use metrics.suggested_sequence immediately
     return NextResponse.json(
       result.rows[0] ?? { error: 'No se pudo crear el plan' },
       { status: 201 }
     )
   } catch (err: any) {
     console.error('POST /api/season-plans error:', err)
-    require('fs').appendFileSync('/tmp/rodeo_api_error.log', new Date().toISOString() + ' ' + err.message + '\n' + err.stack + '\n')
     return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
   }
 }

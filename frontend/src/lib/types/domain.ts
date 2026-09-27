@@ -167,15 +167,52 @@ export interface WeatherData {
 
 // ── Planes de Temporada ──────────────────────────────────────────────────────
 
-/** Configuración de un plan de temporada holístico */
+/** Tipo de temporada agronómica */
+export type SeasonType = 'cerrado' | 'abierto' | 'ambos'
+
+/** Estado del plan de temporada */
+export type SeasonStatus = 'draft' | 'active' | 'closed'
+
+/** Fuente de creación del plan */
+export type SeasonSource = 'manual' | 'suggested' | 'excel_import'
+
+/**
+ * Plan de temporada — configuración agronómica completa.
+ * FUENTE ÚNICA DE VERDAD. No duplicar interfaces locales en modales.
+ */
 export interface SeasonPlan {
-  id: string
+  id?: string
   name: string
+  season_type: SeasonType
+  year: number
   start_date: string
   end_date: string
+  /** Inicio del período de menor crecimiento (Invierno) */
+  no_growth_from: string | null
+  /** Fin del período de menor crecimiento */
+  no_growth_to: string | null
+  drought_reserve_days: number
   daily_allocation_kg: number
   target_remnant_kg_ha: number
-  plan_type: PlanType
+  /** Remanente específico por potrero (clave: paddock_id) */
+  specific_remnants?: Record<string, number>
+  /** Días de recuperación por estación */
+  recovery_days?: {
+    min?: number
+    max?: number
+    spring_summer?: number
+    autumn?: number
+    winter?: number
+  }
+  cell_name?: string | null
+  notes: string | null
+  status: SeasonStatus
+  source: SeasonSource
+  // Snapshots guardados al confirmar el plan
+  demand_snapshot?: unknown
+  supply_snapshot?: unknown
+  metrics?: Record<string, unknown>
+  herd_ids?: string[]
   org_id?: string
 }
 

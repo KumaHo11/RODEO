@@ -1,6 +1,7 @@
 /**
- * PATCH /api/season-plans/[id]  — Actualiza un plan (cerrar, calcular métricas, etc.)
- * DELETE /api/season-plans/[id] — Elimina un plan (solo borradores)
+ * GET    /api/season-plans/[id]  — Obtiene un plan por ID
+ * PATCH  /api/season-plans/[id]  — Actualiza un plan (cerrar, calcular métricas, etc.)
+ * DELETE /api/season-plans/[id]  — Elimina un plan con cascade explícito
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFirebaseToken } from '@/lib/firebase/verify-token'
@@ -19,6 +20,31 @@ async function getAuth(req: NextRequest) {
   return { orgId: profile.organization_id }
 }
 
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const auth = await getAuth(req)
+    if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+    const plan = await serviceQueryOne<Record<string, unknown>>(
+      `SELECT * FROM season_plans WHERE id = $1 AND org_id = $2`,
+      [id, auth.orgId]
+    )
+
+    if (!plan) {
+      return NextResponse.json({ error: 'Plan no encontrado' }, { status: 404 })
+    }
+
+    return NextResponse.json({ season_plan: plan })
+  } catch (err: any) {
+    console.error('GET /api/season-plans/[id] error:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -35,6 +61,7 @@ export async function PATCH(
       drought_reserve_days, daily_allocation_kg,
       cell_name, total_ha, status,
       demand_snapshot, supply_snapshot, metrics, notes,
+      herd_ids, cell_paddock_ids, target_remnant_kg_ha, recovery_days,
     } = body
 
     await serviceMutate(
@@ -55,8 +82,12 @@ export async function PATCH(
         supply_snapshot      = COALESCE($14, supply_snapshot),
         metrics              = COALESCE($15, metrics),
         notes                = COALESCE($16, notes),
+        herd_ids             = COALESCE($17, herd_ids),
+        cell_paddock_ids     = COALESCE($18, cell_paddock_ids),
+        target_remnant_kg_ha = COALESCE($19, target_remnant_kg_ha),
+        recovery_days        = COALESCE($20, recovery_days),
         updated_at           = now()
-      WHERE id = $17 AND org_id = $18`,
+      WHERE id = $21 AND org_id = $22`,
       [
         name || null, season_type || null, year || null,
         start_date || null, end_date || null,
@@ -67,6 +98,10 @@ export async function PATCH(
         supply_snapshot ? JSON.stringify(supply_snapshot) : null,
         metrics ? JSON.stringify(metrics) : null,
         notes || null,
+        herd_ids ? JSON.stringify(herd_ids) : null,
+        cell_paddock_ids ? JSON.stringify(cell_paddock_ids) : null,
+        target_remnant_kg_ha ?? null,
+        recovery_days ? JSON.stringify(recovery_days) : null,
         id, auth.orgId,
       ]
     )
@@ -74,7 +109,6 @@ export async function PATCH(
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     console.error('PATCH /api/season-plans/[id] error:', err)
-    require('fs').appendFileSync('/tmp/rodeo_api_error.log', new Date().toISOString() + ' PATCH ' + err.message + '\n' + err.stack + '\n')
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
@@ -89,22 +123,42 @@ export async function DELETE(
     const auth = await getAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    // Only allow deletion of drafts or excel_import files to preserve historical integrity for manual active plans
-    const result = await serviceMutate(
-      `DELETE FROM season_plans
-       WHERE id = $1 AND org_id = $2 AND (status = 'draft' OR source = 'excel_import')`,
+    // 1. Verificar que el plan existe y pertenece al org antes de borrar
+    const existing = await serviceQueryOne<{ id: string }>(
+      `SELECT id FROM season_plans WHERE id = $1 AND org_id = $2`,
+      [id, auth.orgId]
+    )
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Plan no encontrado o no tenés permiso para eliminarlo.' },
+        { status: 404 }
+      )
+    }
+
+    // 2. Cascade explícito: borrar grazing_plans asociados.
+    //    Necesario si el FK grazing_plans.season_plan_id no tiene ON DELETE CASCADE configurado.
+    //    Si ya existe el CASCADE en el schema, esta operación es un no-op seguro.
+    await serviceMutate(
+      `DELETE FROM grazing_plans WHERE season_plan_id = $1`,
+      [id]
+    )
+
+    // 3. Borrar el season_plan padre
+    await serviceMutate(
+      `DELETE FROM season_plans WHERE id = $1 AND org_id = $2`,
       [id, auth.orgId]
     )
 
-    if (result.rowCount === 0) {
-      return NextResponse.json(
-        { error: 'Solo se pueden eliminar archivos de Excel importados o planes en borrador. Los planes manuales cerrados no se pueden borrar.' },
-        { status: 400 }
-      )
-    }
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     console.error('DELETE /api/season-plans/[id] error:', err)
+    // Clasificar errores de FK como 409 Conflict, no 500
+    if (err.code === '23503') {
+      return NextResponse.json(
+        { error: 'No se puede eliminar: el plan tiene registros vinculados en otras tablas.' },
+        { status: 409 }
+      )
+    }
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

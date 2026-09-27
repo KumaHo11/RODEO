@@ -93,8 +93,12 @@ export function useConfirm() {
 
     const modalContent = (
       <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pb-20 md:pb-4"
-        style={{ backdropFilter: 'blur(4px)', backgroundColor: 'rgba(0,0,0,0.45)' }}
+        className="fixed inset-0 z-[10000] flex items-center justify-center p-4 pb-20 md:pb-4"
+        style={{
+          backdropFilter: 'blur(8px) saturate(0.8)',
+          WebkitBackdropFilter: 'blur(8px) saturate(0.8)',
+          backgroundColor: 'rgba(0,0,0,0.55)',
+        }}
         onMouseDown={(e) => { if (e.target === e.currentTarget) handleDismiss() }}
       >
         <div

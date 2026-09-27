@@ -35,80 +35,15 @@ import GanttClimateAlert from '@/components/GanttClimateAlert'
 import GanttClimatePanel, { type PaddockClimateInfo, type HerdClimateInfo } from '@/components/GanttClimatePanel'
 import GanttClimateMonthRow from '@/components/GanttClimateMonthRow'
 
-
-// ─────────────── CONSTANTS ───────────────
-const HERD_COLORS = [
-  '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed',
-  '#0891b2', '#be185d', '#65a30d', '#ea580c', '#4338ca'
-]
-
-// ─── Gradientes monocromáticos de púrpura para planificaciones sugeridas ───
-// 5 niveles de intensidad creciente; se ciclan cuando hay > 5 season plans.
-const PURPLE_LEVELS = [
-  { bg: 'rgba(139,92,246,0.13)',  border: 'rgba(139,92,246,0.42)', textColor: '#6d28d9' }, // nivel 1 — 20%
-  { bg: 'rgba(109,40,217,0.22)', border: 'rgba(109,40,217,0.58)', textColor: '#5b21b6' }, // nivel 2 — 40%
-  { bg: 'rgba(91,33,182,0.32)',  border: 'rgba(91,33,182,0.70)',  textColor: '#4c1d95' }, // nivel 3 — 60%
-  { bg: 'rgba(76,29,149,0.42)',  border: 'rgba(76,29,149,0.82)',  textColor: '#3730a3' }, // nivel 4 — 80%
-  { bg: 'rgba(46,16,101,0.54)',  border: 'rgba(46,16,101,0.92)',  textColor: '#1e1b4b' }, // nivel 5 — 100%
-]
-
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  ACTIVE:    { label: 'Pastando',     color: 'text-green-700',  bg: 'bg-green-100' },
-  PLANNED:   { label: 'Planificado',  color: 'text-blue-700',   bg: 'bg-blue-100'  },
-  COMPLETED: { label: 'Completado',   color: 'text-gray-600',   bg: 'bg-gray-100'  },
-}
-
-// Season dict for southern hemisphere
-const getSeason = () => {
-  const m = new Date().getMonth() + 1
-  if (m >= 4 && m < 10) return { name: 'Otoño/Invierno', type: 'Temporada cerrada', icon: '', color: 'bg-amber-100 text-gray-700' }
-  return { name: 'Primavera/Verano', type: 'Temporada abierta', icon: '🌱', color: 'bg-green-100 text-green-700' }
-}
-
-// Safe date string normalizer — handles null, undefined, JS Date objects, and ISO strings
-const safeIso = (val: any): string => {
-  if (!val) return ''
-  if (val instanceof Date) return val.toISOString().split('T')[0]
-  const s = String(val)
-  return s.includes('T') ? s.split('T')[0] : s
-}
-
-// Format date as dd/MM
-const fmt = (iso: any): string => {
-  const s = safeIso(iso)
-  if (!s) return '—'
-  const d = new Date(s + 'T00:00:00')
-  if (isNaN(d.getTime())) return '—'
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
-}
-
-// days between two ISO dates
-const daysBetween = (a: any, b: any): number => {
-  const sa = safeIso(a)
-  const sb = safeIso(b)
-  if (!sa || !sb) return 0
-  const da = new Date(sa + 'T00:00:00')
-  const db = new Date(sb + 'T00:00:00')
-  if (isNaN(da.getTime()) || isNaN(db.getTime())) return 0
-  return Math.round((db.getTime() - da.getTime()) / 86400000)
-}
-
-// Add n days to ISO date string
-const addDays = (iso: any, n: number): string => {
-  const s = safeIso(iso)
-  if (!s) return new Date().toISOString().split('T')[0]
-  const d = new Date(s + 'T00:00:00')
-  if (isNaN(d.getTime())) return new Date().toISOString().split('T')[0]
-  d.setDate(d.getDate() + n)
-  return d.toISOString().split('T')[0]
-}
-
-// Re-exports removidos porque rompen el build de Next.js.
-
-// ── Alias local para uso interno del Gantt (evita import circular) ──
+// ─────────────── IMPORTS DE FUENTES Únicas DE VERDAD ───────────────
+import { safeIso, fmt, daysBetween, addDays } from '@/lib/grazing/dateUtils'
 import {
-  calculateDynamicHeadcount as _calculateDynamicHeadcount,
-  getDynamicHerdEV as _getDynamicHerdEV,
+  HERD_COLORS, PURPLE_LEVELS, STATUS_MAP, getSeason,
+  EVT_CONFIG, SEASONAL_MS_GROWTH, REGION_DROUGHT_REF,
+} from '@/lib/grazing/constants'
+import {
+  calculateDynamicHeadcount,
+  getDynamicHerdEV,
   EV_BASE,
   calculateBaseEV,
   obtenerEvRodeoParaFecha,
@@ -118,117 +53,10 @@ import {
 } from '@/lib/grazing/evProjection'
 import { BASE_GROWTH_RATE_KG_HA_DAY } from '@/lib/grazing/forageCurves'
 
-// Calculate dynamic headcount — wrapper local para uso en callbacks del Gantt
-const calculateDynamicHeadcount = (herdId: string, baseCount: number, dateStr: string, unifiedEvents: any[]) => {
-  const today = new Date().toISOString().split('T')[0]
-  let count = baseCount
-  
-  const relEvents = unifiedEvents.filter(e => e.herd_id === herdId || (e.herd_ids && e.herd_ids.includes(herdId)))
-  
-  if (dateStr < today) {
-    // Past: reverse-apply movements that happened between dateStr and today
-    const eventsBetween = relEvents.filter(e => e.event_date > dateStr && e.event_date <= today)
-    eventsBetween.forEach(e => {
-      const q = Number(e.quantity || 0)
-      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count += q
-      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count -= q
-    })
-  } else if (dateStr > today) {
-    // Future: forward-apply scheduled movements
-    const eventsBetween = relEvents.filter(e => e.event_date > today && e.event_date <= dateStr)
-    eventsBetween.forEach(e => {
-      const q = Number(e.quantity || 0)
-      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count -= q
-      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count += q
-    })
-  }
-  return Math.max(0, count)
-}
-
-// Biological Demand Evolution — wrapper local
-const getDynamicHerdEV = (herd: any, dateISO: string, farmEvents: any[], headCountOverride?: number): number => {
-  const currentEV = Number(herd?.total_ev) || 0
-  if (currentEV === 0) return 0
-  const currentHeadCount = Number(herd?.head_count || herd?.animal_count) || currentEV 
-
-  const headCount = headCountOverride !== undefined ? headCountOverride : currentHeadCount
-  if (headCount === 0) return 0
-
-  const evPerHead = currentHeadCount > 0 ? currentEV / currentHeadCount : (currentEV > 0 ? currentEV : 1)
-
-  const sorted = farmEvents
-    .filter(e => (e.herd_id === herd.id || !e.herd_id) && e.event_date <= dateISO)
-    .sort((a, b) => a.event_date.localeCompare(b.event_date))
-
-  let currentState = 'normal'
-  let lastParicion: string | null = null
-
-  for (const ev of sorted) {
-    if (ev.event_type === 'paricion') {
-      currentState = 'lactating'
-      lastParicion = ev.event_date
-    } else if (ev.event_type === 'destete') {
-      currentState = 'normal'
-      lastParicion = null
-    }
-  }
-
-  if (currentState === 'lactating' && lastParicion && daysBetween(lastParicion, dateISO) >= 90) {
-    currentState = 'lactating_with_calf'
-  }
-
-  if (currentState === 'lactating') return headCount * 1.5
-  if (currentState === 'lactating_with_calf') return headCount * 1.8
-  return evPerHead * headCount
-}
 
 
-// Event type config — colors from Bitacora reference
-const EVT_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
-  servicio:              { label: 'Servicio',              emoji: '●', color: '#ef4444' },
-  paricion:              { label: 'Parición',              emoji: '●', color: '#3b82f6' },
-  destete:               { label: 'Destete',               emoji: '●', color: '#eab308' },
-  diagnostico_prenez:    { label: 'Diagnóstico preñez',    emoji: '●', color: '#f97316' },
-  tratamiento_sanitario: { label: 'Sanitario',             emoji: '●', color: '#78350f' },
-  esquila:               { label: 'Esquila',               emoji: '●', color: '#8b5cf6' },
-  vacaciones:            { label: 'Vacaciones',            emoji: '●', color: '#ec4899' },
-  compra:                { label: 'Compra',                emoji: '●', color: '#10b981' },
-  venta:                 { label: 'Venta',                 emoji: '●', color: '#ef4444' },
-  mortandad:             { label: 'Mortandad',             emoji: '●', color: '#000000' },
-  stock_inicial:         { label: 'Stock Inicial',         emoji: '●', color: '#6366f1' },
-  ajuste_entrada:        { label: 'Ajuste (entrada)',      emoji: '●', color: '#0d9488' },
-  ajuste_salida:         { label: 'Ajuste (salida)',       emoji: '●', color: '#0891b2' },
-  ajuste:                { label: 'Ajuste de stock',       emoji: '●', color: '#0d9488' },
-}
 
-// ─── Multiplicadores estacionales de crecimiento de MS (Hemisferio Sur) ────────
-// Aplicados al cálculo de días durante la generación del ciclo sugerido
-const SEASONAL_MS_GROWTH: Record<number, number> = {
-  5: 0.3, 6: 0.3, 7: 0.3,          // Jun–Ago: Invierno
-  8: 1.5, 9: 1.5, 10: 1.5,          // Sep–Nov: Primavera
-  11: 1.2, 0: 1.0, 1: 0.9,          // Dic–Feb: Verano (declinando)
-  2: 0.7, 3: 0.5, 4: 0.4,           // Mar–May: Otoño
-}
 
-// ─── Trigger de Sequía Regional — SMN Argentina ─────────────────────────────
-// Devuelve el promedio histórico de referencia y el umbral de trigger por región.
-// El campo puede configurar su propio umbral; este valor es el default inicial
-// basado en las coordenadas del establecimiento.
-interface DroughtRef {
-  refMm: number
-  triggerMm: number
-  regionName: string
-}
-const REGION_DROUGHT_REF = (lat: number, lng: number): DroughtRef => {
-  // NEA: Corrientes / Chaco (lat ~-22 a -30, lng ~-55 a -65)
-  if (lat > -31 && lat < -22 && lng > -65 && lng < -55)
-    return { refMm: 130, triggerMm: 80, regionName: 'NEA (Corrientes / Chaco)' }
-  // Semiárida: San Luis / Oeste de Córdoba (lng < -64, lat -30 a -38)
-  if (lng < -64 && lat < -30 && lat > -38)
-    return { refMm: 50, triggerMm: 25, regionName: 'Región Semiárida' }
-  // Default: Pampa Húmeda
-  return { refMm: 90, triggerMm: 50, regionName: 'Pampa Húmeda' }
-}
 
 
 // ─────────────── INTERACTIVE GANTT ───────────────
@@ -366,8 +194,8 @@ function InteractiveGantt({
   /** Optional ordered paddock IDs — when provided, rows are rendered in this sequence */
   paddockOrder?: string[]
   onPaddockReorder?: (paddockId: string, direction: 'up' | 'down') => void
-  /** Mapa season_plan_id → índice de nivel de púrpura (solo planificaciones sugeridas) */
-  seasonPlanColorMap?: Record<string, number>
+  /** Mapa season_plan_id → color hex/CSS del plan (por rodeo o púrpura fallback) */
+  seasonPlanColorMap?: Record<string, string>
   /** Mapa season_plan_id → nombre del plan */
   seasonPlanNames?: Record<string, string>
   /** Control de capas visibles en el Gantt */
@@ -447,9 +275,17 @@ function InteractiveGantt({
     entry: string; exit: string; x: number; y: number
   } | null>(null)
 
-  // Compute forage gaps for the current window
+  // Compute forage gaps for the current window (using only herds from visible plans)
   const forageGaps = useMemo(() => {
-    const totalEv = herds.reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
+    const herdIdsInPlans = new Set<string>()
+    plans.filter(p => p.status !== 'DELETED').forEach(p => {
+      if (p.herd_ids?.length) p.herd_ids.forEach((id: string) => herdIdsInPlans.add(id))
+      else if (p.herd_id) herdIdsInPlans.add(p.herd_id)
+    })
+    const planHerds = herdIdsInPlans.size > 0
+      ? herds.filter((h: any) => herdIdsInPlans.has(h.id))
+      : herds
+    const totalEv = planHerds.reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
     if (totalEv === 0) return []
     return detectForageGaps(plans, totalEv, windowDays, windowStart)
   }, [plans, herds, windowDays, windowStart])
@@ -1025,9 +861,15 @@ function InteractiveGantt({
           const activePaddocks = orderedPaddocks.filter(p => p.is_active !== false && Number(p.dry_matter_kg_ha) > 0)
           const inactivePaddocks = orderedPaddocks.filter(p => !(p.is_active !== false && Number(p.dry_matter_kg_ha) > 0))
 
+          // Split active paddocks: those with plans go on top, those without go below (collapsed)
+          const paddockIdsWithPlans = new Set(plans.filter(p => p.status !== 'DELETED').map(p => p.paddock_id))
+          const plannedPaddocks = activePaddocks.filter(p => paddockIdsWithPlans.has(p.id))
+          const unplannedPaddocks = activePaddocks.filter(p => !paddockIdsWithPlans.has(p.id))
+
           return (
             <>
-            {activePaddocks.map((paddock, rowIdx) => {
+            {/* Show planned paddocks (or all active if no plans exist yet) */}
+            {(plannedPaddocks.length > 0 ? plannedPaddocks : activePaddocks).map((paddock, rowIdx) => {
               const paddockPlans = plans.filter(p => p.paddock_id === paddock.id && p.status !== 'DELETED')
               // Dot: green if enabled (is_active) AND has MS declared, gray if disabled or no MS
               const hasMS = true
@@ -1043,8 +885,17 @@ function InteractiveGantt({
                 : 'text-gray-300'
 
               // ── Métricas Holísticas ──────────────────────────
-              // DAH Estimado: (MS - remanente) × ha / (EV_total × kg/día)
-              const totalEV = herds.reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
+              // DAH Estimado: (MS - remanente) × ha / (EV_plan × kg/día)
+              // Use only EV from herds assigned to plans on THIS paddock
+              const paddockHerdIds = new Set<string>()
+              paddockPlans.forEach(p => {
+                if (p.herd_ids?.length) p.herd_ids.forEach((id: string) => paddockHerdIds.add(id))
+                else if (p.herd_id) paddockHerdIds.add(p.herd_id)
+              })
+              const paddockHerds = paddockHerdIds.size > 0
+                ? herds.filter((h: any) => paddockHerdIds.has(h.id))
+                : herds
+              const totalEV = paddockHerds.reduce((s: number, h: any) => s + Number(h.total_ev || 0), 0)
               const usableMs = calculateUsableForage(msHa, targetRemnant, areaHa)
               const dailyDemand = totalEV * dailyAllocationKg
               const estimatedDah = calculateGrazingDays(usableMs, dailyDemand) || null
@@ -1550,10 +1401,11 @@ function InteractiveGantt({
 
                     if (ganttLayers.showPlanned) {
                     if (isSuggested) {
-                      // ── Color dinámico por season_plan_id (gradiente púrpura) ──
-                      const spId = plan.ai_analysis?.season_plan_id as string | undefined
-                      const spIdx = spId !== undefined ? (seasonPlanColorMap[spId] ?? 0) : 0
-                      const pl = PURPLE_LEVELS[spIdx % PURPLE_LEVELS.length]
+                      // ── Color dinámico por season_plan_id (v30: campo directo + legacy fallback) ──
+                      const spId = (plan.season_plan_id || plan.ai_analysis?.season_plan_id) as string | undefined
+                      // Color directo desde el mapa (por rodeo) o fallback púrpura
+                      const planColor = spId ? (seasonPlanColorMap[spId] ?? PURPLE_LEVELS[0].bg) : PURPLE_LEVELS[0].bg
+                      const pl = { bg: planColor, border: planColor }
                       // ── Etiqueta interna: conteo de animales de esta planificación ──
                       const blockHerdIds: string[] = Array.isArray(plan.herd_ids) && plan.herd_ids.length > 0
                         ? plan.herd_ids
@@ -1564,7 +1416,7 @@ function InteractiveGantt({
                       const blockLabel = blockHeadCount > 0
                         ? `${blockHeadCount} ${primaryBlockHerd?.categoria || primaryBlockHerd?.name || 'cab.'}`
                         : (spId ? (seasonPlanNames[spId] || '') : '')
-                      const planSourceName = spId ? (seasonPlanNames[spId] || 'Planificación sugerida') : 'Planificación sugerida'
+                      const planSourceName = spId ? (seasonPlanNames[spId] || 'Plan forrajero') : 'Plan forrajero'
                       // Rayas diagonales con el color de intensidad — sin etiqueta de texto
                       renderBlocks.push(createBlock(
                         `t2-${plan.id}`, TRACK2_TOP, leftPct, widthPct,
@@ -1716,6 +1568,19 @@ function InteractiveGantt({
             </div>
           )
         })}
+
+        {/* ── Potreros Sin Planificación (activos pero sin planes) ── */}
+        {plannedPaddocks.length > 0 && unplannedPaddocks.length > 0 && (
+          <div className="bg-gray-50/40 border-t border-dashed border-gray-200 px-4 py-2.5">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-300"></span>
+              Sin planificación ({unplannedPaddocks.length})
+              <span className="font-medium normal-case tracking-normal text-gray-400 ml-1">
+                — {unplannedPaddocks.map(p => p.name).join(', ')}
+              </span>
+            </p>
+          </div>
+        )}
 
         {/* ── Potreros Inhabilitados / Sin MS ── */}
         {inactivePaddocks.length > 0 && (
@@ -2238,15 +2103,15 @@ function InteractiveGantt({
     )}
 
     {/* ── Gap Detail Panel ── */}
-    {selectedGap && (
+    {selectedGap && typeof document !== 'undefined' && createPortal(
       <>
         {/* Backdrop */}
         <div
-          className="fixed inset-0 z-[1000]"
+          className="fixed inset-0 z-[10000]"
           onClick={() => setSelectedGap(null)}
         />
         {/* Panel */}
-        <div className="fixed right-0 top-0 h-full w-80 z-[1001] bg-white border-l border-gray-100 shadow-2xl flex flex-col animate-in slide-in-from-right-4 duration-300">
+        <div className="fixed right-0 top-0 h-full w-80 z-[10001] bg-white border-l border-gray-100 shadow-2xl flex flex-col animate-in slide-in-from-right-4 duration-300">
           {/* Header */}
           <div className={`px-6 pt-8 pb-6 border-b ${selectedGap.severity === 'critical' ? 'border-red-100 bg-red-50/60' : selectedGap.severity === 'medium' ? 'border-amber-100 bg-amber-50/60' : 'border-yellow-100 bg-yellow-50/40'}`}>
             <div className="flex items-center justify-between mb-3">
@@ -2323,11 +2188,12 @@ function InteractiveGantt({
             </button>
           </div>
         </div>
-      </>
+      </>,
+      document.body
     )}
 
-    {showHerdDecisionModal && (
-      <div className="fixed inset-0 z-[9999] bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+    {showHerdDecisionModal && typeof document !== 'undefined' && createPortal(
+      <div className="fixed inset-0 z-[10000] bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 relative animate-in zoom-in-95 duration-200">
           <button onClick={() => setShowHerdDecisionModal(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
             <X className="w-4 h-4" />
@@ -2369,7 +2235,8 @@ function InteractiveGantt({
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     )}
 
     {/* ANNUAL VIEW HERD MODAL */}
@@ -2414,7 +2281,18 @@ function InteractiveGantt({
                   </tr>
                 </thead>
                 <tbody>
-                  {herds.map((herd: any, i: number) => {
+                  {/* Only show herds that have plans in the current Gantt view */}
+                  {(() => {
+                    const herdIdsInPlans = new Set<string>()
+                    plans.filter(p => p.status !== 'DELETED').forEach(p => {
+                      if (p.herd_ids?.length) p.herd_ids.forEach((id: string) => herdIdsInPlans.add(id))
+                      else if (p.herd_id) herdIdsInPlans.add(p.herd_id)
+                    })
+                    const visibleHerds = herdIdsInPlans.size > 0
+                      ? herds.filter((h: any) => herdIdsInPlans.has(h.id))
+                      : herds
+                    return visibleHerds
+                  })().map((herd: any, i: number) => {
                     const currentHeadCount = Number(herd.head_count) || 0
                     const peso = Number(herd.avg_weight_kg) || 0
                     let herdEntry = herd.admission_date || '2000-01-01'
@@ -2528,7 +2406,16 @@ function InteractiveGantt({
                     <td className="py-2.5 px-4 text-[10px] font-black text-gray-700 uppercase tracking-widest border-r border-gray-200 sticky left-0 z-10 bg-gray-100">Total</td>
                     {MONTHS_FOOTER.map(m => {
                       let totalCab = 0, totalEv = 0
-                      herds.forEach((h: any) => {
+                      // Only sum herds that have plans in the current view
+                      const herdIdsInPlans = new Set<string>()
+                      plans.filter(p => p.status !== 'DELETED').forEach(p => {
+                        if (p.herd_ids?.length) p.herd_ids.forEach((id: string) => herdIdsInPlans.add(id))
+                        else if (p.herd_id) herdIdsInPlans.add(p.herd_id)
+                      })
+                      const totalHerds = herdIdsInPlans.size > 0
+                        ? herds.filter((h: any) => herdIdsInPlans.has(h.id))
+                        : herds
+                      totalHerds.forEach((h: any) => {
                         const hEntry = h.admission_date || '2000-01-01'
                         const hExit = h.exit_date || '2100-01-01'
                         if (hEntry <= m.endDate && hExit >= m.startDate) {

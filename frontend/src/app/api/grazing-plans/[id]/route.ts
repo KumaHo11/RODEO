@@ -64,11 +64,22 @@ export async function DELETE(
     const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
+    const id = (await params).id
+
+    // 1. Eliminar eventos de agenda huérfanos asociados a este bloque
+    await serviceMutate(
+      `DELETE FROM farm_events 
+       WHERE org_id = $1 
+         AND impacts->>'grazingPlanId' = $2`,
+      [auth.orgId, id]
+    )
+
+    // 2. Eliminar el bloque de pastoreo
     await serviceMutate(
       `DELETE FROM grazing_plans
        WHERE id = $1
          AND paddock_id IN (SELECT id FROM paddocks WHERE org_id = $2)`,
-      [(await params).id, auth.orgId]
+      [id, auth.orgId]
     )
 
     return NextResponse.json({ success: true })

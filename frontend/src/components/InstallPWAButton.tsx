@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Download, X } from 'lucide-react'
 
 interface BeforeInstallPromptEvent extends Event {
@@ -190,7 +191,7 @@ export function InstallPWAButton({ variant = 'full' }: { variant?: 'full' | 'com
 import { MoreVertical } from 'lucide-react'
 
 function InstallGuideOverlay({ isIOS, isAndroid, onClose }: { isIOS: boolean; isAndroid: boolean; onClose: () => void }) {
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -243,6 +244,9 @@ function InstallGuideOverlay({ isIOS, isAndroid, onClose }: { isIOS: boolean; is
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }
 
 export default InstallPWAButton

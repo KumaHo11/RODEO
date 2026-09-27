@@ -198,6 +198,8 @@ function ClimateDetailDrawer({
   // Próximos 3 días
   const next3 = forecast.slice(0, 3)
 
+  if (typeof document === 'undefined') return null
+
   return createPortal(
     <>
       <div className="fixed inset-0 z-[9998] bg-black/25 backdrop-blur-[1px]" onClick={onClose} />

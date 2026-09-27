@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface PromptModalProps {
   isOpen: boolean
@@ -29,10 +30,10 @@ export default function PromptModal({
     }
   }, [isOpen])
 
-  if (!isOpen) return null
+  if (!isOpen || typeof document === 'undefined') return null
 
-  return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
       <div 
         className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden"
         onClick={e => e.stopPropagation()}
@@ -63,6 +64,7 @@ export default function PromptModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

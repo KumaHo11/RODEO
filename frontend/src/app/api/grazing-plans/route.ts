@@ -13,6 +13,34 @@ export async function GET(req: NextRequest) {
     const auth = await requireAuth(req)
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
+    const url = new URL(req.url)
+    const planIdsStr = url.searchParams.get('planIds')
+
+    if (planIdsStr !== null && planIdsStr.trim() === '') {
+      return NextResponse.json({ plans: [] })
+    }
+
+    const planIds = planIdsStr ? planIdsStr.split(',').filter(Boolean) : []
+    const hasOrphan = planIds.includes('__orphan__')
+    const validUuids = planIds.filter(id => id !== '__orphan__')
+
+    let whereClause = `WHERE p.org_id = $1`
+    const queryParams: any[] = [auth.orgId]
+
+    if (planIdsStr !== null) {
+      if (validUuids.length > 0 && hasOrphan) {
+        whereClause += ` AND (gp.season_plan_id = ANY($2::uuid[]) OR gp.season_plan_id IS NULL)`
+        queryParams.push(validUuids)
+      } else if (validUuids.length > 0) {
+        whereClause += ` AND gp.season_plan_id = ANY($2::uuid[])`
+        queryParams.push(validUuids)
+      } else if (hasOrphan) {
+        whereClause += ` AND gp.season_plan_id IS NULL`
+      } else {
+        return NextResponse.json({ plans: [] })
+      }
+    }
+
     const plans = await serviceQuery(
       `SELECT
          gp.id, gp.org_id, gp.paddock_id, gp.herd_id, gp.herd_ids,
@@ -29,7 +57,7 @@ export async function GET(req: NextRequest) {
          -- Track paralelo: clasifica el bloque según su pista de origen
          COALESCE(gp.plan_type, 'manual') AS plan_type,
          COALESCE(gp.source_origin, 'human') AS source_origin,
-         gp.cycle_id,
+         gp.cycle_id, gp.season_plan_id, COALESCE(gp.pass_number, 1) AS pass_number,
          json_build_object('id', p.id, 'name', p.name, 'area_ha', p.area_ha) AS paddocks,
          CASE WHEN h.id IS NOT NULL
            THEN json_build_object('id', h.id, 'name', h.name, 'head_count', h.head_count, 'total_ev', h.total_ev)
@@ -38,10 +66,9 @@ export async function GET(req: NextRequest) {
        FROM grazing_plans gp
        JOIN paddocks p ON p.id = gp.paddock_id
        LEFT JOIN herds h ON h.id = gp.herd_id
-       WHERE p.org_id = $1
+       ${whereClause}
        ORDER BY gp.entry_date ASC`,
-
-      [auth.orgId]
+      queryParams
     )
 
     return NextResponse.json({ plans })
@@ -64,10 +91,10 @@ export async function POST(req: NextRequest) {
       planned_recovery_days, status, temporary_animals, notes,
       exit_notes, exit_dry_matter_kg_ha, org_id, ai_analysis,
       // Campos de track paralelo
-      plan_type, source_origin, cycle_id, season_plan_id
+      plan_type, source_origin, cycle_id, season_plan_id, pass_number
     } = body
 
-    if (!paddock_id || !herd_id || !entry_date) {
+    if (!paddock_id || !entry_date) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
     }
 
@@ -78,8 +105,8 @@ export async function POST(req: NextRequest) {
           adjusted_entry_date, adjusted_exit_date, is_locked, closing_stock,
           planned_recovery_days, status, temporary_animals, notes,
           exit_notes, exit_dry_matter_kg_ha, ai_analysis,
-          plan_type, source_origin, cycle_id, season_plan_id, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23, NOW(), NOW())
+          plan_type, source_origin, cycle_id, season_plan_id, pass_number, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24, NOW(), NOW())
        RETURNING id`,
       [
         paddock_id, herd_id,
@@ -101,6 +128,7 @@ export async function POST(req: NextRequest) {
         (source_origin === 'algorithm' ? 'algorithm' : 'human'),
         cycle_id || null,
         season_plan_id || null,
+        pass_number || 1,
       ]
     )
 

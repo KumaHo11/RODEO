@@ -840,8 +840,8 @@ export default function BitacoraPage() {
 
 
       {/* ── Recording & Saving overlays ──────────────────────────────── */}
-      {(isRecording || saving || saved) && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center pointer-events-none">
+      {(isRecording || saving || saved) && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-end justify-center p-4 sm:items-center pointer-events-none">
           {/* Backdrop — only when recording */}
           {isRecording && (
             <div className="absolute inset-0 bg-gray-950/30 backdrop-blur-[2px] pointer-events-auto" />
@@ -897,7 +897,8 @@ export default function BitacoraPage() {
               </div>
             </div>
           ) : null}
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Photo menu modal ─────────────────────────────────────────── */}

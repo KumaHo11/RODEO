@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Check } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -29,8 +30,8 @@ export function AiPhotoSelectionModal({ photos, onContinue, onCancel }: AiPhotoS
     setSelected(newSelected)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4">
       <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <h3 className="font-bold text-gray-800">Seleccionar fotos para analizar</h3>
@@ -77,4 +78,7 @@ export function AiPhotoSelectionModal({ photos, onContinue, onCancel }: AiPhotoS
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }

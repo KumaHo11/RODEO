@@ -43,7 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'PLANIFICACIÓN',
     items: [
-      { name: 'Planificador', href: '/dashboard/grazing',  icon: Calendar,     permissionKey: 'planificador' },
+      { name: 'Planificador', href: '/dashboard/grazing/sandbox',  icon: Calendar,     permissionKey: 'planificador' },
       { name: 'Tareas',       href: '/dashboard/tareas',   icon: CheckSquare,  permissionKey: 'tareas'       },
       { name: 'Equipo',       href: '/dashboard/equipo',   icon: Users,        permissionKey: 'equipo'       },
     ],
@@ -74,7 +74,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/herds':     'rebanhos',
   '/dashboard/agenda':    'agenda',
   '/dashboard/clima':     'clima',
-  '/dashboard/grazing':   'planificador',
+  '/dashboard/grazing':           'planificador',
+  '/dashboard/grazing/sandbox':   'planificador',
   '/dashboard/bitacora':          'bitacora',
   '/dashboard/bitacora/bandeja':  'bitacora',
   '/dashboard/insights':  'insights',

@@ -889,7 +889,7 @@ function KmlPolygonActionModal({
     setSaving(false)
   }
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header */}
@@ -1023,6 +1023,9 @@ function KmlPolygonActionModal({
       </div>
     </div>
   )
+  
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }
 
 // ── FieldSetupModalInline ────────────────────────────────────────────────────────────

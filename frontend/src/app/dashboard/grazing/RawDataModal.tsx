@@ -1,4 +1,5 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { X, Table as TableIcon } from 'lucide-react'
 
 interface Props {
@@ -9,19 +10,22 @@ interface Props {
 export default function RawDataModal({ plan, onClose }: Props) {
   const tableData = plan?.metrics?.raw_table
 
+  if (typeof document === 'undefined') return null
+
   if (!tableData) {
-    return (
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+    return createPortal(
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center shadow-xl">
           <p className="text-sm font-bold text-gray-700">No hay tabla de datos asociada a este plan.</p>
           <button onClick={onClose} className="mt-4 px-6 py-2 bg-green-600 text-white font-bold rounded-xl text-sm">Cerrar</button>
         </div>
-      </div>
+      </div>,
+      document.body
     )
   }
 
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0 bg-gray-50/50">
@@ -78,6 +82,7 @@ export default function RawDataModal({ plan, onClose }: Props) {
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

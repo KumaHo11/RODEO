@@ -53,16 +53,7 @@ async function ensureTable() {
       updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `)
-
-  // Ensure grazing_plans has the season_plan_id column to allow cascade deletion when an imported file is removed
-  await serviceMutate(`
-    DO $$ 
-    BEGIN 
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='grazing_plans' AND column_name='season_plan_id') THEN 
-        ALTER TABLE grazing_plans ADD COLUMN season_plan_id UUID REFERENCES season_plans(id) ON DELETE CASCADE; 
-      END IF; 
-    END $$;
-  `).catch(e => console.error('Migration error adding season_plan_id:', e.message))
+  // Note: season_plan_id FK on grazing_plans is managed by v30_multi_rodeo_plans.sql migration
 }
 
 export async function POST(req: NextRequest) {

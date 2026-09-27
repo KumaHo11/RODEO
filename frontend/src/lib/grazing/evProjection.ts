@@ -283,9 +283,14 @@ interface FarmEventLike {
  * - Fecha pasada: revierte los movimientos desde la fecha hasta hoy
  * - Fecha futura: aplica los movimientos programados
  *
- * @param herdId       ID del rodeo
- * @param baseCount    Headcount actual del rodeo
- * @param dateStr      Fecha target en formato 'YYYY-MM-DD'
+ * Eventos que reducen el stock: venta, mortandad, ajuste_salida
+ * Eventos que aumentan el stock: compra, paricion, ajuste_entrada, servicio
+ *
+ * FUENTE ÚNICA DE VERDAD — no duplicar en page.tsx ni InteractiveGantt.tsx.
+ *
+ * @param herdId        ID del rodeo
+ * @param baseCount     Headcount actual del rodeo
+ * @param dateStr       Fecha target en formato 'YYYY-MM-DD'
  * @param unifiedEvents Eventos de hacienda unificados
  */
 export function calculateDynamicHeadcount(
@@ -308,8 +313,9 @@ export function calculateDynamicHeadcount(
     )
     eventsBetween.forEach(e => {
       const q = Number(e.quantity || 0)
-      if (['ajuste_salida'].includes(e.event_type)) count += q
-      if (['ajuste_entrada'].includes(e.event_type)) count -= q
+      // Para ir al pasado: revertir reducciones (sumar) y aumentos (restar)
+      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count += q
+      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count -= q
     })
   } else if (dateStr > today) {
     // Futuro: aplicar movimientos programados desde hoy hasta dateStr
@@ -318,8 +324,8 @@ export function calculateDynamicHeadcount(
     )
     eventsBetween.forEach(e => {
       const q = Number(e.quantity || 0)
-      if (['ajuste_salida'].includes(e.event_type)) count -= q
-      if (['ajuste_entrada'].includes(e.event_type)) count += q
+      if (['venta', 'mortandad', 'ajuste_salida'].includes(e.event_type)) count -= q
+      if (['compra', 'paricion', 'ajuste_entrada', 'servicio'].includes(e.event_type)) count += q
     })
   }
 

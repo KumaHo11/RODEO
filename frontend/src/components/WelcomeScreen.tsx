@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { usePermissions, ROLE_LABELS, ROLE_COLORS } from '@/lib/usePermissions'
 import { Check, ArrowRight, Loader2, Sprout, MapPin, ClipboardList, Users, Calendar, BookOpen, BarChart2, CheckSquare } from 'lucide-react'
@@ -61,7 +62,7 @@ export function WelcomeScreen({ orgName, onDismiss }: WelcomeScreenProps) {
     onDismiss()
   }
 
-  return (
+  const modalContent = (
     <div
       className={`fixed inset-0 z-[9999] flex items-center justify-center transition-all duration-700 ${
         mounted ? 'opacity-100' : 'opacity-0'
@@ -171,4 +172,7 @@ export function WelcomeScreen({ orgName, onDismiss }: WelcomeScreenProps) {
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }
