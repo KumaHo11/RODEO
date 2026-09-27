@@ -145,12 +145,12 @@ function PaddockCard({
           {isSubRow && onRestore && (
             <button
               type="button"
-              className="flex items-center gap-1 text-[9px] font-semibold text-gray-500 hover:text-red-600 bg-gray-100 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-full px-2 py-0.5 transition-colors"
+              className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-full transition-colors shrink-0"
               onClick={e => { e.stopPropagation(); onRestore() }}
               title="Restaurar potrero original"
+              aria-label="Restaurar potrero original"
             >
-              <RotateCcw size={9} />
-              Restaurar
+              <RotateCcw size={10} />
             </button>
           )}
           <div className="text-gray-400 hover:text-gray-700 bg-gray-50 rounded-md p-1 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-colors">

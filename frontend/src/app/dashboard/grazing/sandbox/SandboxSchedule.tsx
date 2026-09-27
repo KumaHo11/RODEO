@@ -10,7 +10,7 @@
 import React, { useMemo, useState } from 'react'
 import { useSandboxStore } from '@/lib/grazing/sandboxStore'
 import type { PlanEvent } from '@/lib/grazing/types'
-import { RefreshCw, Search, X, AlertTriangle, Layers, List, ChevronDown, BarChart3 } from 'lucide-react'
+import { RefreshCw, Search, X, Layers, List, ChevronDown, BarChart3 } from 'lucide-react'
 import StockingRateGauge from './StockingRateGauge'
 
 function fmt(dateStr: string): string {
@@ -84,34 +84,7 @@ function PasadaRow({ ev, i, isLast, isClosed }: { ev: PlanEvent; i: number; isLa
   )
 }
 
-// ── Advertencia de heterogeneidad extrema ─────────────────────────────────────
 
-function HeterogeneidadWarning({ warning }: {
-  warning: { potreroMax: string; potreroMin: string; ratio: number; suggestion: string }
-}) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="mx-3 mb-2 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
-      <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-left"
-        onClick={() => setOpen(v => !v)}
-      >
-        <AlertTriangle size={13} className="text-amber-600 shrink-0" />
-        <span className="text-[11px] font-bold text-amber-800 flex-1">
-          Heterogeneidad alta ({warning.ratio}×) · {warning.potreroMax}
-        </span>
-        <span className="text-[10px] text-amber-500">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div className="px-3 pb-3 border-t border-amber-200">
-          <p className="text-[11px] text-amber-700 leading-relaxed mt-2">
-            Algunos potreros son demasiado grandes con respecto al más chico o al general, quizás sea conveniente dividir el potrero con un boyero, solo eso.
-          </p>
-        </div>
-      )}
-    </div>
-  )
-}
 
 export default function SandboxSchedule() {
   const result  = useSandboxStore(s => s.result)
@@ -239,12 +212,6 @@ export default function SandboxSchedule() {
         </div>
       )}
 
-      {/* ── Advertencia heterogeneidad extrema ── */}
-      {result?.heterogeneidadExtrema && hasPlan && (
-        <div className="shrink-0 pt-2">
-          <HeterogeneidadWarning warning={result.heterogeneidadExtrema} />
-        </div>
-      )}
 
       {/* ── Barra resumen pasadas + toggle vista + buscador ── */}
       {hasPlan && (

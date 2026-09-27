@@ -84,6 +84,13 @@ export interface SandboxState {
    * Allows the UI to show a "Restore" button.
    */
   subdivisionSources: Record<string, string[]>
+  /**
+   * Anchor strategy for heterogeneous paddock cells.
+   * 'min'  = Proteger Chicos: cycle anchored to smallest paddock's rest requirement
+   * 'max'  = Proteger Grandes: cycle anchored to largest paddock's rest requirement (default)
+   * null   = auto (engine default)
+   */
+  anchorMode: 'min' | 'max' | null
 
   init: (params: {
     paddocks: PaddockRawInit[]
@@ -108,6 +115,8 @@ export interface SandboxState {
   subdivideRow: (paddockId: string, parts?: number) => void
   /** Restore a subdivided paddock back to its original single row. */
   restoreSubdividedRow: (originalId: string) => void
+  /** Set the anchor strategy for heterogeneous cells. Triggers recalculation. */
+  setAnchorMode: (mode: 'min' | 'max' | null) => void
   confirmPlan: (params: {
     apiFn: (url: string, opts: RequestInit) => Promise<Response>
     herdIds: string[]
@@ -222,6 +231,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   generatedBlocks: [],
   lastSeasonPlanId: null,
   subdivisionSources: {},
+  anchorMode: null,
 
   // ── init ──────────────────────────────────────────────────────────────────
   init: ({ paddocks, herds, mode }) => {
@@ -348,6 +358,12 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   recalculate: () => {
     const { config, paddockRows } = get()
     set({ result: simulate({ config, paddocks: paddockRows }) })
+  },
+
+  // ── setAnchorMode ─────────────────────────────────────────────────────────
+  setAnchorMode: (mode) => {
+    set({ anchorMode: mode, isDirty: true })
+    get().recalculate()
   },
 
   // ── subdivideRow ──────────────────────────────────────────────────────────
@@ -615,6 +631,8 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     generatedBlocks: [],
     lastSeasonPlanId: null,
     subdivisionSources: {},
+    anchorMode: null,
+
   }),
 }))
 

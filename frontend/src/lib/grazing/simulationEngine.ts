@@ -199,11 +199,14 @@ function simulateOpen(config: SimulationConfig, all: PaddockSimRow[]): Simulatio
   // Advertencia si no hay rodeo
   if (sinRodeo) warnings.push('Seleccioná al menos 1 rodeo para generar el cronograma.')
 
-  // ─ Detectar heterogeneidad extrema de coeficientes (ratio > 4×) ────────────
+  // ─ Detectar heterogeneidad de coeficientes (ratio >= 2.5×) ─────────────────
+  // Umbral: cuando el potrero de mayor coeficiente es ≥ 2.5× el de menor,
+  // se activa el banner sutil de alerta y el modal de planes de manejo.
+  // Equivale aproximadamente a una Calidad Relativa máxima > 1.5.
   const coefMax = coefs.reduce((max, c) => c.C > max.C ? c : max, coefs[0])
   const coefMin = coefs.reduce((min, c) => c.C < min.C ? c : min, coefs[0])
   const ratio = coefMin.C > 0 ? coefMax.C / coefMin.C : 0
-  const heterogeneidadExtrema = ratio > 4 ? {
+  const heterogeneidadExtrema = ratio >= 2.5 ? {
     potreroMax: coefMax.name,
     potreroMin: coefMin.name,
     ratio: +ratio.toFixed(1),

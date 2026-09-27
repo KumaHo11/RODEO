@@ -1185,13 +1185,22 @@ body {
   overflow: hidden;
   min-height: 0;
 }
-/* Rodeos y Potreros: ancho fijo máximo, sin crecer más */
-.sandbox-col--herds,
+/* Rodeos: 25% del ancho total */
+.sandbox-col--herds {
+  width: 25%;
+  min-width: 200px;
+  max-width: 320px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  min-height: 0;
+  border-right: 1px solid #e5e7eb;
+}
+/* Potreros: 30% del ancho total */
 .sandbox-col--paddocks {
-  width: 300px;           /* ancho base */
-  min-width: 240px;       /* no colapsar por debajo de esto */
-  max-width: 340px;       /* no crecer más de esto */
-  flex-shrink: 0;         /* no se achican si el mapa necesita espacio */
+  width: 30%;
+  min-width: 240px;
+  max-width: 400px;
+  flex-shrink: 0;
   overflow-y: auto;
   min-height: 0;
   border-right: 1px solid #e5e7eb;
@@ -1213,11 +1222,8 @@ body {
 
 /* ── Breakpoint intermedio: pantallas medianas (1024px → 769px) ──────────── */
 @media (max-width: 1100px) {
-  .sandbox-col--herds,
-  .sandbox-col--paddocks {
-    width: 260px;
-    min-width: 200px;
-  }
+  .sandbox-col--herds    { width: 23%; min-width: 180px; }
+  .sandbox-col--paddocks { width: 28%; min-width: 200px; }
 }
 
 /* ── Mobile: tabs ────────────────────────────────────────────────────────── */
