@@ -131,6 +131,7 @@ function InteractiveGantt({
   paddockOrder = [], onPaddockReorder,
   seasonPlanColorMap = {},
   seasonPlanNames = {},
+  paddockPlanColorMap = {},
   ganttLayers = { showOriginal: true, showPlanned: true, showReal: true, showEvents: true, showAgenda: true, showRemnant: true, showAnimals: true },
   onPaddockToggle,
   bioMilestones = [],
@@ -182,7 +183,9 @@ function InteractiveGantt({
   }
   /** Callback para habilitar/deshabilitar potrero desde el Gantt */
   onPaddockToggle?: (paddockId: string, isActive: boolean) => void
-  /** Hitos biológicos compartidos (destete, servicio, parición) para EV dinámico */
+  /** Mapa paddock_id → color hex del season_plan que lo cubre (para badge de número de orden) */
+  paddockPlanColorMap?: Record<string, string>
+  /** Hitos biológicos compartidos (destete, servicio, parión) para EV dinámico */
   bioMilestones?: BioMilestone[]
 }) {
   // ── Filtrado estricto: solo potreros y rodeos involucrados en los planes visibles ──
@@ -810,140 +813,91 @@ function InteractiveGantt({
                   className={`flex border-b border-gray-100 ${rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}
                   style={{ height: ROW_H }}
                 >
-                  {/* Label — datos del potrero */}
-              <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`px-3 py-2 flex items-center gap-2 border-r border-gray-100 shrink-0 sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${!isEnabled ? 'bg-gray-100 h-full' : rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}>
-                {/* Paddock toggle — habilitar/deshabilitar directo en el Gantt */}
-                <button
-                  onClick={() => onPaddockToggle?.(paddock.id, !isEnabled)}
-                  title={isEnabled ? 'Inhabilitar potrero' : 'Habilitar potrero'}
-                  className={`shrink-0 transition-colors rounded ${
-                    isEnabled ? 'text-green-500 hover:text-red-400 self-start mt-2' : 'text-gray-300 hover:text-green-500'
-                  }`}
-                >
-                  {paddock.is_active !== false ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                </button>
-                <div className="min-w-0 flex-1 flex flex-col justify-center gap-1.5 py-1 group/paddock">
-                  {/* Row 1: Nombre + badge calidad */}
-                  <div className="flex items-center justify-between gap-1">
-                    {onPaddockReorder && (
-                      <div className="flex flex-col gap-[2px] shrink-0 mr-1.5 opacity-0 group-hover/paddock:opacity-100 transition-opacity">
-                        <button type="button" onClick={() => onPaddockReorder(paddock.id, 'up')} className="text-gray-300 hover:text-green-600 hover:bg-green-50 rounded" title="Mover arriba">
-                          <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
-                        </button>
-                        <button type="button" onClick={() => onPaddockReorder(paddock.id, 'down')} className="text-gray-300 hover:text-green-600 hover:bg-green-50 rounded" title="Mover abajo">
-                          <ChevronDown className="w-3.5 h-3.5 stroke-[3]" />
-                        </button>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onPaddockClick?.(paddock.id)}
-                      className="text-sm font-black text-gray-950 tracking-tight truncate hover:text-green-700 transition-colors text-left leading-tight"
-                      title={`Ir al potrero ${paddock.name}`}
-                    >
-                      {paddock.name}
-                    </button>
-                    {isEnabled && qualityScore != null && (
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <HoverTooltip text={HOLISTIC_TOOLTIPS.quality}>
-                          <span className={`text-[10px] font-black min-w-[36px] text-center px-1.5 py-0.5 rounded-lg border bg-white shadow-sm cursor-help ${qColor}`}>
-                            {qualityScore}/10
-                          </span>
-                        </HoverTooltip>
-                      </div>
-                    )}
-                    {!hasMS && (
-                      <div className="flex items-center gap-0.5 shrink-0" title="Sin materia seca declarada no es posible planificar pastoreos en este potrero.">
-                        <span className="flex items-center gap-0.5 text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md cursor-help">
-                          <AlertTriangle className="w-2 h-2" />Sin MS
-                        </span>
-                      </div>
-                    )}
-                    {isEnabled && hasMS && estimatedDah === 0 && (
-                      <div className="flex items-center gap-0.5 shrink-0" title="El forraje actual está por debajo del remanente objetivo. Riesgo de sobrepastoreo.">
-                        <span className="flex items-center gap-0.5 text-[9px] font-black text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-md cursor-help">
-                          <AlertTriangle className="w-2 h-2" />0 Días
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {isEnabled && (
-                    <>
-                      {/* Row 2: ha + MS/ha */}
-                      <div className="flex items-center gap-1.5">
-                        <HoverTooltip text="Superficie del potrero (hectáreas)">
-                          <span className="text-[11px] font-bold text-gray-700 cursor-help">{areaHa.toFixed(1)}<span className="font-normal text-gray-400 ml-0.5">ha</span></span>
-                        </HoverTooltip>
-                        {msHa > 0 && (
-                          <>
-                            <span className="w-0.5 h-0.5 rounded-full bg-gray-300" />
-                            <HoverTooltip text="Biomasa disponible (kg MS/ha)">
-                              <span className="text-[11px] font-bold text-gray-700 cursor-help">{msHa.toLocaleString('es')}<span className="font-normal text-gray-400 ml-0.5">kg/ha</span></span>
-                            </HoverTooltip>
-                          </>
-                        )}
-                      </div>
-                      {/* Row 3: DAH + Coeficiente (Holistic Metrics) */}
-                      {(() => {
-                        return (
-                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                            {/* Yield Coefficient badge */}
-                            {yieldCoef !== null && (
-                                <HoverTooltip text={HOLISTIC_TOOLTIPS.yieldCoef}>
-                                  <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border cursor-help ${
-                                    yieldCoef >= 1.05 ? 'text-green-700 bg-green-50 border-green-100'
-                                    : yieldCoef >= 0.95 ? 'text-gray-600 bg-gray-50 border-gray-200'
-                                    : 'text-amber-700 bg-amber-50 border-amber-100'
-                                  }`}>
-                                    ×{yieldCoef.toFixed(2)}
-                                  </span>
-                                </HoverTooltip>
+                  {/* Label — card minimalista */}
+                  {(() => {
+                    // Número de orden cronológico: posición del 1er plan del potrero
+                    // entre todos los paddocks ordenados por su entry_date más temprana.
+                    const firstPlanEntry = paddockPlans
+                      .filter((p: any) => p.entry_date)
+                      .map((p: any) => p.entry_date)
+                      .sort()[0]
+
+                    // Días de pastoreo planificados (suma de duración de sus bloques)
+                    const plannedDays = paddockPlans.reduce((total: number, p: any) => {
+                      if (!p.entry_date || !p.exit_date) return total
+                      const d = Math.max(0, Math.round(
+                        (new Date(p.exit_date + 'T00:00').getTime() - new Date(p.entry_date + 'T00:00').getTime()) / 86_400_000
+                      ))
+                      return total + d
+                    }, 0)
+
+                    return (
+                      <div
+                        style={{ width: LABEL_W, minWidth: LABEL_W }}
+                        className={`px-3 py-0 flex items-center gap-2.5 border-r border-gray-100 shrink-0 sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${rowIdx % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}
+                      >
+                        {/* Número de orden — coloreado por el plan al que pertenece el potrero */}
+                        {(() => {
+                          const planColor = paddockPlanColorMap[paddock.id]
+                          if (planColor) {
+                            // Color sutil: borde y texto del color del plan, fondo muy claro
+                            return (
+                              <span
+                                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-[11px] font-black leading-none border"
+                                style={{
+                                  backgroundColor: planColor + '18',
+                                  borderColor: planColor + '70',
+                                  color: planColor + 'cc',
+                                }}
+                              >
+                                {rowIdx + 1}
+                              </span>
+                            )
+                          }
+                          return (
+                            <span className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg bg-gray-100 text-[11px] font-black text-gray-500 leading-none">
+                              {rowIdx + 1}
+                            </span>
+                          )
+                        })()}
+
+                        {/* Datos del potrero */}
+                        <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5 py-1">
+                          {/* Nombre */}
+                          <button
+                            type="button"
+                            onClick={() => onPaddockClick?.(paddock.id)}
+                            className="text-sm font-black text-gray-950 tracking-tight truncate hover:text-green-700 transition-colors text-left leading-tight"
+                            title={`Ir al potrero ${paddock.name}`}
+                          >
+                            {paddock.name}
+                          </button>
+                          {/* Ha · Aforo */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-semibold text-gray-500">
+                              {areaHa.toFixed(1)}<span className="text-gray-400 font-normal"> ha</span>
+                            </span>
+                            {msHa > 0 && (
+                              <>
+                                <span className="w-0.5 h-0.5 rounded-full bg-gray-300 shrink-0" />
+                                <span className="text-[11px] font-semibold text-gray-500">
+                                  {msHa.toLocaleString('es')}<span className="text-gray-400 font-normal"> kg/ha</span>
+                                </span>
+                              </>
                             )}
-                            {/* Min / Max / Occupation Days */}
-                            {(() => {
-                               const stdDivisor = Math.max(1, paddocks.filter((p: any) => p.is_active !== false).length - 1)
-                               const pYield = yieldCoef || 1
-                               const stdMin = Math.round(pYield * (50 / stdDivisor))
-                               const stdMax = Math.round(pYield * (100 / stdDivisor))
-                               const stdAvg = Math.round((stdMin + stdMax) / 2)
-
-                               const activeSupply = activeSeasonPlan?.supply_snapshot?.by_paddock?.find((d: any) => d.id === paddock.id);
-                               const isClosed = activeSeasonPlan?.season_type === 'cerrado';
-
-                               let displayMin = stdMin
-                               let displayMax = stdMax
-                               let displayAvg = stdAvg
-                               let isFixed = false
-
-                               if (activeSupply) {
-                                 if (isClosed) {
-                                   displayMin = activeSupply.min_days || 0
-                                   isFixed = true
-                                 } else {
-                                   displayMin = activeSupply.min_days || 0
-                                   displayMax = activeSupply.max_days || 0
-                                   displayAvg = Math.round((displayMin + displayMax) / 2)
-                                 }
-                               }
-
-                               return (
-                                 <HoverTooltip text={isFixed ? "Días permitidos en base a la oferta forrajera" : "Rango sugerido de pastoreo (Mínimo, Promedio y Máximo)"}>
-                                   <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded-full cursor-help">
-                                     {isFixed 
-                                       ? `Días de pastoreo: ${displayMin}d` 
-                                       : `Mín: ${displayMin}d • Prom: ${displayAvg}d • Máx: ${displayMax}d`
-                                     }
-                                   </span>
-                                 </HoverTooltip>
-                               )
-                            })()}
+                            {plannedDays > 0 && (
+                              <>
+                                <span className="w-0.5 h-0.5 rounded-full bg-gray-300 shrink-0" />
+                                <span className="inline-flex items-center text-[11px] font-bold text-green-700 bg-green-50 border border-green-100 px-1.5 py-px rounded-full">
+                                  {plannedDays}d
+                                </span>
+                              </>
+                            )}
                           </div>
-                        )
-                      })()}
-                    </>
-                  )}
-                </div>
-              </div>
+                        </div>
+                      </div>
+                    )
+                  })()}
 
               {/* Timeline area */}
 

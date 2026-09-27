@@ -17,7 +17,6 @@
 
 import React from 'react'
 import { Check, ChevronDown, AlertTriangle, Eye, EyeOff } from 'lucide-react'
-import { createPortal } from 'react-dom'
 import InteractiveGantt from '../InteractiveGantt'
 import { fmtDate, type GrazingPlanRow, type SeasonPlanRow } from '@/lib/grazing/planFormatters'
 import type { UsePlanViewFiltersReturn, GanttTab } from '@/hooks/usePlanViewFilters'
@@ -79,6 +78,9 @@ interface GanttViewProps {
   onPaddockClick: (paddockId: string) => void
   onPaddockToggle: (paddockId: string, isActive: boolean) => void
   onPaddockReorder?: (paddockId: string, dir: 'up' | 'down') => void
+
+  /** Mapa paddock_id → color del season_plan que lo cubre (para badge de número) */
+  paddockPlanColorMap?: Record<string, string>
 
   // Alertas de movimiento inminente
   urgentPlans: GrazingPlanRow[]
@@ -166,95 +168,93 @@ function PlanSelectorHeader({
             {seasonPlans.length} plan{seasonPlans.length !== 1 ? 'es' : ''}
           </button>
 
-          {open &&
-            typeof document !== 'undefined' &&
-            createPortal(
-              <>
-                <div
-                  className="fixed inset-0 z-[8999]"
-                  onClick={() => setOpen(false)}
-                />
-                <div
-                  className="fixed z-[9000] bg-white border border-gray-100 shadow-2xl rounded-2xl w-72 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
-                  style={{ top: 60, left: 16 }}
-                >
-                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                    <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">
-                      Seleccionar planes
-                    </span>
-                    <span className="text-[9px] text-gray-400 font-medium">
-                      {selectedSeasonPlanIds.length} seleccionado{selectedSeasonPlanIds.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="max-h-72 overflow-y-auto py-1">
-                    {[...seasonPlans]
-                      .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
-                      .map((sp) => {
-                        const selected = selectedSeasonPlanIds.includes(sp.id)
-                        const color = seasonPlanColorMap[sp.id] || '#9ca3af'
-                        return (
-                          <button
-                            key={sp.id}
-                            onClick={() => {
-                              onToggle(sp.id)
-                              if (!activeSeasonPlanId && !selected) {
-                                onSetActive(sp.id)
-                              }
-                            }}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors"
-                          >
-                            {/* Checkbox visual */}
-                            <span
-                              className={`w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
-                                selected ? 'border-0' : 'border-gray-300'
-                              }`}
-                              style={selected ? { backgroundColor: color } : {}}
-                            >
-                              {selected && <Check className="w-2.5 h-2.5 text-white" />}
-                            </span>
-
-                            {/* Color dot */}
-                            <span
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{ backgroundColor: color }}
-                              aria-hidden
-                            />
-
-                            {/* Info del plan */}
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-xs font-bold truncate ${selected ? 'text-gray-900' : 'text-gray-600'}`}>
-                                {sp.name}
-                              </p>
-                              <p className="text-[9px] text-gray-400 font-medium">
-                                {sp.year}
-                                {sp.season_type === 'cerrado' ? ' · Cerrada' : ' · Abierta'}
-                                {sp.source === 'suggested' ? ' · IA' : ''}
-                              </p>
-                            </div>
-
-                            {/* Indicador de plan activo del viewport */}
-                            {sp.id === activeSeasonPlanId && (
-                              <span className="text-[8px] font-black text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-md shrink-0">
-                                Activo
-                              </span>
-                            )}
-                          </button>
-                        )
-                      })}
-                  </div>
-
-                  {/* Acción: marcar como activo del viewport */}
-                  {selectedSeasonPlanIds.length > 0 && (
-                    <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/80">
-                      <p className="text-[9px] text-gray-400 font-medium">
-                        El plan "activo" posiciona la ventana del Gantt. Tildá múltiples para verlos en simultáneo.
-                      </p>
-                    </div>
-                  )}
+          {open && (
+            <>
+              {/* Overlay invisible para cerrar al hacer clic afuera */}
+              <div
+                className="fixed inset-0 z-[8999]"
+                onClick={() => setOpen(false)}
+              />
+              {/* Dropdown — anclado al botón con absolute */}
+              <div
+                className="absolute top-full left-0 mt-1.5 z-[9000] bg-white border border-gray-100 shadow-2xl rounded-2xl w-72 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+              >
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                  <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">
+                    Planes disponibles
+                  </span>
+                  <span className="text-[9px] text-gray-400 font-medium">
+                    {selectedSeasonPlanIds.length} seleccionado{selectedSeasonPlanIds.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
-              </>,
-              document.body
-            )}
+                <div className="max-h-72 overflow-y-auto py-1">
+                  {[...seasonPlans]
+                    .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
+                    .map((sp) => {
+                      const selected = selectedSeasonPlanIds.includes(sp.id)
+                      const color = seasonPlanColorMap[sp.id] || '#9ca3af'
+                      return (
+                        <button
+                          key={sp.id}
+                          onClick={() => {
+                            onToggle(sp.id)
+                            if (!activeSeasonPlanId && !selected) {
+                              onSetActive(sp.id)
+                            }
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          {/* Checkbox visual */}
+                          <span
+                            className={`w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+                              selected ? 'border-0' : 'border-gray-300'
+                            }`}
+                            style={selected ? { backgroundColor: color } : {}}
+                          >
+                            {selected && <Check className="w-2.5 h-2.5 text-white" />}
+                          </span>
+
+                          {/* Color dot */}
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: color }}
+                            aria-hidden
+                          />
+
+                          {/* Info del plan */}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-bold truncate ${selected ? 'text-gray-900' : 'text-gray-600'}`}>
+                              {sp.name}
+                            </p>
+                            <p className="text-[9px] text-gray-400 font-medium">
+                              {sp.year}
+                              {sp.season_type === 'cerrado' ? ' · Cerrada' : ' · Abierta'}
+                              {sp.source === 'suggested' ? ' · IA' : ''}
+                            </p>
+                          </div>
+
+                          {/* Indicador de plan activo del viewport */}
+                          {sp.id === activeSeasonPlanId && (
+                            <span className="text-[8px] font-black text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-md shrink-0">
+                              Activo
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                </div>
+
+                {/* Acción: marcar como activo del viewport */}
+                {selectedSeasonPlanIds.length > 0 && (
+                  <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/80">
+                    <p className="text-[9px] text-gray-400 font-medium">
+                      El plan "activo" posiciona la ventana del Gantt. Tildá múltiples para verlos en simultáneo.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -350,6 +350,7 @@ export function GanttView({
   ganttLayers,
   bioMilestones,
   paddockOrder,
+  paddockPlanColorMap = {},
   onBlockClick,
   onBlockMove,
   onRainfallChange,
@@ -476,6 +477,7 @@ export function GanttView({
             onEditEvent={onEditEvent}
             onHerdClick={onHerdClick}
             paddockOrder={paddockOrder}
+            paddockPlanColorMap={paddockPlanColorMap}
             onPaddockReorder={onPaddockReorder}
             seasonPlanColorMap={seasonPlanColorMap}
             seasonPlanNames={Object.fromEntries(seasonPlans.map((sp) => [sp.id, sp.name]))}

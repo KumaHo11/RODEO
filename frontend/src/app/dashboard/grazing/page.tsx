@@ -427,6 +427,60 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     })
   }
 
+  /**
+   * planBasedPaddockOrder — ordena los potreros por el orden definido en la planificación:
+   * agrupa por season_plan (en el orden de selectedSeasonPlanIds) y dentro de cada plan
+   * ordena por entry_date más temprana del potrero. Refleja la Mesa de Arena.
+   */
+  const planBasedPaddockOrder = useMemo(() => {
+    if (selectedSeasonPlanIds.length === 0 || plans.length === 0) return customPaddockOrder
+
+    // Para cada potrero, encontrar su entry_date más temprana en los planes seleccionados
+    const paddockMinEntry = new Map<string, { entry: string; planIdx: number }>()
+
+    selectedSeasonPlanIds.forEach((spId, planIdx) => {
+      const spPlans = plans.filter((p: any) =>
+        p.season_plan_id === spId && p.status !== 'DELETED' && p.entry_date
+      )
+      spPlans.forEach((p: any) => {
+        const existing = paddockMinEntry.get(p.paddock_id)
+        if (!existing || p.entry_date < existing.entry || planIdx < existing.planIdx) {
+          paddockMinEntry.set(p.paddock_id, { entry: p.entry_date, planIdx })
+        }
+      })
+    })
+
+    if (paddockMinEntry.size === 0) return customPaddockOrder
+
+    // Ordenar: primero por índice de plan (agrupa por planificación), luego por entry_date
+    const ordered = [...paddockMinEntry.entries()]
+      .sort((a, b) => {
+        if (a[1].planIdx !== b[1].planIdx) return a[1].planIdx - b[1].planIdx
+        return a[1].entry.localeCompare(b[1].entry)
+      })
+      .map(([paddockId]) => paddockId)
+
+    return ordered
+  }, [selectedSeasonPlanIds, plans, customPaddockOrder])
+
+  /**
+   * paddockPlanColorMap — para cada paddock_id, el color del season_plan que lo cubre primero.
+   * Pasado al InteractiveGantt para colorear el badge de número de orden.
+   */
+  const paddockPlanColorMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    selectedSeasonPlanIds.forEach(spId => {
+      const color = seasonPlanColorMap[spId]
+      if (!color) return
+      plans
+        .filter((p: any) => p.season_plan_id === spId && p.status !== 'DELETED')
+        .forEach((p: any) => {
+          if (!map[p.paddock_id]) map[p.paddock_id] = color
+        })
+    })
+    return map
+  }, [selectedSeasonPlanIds, plans, seasonPlanColorMap])
+
   // Auto-set activeSeasonPlanId + selectedSeasonPlanIds cuando carga por primera vez
   // BUG 1 FIX: también se activa cuando selectedSeasonPlanIds está vacío aunque
   // ya exista un activeSeasonPlanId (puede ocurrir en reload después de crear plan).
@@ -2101,13 +2155,23 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   {seasonPlans.find(sp => sp.id === activeSeasonPlanId)?.name || 'Plan Forrajero'}
                 </span>
               )}
-              {/* Dropdown selector de planes — siempre visible */}
+              {/* Dropdown selector de planes — multi-select con checkboxes */}
               <div className="relative">
                 <button
                   onClick={() => setShowSeasonPlanSelector(p => !p)}
                   className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-all"
-                  title="Cambiar plan activo"
+                  title="Seleccionar planes"
                 >
+                  {/* Dots de planes seleccionados */}
+                  <span className="flex -space-x-1 mr-0.5">
+                    {selectedSeasonPlanIds.slice(0, 3).map(id => (
+                      <span
+                        key={id}
+                        className="w-2 h-2 rounded-full border border-white shadow-sm"
+                        style={{ backgroundColor: seasonPlanColorMap[id] || '#9ca3af' }}
+                      />
+                    ))}
+                  </span>
                   <ChevronDown className="w-3 h-3" />
                   {seasonPlans.length} plan{seasonPlans.length !== 1 ? 'es' : ''}
                 </button>
@@ -2115,40 +2179,99 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   <>
                     <div className="fixed inset-0 z-[8999]" onClick={() => setShowSeasonPlanSelector(false)} />
                     <div
-                      className="fixed z-[9000] bg-white border border-gray-100 shadow-2xl rounded-2xl w-64 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
-                      style={{
-                        top: 60,
-                        left: 16,
-                      }}
+                      className="fixed z-[9000] bg-white border border-gray-100 shadow-2xl rounded-2xl w-72 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                      style={{ top: 60, left: 16 }}
                     >
-                      <div className="px-4 py-3 border-b border-gray-100">
-                        <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Planes disponibles</span>
+                      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                        <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">
+                          Planes disponibles
+                        </span>
+                        <span className="text-[9px] text-gray-400 font-medium">
+                          {selectedSeasonPlanIds.length} seleccionado{selectedSeasonPlanIds.length !== 1 ? 's' : ''}
+                        </span>
                       </div>
                       <div className="max-h-64 overflow-y-auto py-1">
-                        {[...seasonPlans].sort((a, b) => (b.year ?? 0) - (a.year ?? 0)).map(sp => (
-                          <button
-                            key={sp.id}
-                            onClick={() => {
-                              setActiveSeasonPlanId(sp.id)
-                              if (sp.start_date) setGanttWindow(sp.start_date)
-                              setShowSeasonPlanSelector(false)
-                            }}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors ${sp.id === activeSeasonPlanId ? 'bg-green-50' : ''}`}
-                          >
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${sp.id === activeSeasonPlanId ? 'bg-green-500' : 'bg-gray-300'}`} />
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-xs font-bold truncate ${sp.id === activeSeasonPlanId ? 'text-green-800' : 'text-gray-800'}`}>{sp.name}</p>
-                              <p className="text-[9px] text-gray-400 font-medium">{sp.year} · {sp.season_type === 'cerrado' ? 'Cerrada' : 'Abierta'}</p>
-                            </div>
-                            {sp.id === activeSeasonPlanId && <Check className="w-3 h-3 text-green-600 shrink-0" />}
-                          </button>
-                        ))}
+                        {[...seasonPlans].sort((a, b) => (b.year ?? 0) - (a.year ?? 0)).map(sp => {
+                          const selected = selectedSeasonPlanIds.includes(sp.id)
+                          const color = seasonPlanColorMap[sp.id] || '#9ca3af'
+                          const isOnlySelected = selected && selectedSeasonPlanIds.length === 1
+                          return (
+                            <button
+                              key={sp.id}
+                              onClick={() => {
+                                // Multi-select: toggle el plan en selectedSeasonPlanIds
+                                if (!isOnlySelected) {
+                                  toggleSeasonPlan(sp.id)
+                                }
+                                // Si no había plan activo o el usuario activa uno nuevo,
+                                // actualizar también el viewport del Gantt
+                                if (!activeSeasonPlanId || (!selected && selectedSeasonPlanIds.length === 0)) {
+                                  setActiveSeasonPlanId(sp.id)
+                                  if (sp.start_date) setGanttWindow(sp.start_date)
+                                }
+                              }}
+                              disabled={isOnlySelected}
+                              title={isOnlySelected ? 'Debe quedar al menos 1 plan seleccionado' : undefined}
+                              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60`}
+                            >
+                              {/* Checkbox visual */}
+                              <span
+                                className={`w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+                                  selected ? 'border-0' : 'border-gray-300'
+                                }`}
+                                style={selected ? { backgroundColor: color } : {}}
+                              >
+                                {selected && <Check className="w-2.5 h-2.5 text-white" />}
+                              </span>
+                              {/* Color dot */}
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ backgroundColor: color }}
+                              />
+                              {/* Info del plan */}
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs font-bold truncate ${selected ? 'text-gray-900' : 'text-gray-600'}`}>
+                                  {sp.name}
+                                </p>
+                                <p className="text-[9px] text-gray-400 font-medium">
+                                  {sp.year} · {sp.season_type === 'cerrado' ? 'Cerrada' : 'Abierta'}
+                                </p>
+                              </div>
+                              {/* Badge active (viewport) */}
+                              {sp.id === activeSeasonPlanId && (
+                                <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: color }} />
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {/* Footer: Todos / Ninguno */}
+                      <div className="border-t border-gray-100 px-4 py-2 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            seasonPlans.forEach(sp => {
+                              if (!selectedSeasonPlanIds.includes(sp.id)) toggleSeasonPlan(sp.id)
+                            })
+                          }}
+                          className="text-[10px] font-bold text-green-600 hover:text-green-700 transition-colors"
+                        >
+                          Todos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowSeasonPlanSelector(false)}
+                          className="text-[10px] font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                          Cerrar
+                        </button>
                       </div>
                     </div>
                   </>,
                   document.body
                 )}
               </div>
+
             </>
           )}
         </div>
@@ -2501,10 +2624,11 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               setShowNewEventModal(true)
             }}
             onHerdClick={(herd) => setEditingGanttHerd(herd as HerdData)}
-            paddockOrder={activeGanttTab === 'suggested' ? suggestedPaddockOrder : customPaddockOrder}
+            paddockOrder={activeGanttTab === 'suggested' ? suggestedPaddockOrder : planBasedPaddockOrder}
             onPaddockReorder={activeGanttTab === 'manual' ? handlePaddockReorder : undefined}
             seasonPlanColorMap={seasonPlanColorMap}
             seasonPlanNames={seasonPlanNames}
+            paddockPlanColorMap={paddockPlanColorMap}
             ganttLayers={ganttLayers}
             onPaddockToggle={handlePaddockToggle}
             bioMilestones={bioMilestones}
@@ -2909,18 +3033,18 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
           const isAlreadyCompleted = plan.status === 'COMPLETED'
           return (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+              <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
   
                 {/* Header */}
-                <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
+                <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-2 shrink-0">
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-0.5">
                       <span className={`w-2 h-2 rounded-full shrink-0 ${isAlreadyCompleted ? 'bg-amber-500' : 'bg-green-500'}`} />
                       <h3 className="text-base font-black text-gray-950">
                         {isAlreadyCompleted ? 'Corregir datos de cierre' : 'Finalizar pastoreo'}
                       </h3>
                     </div>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                       {paddock?.name || '—'} · {Number(paddock?.area_ha || 0).toFixed(1)} ha
                     </p>
                   </div>
@@ -2929,135 +3053,101 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   </button>
                 </div>
   
-                {/* Plan summary — scrollable body */}
-                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-                  {/* Summary Box */}
-                  <div className="px-5 py-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Entrada plan</p>
-                        <p className="text-sm font-bold text-gray-700">{plan.entry_date ? new Date(plan.entry_date + 'T12:00').toLocaleDateString('es', { day:'2-digit', month:'2-digit' }) : '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Salida plan</p>
-                        <p className="text-sm font-bold text-gray-700">{plan.exit_date ? new Date(plan.exit_date + 'T12:00').toLocaleDateString('es', { day:'2-digit', month:'2-digit' }) : '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Estadía plan</p>
-                        <p className="text-sm font-bold text-gray-700">{planDays ? `${planDays}d` : '—'}</p>
-                      </div>
-                    </div>
-                    {planHerds.length > 0 && (
-                      <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-                        {planHerds.map((h: any) => (
-                          <span key={h.id} className="text-[10px] font-bold px-2 py-0.5 bg-white rounded-lg border border-gray-200 text-gray-600">
-                            {h.name} · {h.animal_count || h.head_count || '?'} cab.
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-  
-                  {/* Recordatorio de salida */}
-                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                    <Camera className="w-5 h-5 text-amber-600 shrink-0" />
-                    <div>
-                      <p className="text-sm font-bold text-amber-900">Registro en campo</p>
-                      <p className="text-xs text-amber-800 mt-1">
-                        No olvides registrar el remanente de pasto y tomar fotos (del pasto, condición corporal y animal) para nutrir el modelo IA.
-                      </p>
-                    </div>
-                  </div>
-  
-                  {/* Form */}
-                  <div className="grid grid-cols-2 gap-4 border border-gray-100 rounded-xl p-4 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                    {/* Fecha real de entrada */}
-                    <div className="space-y-1.5">
-                      <p className="text-sm font-black text-gray-950">Entrada real *</p>
+                {/* Plan summary — una línea compacta */}
+                <div className="mx-4 mt-3 px-3 py-2 bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2 flex-wrap">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest shrink-0">Plan:</span>
+                  <span className="text-xs font-bold text-gray-700">
+                    {plan.entry_date ? new Date(plan.entry_date + 'T12:00').toLocaleDateString('es', { day:'2-digit', month:'2-digit' }) : '—'}
+                    {' → '}
+                    {plan.exit_date ? new Date(plan.exit_date + 'T12:00').toLocaleDateString('es', { day:'2-digit', month:'2-digit' }) : '—'}
+                    {planDays ? ` · ${planDays}d` : ''}
+                  </span>
+                  {planHerds.length > 0 && (
+                    <>
+                      <span className="text-gray-300 text-xs">·</span>
+                      {planHerds.map((h: any) => (
+                        <span key={h.id} className="text-[10px] font-bold px-1.5 py-0.5 bg-white rounded-md border border-gray-200 text-gray-600">
+                          {h.name} · {h.animal_count || h.head_count || '?'} cab.
+                        </span>
+                      ))}
+                    </>
+                  )}
+                </div>
+
+                {/* Body compacto — sin scroll */}
+                <div className="px-4 pt-3 pb-4 space-y-2">
+
+                  {/* Fechas reales */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Entrada real *</p>
                       <input
                         type="date"
                         value={closeForm.actual_entry_date}
                         onChange={e => setCloseForm(prev => ({ ...prev, actual_entry_date: e.target.value }))}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                       />
                     </div>
-  
-                    {/* Fecha real de salida */}
-                    <div className="space-y-1.5">
-                      <p className="text-sm font-black text-gray-950">Salida real *</p>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Salida real *</p>
                       <input
                         type="date"
                         value={closeForm.actual_exit_date}
                         onChange={e => setCloseForm(prev => ({ ...prev, actual_exit_date: e.target.value }))}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                       />
                     </div>
                   </div>
   
                   {/* Remanente MS */}
-                  <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                    <div>
-                      <p className="text-sm font-black text-gray-950">Remanente de pasto (kg MS/ha)</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Pasto que quedó en pie al terminar el pastoreo. Dato clave para validar el remanente objetivo.</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        step={50}
-                        min={0}
-                        value={closeForm.exit_dry_matter_kg_ha}
-                        onChange={e => setCloseForm(prev => ({ ...prev, exit_dry_matter_kg_ha: e.target.value }))}
-                        placeholder="Ej: 800"
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300"
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
+                      Remanente <span className="font-normal text-gray-400 normal-case">(kg MS/ha)</span>
+                    </p>
+                    <input
+                      type="number"
+                      step={50}
+                      min={0}
+                      value={closeForm.exit_dry_matter_kg_ha}
+                      onChange={e => setCloseForm(prev => ({ ...prev, exit_dry_matter_kg_ha: e.target.value }))}
+                      placeholder="Ej: 800"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300"
+                    />
                   </div>
   
                   {/* Stock de cierre */}
                   {closeForm.closing_stock.length > 0 && (
-                    <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-black text-gray-950">Stock de cierre</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">Ajustá las cabezas de cierre si hubo bajas, nacimientos o compras.</p>
-                        </div>
-                        <span className="text-[9px] text-gray-400 font-medium">Inicio → Fin</span>
-                      </div>
-                      <div className="rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
+                        Stock cierre <span className="font-normal text-gray-400 normal-case">(cab. finales)</span>
+                      </p>
+                      <div className="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
                         {closeForm.closing_stock.map((row, idx) => {
                           const diff = row.final - row.initial
                           return (
-                            <div key={row.herd_id} className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
-                              {/* Nombre rodeo */}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-gray-800 truncate">{row.name}</p>
-                                <p className="text-[10px] text-gray-400">{row.initial} cab. al inicio</p>
-                              </div>
-                              {/* Flecha */}
-                              <span className="text-gray-300 text-xs">→</span>
-                              {/* Input final */}
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={row.final}
-                                  onChange={e => setCloseForm(prev => ({
-                                    ...prev,
-                                    closing_stock: prev.closing_stock.map((r, i) =>
-                                      i === idx ? { ...r, final: Number(e.target.value) } : r
-                                    ),
-                                  }))}
-                                  className="w-20 text-sm font-bold text-center bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none"
-                                />
-                                <span className="text-[10px] text-gray-400">cab.</span>
-                                {diff !== 0 && (
-                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-                                    diff > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
-                                  }`}>
-                                    {diff > 0 ? `+${diff}` : diff}
-                                  </span>
-                                )}
-                              </div>
+                            <div key={row.herd_id} className="flex items-center gap-2 px-3 py-2 bg-gray-50">
+                              <p className="text-xs font-bold text-gray-800 flex-1 truncate">{row.name}</p>
+                              <span className="text-[10px] text-gray-400 shrink-0">{row.initial}→</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={row.final}
+                                onChange={e => setCloseForm(prev => ({
+                                  ...prev,
+                                  closing_stock: prev.closing_stock.map((r, i) =>
+                                    i === idx ? { ...r, final: Number(e.target.value) } : r
+                                  ),
+                                }))}
+                                className="w-20 text-sm font-bold text-center bg-white border border-gray-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none"
+                              />
+                              <span className="text-[10px] text-gray-400 shrink-0">cab.</span>
+                              {diff !== 0 && (
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                                  diff > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                                }`}>
+                                  {diff > 0 ? `+${diff}` : diff}
+                                </span>
+                              )}
                             </div>
                           )
                         })}
@@ -3066,28 +3156,25 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                   )}
   
                   {/* Observaciones */}
-                  <div className="border border-gray-100 rounded-xl p-4 bg-white space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                    <div>
-                      <p className="text-sm font-black text-gray-950">Observaciones</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Opcional. Registra cualquier eventualidad en el pastoreo.</p>
-                    </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
+                      Observaciones <span className="font-normal text-gray-400 normal-case">(opcional)</span>
+                    </p>
                     <textarea
                       value={closeForm.exit_notes}
                       onChange={e => setCloseForm(prev => ({ ...prev, exit_notes: e.target.value }))}
-                      placeholder="Registra cualquier eventualidad..."
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300 min-h-[80px]"
+                      placeholder="Registra cualquier eventualidad del pastoreo..."
+                      rows={2}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all placeholder:text-gray-300 resize-none"
                     />
+                    <p className="text-[10px] text-gray-400">
+                      📷 No olvides registrar el remanente y tomar fotos del pasto y condición animal en campo.
+                    </p>
                   </div>
-                </div> {/* end scrollable body */}
+                </div>
   
-                {/* Footer */}
-                <div className="p-5 border-t border-gray-100 flex items-center gap-3 shrink-0">
-                  <button
-                    onClick={() => setClosePlanModal(null)}
-                    className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
-                  >
-                    Cancelar
-                  </button>
+                {/* Footer — sin botón Cancelar, usar la X */}
+                <div className="px-4 pb-4 pt-0 shrink-0">
                   <button
                     disabled={!closeForm.actual_exit_date || !closeForm.actual_entry_date || savingClose}
                     onClick={async () => {
@@ -3121,7 +3208,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                           body: JSON.stringify(body),
                         })
                         if (res.ok) {
-                          const updated = await res.json()
                           setPlans((prev: any[]) => prev.map(p => p.id === plan.id ? { ...p, ...body } : p))
                           setClosePlanModal(null)
                         } else {
@@ -3131,7 +3217,7 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
                       } catch(e: any) { toast.error(e.message) }
                       setSavingClose(false)
                     }}
-                    className="flex-2 px-8 py-3 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                    className="w-full flex justify-center items-center gap-2 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-black transition-all disabled:opacity-40"
                   >
                     {savingClose ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                     {isAlreadyCompleted ? 'Actualizar' : 'Confirmar salida'}
