@@ -65,6 +65,11 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+// Agregamos manejador de errores al pool para evitar que la app se caiga por desconexiones de GCP
+pool.on('error', (err, client) => {
+  console.error('Unexpected error on idle client', err);
+});
+
 // GET /map-data
 // Fetches paddocks geometries and converts PostGIS to GeoJSON mapping Format
 app.get('/map-data', requireAuth, async (req, res) => {

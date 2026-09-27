@@ -2,38 +2,16 @@
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { useAuth } from '@/components/AuthProvider'
-import { apiFetch } from '@/lib/apiFetch'
-import { FeatureGate } from '@/components/FeatureGate'
 import {
-  Calendar, Lock, AlertTriangle, EyeOff, Droplets, Droplet, Sprout, ToggleLeft, ToggleRight, Loader2, Sparkles, AlertCircle, ChevronUp, ChevronDown,
-  Plus, CheckCircle2, Clock, MapPin, Search, Filter,
-  AlignJustify, CalendarDays, Lightbulb, CloudRain, Sun, ChevronLeft, ChevronRight,
-  X, Check, Camera, Leaf, Users, HistoryIcon, Download,
-  Zap, TrendingUp, BarChart3, Target, ArrowDown, Share, Trash2, BookOpen, Upload, HelpCircle,
-  Eye, Layers, MessageSquare, Send
+  Lock, AlertTriangle, EyeOff, ToggleLeft, ToggleRight, ChevronUp, ChevronDown,
+  X, MessageSquare, Send
 } from 'lucide-react'
-import { getPaddockWeather, WeatherData } from '@/lib/services/weather'
-import { DashboardMetricsBar, DashboardMetricsData } from '@/design-system/molecules/DashboardMetricsBar'
-import SeasonPlanModal from './SeasonPlanModal'
-import dynamic from 'next/dynamic'
-const ExcelImporter = dynamic(() => import('./ExcelImporter'), { ssr: false })
-import RawDataModal from './RawDataModal'
 import { HOLISTIC_TOOLTIPS, HoverTooltip } from '@/components/ui/atoms/UsageRing'
 import { calculateUsableForage, calculateGrazingDays } from '@/lib/grazing/forageCurves'
 import { detectForageGaps, type ForageGap } from '@/lib/forage-gaps'
-import { toast } from 'sonner'
-import { useConfirm } from '@/components/ui/ConfirmModal'
-import {
-  CATEGORIAS_COMERCIALES, CATEGORIA_LABEL_RAE,
-  CATEGORIA_PESO_DEFAULT, CATEGORIA_DEMAND_FACTOR, CATEGORIA_REF
-} from '@/lib/categorias'
-import HerdModal, { type HerdData } from '@/components/HerdModal'
-import GanttClimateAlert from '@/components/GanttClimateAlert'
-import GanttClimatePanel, { type PaddockClimateInfo, type HerdClimateInfo } from '@/components/GanttClimatePanel'
 import GanttClimateMonthRow from '@/components/GanttClimateMonthRow'
+import GanttClimateAlert from '@/components/GanttClimateAlert'
+import { GanttAnimalTable } from '@/components/GanttAnimalTable'
 
 // ─────────────── IMPORTS DE FUENTES Únicas DE VERDAD ───────────────
 import { safeIso, fmt, daysBetween, addDays } from '@/lib/grazing/dateUtils'
@@ -144,20 +122,17 @@ export function PlanCommentsSection({
 }
 
 function InteractiveGantt({
-
   plans, paddocks, herds, farmEvents, movements = [], windowStart, windowDays, onBlockClick, onBlockMove,
   rainfallData, onRainfallChange, weatherEvents = [], onPaddockClick,
   droughtThresholdMm, onDroughtThresholdChange,
   targetRemnant, dailyAllocationKg, activeSeasonPlan,
   climateViewEnabled = false, paddockCAdj = {}, paddockAAdj = {},
-  isDrawingMode = false, onDrawEnd, onHerdUpdate, onEditEvent, onDeleteEvent, onAddHerd, onHerdClick,
+  onHerdUpdate, onEditEvent, onDeleteEvent, onHerdClick,
   paddockOrder = [], onPaddockReorder,
   seasonPlanColorMap = {},
   seasonPlanNames = {},
   ganttLayers = { showOriginal: true, showPlanned: true, showReal: true, showEvents: true, showAgenda: true, showRemnant: true, showAnimals: true },
   onPaddockToggle,
-  drawingHerdEV = 0,
-  drawingHerdsLabel = '',
   bioMilestones = [],
 }: {
   plans: any[]
@@ -184,12 +159,9 @@ function InteractiveGantt({
   paddockCAdj?: Record<string, number>
   /** A_adj per paddock — animal demand multiplier due to climate conditions */
   paddockAAdj?: Record<string, number>
-  isDrawingMode?: boolean
-  onDrawEnd?: (paddockId: string, startDate: string, endDate: string) => void
   onHerdUpdate?: (herdId: string, updates: Record<string, any>) => void
   onEditEvent?: (evt: any) => void
   onDeleteEvent?: (evt: any) => void
-  onAddHerd?: (tipo?: 'permanente' | 'temporal') => void
   onHerdClick?: (herd: any) => void
   /** Optional ordered paddock IDs — when provided, rows are rendered in this sequence */
   paddockOrder?: string[]
@@ -210,23 +182,51 @@ function InteractiveGantt({
   }
   /** Callback para habilitar/deshabilitar potrero desde el Gantt */
   onPaddockToggle?: (paddockId: string, isActive: boolean) => void
-  /** EV total de los rodeos seleccionados en modo dibujo (para alerta holística) */
-  drawingHerdEV?: number
-  /** Label legible de rodeos en modo dibujo (para tooltip) */
-  drawingHerdsLabel?: string
   /** Hitos biológicos compartidos (destete, servicio, parición) para EV dinámico */
   bioMilestones?: BioMilestone[]
 }) {
+  // ── Filtrado estricto: solo potreros y rodeos involucrados en los planes visibles ──
+  const activePlanPaddockIds = useMemo(() => {
+    return new Set(plans.filter(p => p.status !== 'DELETED').map((p: any) => p.paddock_id))
+  }, [plans])
+
+  const activePlanHerdIds = useMemo(() => {
+    const ids = new Set<string>()
+    plans.filter((p: any) => p.status !== 'DELETED').forEach((p: any) => {
+      ;(p.herd_ids ?? []).forEach((id: string) => ids.add(id))
+      if (p.herd_id) ids.add(p.herd_id)
+    })
+    return ids
+  }, [plans])
+
+  // Solo los paddocks que tienen planes activos
+  const relevantPaddocks = useMemo(() => {
+    // El filtrado upstream en GanttView ya garantiza que solo lleguen los paddocks
+    // con planes activos. Mantenemos el filtro interno como defensa en profundidad,
+    // pero si llegan 0 planes (carga inicial) mostramos los paddocks recibidos.
+    if (activePlanPaddockIds.size === 0) return paddocks
+    return paddocks.filter((p: any) => activePlanPaddockIds.has(p.id))
+  }, [paddocks, activePlanPaddockIds])
+
+  // Solo los herds involucrados en los planes visibles
+  const relevantHerds = useMemo(() => {
+    if (activePlanHerdIds.size === 0) return herds
+    return herds.filter((h: any) => activePlanHerdIds.has(h.id))
+  }, [herds, activePlanHerdIds])
+
   // Sort paddocks by suggested order when paddockOrder is provided
-  const orderedPaddocks = paddockOrder.length > 0
-    ? [
+  const orderedPaddocks = useMemo(() => {
+    if (paddockOrder.length > 0) {
+      return [
         ...paddockOrder
-          .map(id => paddocks.find((p: any) => p.id === id))
+          .map(id => relevantPaddocks.find((p: any) => p.id === id))
           .filter(Boolean),
-        // Append any paddocks NOT in the sequence at the end
-        ...paddocks.filter((p: any) => !paddockOrder.includes(p.id)),
+        ...relevantPaddocks.filter((p: any) => !paddockOrder.includes(p.id)),
       ]
-    : paddocks
+    }
+    return relevantPaddocks
+  }, [paddockOrder, relevantPaddocks])
+
   const ROW_H = 110
   const LABEL_W = 220
   const HEADER_H = 48
@@ -237,28 +237,6 @@ function InteractiveGantt({
   const [editingRainKey, setEditingRainKey] = useState<string | null>(null)
   const [editingThreshold, setEditingThreshold] = useState(false)
   const [selectedGap, setSelectedGap] = useState<ForageGap | null>(null)
-  const [showAnnualHerdModal, setShowAnnualHerdModal] = useState(false)
-  const [showHerdDecisionModal, setShowHerdDecisionModal] = useState(false)
-  // ── Visibilidad de filas de animales ──
-  const [hiddenHerdIds, setHiddenHerdIds] = useState<Set<string>>(new Set())
-  const [herdSectionCollapsed, setHerdSectionCollapsed] = useState(false)
-  const toggleHerdVisibility = (herdId: string) => {
-    setHiddenHerdIds(prev => {
-      const next = new Set(prev)
-      next.has(herdId) ? next.delete(herdId) : next.add(herdId)
-      return next
-    })
-  }
-  
-  // Drawing state — extended with holistic alert
-  const [drawingState, setDrawingState] = useState<{
-    paddockId: string;
-    startDay: number;
-    currentDay: number;
-    mousePos: { x: number; y: number };
-    isOverOptimal: boolean;
-    optimalDays: number;
-  } | null>(null)
 
   // Resize state
   const resizing = useRef<{
@@ -502,7 +480,6 @@ function InteractiveGantt({
   }, [windowDays])
 
   const handleMouseDown = (e: React.MouseEvent, plan: any) => {
-    if (isDrawingMode) return  // drawing mode takes priority — ignore plan-block drags
     e.preventDefault()
     const container = containerRef.current
     if (!container) return
@@ -518,58 +495,6 @@ function InteractiveGantt({
       plan: plan
     }
   }
-
-  const handleRowMouseDown = (e: React.MouseEvent, paddockId: string) => {
-    if (!isDrawingMode || !containerRef.current) return
-    e.preventDefault()
-    e.stopPropagation()
-    const rect = containerRef.current.getBoundingClientRect()
-    // Use scrollWidth for ppd to match block positioning (blocks use % of full inner width)
-    const ppd = getActualPpd()
-    const xRel = e.clientX - rect.left - LABEL_W + containerRef.current.scrollLeft
-    let dayIdx = Math.max(0, Math.min(windowDays - 1, Math.floor(xRel / ppd)))
-
-    // --- Snapping logic: Snap to 'Siguiente' line if close ---
-    let maxDate = ''
-    const activePlanBlocks = plans.filter(p => p.status !== 'DELETED')
-    for (const p of activePlanBlocks) {
-      const exit = p.exit_date || p.estimated_exit_date || addDays(p.entry_date, p.planned_recovery_days || 14)
-      if (!maxDate || exit > maxDate) maxDate = exit
-    }
-    if (maxDate) {
-      const nextAvailableDate = addDays(maxDate, 1)
-      const nextDiff = daysBetween(windowStart, nextAvailableDate)
-      // Snap if within 7 days (about 1 week tolerance)
-      if (nextDiff >= 0 && Math.abs(dayIdx - nextDiff) <= 7) {
-        dayIdx = nextDiff
-      }
-    }
-    // ---------------------------------------------------------
-
-    // Compute optimal days for this paddock using holistic engine
-    const paddock = paddocks.find((p: any) => p.id === paddockId)
-    const msHa = Number(paddock?.dry_matter_kg_ha) || 0
-    const areaHa = Number(paddock?.area_ha) || 0
-    const usable = calculateUsableForage(msHa, targetRemnant, areaHa)
-    const demand = drawingHerdEV * dailyAllocationKg
-    const optDays = demand > 0 ? calculateGrazingDays(usable, demand) : 0
-    
-    const newState = {
-      paddockId,
-      startDay: dayIdx,
-      currentDay: dayIdx,
-      mousePos: { x: e.clientX, y: e.clientY },
-      isOverOptimal: false,
-      optimalDays: optDays,
-    }
-    // Set ref SYNCHRONOUSLY so the first mousemove event already sees a valid state
-    drawingStateRef.current = newState
-    setDrawingState(newState)
-  }
-
-  // Keep a ref so the global mouseup handler always sees the latest drawingState
-  const drawingStateRef = useRef<typeof drawingState>(null)
-  useEffect(() => { drawingStateRef.current = drawingState }, [drawingState])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -602,19 +527,6 @@ function InteractiveGantt({
         const newExit = addDays(newEntry, origDuration)
         setDragTooltip({ entry: newEntry, exit: newExit, x: e.clientX, y: e.clientY })
         onBlockMove(dragging.current.planId, newEntry, newExit, dragging.current.plan)
-      } else if (drawingStateRef.current && containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect()
-        const xRel = e.clientX - rect.left - LABEL_W + containerRef.current.scrollLeft
-        const ppd = getActualPpd()
-        const dayIdx = Math.max(0, Math.min(windowDays, Math.floor(xRel / ppd)))
-        const days = Math.abs(dayIdx - drawingStateRef.current.startDay) + 1
-        const isOver = drawingStateRef.current.optimalDays > 0 && days > drawingStateRef.current.optimalDays
-        setDrawingState(prev => prev ? {
-          ...prev,
-          currentDay: dayIdx,
-          mousePos: { x: e.clientX, y: e.clientY },
-          isOverOptimal: isOver,
-        } : null)
       }
     }
     const handleMouseUp = () => {
@@ -627,18 +539,6 @@ function InteractiveGantt({
         dragging.current = null
         setDragTooltip(null)
       }
-      const ds = drawingStateRef.current
-      if (ds && onDrawEnd) {
-        const d1 = Math.min(ds.startDay, ds.currentDay)
-        const d2 = Math.max(ds.startDay, ds.currentDay)
-        const startDate = addDays(windowStart, d1)
-        const endDate   = addDays(windowStart, d2 + 1)
-        // Only fire if the user dragged at least 1 day
-        if (d2 >= d1) {
-          onDrawEnd(ds.paddockId, startDate, endDate)
-        }
-      }
-      setDrawingState(null)
     }
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
@@ -646,7 +546,7 @@ function InteractiveGantt({
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [onBlockMove, pxPerDay, onDrawEnd, windowStart, windowDays])
+  }, [onBlockMove, pxPerDay, windowStart, windowDays])
 
   // Auto-scroll to Today
   useEffect(() => {
@@ -747,7 +647,7 @@ function InteractiveGantt({
       ref={containerRef}
       data-gantt-scroll=""
       className="select-none overflow-x-auto overscroll-x-none overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-sm"
-      style={{ cursor: isDrawingMode ? 'crosshair' : 'default', maxHeight: 'calc(100vh - 220px)' }}
+      style={{ cursor: 'default', maxHeight: 'calc(100vh - 220px)' }}
       onClick={() => { setSelectedEvent(null); setPopupPos(null) }}
     >
       <div className="w-full relative" style={{ minWidth: Math.max(1000, windowDays * 6 + LABEL_W) }}>
@@ -848,23 +748,24 @@ function InteractiveGantt({
 
         {/* Paddock rows — sorted by suggestedPaddockOrder when in suggested mode */}
         {(() => {
-          let maxDate = ''
-          for (const p of plans) {
-            if (p.status === 'DELETED') continue
-            const exit = p.exit_date || addDays(p.entry_date, p.planned_recovery_days || 14)
-            if (exit > maxDate) maxDate = exit
-          }
-          const nextAvailableDate = maxDate ? addDays(maxDate, 1) : null
-          const nextDiff = nextAvailableDate ? daysBetween(windowStart, nextAvailableDate) : -1
-          const showNextLine = isDrawingMode && nextDiff >= 0 && nextDiff <= windowDays
+          // BUG 3 FIX: Un potrero SIEMPRE aparece en el Gantt si:
+          //  a) está activo Y tiene aforo declarado, O
+          //  b) tiene al menos 1 plan de pastoreo asociado (independientemente del aforo)
+          // Esto garantiza que los planes creados desde la Sandbox se pinten
+          // aunque el potrero no tenga dry_matter_kg_ha registrado.
+          const paddocksWithPlans = new Set(plans.filter(p => p.status !== 'DELETED').map((p: any) => p.paddock_id))
+          const activePaddocks = orderedPaddocks.filter((p: any) =>
+            (p.is_active !== false && Number(p.dry_matter_kg_ha) > 0) ||
+            paddocksWithPlans.has(p.id)
+          )
+          const inactivePaddocks = orderedPaddocks.filter((p: any) =>
+            !(p.is_active !== false && Number(p.dry_matter_kg_ha) > 0) &&
+            !paddocksWithPlans.has(p.id)
+          )
 
-          const activePaddocks = orderedPaddocks.filter(p => p.is_active !== false && Number(p.dry_matter_kg_ha) > 0)
-          const inactivePaddocks = orderedPaddocks.filter(p => !(p.is_active !== false && Number(p.dry_matter_kg_ha) > 0))
-
-          // Split active paddocks: those with plans go on top, those without go below (collapsed)
-          const paddockIdsWithPlans = new Set(plans.filter(p => p.status !== 'DELETED').map(p => p.paddock_id))
-          const plannedPaddocks = activePaddocks.filter(p => paddockIdsWithPlans.has(p.id))
-          const unplannedPaddocks = activePaddocks.filter(p => !paddockIdsWithPlans.has(p.id))
+          // Con el filtrado estricto ya aplicado, todos los paddocks tienen planes activos
+          const plannedPaddocks = activePaddocks
+          const unplannedPaddocks: any[] = []
 
           return (
             <>
@@ -1048,43 +949,7 @@ function InteractiveGantt({
 
               <div 
                 className={`flex-1 relative overflow-hidden ${!isEnabled ? 'cursor-not-allowed' : ''}`}
-                onMouseDown={(e) => isEnabled ? handleRowMouseDown(e, paddock.id) : undefined}
               >
-                {/* Drawing Highlight Overlay — red when no forage or exceeding optimal days */}
-                {drawingState && drawingState.paddockId === paddock.id && (() => {
-                  const noForage = msHa > 0 && drawingState.optimalDays === 0
-                  const isRed = noForage || drawingState.isOverOptimal
-                  const days = Math.abs(drawingState.currentDay - drawingState.startDay) + 1
-                  return (
-                    <>
-                      <div
-                        className={`absolute inset-y-0 z-20 border-2 rounded-lg pointer-events-none transition-colors ${
-                          isRed
-                            ? 'bg-red-500/25 border-red-500/60'
-                            : 'bg-green-500/30 border-green-500/50'
-                        }`}
-                        style={{
-                          left: `${(Math.min(drawingState.startDay, drawingState.currentDay) / windowDays) * 100}%`,
-                          width: `${days / windowDays * 100}%`,
-                        }}
-                      />
-                      {noForage && (
-                        <div
-                          className="absolute z-30 pointer-events-none"
-                          style={{
-                            left: `${(Math.min(drawingState.startDay, drawingState.currentDay) / windowDays) * 100}%`,
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                          }}
-                        >
-                          <span className="inline-flex items-center gap-1 bg-red-600 text-white text-[9px] font-black px-2 py-1 rounded-lg shadow-lg whitespace-nowrap">
-                            ⚠️ Sin pasto — Riesgo de sobrepastoreo
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  )
-                })()}
                 {/* ── ALERTA DE POTRERO AGOTADO EN EL TIMELINE ── */}
                 {hasMS && estimatedDah === 0 && isEnabled && (
                   <div className="absolute inset-0 z-[5] pointer-events-none flex items-center justify-center opacity-80"
@@ -1103,20 +968,6 @@ function InteractiveGantt({
                   />
                 ))}
 
-                {/* Next Available Day line */}
-                {showNextLine && (
-                  <div
-                    className="absolute top-0 bottom-0 z-[12] pointer-events-none flex flex-col items-center"
-                    style={{ left: `${(nextDiff / windowDays) * 100}%` }}
-                  >
-                    {rowIdx === 0 && (
-                      <div className="absolute top-1 px-1.5 py-0.5 bg-blue-50/80 text-blue-600 border border-blue-200/60 text-[8px] font-bold rounded shadow-sm whitespace-nowrap z-20 backdrop-blur-[2px]">
-                        Siguiente: {nextAvailableDate!.split('-').reverse().join('/')}
-                      </div>
-                    )}
-                    <div className="h-full w-px" style={{ borderLeft: '1.5px dashed rgba(59, 130, 246, 0.35)' }} />
-                  </div>
-                )}
 
                 {/* Today line — soft green dashed line */}
                 {(() => {
@@ -1152,7 +1003,7 @@ function InteractiveGantt({
                     const widthPct = rightPct - leftPct
                     const isMultiDay = evt.end_date && evt.end_date !== evt.event_date
                     const isFirst = rowIdx === 0
-                    const isLast = rowIdx === paddocks.length - 1
+                    const isLast = rowIdx === orderedPaddocks.length - 1
                     return (
                       <div
                         key={`evt-outline-${evt.id}-${rowIdx}`}
@@ -1225,6 +1076,9 @@ function InteractiveGantt({
                     // Completado en tiempo: verde pastel
                     // Completado pasado del tiempo: naranja pastel
                     // Vencido sin completar: rojo pastel
+                    // isSuggested = solo planes sugeridos POR IA (ai_analysis.plan_source).
+                    // Los planes del Sandbox (plan_type==='suggested' sin ai_analysis.plan_source)
+                    // son planes manuales del usuario y van por el branch normal (is_locked=false).
                     const isSuggested  = plan.ai_analysis?.plan_source === 'suggested' && !plan.is_locked
                     const entryDate    = plan.entry_date
                     const isPast       = entryDate < today
@@ -1305,7 +1159,7 @@ function InteractiveGantt({
                       opacity: number = 1, zIndex: number = 20, extraTitle: string = '', showLock: boolean = false,
                       innerLabel: string = '', innerLabelColor: string = '#4c1d95'
                     ) => {
-                      const isManualResizable = !isDrawingMode && isGrabbable && !isCompleted && !hasRealEntry && !isSuggested
+                      const isManualResizable = isGrabbable && !isCompleted && !hasRealEntry && !isSuggested
                       return (
                       <div
                         key={key}
@@ -1338,10 +1192,10 @@ function InteractiveGantt({
                           gap: 3,
                         }}
                         className="transition-all hover:brightness-90 relative group/block"
-                        onMouseDown={e => !isDrawingMode && isGrabbable && !isCompleted && !hasRealEntry && handleMouseDown(e, plan)}
+                        onMouseDown={e => isGrabbable && !isCompleted && !hasRealEntry && handleMouseDown(e, plan)}
                         onClick={(e) => { 
                           e.stopPropagation()
-                          if (!isDrawingMode) onBlockClick(plan, e) 
+                          onBlockClick(plan, e)
                         }}
                         title={`${extraTitle} — ${herdLabel} · ${isCompleted ? ' ✔ Completado' : ''}`}
                       >
@@ -1400,45 +1254,66 @@ function InteractiveGantt({
                     }
 
                     if (ganttLayers.showPlanned) {
-                    if (isSuggested) {
-                      // ── Color dinámico por season_plan_id (v30: campo directo + legacy fallback) ──
                       const spId = (plan.season_plan_id || plan.ai_analysis?.season_plan_id) as string | undefined
-                      // Color directo desde el mapa (por rodeo) o fallback púrpura
-                      const planColor = spId ? (seasonPlanColorMap[spId] ?? PURPLE_LEVELS[0].bg) : PURPLE_LEVELS[0].bg
-                      const pl = { bg: planColor, border: planColor }
-                      // ── Etiqueta interna: conteo de animales de esta planificación ──
-                      const blockHerdIds: string[] = Array.isArray(plan.herd_ids) && plan.herd_ids.length > 0
-                        ? plan.herd_ids
-                        : plan.herd_id ? [plan.herd_id] : []
-                      const blockHerds = herds.filter((h: any) => blockHerdIds.includes(h.id))
-                      const blockHeadCount = blockHerds.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
-                      const primaryBlockHerd = blockHerds[0]
-                      const blockLabel = blockHeadCount > 0
-                        ? `${blockHeadCount} ${primaryBlockHerd?.categoria || primaryBlockHerd?.name || 'cab.'}`
-                        : (spId ? (seasonPlanNames[spId] || '') : '')
-                      const planSourceName = spId ? (seasonPlanNames[spId] || 'Plan forrajero') : 'Plan forrajero'
-                      // Rayas diagonales con el color de intensidad — sin etiqueta de texto
-                      renderBlocks.push(createBlock(
-                        `t2-${plan.id}`, TRACK2_TOP, leftPct, widthPct,
-                        pl.bg, pl.border, pl.border, false, 1, 10,
-                        `⚡ SUGERIDA — ${planSourceName}`,
-                        false, '', ''
-                      ))
-                    } else {
-                       const t2Entry = (plan.is_locked && plan.adjusted_entry_date) ? plan.adjusted_entry_date : plan.entry_date
-                       const t2Exit  = (plan.is_locked && plan.adjusted_exit_date)  ? plan.adjusted_exit_date  : plan.exit_date
-                       const t2EntryDiff = daysBetween(windowStart, t2Entry)
-                       const t2Duration  = t2Exit ? daysBetween(t2Entry, t2Exit) : 14
-                       const t2Left  = Math.max(0, (t2EntryDiff / windowDays) * 100)
-                       const t2Width = Math.max(0.5, (t2Duration / windowDays) * 100)
-                       const t2Bg  = isOverdue ? T2_OVD_BG  : isActiveNow ? T2_ACT_BG  : T2_BG
-                       const t2Bor = isOverdue ? T2_OVD_BOR : isActiveNow ? T2_ACT_BOR : T2_BORDER
-                       const t2Pat = isOverdue ? T2_OVD_PAT : isActiveNow ? T2_ACT_PAT : T2_PAT
-                       const t2Title = isOverdue
-                         ? '⚠️ PLAN VENCIDO — Fecha superada sin completar'
-                         : isActiveNow
-                         ? '🟢 EN PASTOREO — Plan en curso'
-                         : (plan.is_locked ? '✏️ PLAN MODIFICABLE' : '✏️ PLAN MODIFICABLE')
+                      const baseColor = spId ? seasonPlanColorMap[spId] : undefined
+
+                      if (isSuggested) {
+                        // ── Color dinámico por season_plan_id (v30: campo directo + legacy fallback) ──
+                        // Color directo desde el mapa (por rodeo) o fallback púrpura
+                        const planColor = baseColor ?? PURPLE_LEVELS[0].bg
+                        const pl = { bg: planColor, border: planColor }
+                        // ── Etiqueta interna: conteo de animales de esta planificación ──
+                        const blockHerdIds: string[] = Array.isArray(plan.herd_ids) && plan.herd_ids.length > 0
+                          ? plan.herd_ids
+                          : plan.herd_id ? [plan.herd_id] : []
+                        const blockHerds = herds.filter((h: any) => blockHerdIds.includes(h.id))
+                        const blockHeadCount = blockHerds.reduce((s: number, h: any) => s + (Number(h.head_count) || 0), 0)
+                        const primaryBlockHerd = blockHerds[0]
+                        const planSourceName = spId ? (seasonPlanNames[spId] || 'Plan forrajero') : 'Plan forrajero'
+                        renderBlocks.push(createBlock(
+                          `t2-${plan.id}`, TRACK2_TOP, leftPct, widthPct,
+                          pl.bg, pl.border, pl.border, false, 1, 10,
+                          `⚡ SUGERIDA — ${planSourceName}`,
+                          false, '', ''
+                        ))
+                      } else {
+                        // ── BUG 3 FIX: Matemática robusta de posicionamiento para planes manuales/Sandbox ──
+                        // Usamos entry_date/exit_date directos (sin depender de is_locked ni adjusted_*)
+                        // ya que los planes nuevos de Sandbox no tienen esos campos.
+                        const t2Entry = plan.entry_date
+                        const t2Exit  = plan.exit_date || addDays(plan.entry_date, 14)
+                        const t2EntryDiff = daysBetween(windowStart, t2Entry)
+                        const t2Duration  = Math.max(1, daysBetween(t2Entry, t2Exit))
+                        // leftPct ya calculado arriba — reutilizarlo si la entrada es la misma
+                        const t2Left  = Math.max(0, (t2EntryDiff / windowDays) * 100)
+                        const t2Width = Math.max((1 / windowDays) * 100, (t2Duration / windowDays) * 100)
+
+                        // Use baseColor if available, otherwise use defaults.
+                        const hexToRgba = (hex: string, alpha: number) => {
+                          const r = parseInt(hex.slice(1, 3), 16)
+                          const g = parseInt(hex.slice(3, 5), 16)
+                          const b = parseInt(hex.slice(5, 7), 16)
+                          return `rgba(${r},${g},${b},${alpha})`
+                        }
+
+                        let customBg = T2_BG
+                        let customBor = T2_BORDER
+                        let customPat = T2_PAT
+
+                        if (baseColor && baseColor.startsWith('#')) {
+                          customBg = hexToRgba(baseColor, 0.2)
+                          customBor = baseColor
+                          customPat = baseColor
+                        }
+
+                        const t2Bg  = isOverdue ? T2_OVD_BG  : isActiveNow ? T2_ACT_BG  : customBg
+                        const t2Bor = isOverdue ? T2_OVD_BOR : isActiveNow ? T2_ACT_BOR : customBor
+                        const t2Pat = isOverdue ? T2_OVD_PAT : isActiveNow ? T2_ACT_PAT : customPat
+                        const t2Title = isOverdue
+                          ? '⚠️ PLAN VENCIDO — Fecha superada sin completar'
+                          : isActiveNow
+                          ? '🟢 EN PASTOREO — Plan en curso'
+                          : '✏️ PLAN MODIFICABLE'
 
                        renderBlocks.push(
                          createBlock(
@@ -1691,323 +1566,25 @@ function InteractiveGantt({
           )
         })()}
 
-              {/* Row — Tipo de Animal (planilla de control por rodeo) — sticky al fondo */}
+              {/* Row — Tipo de Animal — delegado al componente GanttAnimalTable */}
 
-              {ganttLayers.showAnimals && (() => {
-                if (activeHerdsInWindow.length === 0) return null
-
-                // Column header row
-                return (
-                  <div className="sticky bottom-0 z-30 bg-white border-t-2 border-gray-300 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-                    {/* The inner div matches the exact width of the Gantt content so the columns scroll in sync */}
-                    <div style={{ minWidth: Math.max(1000, windowDays * 6 + LABEL_W) }}>
-
-                    {/* Section title + column headers */}
-                    <div className="flex bg-gray-100" style={{ minHeight: 26 }}>
-                      {/* Sticky label */}
-                      <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="pl-4 pr-2.5 flex items-center justify-between border-r border-gray-300 shrink-0 sticky left-0 z-20 bg-gray-100 shadow-[4px_0_12px_rgba(0,0,0,0.05)]">
-                        <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest text-left">Tipo de Animal</span>
-                        <div className="flex items-center gap-1">
-                          {/* Eye icon — colapsa/expande toda la sección */}
-                          <button
-                            onClick={() => setHerdSectionCollapsed(s => !s)}
-                            title={herdSectionCollapsed ? 'Mostrar animales' : 'Ocultar animales'}
-                            className="text-gray-400 hover:text-gray-700 transition-colors"
-                          >
-                            {herdSectionCollapsed ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                          </button>
-                          <button
-                            onClick={() => setShowAnnualHerdModal(true)}
-                            className="flex items-center gap-1 text-[8px] font-bold text-gray-400 hover:text-green-600 transition-colors bg-white px-2 py-0.5 rounded shadow-sm border border-gray-200"
-                            title="Ver detalle ampliado"
-                          >
-                            <Users className="w-3 h-3" /> Ampliar
-                          </button>
-                        </div>
-                      </div>
-                      {/* Month header columns — fixed width matching Gantt */}
-                      <div className="flex flex-1">
-                        {MONTHS_FOOTER.map(m => {
-                          // ── Alerta preventiva de demanda vs crecimiento forrajero ──
-                          // ── Alerta de consumo acelerado por clima (A_adj > 1.0) ──
-                          // Solo se muestra en el MES ACTUAL — no aplicar el clima de hoy
-                          // a meses futuros (sería incorrecto mostrar alerta de frío en verano).
-                          const currentMonthKey = new Date().toISOString().substring(0, 7)
-                          const isCurrentMonth = m.key === currentMonthKey
-                          const avgAAdj = climateViewEnabled && Object.keys(paddockAAdj).length > 0
-                            ? Object.values(paddockAAdj).reduce((s, v) => s + v, 0) / Object.values(paddockAAdj).length
-                            : 1.0
-                          // Solo mostrar en el mes actual, y solo si el ajuste animal supera el umbral (>5%)
-                          const hasClimateAlert = climateViewEnabled && isCurrentMonth && avgAAdj > 1.05
-                          const racionUsuario = dailyAllocationKg
-                          const racionAjustada = Math.round(racionUsuario * avgAAdj)
-                          return (
-                          <div
-                            key={m.key}
-                            className={`border-r border-gray-300 flex flex-col items-center justify-center px-0.5 overflow-visible shrink-0 gap-0.5 ${hasClimateAlert ? 'bg-orange-50' : ''}`}
-                            style={{ width: `${m.widthPct}%`, minWidth: 60 }}
-                          >
-                            {hasClimateAlert && (
-                              <div className="relative w-full flex justify-center">
-                                <span 
-                                  className="text-[7px] font-black px-1 rounded cursor-help text-orange-700 bg-orange-100"
-                                  title={`Consumo acelerado por clima:\nEl frío o estrés ambiental eleva el requerimiento de los animales (o el desperdicio por pisoteo). El rodeo consume hoy una ración efectiva de ${racionAjustada} kg en lugar de los ${racionUsuario} kg planificados, agotando el stock antes de tiempo.`}
-                                >
-                                  ⚠ Alta demanda
-                                </span>
-                              </div>
-                            )}
-                            <div className="flex w-full">
-                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-[2] text-left pl-1 truncate">Núm.</span>
-                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-left truncate">Peso</span>
-                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-left truncate">%EV</span>
-                              <span className="text-[7px] font-black text-gray-500 uppercase tracking-tight flex-1 text-left truncate">Total EV</span>
-                            </div>
-                          </div>
-                          )
-                        })}
-
-                      </div>
-                    </div>
-
-                    {/* Chip row para animales ocultos */}
-                    {hiddenHerdIds.size > 0 && (
-                      <div className="flex items-center px-4 py-1 bg-amber-50 border-t border-amber-100 gap-2">
-                        <span className="text-[8px] font-bold text-amber-700 uppercase">Ocultos:</span>
-                        <div className="flex flex-wrap gap-1">
-                          {Array.from(hiddenHerdIds).map(id => {
-                            const h = activeHerdsInWindow.find(x => x.id === id)
-                            return h && (
-                              <button key={id} onClick={() => toggleHerdVisibility(id)} className="text-[8px] px-1.5 py-0.5 bg-white border border-amber-200 rounded text-amber-700 hover:bg-amber-100 transition-colors">
-                                {h.name} ×
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* One row per herd — respeta visibilidad */}
-                    {!herdSectionCollapsed && activeHerdsInWindow.map((herd, hi) => {
-                      if (hiddenHerdIds.has(herd.id)) return null
-                      return (
-                      <div key={herd.id} className={`flex border-t border-gray-200 ${hi % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`} style={{ minHeight: 28 }}>
-                        {/* Herd name — sticky left */}
-                        <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`pl-4 pr-2.5 flex items-center border-r border-gray-200 shrink-0 gap-1 justify-between sticky left-0 z-20 shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${hi % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                          <div className="flex items-center gap-1 min-w-0">
-                            <button
-                              className="text-[8px] font-black text-gray-700 truncate hover:text-green-700 hover:underline transition-colors text-left"
-                              onClick={() => onHerdClick?.(herd)}
-                            >
-                              {hi + 1}. {herd.name}
-                            </button>
-                            {herd.exit_date && (
-                              <span className="text-[7px] font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded-md tracking-wider shrink-0">TEMP</span>
-                            )}
-                            {herd.category && !herd.exit_date && (
-                              <span className="text-[7px] text-gray-400 font-medium shrink-0">({herd.category})</span>
-                            )}
-                          </div>
-
-                        </div>
-                        {/* Monthly data — fixed width columns */}
-                        <div className="flex flex-1">
-                          {MONTHS_FOOTER.map(m => {
-                            const monthPlansForHerd = plans.filter(p =>
-                              (p.herd_ids || []).includes(herd.id) &&
-                              (p.exit_date || p.entry_date) >= m.startDate &&
-                              p.entry_date <= m.endDate
-                            )
-                            const herdEntry = herd.admission_date || '2000-01-01'
-                            const herdExit = herd.exit_date || '2100-01-01'
-                            const herdActiveThisMonth = herdEntry <= m.endDate && herdExit >= m.startDate
-                            const currentHeadCount = Number(herd.head_count) || 0
-                            const headCount = herdActiveThisMonth ? getDynamicHeadcount(herd.id, currentHeadCount, m.startDate) : 0
-                            const pesoBase = Number(herd.avg_weight_kg) || 0
-                            const referenceDate = new Date().toISOString().split('T')[0]
-                            const peso = herdActiveThisMonth ? Math.round(calcularPesoParaMes(herd, m.startDate, referenceDate)) : pesoBase
-                            const gainedWeight = peso - pesoBase
-                            const catKey = herd.categoria as string
-                            // ── EV correcto para la tabla: total_ev de DB + crecimiento relativo ──
-                            // calcularEvParaMes usa total_ev como ancla (no PHYSIO_EV_BASE)
-                            // y aplica multiplicadores relativos de peso y fenología para meses futuros.
-                            const ev = herdActiveThisMonth && headCount > 0
-                              ? calcularEvParaMes(herd, m.startDate, headCount, 'primavera', referenceDate)
-                              : 0
-                            const evPerHead = headCount > 0 && ev > 0
-                              ? ev / headCount
-                              : (EV_BASE[catKey] ?? 1.0)
-                            const active = monthPlansForHerd.length > 0 && herdActiveThisMonth
-                            return (
-                              <div
-                                key={m.key}
-                                className={`border-r border-gray-200 flex items-center justify-around px-1 overflow-hidden shrink-0 ${active ? 'bg-sky-50/40' : ''}`}
-                                style={{ width: `${m.widthPct}%`, minWidth: 60 }}
-                              >
-                                {/* Núm. — editable, key fuerza remount cuando headCount cambia */}
-                                {herdActiveThisMonth ? (
-                                  <input
-                                    key={`${herd.id}-${m.key}-${headCount}`}
-                                    type="number"
-                                    defaultValue={headCount || ''}
-                                    min={0}
-                                    className="text-[8px] font-black text-gray-700 flex-[2] text-left pl-1 w-0 bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-sky-400 focus:outline-none rounded-none transition-colors"
-                                    title="Editar cabezas"
-                                    onBlur={async (e) => {
-                                      const newVal = parseInt(e.target.value, 10)
-                                      if (isNaN(newVal) || newVal === headCount) return
-                                      const diff = newVal - headCount
-                                      const isAdd = diff > 0
-                                      try {
-                                        const currentHerd = herds.find((h: any) => h.id === herd.id)
-                                        const existingLog: any[] = Array.isArray(currentHerd?.technical_data?.stock_log)
-                                          ? currentHerd.technical_data.stock_log
-                                          : []
-                                        const newTechData = {
-                                          ...(currentHerd?.technical_data || {}),
-                                          stock_log: [
-                                            ...existingLog,
-                                            {
-                                              date: new Date().toISOString().split('T')[0],
-                                              month: m.key,
-                                              delta: diff,
-                                              total: newVal,
-                                              note: isAdd
-                                                ? `Se agregaron ${Math.abs(diff)} animales el ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
-                                                : `Se retiraron ${Math.abs(diff)} animales el ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`,
-                                            },
-                                          ],
-                                        }
-                                        const res = await apiFetch(`/api/herds/${herd.id}`, {
-                                          method: 'PATCH',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ head_count: newVal, technical_data: newTechData }),
-                                        })
-                                        if (res.ok) {
-                                          toast.success(
-                                            isAdd
-                                              ? `Se agregaron ${Math.abs(diff)} animales a ${herd.name}`
-                                              : `Se retiraron ${Math.abs(diff)} animales de ${herd.name}`
-                                          )
-                                          if (typeof window !== 'undefined') window.dispatchEvent(new Event('rodeo-data-reload'))
-                                        } else {
-                                          toast.error('No se pudo guardar')
-                                          e.target.value = String(headCount)
-                                        }
-                                      } catch { toast.error('Error de conexión'); e.target.value = String(headCount) }
-                                    }}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                                  />
-                                ) : (
-                                  <span className="text-[8px] font-black text-gray-300 flex-[2] text-left pl-1 w-0 truncate">—</span>
-                                )}
-                                {/* Peso */}
-                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-left w-0 truncate relative group cursor-default">
-                                  {herdActiveThisMonth ? (
-                                    <>
-                                      {peso > 0 ? peso : `~${450}`}
-                                      {gainedWeight > 0 && (
-                                        <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                                          Crecimiento proyectado: +{gainedWeight} kg
-                                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
-                                        </div>
-                                      )}
-                                    </>
-                                  ) : '—'}
-                                </span>
-                                {/* % EV */}
-                                <span className="text-[8px] font-bold text-gray-500 flex-1 text-left w-0 truncate">
-                                  {herdActiveThisMonth && headCount > 0 && ev > 0 ? (ev / headCount).toFixed(2) : '—'}
-                                </span>
-                                {/* Total EV */}
-                                <span className="text-[8px] font-black text-green-700 flex-1 text-left w-0 truncate">
-                                  {herdActiveThisMonth && ev > 0 ? ev.toFixed(0) : '—'}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                      )
-                    })}
+              {ganttLayers.showAnimals && relevantHerds.length > 0 && (
+                <GanttAnimalTable
+                  herds={relevantHerds}
+                  plans={plans}
+                  months={MONTHS_FOOTER}
+                  labelW={LABEL_W}
+                  unifiedEvents={[...(farmEvents || []), ...(movements || [])]}
+                  windowDays={windowDays}
+                  referenceDate={new Date().toISOString().split('T')[0]}
+                  onHerdClick={onHerdClick}
+                />
+              )}
 
 
+      </div>{/* end minWidth wrapper */}
+    </div>{/* end containerRef scroll container */}
 
-                    {/* Total row */}
-                    <div className="flex border-t border-gray-300 bg-gray-100" style={{ minHeight: 24 }}>
-                      <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="px-2.5 flex items-center border-r border-gray-300 shrink-0 sticky left-0 z-20 bg-gray-100">
-                        <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest">Total</span>
-                      </div>
-                      <div className="flex flex-1">
-                        {MONTHS_FOOTER.map(m => {
-                          let totalCabMes = 0
-                          let totalEvMes = 0
-                          activeHerdsInWindow.forEach(h => {
-                            const herdEntry = h.admission_date || '2000-01-01'
-                            const herdExit = h.exit_date || '2100-01-01'
-                            if (herdEntry <= m.endDate && herdExit >= m.startDate) {
-                              const hc = getDynamicHeadcount(h.id, Number(h.head_count) || 0, m.startDate)
-                              const referenceDate = new Date().toISOString().split('T')[0]
-                              // ── Total row: mismo motor correcto que las filas individuales ──
-                              const evHerd = hc > 0
-                                ? calcularEvParaMes(h, m.startDate, hc, 'primavera', referenceDate)
-                                : 0
-
-                              totalCabMes += hc
-                              totalEvMes += evHerd
-                            }
-                          })
-                          return (
-                            <div
-                              key={m.key}
-                              className="border-r border-gray-300 flex items-center justify-around px-0.5 overflow-hidden shrink-0"
-                              style={{ width: `${m.widthPct}%`, minWidth: 60 }}
-                            >
-                              {totalCabMes > 0 ? (
-                                <>
-                                  <span className="text-[8px] font-black text-gray-800 flex-[2] text-left pl-1 truncate">{totalCabMes}</span>
-                                  <span className="text-[8px] font-bold text-gray-400 flex-1 text-left truncate">—</span>
-                                  <span className="text-[8px] font-bold text-gray-400 flex-1 text-left truncate">—</span>
-                                  <span className="text-[8px] font-black text-green-700 flex-1 text-left truncate">{totalEvMes.toFixed(0)}</span>
-                                </>
-                              ) : (
-                                <span className="text-[8px] text-gray-200 w-full text-center truncate">—</span>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-
-                    {/* Split button: + Rodeo | + Temporario */}
-                    <div className="flex border-t border-dashed border-green-200 bg-white" style={{ minHeight: 30 }}>
-                      <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="pl-4 pr-2 flex items-center border-r border-green-200 shrink-0 gap-1.5 sticky left-0 z-20 bg-white shadow-[4px_0_12px_rgba(0,0,0,0.05)]">
-                        <button
-                          onClick={() => onAddHerd?.('permanente')}
-                          className="text-[8px] font-bold text-green-700 flex items-center gap-0.5 hover:text-green-900 transition-colors"
-                        >
-                          <span className="text-xs leading-none">+</span> Rodeo
-                        </button>
-                        <span className="text-gray-300 text-[10px]">|</span>
-                        <button
-                          onClick={() => onAddHerd?.('temporal')}
-                          className="text-[8px] font-bold text-sky-600 flex items-center gap-0.5 hover:text-sky-800 transition-colors"
-                        >
-                          <span className="text-xs leading-none">+</span> Temporario
-                        </button>
-                      </div>
-                      <div className="flex-1" />
-                    </div>
-
-                    </div>{/* end minWidth wrapper */}
-                  </div>
-                )
-               })()}
-
-
-      </div>
-    </div>
     {/* ── Legend bar: fuera del scroll container para que sea siempre visible */}
     <div className="flex items-center gap-3 px-4 py-2.5 border border-t-0 border-gray-200 bg-white rounded-b-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex-wrap">
       <div className="flex items-center gap-3 mr-2">
@@ -2047,42 +1624,6 @@ function InteractiveGantt({
       </div>
     </div>
     {eventPopup}
-
-    {/* ── Drawing Tooltip — pegado al cursor durante el trazado ── */}
-    {drawingState && (() => {
-      const d1 = Math.min(drawingState.startDay, drawingState.currentDay)
-      const d2 = Math.max(drawingState.startDay, drawingState.currentDay)
-      const days = d2 - d1 + 1
-      const startDateStr = addDays(windowStart, d1)
-      const startDateFmt = new Date(startDateStr + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
-      const isAlert = drawingState.isOverOptimal
-      const tipX = Math.min(drawingState.mousePos.x + 14, (typeof window !== 'undefined' ? window.innerWidth : 800) - 190)
-      const tipY = drawingState.mousePos.y - 56
-      return (
-        <div
-          className="fixed z-[2000] pointer-events-none select-none"
-          style={{ left: tipX, top: tipY }}
-        >
-          <div className={`rounded-xl shadow-2xl border px-3 py-2 text-[11px] font-bold leading-tight ${
-            isAlert
-              ? 'bg-red-900/90 text-white border-red-500/60'
-              : 'bg-gray-900/90 text-white border-white/10'
-          }`}>
-            <div className="font-black">{startDateFmt}</div>
-            <div className={`mt-0.5 flex items-center gap-1 ${ isAlert ? 'text-red-300' : 'text-green-300' }`}>
-              <span className="text-base leading-none">{isAlert ? '⚠' : '✓'}</span>
-              <span>{days} día{days !== 1 ? 's' : ''}</span>
-              {isAlert && drawingState.optimalDays > 0 && (
-                <span className="text-red-400 text-[9px]">/ óptimo {drawingState.optimalDays}d</span>
-              )}
-            </div>
-            {drawingHerdsLabel && (
-              <div className="text-[9px] text-gray-400 mt-0.5 truncate max-w-[160px]">{drawingHerdsLabel}</div>
-            )}
-          </div>
-        </div>
-      )
-    })()}
 
     {/* ── Drag / Resize Tooltip — fechas al mover o estirar un bloque ── */}
     {dragTooltip && (
@@ -2192,277 +1733,6 @@ function InteractiveGantt({
       document.body
     )}
 
-    {showHerdDecisionModal && typeof document !== 'undefined' && createPortal(
-      <div className="fixed inset-0 z-[10000] bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 relative animate-in zoom-in-95 duration-200">
-          <button onClick={() => setShowHerdDecisionModal(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-          <h3 className="modal-title mb-2">Añadir animales</h3>
-          <p className="text-xs text-gray-500 mb-6 font-medium">¿Qué tipo de stock necesitás registrar?</p>
-          
-          <div className="space-y-3">
-            <button
-              onClick={() => {
-                setShowHerdDecisionModal(false)
-                window.location.href = '/dashboard/herds'
-              }}
-              className="w-full flex items-start gap-3 p-4 border border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all text-left group"
-            >
-              <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-green-100 flex items-center justify-center shrink-0 transition-colors">
-                <Users className="w-4 h-4 text-gray-500 group-hover:text-green-700 transition-colors" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-gray-900">Rodeo Permanente</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">Se mantendrá en tu stock general y estará disponible para todas las planificaciones futuras.</p>
-              </div>
-            </button>
-            
-            <button
-              onClick={() => {
-                setShowHerdDecisionModal(false)
-                alert("Flujo de animales temporales en construcción.")
-              }}
-              className="w-full flex items-start gap-3 p-4 border border-gray-200 rounded-xl hover:border-amber-500 hover:bg-amber-50 transition-all text-left group"
-            >
-              <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors">
-                <Clock className="w-4 h-4 text-gray-500 group-hover:text-amber-700 transition-colors" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-gray-900">Animales Temporales</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">Animales de paso o engorde rápido que solo afectarán a un pastoreo específico.</p>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>,
-      document.body
-    )}
-
-    {/* ANNUAL VIEW HERD MODAL */}
-    {showAnnualHerdModal && typeof document !== 'undefined' && createPortal(
-      <>
-        <div className="fixed inset-0 z-[9999] bg-gray-900/40 backdrop-blur-sm" onClick={() => setShowAnnualHerdModal(false)} />
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 pointer-events-none">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-[95vw] w-full max-h-[90vh] flex flex-col pointer-events-auto">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <div>
-                <h2 className="modal-title tracking-tight">Detalle de carga animal</h2>
-                <p className="text-xs text-gray-500 font-medium mt-1">Composición mensual — hacé clic en las cabezas para editar</p>
-              </div>
-              <button onClick={() => setShowAnnualHerdModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-            <div className="overflow-x-auto overscroll-x-none overflow-y-auto p-0 m-6 rounded-2xl border border-gray-200">
-              <table className="w-full text-left border-collapse min-w-[1200px]">
-                <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-20">
-                  <tr>
-                    <th rowSpan={2} className="py-3 px-4 text-[10px] font-black tracking-widest text-gray-500 uppercase border-r border-gray-200 bg-white sticky left-0 z-30 shadow-[1px_0_0_0_#e5e7eb]">Rodeo</th>
-                    {MONTHS_FOOTER.map(m => {
-                      const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-                      const label = `${monthNames[m.month]} ${m.key.split('-')[0]}`
-                      return (
-                        <th colSpan={4} key={m.key} className="py-2 px-2 text-[10px] font-black tracking-widest text-gray-600 uppercase text-center border-r border-gray-200 bg-gray-50">
-                          {label}
-                        </th>
-                      )
-                    })}
-                  </tr>
-                  <tr>
-                    {MONTHS_FOOTER.map(m => (
-                      <React.Fragment key={m.key}>
-                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-left bg-gray-50 border-t border-gray-200">Núm</th>
-                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-left bg-gray-50 border-t border-gray-200">Peso</th>
-                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-gray-500 uppercase text-left bg-gray-50 border-t border-gray-200">%EV</th>
-                        <th className="py-2 px-1 text-[9px] font-bold tracking-widest text-green-700 uppercase text-left border-r border-gray-200 bg-gray-50 border-t border-gray-200">EV</th>
-                      </React.Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* Only show herds that have plans in the current Gantt view */}
-                  {(() => {
-                    const herdIdsInPlans = new Set<string>()
-                    plans.filter(p => p.status !== 'DELETED').forEach(p => {
-                      if (p.herd_ids?.length) p.herd_ids.forEach((id: string) => herdIdsInPlans.add(id))
-                      else if (p.herd_id) herdIdsInPlans.add(p.herd_id)
-                    })
-                    const visibleHerds = herdIdsInPlans.size > 0
-                      ? herds.filter((h: any) => herdIdsInPlans.has(h.id))
-                      : herds
-                    return visibleHerds
-                  })().map((herd: any, i: number) => {
-                    const currentHeadCount = Number(herd.head_count) || 0
-                    const peso = Number(herd.avg_weight_kg) || 0
-                    let herdEntry = herd.admission_date || '2000-01-01'
-                    const herdExit = herd.exit_date || '2100-01-01'
-
-                    // Asegurar que si el rodeo está planificado antes de su fecha de alta, aparezca
-                    const herdPlans = plans.filter(p => (p.herd_ids || []).includes(herd.id) && p.status !== 'DELETED')
-                    for (const p of herdPlans) {
-                      const entry = p.entry_date || p.estimated_entry_date
-                      if (entry && entry < herdEntry) {
-                        herdEntry = entry
-                      }
-                    }
-
-                    return (
-                      <tr key={herd.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                        <td className="py-3 px-4 text-xs font-black text-gray-800 border-r border-gray-200 bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] whitespace-nowrap cursor-pointer hover:text-green-700 transition-colors">
-                          {i + 1}. {herd.name}
-                          {herd.is_temporary && <span className="ml-1 text-[8px] text-sky-600 font-black">TMP</span>}
-                        </td>
-                        {MONTHS_FOOTER.map(m => {
-                          const herdActiveThisMonth = herdEntry <= m.endDate && herdExit >= m.startDate
-                          if (!herdActiveThisMonth) {
-                            return <td colSpan={4} key={m.key} className="py-3 px-1 text-xs text-gray-200 text-center border-r border-gray-200">—</td>
-                          }
-                          // ── Proyección de EV y Peso ──
-                          const headCount = getDynamicHeadcount(herd.id, currentHeadCount, m.startDate)
-                          const catU = herd.categoria?.toUpperCase() || 'VACAS'
-                          const referenceDate = new Date().toISOString().split('T')[0]
-                          const pesoDinamico = Math.round(calcularPesoParaMes(herd, m.startDate, referenceDate))
-                          const gainedWeight = pesoDinamico - peso
-                          const pesoForCalc = pesoDinamico > 0 ? pesoDinamico
-                            : (CATEGORIA_PESO_DEFAULT[catU as keyof typeof CATEGORIA_PESO_DEFAULT] ?? 450)
-                          const ev = headCount > 0 ? calcularEvParaMes(herd, m.startDate, headCount, 'primavera', referenceDate) : 0
-                          const evPerH = headCount > 0 && ev > 0 ? ev / headCount : (EV_BASE[catU] ?? 1.0)
-                          const eqPct = ev > 0 && headCount > 0 ? evPerH.toFixed(2) : '—'
-                          return (
-                            <React.Fragment key={m.key}>
-                              <td className="py-1 px-1 text-left">
-                                <input
-                                  key={`ampliar-${herd.id}-${m.key}-${headCount}`}
-                                  type="number" min={0}
-                                  defaultValue={headCount || ''}
-                                  className="w-12 text-[11px] font-black text-gray-800 text-left bg-transparent border-b border-transparent hover:border-gray-300 focus:border-green-500 focus:outline-none rounded-none transition-colors"
-                                  onBlur={async (e) => {
-                                    const newVal = parseInt(e.target.value, 10)
-                                    if (isNaN(newVal) || newVal === headCount) return
-                                    const delta = newVal - headCount
-                                    if (delta === 0) return
-                                    const isAdd = delta > 0
-                                    const q = Math.abs(delta)
-                                    const oldEv = Number(herd.total_ev) || 0
-                                    const oldHc = Number(herd.head_count) || 1
-                                    const newEv = newVal * (oldEv / Math.max(1, oldHc))
-                                    
-                                    try {
-                                      // Construir log interno del rodeo (sin crear evento en el calendario)
-                                      const currentHerd = herds.find((h: any) => h.id === herd.id)
-                                      const existingLog: any[] = Array.isArray(currentHerd?.technical_data?.stock_log)
-                                        ? currentHerd.technical_data.stock_log
-                                        : []
-                                      const newTechData = {
-                                        ...(currentHerd?.technical_data || {}),
-                                        stock_log: [
-                                          ...existingLog,
-                                          {
-                                            date: new Date().toISOString().split('T')[0],
-                                            month: m.key,
-                                            delta,
-                                            total: newVal,
-                                            note: isAdd
-                                              ? `Se agregaron ${q} animales el ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
-                                              : `Se retiraron ${q} animales el ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`,
-                                          },
-                                        ],
-                                      }
-                                      // Solo actualizar stock y EV — sin movimiento en el calendario
-                                      const pRes = await apiFetch(`/api/herds/${herd.id}`, {
-                                        method: 'PATCH',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ head_count: newVal, total_ev: newEv, technical_data: newTechData }),
-                                      })
-                                      if (pRes.ok) {
-                                        window.dispatchEvent(new Event('rodeo-gantt-reload'))
-                                        toast.success(
-                                          isAdd
-                                            ? `Se agregaron ${q} animales a ${herd.name}`
-                                            : `Se retiraron ${q} animales de ${herd.name}`
-                                        )
-                                      } else { e.target.value = String(headCount); toast.error('No se pudo guardar') }
-                                    } catch { e.target.value = String(headCount); toast.error('Error de conexión') }
-                                  }}
-                                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                                />
-                              </td>
-                              <td className="py-3 px-1 text-xs text-gray-500 font-bold text-left relative group cursor-default">
-                                {pesoForCalc > 0 ? pesoForCalc : '—'}
-                                {gainedWeight > 0 && <span className="text-green-600 ml-0.5 inline-block" title={`Aumento proyectado: +${gainedWeight} kg`}>↑</span>}
-                              </td>
-                              <td className="py-3 px-1 text-xs text-gray-500 font-bold text-left">{eqPct}</td>
-                              <td className="py-3 px-1 text-xs font-black text-green-700 text-left border-r border-gray-200">{ev > 0 ? ev.toFixed(0) : '—'}</td>
-                            </React.Fragment>
-                          )
-                        })}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-gray-200 bg-gray-100">
-                    <td className="py-2.5 px-4 text-[10px] font-black text-gray-700 uppercase tracking-widest border-r border-gray-200 sticky left-0 z-10 bg-gray-100">Total</td>
-                    {MONTHS_FOOTER.map(m => {
-                      let totalCab = 0, totalEv = 0
-                      // Only sum herds that have plans in the current view
-                      const herdIdsInPlans = new Set<string>()
-                      plans.filter(p => p.status !== 'DELETED').forEach(p => {
-                        if (p.herd_ids?.length) p.herd_ids.forEach((id: string) => herdIdsInPlans.add(id))
-                        else if (p.herd_id) herdIdsInPlans.add(p.herd_id)
-                      })
-                      const totalHerds = herdIdsInPlans.size > 0
-                        ? herds.filter((h: any) => herdIdsInPlans.has(h.id))
-                        : herds
-                      totalHerds.forEach((h: any) => {
-                        const hEntry = h.admission_date || '2000-01-01'
-                        const hExit = h.exit_date || '2100-01-01'
-                        if (hEntry <= m.endDate && hExit >= m.startDate) {
-                          const hc = getDynamicHeadcount(h.id, Number(h.head_count) || 0, m.startDate)
-                          const referenceDate = new Date().toISOString().split('T')[0]
-                          const evHerd = hc > 0 ? calcularEvParaMes(h, m.startDate, hc, 'primavera', referenceDate) : 0
-                          totalCab += hc
-                          totalEv += evHerd
-                        }
-                      })
-                      return (
-                        <React.Fragment key={m.key}>
-                          <td className="py-2.5 px-1 text-xs font-black text-gray-800 text-left bg-gray-100">{totalCab || '—'}</td>
-                          <td className="py-2.5 px-1 text-left bg-gray-100 text-gray-300 text-xs">—</td>
-                          <td className="py-2.5 px-1 text-left bg-gray-100 text-gray-300 text-xs">—</td>
-                          <td className="py-2.5 px-1 text-xs font-black text-green-700 text-left border-r border-gray-200 bg-gray-100">{totalEv > 0 ? totalEv.toFixed(0) : '—'}</td>
-                        </React.Fragment>
-                      )
-                    })}
-                  </tr>
-                  <tr className="border-t border-dashed border-green-200 hover:bg-green-50/40 transition-colors group">
-                    <td className="py-2 px-4 border-r border-gray-200 bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb]">
-                      <button
-                        onClick={() => { setShowAnnualHerdModal(false); onAddHerd?.() }}
-                        className="flex items-center gap-1 text-[10px] font-bold text-green-600 hover:text-green-800 transition-colors">
-                        <span className="text-sm leading-none">+</span> Rodeo o animales temporarios
-                      </button>
-                    </td>
-                    {MONTHS_FOOTER.map(m => (
-                      <td key={m.key} colSpan={4} className="py-2 px-1 text-center border-r border-gray-200 text-[9px] text-gray-200">—</td>
-                    ))}
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end rounded-b-3xl shrink-0">
-              <button
-                onClick={() => setShowAnnualHerdModal(false)}
-                className="px-6 py-2.5 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-gray-800 transition-colors">
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      </>,
-      document.body
-    )}
     </>
   )
 }

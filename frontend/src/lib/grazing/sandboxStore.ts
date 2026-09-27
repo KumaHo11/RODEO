@@ -7,6 +7,10 @@
  *
  * v30: confirmPlan ahora crea un season_plan con herd_ids + cell_paddock_ids
  *      antes de generar los bloques individuales, vinculándolos via season_plan_id.
+ *
+ * BUG 1 FIX: validRows en modo cerrado filtra solo por r.enabled.
+ *             Si dpSugerido === 0, se usa mínimo 1 día.
+ * BUG 2 FIX: confirmPlan acepta existingSeasonPlanId para PATCH en modo edición.
  */
 
 import { create } from 'zustand'
@@ -123,6 +127,11 @@ export interface SandboxState {
     planName?: string
     /** Planes existentes para detección de colisiones */
     existingPlans?: ExistingBlock[]
+    /**
+     * BUG 2 FIX: Si el usuario está editando un season_plan existente,
+     * pasar su ID aquí para hacer PATCH en lugar de POST (evita duplicados).
+     */
+    existingSeasonPlanId?: string
     onCollisionWarning?: (message: string) => Promise<boolean>
     onSuccess?: (blocks: GeneratedBlock[], seasonPlanId: string) => void
     onError?: (err: string) => void
@@ -448,7 +457,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   },
 
   // ── confirmPlan ───────────────────────────────────────────────────────────
-  confirmPlan: async ({ apiFn, herdIds, planName, existingPlans, onCollisionWarning, onSuccess, onError }) => {
+  confirmPlan: async ({ apiFn, herdIds, planName, existingPlans, existingSeasonPlanId, onCollisionWarning, onSuccess, onError }) => {
     const { result, config, paddockRows, herds, mode } = get()
 
     const enabledPaddocks = paddockRows.filter(p => p.enabled).sort((a, b) => a.order - b.order)
@@ -485,16 +494,21 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
         pass_number: ev.vuelta,
       }))
     } else {
-      // Temporada Cerrada: una sola pasada secuencial
-      const validRows = result?.rows.filter(r => r.enabled && r.dpSugerido > 0) ?? []
+      // ── Temporada Cerrada: una sola pasada secuencial ──
+      // BUG 1 FIX: Filtrar SOLO por r.enabled.
+      // Si dpSugerido === 0 o es undefined, se asigna mínimo 1 día.
+      // NUNCA descartamos un potrero que el usuario habilitó explícitamente.
+      const validRows = result?.rows.filter(r => r.enabled) ?? []
       if (validRows.length === 0) {
-        onError?.('No hay potreros habilitados con días válidos.')
+        onError?.('No hay potreros habilitados.')
         return
       }
       let currentDate = config.fechaInicio
       blocks = validRows.map(row => {
+        // BUG 1 FIX: garantizar mínimo 1 día aunque el motor devuelva 0 o undefined
+        const days = Math.max(1, row.dpSugerido ?? 1)
         const entry = currentDate
-        const exit = addDays(entry, row.dpSugerido)
+        const exit = addDays(entry, days)
         currentDate = addDays(exit, 1)
         return {
           paddock_id: row.id,
@@ -522,7 +536,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       const paddockNames: Record<string, string> = {}
       paddockRows.forEach(p => { paddockNames[p.id] = p.name })
 
-      const collisions = detectPaddockCollisions(newEntries, existingPlans, paddockNames)
+      const collisions = detectPaddockCollisions(newEntries, existingPlans, paddockNames, existingSeasonPlanId)
 
       if (collisions.length > 0) {
         const herdNames: Record<string, string> = {}
@@ -536,7 +550,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     set({ isSaving: true })
 
     try {
-      // 1. Crear el season_plan padre con herd_ids + cell_paddock_ids
+      // Payload del season_plan (idéntico para CREATE y UPDATE)
       const year = new Date(config.fechaInicio).getFullYear()
       const seasonPlanPayload = {
         name: planName || `Plan ${enabledHerds.map(h => h.name).join(' + ')} ${year}`,
@@ -574,21 +588,50 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
         },
       }
 
-      const spRes = await apiFn('/api/season-plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(seasonPlanPayload),
-      })
+      let seasonPlanId: string
 
-      if (!spRes.ok) {
-        const err = await spRes.json().catch(() => ({ error: 'Error desconocido' }))
-        throw new Error(err.error || 'Error al crear el plan de temporada')
+      // BUG 2 FIX: Si hay un season_plan existente, hacer PATCH en lugar de POST
+      if (existingSeasonPlanId) {
+        // ── MODO EDICIÓN: PATCH del season_plan + borrar y recrear los bloques ──
+        const patchRes = await apiFn(`/api/season-plans/${existingSeasonPlanId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(seasonPlanPayload),
+        })
+        if (!patchRes.ok) {
+          const err = await patchRes.json().catch(() => ({ error: 'Error desconocido' }))
+          throw new Error(err.error || 'Error al actualizar el plan de temporada')
+        }
+        seasonPlanId = existingSeasonPlanId
+
+        // Borrar todos los bloques anteriores de este season_plan
+        // usando el endpoint bulk-delete que soporta filtrado por season_plan_id.
+        const deleteRes = await apiFn(
+          `/api/grazing-plans/bulk-delete?season_plan_id=${existingSeasonPlanId}`,
+          { method: 'DELETE' }
+        )
+        if (!deleteRes.ok) {
+          const err = await deleteRes.json().catch(() => ({ error: 'Error desconocido' }))
+          throw new Error(err.error || 'Error al eliminar los bloques anteriores del plan')
+        }
+      } else {
+        // ── MODO CREACIÓN: POST del season_plan nuevo ──
+        const spRes = await apiFn('/api/season-plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(seasonPlanPayload),
+        })
+
+        if (!spRes.ok) {
+          const err = await spRes.json().catch(() => ({ error: 'Error desconocido' }))
+          throw new Error(err.error || 'Error al crear el plan de temporada')
+        }
+
+        const spData = await spRes.json()
+        seasonPlanId = spData.id
       }
 
-      const spData = await spRes.json()
-      const seasonPlanId = spData.id
-
-      // 2. Crear los bloques individuales, vinculados al season_plan
+      // Crear los bloques individuales, vinculados al season_plan
       const blocksWithSpId = blocks.map(b => ({
         ...b,
         season_plan_id: seasonPlanId,
@@ -632,7 +675,6 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     lastSeasonPlanId: null,
     subdivisionSources: {},
     anchorMode: null,
-
   }),
 }))
 

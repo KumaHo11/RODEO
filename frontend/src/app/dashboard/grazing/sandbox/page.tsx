@@ -105,9 +105,9 @@ export default function SandboxPage() {
     usePlanHydration((url, opts) => apiFetch(url, opts))
 
   // ── Plan name ─────────────────────────────────────────────────────────
-  const today = new Date()
-  const defaultPlanName = `Planificación ${today.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}`
-  const [planName, setPlanName] = useState(defaultPlanName)
+  // BUG 4 FIX: El nombre nace vacío para forzar identidad explícita por el usuario.
+  // Solo se pre-rellena al hidratar un plan existente (modo edición).
+  const [planName, setPlanName] = useState('')
 
   const handleSavedPlanToggle = useCallback(async (id: string) => {
     const plan = savedPlans.find(p => p.id === id)
@@ -116,14 +116,14 @@ export default function SandboxPage() {
     if (selectedSavedPlanIds.includes(id)) {
       setSelectedSavedPlanIds([])
       resetToCreate()
-      setPlanName(defaultPlanName)
+      setPlanName('')
       return
     }
     // Seleccionar SOLO este plan (single-select) y rehidratar el store
     setSelectedSavedPlanIds([id])
     await hydratePlan(id, plan.name)
     setPlanName(plan.name)
-  }, [savedPlans, selectedSavedPlanIds, hydratePlan, resetToCreate, defaultPlanName])
+  }, [savedPlans, selectedSavedPlanIds, hydratePlan, resetToCreate])
   // ── Fetch inicial ──────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -183,11 +183,6 @@ export default function SandboxPage() {
   // ── Confirmar plan ─────────────────────────────────────────────────────────
 
   const handleConfirm = useCallback(async () => {
-    const validRows = result?.rows.filter(r => r.enabled && r.dpSugerido > 0) ?? []
-    if (validRows.length === 0) {
-      toast.error('No hay potreros habilitados con días válidos')
-      return
-    }
     // Fetch existing plans for collision detection — solo planes ACTIVOS (no completados/históricos)
     let existingPlans: any[] = []
     try {
@@ -195,12 +190,12 @@ export default function SandboxPage() {
       if (plansRes.ok) {
         const data = await plansRes.json()
         const today = new Date().toISOString().split('T')[0]
-        // BUG FIX: Solo considerar bloques que están activos Y con exit_date futura.
-        // Los planes COMPLETED o con exit_date pasada son históricos y NO pueden solapar.
         existingPlans = (data.plans ?? []).filter((p: any) => {
           const activeStatus = p.status === 'PLANNED' || p.status === 'IN_PROGRESS' || p.status === 'SCHEDULED'
           const hasFutureExit = p.exit_date && p.exit_date > today
-          return activeStatus && hasFutureExit
+          // BUG 2 FIX: excluir los bloques del plan que estamos editando (no son colisiones reales)
+          const notCurrentPlan = sandboxMode.type !== 'edit' || p.season_plan_id !== sandboxMode.planId
+          return activeStatus && hasFutureExit && notCurrentPlan
         })
       }
     } catch { /* collision detection is optional */ }
@@ -211,19 +206,21 @@ export default function SandboxPage() {
       herdIds: activeHerdIds,
       planName,
       existingPlans,
+      // BUG 2 FIX: pasar el ID del season_plan existente para hacer PATCH en lugar de POST
+      existingSeasonPlanId: sandboxMode.type === 'edit' ? sandboxMode.planId : undefined,
       onCollisionWarning: async (message) => {
         return new Promise<boolean>((resolve) => {
           setCollisionDialog({ message, resolve })
         })
       },
       onSuccess: (blocks, seasonPlanId) => {
-        toast.success(`Plan generado — ${blocks.length} bloques`)
+        toast.success(`Plan guardado — ${blocks.length} bloques`)
         window.dispatchEvent(new Event('rodeo-gantt-reload'))
         router.push('/dashboard/grazing?view=gantt')
       },
       onError: (err) => toast.error(err),
     })
-  }, [result, herds, confirmPlan, router, planName])
+  }, [result, herds, confirmPlan, router, planName, sandboxMode])
 
   // ── Ir al Gantt (con guardia de navegación) ────────────────────────────
 
@@ -271,8 +268,10 @@ export default function SandboxPage() {
               type="text"
               value={planName}
               onChange={e => setPlanName(e.target.value)}
+              // BUG 4 FIX: autoFocus para que el cursor aterrice en el nombre inmediatamente
+              autoFocus={sandboxMode.type === 'create' && planName === ''}
               className="text-[20px] font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-green-600 focus:outline-none px-1 py-0.5 rounded transition-colors min-w-[350px] md:min-w-[400px]"
-              placeholder="Nombre del plan..."
+              placeholder="Dar nombre al plan..."
               title="Haz clic para editar el nombre del plan"
             />
           </div>
@@ -295,7 +294,7 @@ export default function SandboxPage() {
                   Editando: {sandboxMode.planName}
                   <button
                     type="button"
-                    onClick={() => { resetToCreate(); setPlanName(defaultPlanName); setSelectedSavedPlanIds([]) }}
+                    onClick={() => { resetToCreate(); setPlanName(''); setSelectedSavedPlanIds([]) }}
                     className="ml-1 text-indigo-400 hover:text-indigo-700 transition-colors"
                     title="Volver al modo de creación"
                     aria-label="Salir del modo edición"
@@ -349,12 +348,13 @@ export default function SandboxPage() {
             id="sandbox-confirm-btn"
             onClick={handleConfirm}
             disabled={!canGeneratePlan}
-            title={!canGeneratePlan ? 'Seleccioná al menos 1 rodeo y 1 potrero para generar el plan' : 'Generar plan y guardarlo'}
+            title={!canGeneratePlan ? 'Seleccioná al menos 1 rodeo y 1 potrero para generar el plan' : 'Guardar plan'}
             className={`sandbox-confirm-btn ${isSaving ? 'sandbox-confirm-btn--loading' : ''} bg-[#008234] hover:bg-[#006026] disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             {isSaving
               ? <><Loader2 size={15} className="animate-spin" /><span>Guardando…</span></>
-              : <span>Generar Plan</span>
+              // BUG 4 FIX: wording diferente según modo edición vs. creación
+              : <span>{sandboxMode.type === 'edit' ? 'Guardar Plan' : 'Generar Plan'}</span>
             }
           </button>
         </div>

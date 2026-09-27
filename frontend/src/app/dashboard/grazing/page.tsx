@@ -44,6 +44,19 @@ import GanttClimateMonthRow from '@/components/GanttClimateMonthRow'
 
 import InteractiveGantt, { PlanCommentsSection } from './InteractiveGantt';
 import PromptModal from '@/components/ui/PromptModal';
+import { usePlanViewFilters } from '@/hooks/usePlanViewFilters';
+import { GanttView } from './views/GanttView';
+import { ListView } from './views/ListView';
+import { HistoryView } from './views/HistoryView';
+import {
+  safeIso as _safeIsoFmt,
+  fmtDate as _fmtDate,
+  daysBetween as _daysBetween,
+  addDays as _addDays,
+  buildPlanCsvRows,
+  buildCsvString,
+  downloadCsv,
+} from '@/lib/grazing/planFormatters';
 // ─────────────── CONSTANTS ───────────────
 const HERD_COLORS = [
   '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed',
@@ -73,43 +86,12 @@ const getSeason = () => {
   return { name: 'Primavera/Verano', type: 'Temporada abierta', icon: '🌱', color: 'bg-green-100 text-green-700' }
 }
 
-// Safe date string normalizer — handles null, undefined, JS Date objects, and ISO strings
-const safeIso = (val: any): string => {
-  if (!val) return ''
-  if (val instanceof Date) return val.toISOString().split('T')[0]
-  const s = String(val)
-  return s.includes('T') ? s.split('T')[0] : s
-}
-
-// Format date as dd/MM
-const fmt = (iso: any): string => {
-  const s = safeIso(iso)
-  if (!s) return '—'
-  const d = new Date(s + 'T00:00:00')
-  if (isNaN(d.getTime())) return '—'
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
-}
-
-// days between two ISO dates
-const daysBetween = (a: any, b: any): number => {
-  const sa = safeIso(a)
-  const sb = safeIso(b)
-  if (!sa || !sb) return 0
-  const da = new Date(sa + 'T00:00:00')
-  const db = new Date(sb + 'T00:00:00')
-  if (isNaN(da.getTime()) || isNaN(db.getTime())) return 0
-  return Math.round((db.getTime() - da.getTime()) / 86400000)
-}
-
-// Add n days to ISO date string
-const addDays = (iso: any, n: number): string => {
-  const s = safeIso(iso)
-  if (!s) return new Date().toISOString().split('T')[0]
-  const d = new Date(s + 'T00:00:00')
-  if (isNaN(d.getTime())) return new Date().toISOString().split('T')[0]
-  d.setDate(d.getDate() + n)
-  return d.toISOString().split('T')[0]
-}
+// ─── Utilidades de fecha — importadas desde planFormatters (SSOT) ─────────────
+// Los alias mantienen compatibilidad con el código existente en este archivo.
+const safeIso = _safeIsoFmt
+const fmt = _fmtDate
+const daysBetween = _daysBetween
+const addDays = _addDays
 
 // Re-exports removidos porque rompen el build de Next.js.
 
@@ -384,11 +366,34 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     requestedDays: number
   } | null>(null)
 
-  const [viewMode, setViewMode] = useState<'gantt' | 'list' | 'history'>('gantt')
-  const [activeGanttTab, setActiveGanttTab] = useState<'suggested' | 'manual'>('manual')
-  const [historyTab, setHistoryTab] = useState<'all' | 'suggested' | 'manual'>('all')
+  // seasonPlans debe declararse ANTES de usePlanViewFilters (lo recibe como parámetro)
+  const [seasonPlans, setSeasonPlans] = useState<any[]>([])
+  const [ganttPeriod, setGanttPeriod] = useState<'trimestral' | 'semestral' | 'anual' | 'cerrada' | 'abierta'>('trimestral')
+  const [seasonalFilters, setSeasonalFilters] = useState<string[]>(['abierta', 'cerrada'])
+
+  // ── SSOT: estado de vistas, filtros y colores ─────────────────────────────
+  const planViewFilters = usePlanViewFilters(plans, seasonPlans, herds)
+  const {
+    viewMode, setViewMode,
+    activeGanttTab, setActiveGanttTab,
+    historyTab, setHistoryTab,
+    search, setSearch,
+    filterStatus, setFilterStatus,
+    dateRangeFrom, dateRangeTo, setDateRange,
+    selectedSeasonPlanIds, toggleSeasonPlan, selectSeasonPlanOnly,
+    activeSeasonPlanId, setActiveSeasonPlanId,
+    resetSelection,
+    filteredPlans,
+    accordionGroups,
+    seasonPlanColorMap,
+    herdColorMap,
+    hasActiveFilters,
+    clearFilters,
+  } = planViewFilters
+
+  // Paddock ordering (fuera del hook — necesita acceso a localStorage + user.farm_id)
   const [showGanttModeDropdown, setShowGanttModeDropdown] = useState(false)
-  // Ordered paddock IDs from the last generated suggested plan (for Gantt row sorting)
+  const [showSeasonPlanSelector, setShowSeasonPlanSelector] = useState(false)
   const [suggestedPaddockOrder, setSuggestedPaddockOrder] = useState<string[]>([])
   const [customPaddockOrder, setCustomPaddockOrder] = useState<string[]>([])
 
@@ -396,20 +401,16 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     if (typeof window !== 'undefined' && user?.farm_id) {
       const saved = localStorage.getItem(`rodeo_paddock_order_${user.farm_id}`)
       if (saved) {
-        try {
-          setCustomPaddockOrder(JSON.parse(saved))
-        } catch (e) {}
+        try { setCustomPaddockOrder(JSON.parse(saved)) } catch (e) {}
       }
     }
   }, [user?.farm_id])
 
   const handlePaddockReorder = (paddockId: string, direction: 'up' | 'down') => {
     setCustomPaddockOrder(prev => {
-      // Si prev está vacío, inicializarlo con el orden de la lista original
       const currentOrder = prev.length > 0 ? [...prev] : paddocks.map((p: any) => p.id)
       const idx = currentOrder.indexOf(paddockId)
       if (idx === -1) return prev
-
       if (direction === 'up' && idx > 0) {
         const temp = currentOrder[idx - 1]
         currentOrder[idx - 1] = currentOrder[idx]
@@ -419,33 +420,35 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         currentOrder[idx + 1] = currentOrder[idx]
         currentOrder[idx] = temp
       }
-
       if (typeof window !== 'undefined' && user?.farm_id) {
         localStorage.setItem(`rodeo_paddock_order_${user.farm_id}`, JSON.stringify(currentOrder))
       }
       return currentOrder
     })
   }
-  const [activeSeasonPlanId, setActiveSeasonPlanId] = useState<string | null>(null)
-  const [showSeasonPlanSelector, setShowSeasonPlanSelector] = useState(false)
-  const [seasonPlans, setSeasonPlans] = useState<any[]>([])
-  const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
-  const [ganttPeriod, setGanttPeriod] = useState<'trimestral' | 'semestral' | 'anual' | 'cerrada' | 'abierta'>('trimestral')
-  const [seasonalFilters, setSeasonalFilters] = useState<string[]>(['abierta', 'cerrada'])
 
-  // Auto-set activeSeasonPlanId to show plan name by default
+  // Auto-set activeSeasonPlanId + selectedSeasonPlanIds cuando carga por primera vez
+  // BUG 1 FIX: también se activa cuando selectedSeasonPlanIds está vacío aunque
+  // ya exista un activeSeasonPlanId (puede ocurrir en reload después de crear plan).
   useEffect(() => {
-    if (viewMode === 'gantt' && !activeSeasonPlanId && seasonPlans.length > 0) {
-      if (activeGanttTab === 'manual') {
-        const recent = seasonPlans.find(sp => sp.source !== 'suggested' && sp.status !== 'COMPLETED')
-        if (recent) setActiveSeasonPlanId(recent.id)
-      } else {
-        const recent = seasonPlans.find(sp => sp.source === 'suggested' && sp.status !== 'COMPLETED')
-        if (recent) setActiveSeasonPlanId(recent.id)
+    if (viewMode === 'gantt' && seasonPlans.length > 0 && selectedSeasonPlanIds.length === 0) {
+      // Prioridad 1: plan del tab activo que no esté completado
+      const recentInTab = activeGanttTab === 'manual'
+        ? seasonPlans.find(sp => sp.source !== 'suggested' && sp.status !== 'COMPLETED')
+        : seasonPlans.find(sp => sp.source === 'suggested' && sp.status !== 'COMPLETED')
+      // Prioridad 2: cualquier plan activo (sin importar fuente)
+      const recentAny = seasonPlans.find(sp => sp.status !== 'COMPLETED')
+      // Prioridad 3: el más reciente absoluto
+      const recentFallback = seasonPlans[0]
+
+      const toSelect = recentInTab ?? recentAny ?? recentFallback
+      if (toSelect) {
+        setActiveSeasonPlanId(toSelect.id)
+        toggleSeasonPlan(toSelect.id)
       }
     }
-  }, [viewMode, activeGanttTab, activeSeasonPlanId, seasonPlans])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, activeGanttTab, seasonPlans, selectedSeasonPlanIds.length])
 
   const PERIODS: Record<string, number> = { trimestral: 84, semestral: 180, anual: 365, cerrada: 214, abierta: 212 }
   
@@ -1160,7 +1163,13 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
   useEffect(() => {
     loadData()
-    const handleReload = () => loadData()
+    const handleReload = () => {
+      // BUG 1 FIX: al recibir el evento de reload (ej. desde la Sandbox tras guardar
+      // un plan nuevo), limpiamos la selección activa para que el useEffect de
+      // auto-select se dispare con los datos frescos y elija el plan más reciente.
+      resetSelection()
+      loadData()
+    }
     window.addEventListener('rodeo-data-reload', handleReload)
     window.addEventListener('rodeo-gantt-reload', handleReload)
     return () => {
@@ -1553,7 +1562,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     }))
 
     // Persist via outbox (works offline)
-    
     await enqueue({
       type: 'grazing_plan_move',
       url: `/api/grazing-plans/${planId}`,
@@ -1562,34 +1570,9 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
     })
   }, [])
 
-  const filteredPlans = useMemo(() =>
-    plans.filter(p => {
-      const matchSearch = (p.paddocks?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-                         (p.herds?.name || '').toLowerCase().includes(search.toLowerCase())
-      const matchStatus = filterStatus === 'all' ? true : p.status === filterStatus
-      // ── Track filter: filter by active tab in Gantt view ──────────────
-      let matchTab = true
-      if (viewMode === 'gantt') {
-        if (activeGanttTab === 'suggested') {
-          matchTab = (p.plan_type === 'suggested' || p.ai_analysis?.plan_source === 'suggested')
-        } else {
-          matchTab = (p.plan_type !== 'suggested' && p.ai_analysis?.plan_source !== 'suggested')
-        }
-      } else if (viewMode === 'history') {
-        // Historial: tab 'manual' muestra solo planes no-sugeridos
-        if (historyTab === 'manual') {
-          matchTab = (p.plan_type !== 'suggested' && p.ai_analysis?.plan_source !== 'suggested')
-        }
-        // tab 'all' muestra todos → matchTab = true
-      }
-
-      // Mostrar todos los planes del track activo, sin filtrar por temporada.
-      // El activeSeasonPlanId solo se usa para posicionar la ventana del Gantt,
-      // no para ocultar planes — los planes deben verse siempre que correspondan al tab.
-      return matchSearch && matchStatus && matchTab
-    }),
-    [plans, search, filterStatus, viewMode, activeGanttTab, historyTab]
-  )
+  // filteredPlans ahora viene del hook usePlanViewFilters (SSOT)
+  // Ver: src/hooks/usePlanViewFilters.ts
+  // La variable `filteredPlans` sigue disponible vía la desestructuración del hook.
 
   let dynamicWindowDays = (PERIODS[ganttPeriod] ?? 365) + (ganttPeriod === 'anual' ? 215 : 0)
 
@@ -1884,21 +1867,9 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
   const plannedPlans   = plans.filter(p => p.status === 'PLANNED').length
   const restingPaddocks = paddocks.filter(p => p.current_status === 'RESTING').length
 
-  // Color map for herds (stable)
-  const herdColorMap = useMemo(() => {
-    const map: Record<string, string> = {}
-    herds.forEach((h, i) => { map[h.id] = HERD_COLORS[i % HERD_COLORS.length] })
-    return map
-  }, [herds])
-
-  // ── Mapas de color e identidad para planificaciones sugeridas (gradiente púrpura) ──
-  const seasonPlanColorMap = useMemo(() => {
-    const map: Record<string, string> = {}
-    const colors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899']
-    const sorted = [...seasonPlans].sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''))
-    sorted.forEach((sp, i) => { map[sp.id] = colors[i % colors.length] })
-    return map
-  }, [seasonPlans])
+  // herdColorMap y seasonPlanColorMap ahora vienen del hook usePlanViewFilters (SSOT)
+  // Ver: src/hooks/usePlanViewFilters.ts → HERD_COLORS y SEASON_PLAN_PALETTE
+  // Las variables siguen disponibles vía la desestructuración del hook.
 
   const seasonPlanNames = useMemo(() => {
     const map: Record<string, string> = {}
@@ -2353,7 +2324,9 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
         </div>
-      ) : seasonPlans.length === 0 && viewMode === 'gantt' && !drawingMode ? (
+      // BUG 3 FIX: Empty state SOLO cuando no hay planes en absoluto.
+      // Si hay planes pero ninguno seleccionado → mostrar aviso de selección.
+      ) : plans.length === 0 && viewMode === 'gantt' && !drawingMode ? (
         <div className="relative rounded-2xl overflow-hidden" style={{ minHeight: 360 }}>
           {/* Gantt borroso de fondo */}
           <div className="pointer-events-none select-none" style={{ filter: 'blur(3px)', opacity: 0.4 }}>
@@ -2376,7 +2349,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               dailyAllocationKg={dailyAllocationKg}
               climateViewEnabled={false}
               paddockCAdj={paddockCAdj}
-              isDrawingMode={false}
               ganttLayers={ganttLayers}
             />
           </div>
@@ -2405,6 +2377,21 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
       ) : viewMode === 'gantt' ? (
         <div className="space-y-3">
+
+          {/* BUG 3: Aviso cuando hay planes pero ninguno seleccionado */}
+          {plans.length > 0 && selectedSeasonPlanIds.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+              <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-xl border border-gray-100">
+                <Calendar className="w-7 h-7 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-gray-950">Seleccioná un plan para visualizar</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Elegí uno de los planes de la lista superior para ver el Gantt.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ─── ALERTAS DE MOVIMIENTO INMINENTE ─────────────────────────── */}
           {(() => {
@@ -2499,14 +2486,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             climateViewEnabled={climateViewEnabled}
             paddockCAdj={paddockCAdj}
             paddockAAdj={paddockAAdj}
-            isDrawingMode={drawingMode}
-            onDrawEnd={(paddockId, startDate, endDate) => {
-              handleDrawEnd(
-                paddockId,
-                new Date(startDate).toISOString().split('T')[0],
-                new Date(endDate).toISOString().split('T')[0]
-              )
-            }}
             onHerdUpdate={(herdId, updates) => {
               setHerds((prev: any[]) => prev.map(h => h.id === herdId ? { ...h, ...updates } : h))
             }}
@@ -2521,10 +2500,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
               setEditingEventId(evt.id || null)
               setShowNewEventModal(true)
             }}
-            onAddHerd={(tipo) => {
-              setAddHerdForm(f => ({ ...f, is_temporary: tipo === 'temporal' }))
-              setShowNewHerdUnifiedModal(true)
-            }}
             onHerdClick={(herd) => setEditingGanttHerd(herd as HerdData)}
             paddockOrder={activeGanttTab === 'suggested' ? suggestedPaddockOrder : customPaddockOrder}
             onPaddockReorder={activeGanttTab === 'manual' ? handlePaddockReorder : undefined}
@@ -2532,20 +2507,6 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
             seasonPlanNames={seasonPlanNames}
             ganttLayers={ganttLayers}
             onPaddockToggle={handlePaddockToggle}
-            drawingHerdEV={(() => {
-              // ── EV CORRECTO: usa total_ev de BD, no la proyección fisiológica ──
-              // obtenerEvRodeoParaFecha() recalcula el EV con PHYSIO_EV_BASE que diverge
-              // del total_ev real del usuario (ej: Novillito factor=0.58 → 182 EV en
-              // lugar de 337 EV reales). total_ev ya incluye peso y categoría correctos.
-              return herds
-                .filter((h: any) => drawingHerdIds.includes(h.id))
-                .reduce((s: number, h: any) => s + (Number(h.total_ev) || 0), 0)
-            })()}
-            drawingHerdsLabel={herds
-              .filter((h: any) => drawingHerdIds.includes(h.id))
-              .map((h: any) => h.name)
-              .join(', ')
-            }
             bioMilestones={bioMilestones}
           />
 
@@ -2554,481 +2515,74 @@ function GrazingPlannerContent({ user, router }: { user: any; router: any }) {
 
 
       ) : viewMode === 'list' ? (
-        /* List View */
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          {/* Toolbar */}
-          {(() => {
-            // Derive season info from filteredPlans
-            const allDates = filteredPlans.flatMap(p => [p.entry_date, p.exit_date].filter(Boolean))
-            const seasonStart = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : null
-            const seasonEnd   = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : null
-            const seasonType  = seasonalFilters.length === 2 ? 'Anual'
-              : seasonalFilters.includes('abierta') ? 'Temporada abierta'
-              : 'Temporada cerrada'
-            const seasonColor = seasonalFilters.length === 1 && seasonalFilters.includes('abierta')
-              ? 'text-green-700 bg-green-50 border-green-200'
-              : seasonalFilters.length === 1 && seasonalFilters.includes('cerrada')
-              ? 'text-blue-700 bg-blue-50 border-blue-200'
-              : 'text-gray-600 bg-gray-100 border-gray-200'
-            const fmtShort = (d: string | null) => d
-              ? new Date(d + 'T12:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
-              : null
-            return (
-              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-4 bg-gray-50/50 flex-wrap">
-                {/* Left: count + season */}
-                <div className="flex flex-col gap-0.5">
-                  <p className="text-xs font-black text-gray-700">{filteredPlans.length} planificaciones</p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${seasonColor}`}>
-                      {seasonType}
-                    </span>
-                    {seasonStart && seasonEnd && (
-                      <span className="text-[10px] text-gray-400 font-medium tabular-nums">
-                        {fmtShort(seasonStart)} → {fmtShort(seasonEnd)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {/* Right: export buttons */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleExportExcel}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 hover:border-green-300 hover:text-green-700 transition-all shadow-sm"
-                  >
-                    <Download className="w-3 h-3" /> Exportar CSV
-                  </button>
-                </div>
-              </div>
-            )
-          })()}
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  {['Potrero / Rodeo', 'Ha', 'Estado', 'Entrada', 'Salida', 'Días', 'Descanso', 'EV'].map(h => (
-                    <th key={h} className="px-5 py-3.5 text-left text-[10px] font-black text-gray-400 tracking-widest uppercase whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredPlans.map(plan => {
-                  const st = STATUS_MAP[plan.status] || STATUS_MAP.PLANNED
-                  const pHerds = herds.filter(h => plan.herd_ids?.includes(h.id))
-                  const herdNames = pHerds.length > 0 ? pHerds.map(h => h.name).join(', ') : 'Rodeo desconocido'
-                  const totalEv = pHerds.reduce((s, h) => s + Number(h.total_ev || 0), 0)
-                  const color = herdColorMap[plan.herd_ids?.[0]] || '#9ca3af'
-                  const days = plan.exit_date ? daysBetween(plan.entry_date, plan.exit_date) : null
-                  const todayStr = new Date().toISOString().split('T')[0]
-                  const isRowActive = plan.status === 'ACTIVE' || (plan.entry_date <= todayStr && plan.status !== 'COMPLETED')
-                  return (
-                    <tr
-                      key={plan.id}
-                      className="hover:bg-gray-50 cursor-pointer transition-colors"
-                      style={isRowActive ? { borderLeft: '3px solid #D4A373' } : undefined}
-                      onClick={() => handleOpenModal(plan)}
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                          <div>
-                            <p className="text-sm font-bold text-gray-900">{plan.paddocks?.name}</p>
-                            <p className="text-[10px] text-gray-400 mt-0.5 max-w-[150px] truncate">{herdNames}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-xs font-bold text-gray-600 tabular-nums whitespace-nowrap">
-                        {Number(plan.paddocks?.area_ha || 0).toFixed(1)} <span className="text-gray-400 font-normal text-[10px]">ha</span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
-                      </td>
-                      <td className="px-5 py-4 text-xs text-gray-700 font-medium tabular-nums">{fmt(plan.entry_date)}</td>
-                      <td className="px-5 py-4 text-xs text-gray-700 font-medium tabular-nums">{plan.exit_date ? fmt(plan.exit_date) : '—'}</td>
-                      <td className="px-5 py-4 text-sm font-black text-gray-900">{days ?? '—'}<span className="text-[10px] font-normal text-gray-400 ml-1">d</span></td>
-                      <td className="px-5 py-4 text-sm font-bold text-green-700">{plan.planned_recovery_days}<span className="text-[10px] font-normal text-gray-400 ml-1">d</span></td>
-                      <td className="px-5 py-4 text-sm font-bold text-gray-600">{Number(totalEv).toFixed(1)}</td>
-                    </tr>
-                  )
-                })}
-                {filteredPlans.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400 font-medium">
-                      No hay planificaciones que coincidan con la búsqueda
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        /* List View — Componente Presentacional */
+        <ListView
+          filteredPlans={filteredPlans}
+          accordionGroups={accordionGroups}
+          herds={herds}
+          paddocks={paddocks}
+          seasonPlans={seasonPlans}
+          search={search}
+          filterStatus={filterStatus}
+          dateFrom={dateRangeFrom}
+          dateTo={dateRangeTo}
+          hasActiveFilters={hasActiveFilters}
+          seasonPlanColorMap={seasonPlanColorMap}
+          herdColorMap={herdColorMap}
+          onSearchChange={setSearch}
+          onFilterStatusChange={(v) => setFilterStatus(v as any)}
+          onDateRangeChange={setDateRange}
+          onClearFilters={clearFilters}
+          onPlanClick={handleOpenModal}
+          onSeasonPlanViewInGantt={handleViewInGantt}
+        />
       ) : (
-        /* History View */
-        <div className="space-y-4">
-
-          {/* Temporadas históricas (season_plans) */}
-          {seasonPlans.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-amber-50/40">
-                <div>
-                  <h3 className="text-sm font-black text-gray-950">Planes de temporada</h3>
-                  <p className="text-xs text-gray-500 font-medium mt-0.5">
-                    Planes históricos · {seasonPlans.length} temporada{seasonPlans.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-                {/* TODO: Excel import — temporalmente deshabilitado
-                <button
-                  onClick={() => setShowExcelImporter(true)}
-                  className="flex items-center gap-1.5 text-[10px] font-bold text-green-600 hover:text-green-700 transition-colors"
-                >
-                  <Upload className="w-3 h-3" />
-                  Importar otro
-                </button>
-                */}
-              </div>
-              <div className="divide-y divide-gray-100">
-                {[...seasonPlans]
-                  .sort((a, b) => b.year - a.year)
-                  .map(sp => (
-                  <div key={sp.id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
-                        <Calendar className="w-3.5 h-3.5 text-gray-500" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${sp.source === 'suggested' ? 'bg-purple-500' : 'bg-green-500'}`} />
-                          <p className="text-sm font-bold text-gray-900">{sp.name}</p>
-                        </div>
-                        <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-                          {sp.year} · {sp.season_type === 'cerrado' ? 'Plan cerrado' : 'Plan abierto'}
-                          {sp.total_ha ? ` · ${Number(sp.total_ha).toFixed(0)} ha` : ''}
-                          {sp.source === 'excel_import' ? ' · Excel' : ''}
-                          <span className="mx-1">·</span>
-                          {sp.source === 'suggested' ? 'Sugerida' : 'Manual'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-6 shrink-0">
-                      <div className="text-right">
-                        {sp.demand_snapshot?.total_ev && (
-                          <p className="text-xs font-bold text-gray-700">
-                            {Number(sp.demand_snapshot.total_ev).toFixed(1)} EV
-                          </p>
-                        )}
-                        {sp.start_date && (
-                          <p className="text-[9px] text-gray-400 font-medium">
-                            {sp.start_date} → {sp.end_date || '—'}
-                          </p>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {sp.start_date || !sp.metrics?.raw_table ? (
-                          <button
-                            onClick={() => handleViewInGantt(sp)}
-                            className="px-3 py-1.5 bg-gray-100 text-gray-700 text-[10px] font-bold rounded shadow-sm hover:bg-gray-200 hover:text-gray-900 transition-colors"
-                          >
-                            Ver en Gantt
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setRawTablePlan(sp)}
-                            className="px-3 py-1.5 bg-green-50 text-green-700 border border-green-100 text-[10px] font-bold rounded shadow-sm hover:bg-green-100 transition-colors"
-                          >
-                            Ver Planilla
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleExportSeasonPlan(sp)}
-                          className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 text-[10px] font-bold rounded shadow-sm hover:border-green-300 hover:text-green-700 transition-colors flex items-center gap-1.5"
-                          title="Descargar CSV del plan"
-                        >
-                          <Download className="w-3 h-3" /> CSV
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSeasonPlan(sp.id, sp.name)}
-                          className="px-2 py-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 outline-none text-[10px] font-bold rounded transition-colors"
-                          title="Eliminar registro y limpiar movimientos asociados"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Movimientos históricos de pastoreo */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <div>
-                <h3 className="text-sm font-black text-gray-950">Registro histórico de pastoreo</h3>
-                <p className="text-xs text-gray-500 font-medium mt-0.5">Consulta trazabilidad real vs. planificada</p>
-              </div>
-              <div className="text-[10px] font-bold text-gray-400 bg-white border border-gray-200 px-2.5 py-1 rounded-lg">
-                {filteredPlans.length} registros
-              </div>
-              {/* Exportar botones */}
-              <div className="flex items-center gap-2">
-                <div className="flex items-center bg-gray-100 p-1 rounded-xl mr-2">
-                  <button
-                    onClick={() => setHistoryTab('all')}
-                    className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${historyTab === 'all' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    Todos
-                  </button>
-                  <button
-                    onClick={() => setHistoryTab('manual')}
-                    className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1 ${historyTab === 'manual' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    Manuales
-                  </button>
-                </div>
-                <button
-                  onClick={handleExportHistory}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 hover:border-green-300 hover:text-green-700 transition-all shadow-sm"
-                >
-                  <Download className="w-3 h-3" /> Exportar CSV
-                </button>
-              </div>
-            </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  {['Potrero / Rodeo', 'Estado', 'Entrada plan', 'Entrada real', 'Salida plan', 'Salida real', 'Días plan', 'Días reales', 'Raciones Totales', 'Rac. Disp.', '% Uso', 'Stock inicio', 'Stock fin', 'Remanente', 'Desvío vs plan', 'Comentarios'].map(h => (
-                    <th key={h} className="px-4 py-3.5 text-left text-[10px] font-black text-gray-400 tracking-widest uppercase whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredPlans.map(plan => {
-                  const st = STATUS_MAP[plan.status] || STATUS_MAP.PLANNED
-                  const pHerds = herds.filter(h => plan.herd_ids?.includes(h.id))
-                  const herdNames = pHerds.length > 0 ? pHerds.map(h => h.name).join(', ') : 'Rodeo desconocido'
-                  const color = herdColorMap[plan.herd_ids?.[0]] || '#9ca3af'
-
-                  // Días plan: usar exit_date si existe, sino planned_recovery_days
-                  const plannedDays = plan.exit_date
-                    ? daysBetween(plan.entry_date, plan.exit_date)
-                    : (plan.planned_recovery_days || 0)
-
-                  // Días reales: si no hay actual_entry_date, usar entry_date como proxy
-                  const effectiveEntry = plan.actual_entry_date || (plan.status === 'COMPLETED' ? plan.entry_date : null)
-                  const actualDays = (effectiveEntry && plan.actual_exit_date)
-                    ? daysBetween(effectiveEntry, plan.actual_exit_date)
-                    : null
-
-                  const daysDev = actualDays !== null && plannedDays > 0 ? (actualDays - plannedDays) : 0
-                  const hasDeviation = daysDev !== 0
-
-                  // Stock: suma de cabezas de los rodeos asignados
-                  let stockInicio = pHerds.reduce((s, h) => s + (Number(h.animal_count || h.head_count) || 0), 0)
-                  let stockFinVal: number | null = null
-
-                  const isCompletedPlan = plan.status === 'COMPLETED'
-                  if (plan.ai_analysis?.closing_stock && Array.isArray(plan.ai_analysis.closing_stock)) {
-                    stockInicio = plan.ai_analysis.closing_stock.reduce((s: number, r: any) => s + (Number(r.initial) || 0), 0)
-                    if (isCompletedPlan) {
-                      stockFinVal = plan.ai_analysis.closing_stock.reduce((s: number, r: any) => s + (Number(r.final) || 0), 0)
-                    }
-                  } else if (isCompletedPlan) {
-                    stockFinVal = stockInicio
-                  }
-
-                  const dailyAllocationKg = Number(plan.daily_allocation_kg) || 12
-                  const targetDays = actualDays !== null ? actualDays : plannedDays
-                  const racionesTotales = (() => {
-                    if (targetDays <= 0) return 0
-                    const startDateStr = effectiveEntry || plan.entry_date
-                    if (!startDateStr) return 0
-                    const dStart = new Date(startDateStr + 'T12:00:00')
-                    const evData = projectEVDemand(pHerds, dailyAllocationKg, 'otono', 12, dStart)
-                    const current = new Date(dStart)
-                    let totalRaciones = 0
-                    for (let i = 0; i < targetDays; i++) {
-                      const mDiff = (current.getFullYear() - dStart.getFullYear()) * 12 + (current.getMonth() - dStart.getMonth())
-                      const evRecord = evData[mDiff]
-                      const dailyRacion = evRecord ? evRecord.dailyDemandKg : (pHerds.reduce((s, h) => s + Number(h.total_ev), 0) * dailyAllocationKg)
-                      totalRaciones += dailyRacion
-                      current.setDate(current.getDate() + 1)
-                    }
-                    return totalRaciones
-                  })()
-
-                  const usableForage = (() => {
-                    const pad = paddocks.find(p => p.id === plan.paddock_id)
-                    if (!pad) return 0
-                    const targetRemnant = Number(plan.target_remnant_kg_ha) || 400
-                    const area = Number(pad.area_ha) || 0
-                    const msStart = plan.ai_analysis?.supply_snapshot?.by_paddock?.[pad.id]?.dry_matter_kg_ha 
-                      || plan.entry_dry_matter_kg_ha 
-                      || Number(pad.dry_matter_kg_ha) || 0
-                    
-                    return Math.max(0, (msStart - targetRemnant) * area)
-                  })()
-
-                  const usoPct = usableForage > 0 ? (racionesTotales / usableForage) * 100 : 0
-
-                  return (
-                    <tr
-                      key={plan.id}
-                      className="hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => {
-                        if (isCompletedPlan) {
-                          // Abrir mini-modal de corrección de fecha real
-                          setCloseForm({
-                            actual_entry_date: plan.actual_entry_date || plan.entry_date || new Date().toISOString().split('T')[0],
-                            actual_exit_date: plan.actual_exit_date || plan.exit_date || new Date().toISOString().split('T')[0],
-                            exit_dry_matter_kg_ha: plan.exit_dry_matter_kg_ha?.toString() || '',
-                            exit_notes: plan.exit_notes || '',
-                            closing_stock: herds
-                              .filter((h: any) => (plan.herd_ids?.length ? plan.herd_ids : plan.herd_id ? [plan.herd_id] : []).includes(h.id))
-                              .map((h: any) => ({
-                                herd_id: h.id,
-                                name: h.name,
-                                initial: Number(h.animal_count || h.head_count) || 0,
-                                final: plan.ai_analysis?.closing_stock?.find((s: any) => s.herd_id === h.id)?.final
-                                  ?? Number(h.animal_count || h.head_count) ?? 0,
-                              })),
-                          })
-                          setClosePlanModal({ plan })
-                        } else {
-                          handleOpenModal(plan)
-                        }
-                      }}
-                    >
-                      {/* Potrero / Rodeo */}
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${plan.plan_type === 'suggested' || plan.ai_analysis?.plan_source === 'suggested' ? 'bg-purple-500' : 'bg-green-500'}`} />
-                          <div>
-                            <p className="text-sm font-bold text-gray-900">{plan.paddocks?.name}</p>
-                            <p className="text-[10px] text-gray-400 mt-0.5 max-w-[150px] truncate">{herdNames}</p>
-                          </div>
-                        </div>
-                      </td>
-                      {/* Estado */}
-                      <td className="px-4 py-3.5">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
-                      </td>
-                      {/* Entrada plan */}
-                      <td className="px-4 py-3.5 text-xs font-medium tabular-nums text-gray-500">
-                        {plan.entry_date ? fmt(plan.entry_date) : <span className="text-gray-300">—</span>}
-                      </td>
-                      {/* Entrada real */}
-                      <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {effectiveEntry ? (
-                          <span className={`font-bold ${
-                            plan.entry_date && effectiveEntry !== plan.entry_date ? 'text-amber-700' : 'text-gray-900'
-                          }`}>{fmt(effectiveEntry)}</span>
-                        ) : (
-                          <span className="text-gray-300 text-[10px]">No reg.</span>
-                        )}
-                      </td>
-                      {/* Salida plan */}
-                      <td className="px-4 py-3.5 text-xs font-medium tabular-nums text-gray-500">
-                        {plan.exit_date ? fmt(plan.exit_date) : <span className="text-gray-300">—</span>}
-                      </td>
-                      {/* Salida real */}
-                      <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {plan.actual_exit_date ? (
-                          <span className={`font-bold ${
-                            plan.exit_date && plan.actual_exit_date !== plan.exit_date ? 'text-amber-700' : 'text-gray-900'
-                          }`}>{fmt(plan.actual_exit_date)}</span>
-                        ) : (
-                          <span className="text-gray-300 text-[10px]">No reg.</span>
-                        )}
-                      </td>
-                      {/* Días plan */}
-                      <td className="px-4 py-3.5 text-xs tabular-nums text-gray-500">
-                        {plannedDays > 0 ? <><span className="font-bold">{plannedDays}</span> <span className="text-gray-400">d</span></> : <span className="text-gray-300">—</span>}
-                      </td>
-                      {/* Días reales */}
-                      <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {actualDays !== null
-                          ? <><span className="font-black text-gray-900">{actualDays}</span> <span className="text-[10px] text-gray-400">d</span></>
-                          : <span className="text-gray-300">—</span>}
-                      </td>
-                      {/* Raciones Totales */}
-                      <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {racionesTotales > 0
-                          ? <span className="font-bold text-gray-700">{Math.round(racionesTotales).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">kg</span></span>
-                          : <span className="text-gray-300">—</span>}
-                      </td>
-                      {/* Rac. Disp. */}
-                      <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {usableForage > 0
-                          ? <span className="font-bold text-gray-700">{Math.round(usableForage).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">kg</span></span>
-                          : <span className="text-gray-300">—</span>}
-                      </td>
-                      {/* % Uso */}
-                      <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {usoPct > 0
-                          ? <span className={`font-black ${usoPct > 100 ? 'text-red-600' : 'text-blue-600'}`}>{Math.round(usoPct)}%</span>
-                          : <span className="text-gray-300">—</span>}
-                      </td>
-                      {/* Stock inicio */}
-                      <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {stockInicio > 0
-                          ? <span className="font-bold text-gray-700">{stockInicio} <span className="text-[10px] text-gray-400 font-normal">cab.</span></span>
-                          : <span className="text-gray-300">—</span>}
-                      </td>
-                      {/* Stock fin */}
-                      <td className="px-4 py-3.5 text-xs tabular-nums">
-                        {stockFinVal !== null
-                          ? <span className={`font-bold ${stockFinVal !== stockInicio ? 'text-amber-700' : 'text-gray-700'}`}>{stockFinVal} <span className="text-[10px] text-gray-400 font-normal">cab.</span></span>
-                          : <span className="text-gray-300">—</span>}
-                      </td>
-                      {/* Remanente */}
-                      <td className="px-4 py-3.5">
-                        {plan.exit_dry_matter_kg_ha ? (
-                          <span className="text-xs font-bold text-green-700 bg-green-50 px-2 py-1 rounded-lg border border-green-100">
-                            {plan.exit_dry_matter_kg_ha} <span className="text-[9px] text-green-600 font-medium">kg MS/ha</span>
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-gray-300">—</span>
-                        )}
-                      </td>
-                      {/* Desvío */}
-                      <td className="px-4 py-3.5">
-                        {hasDeviation ? (
-                          <span className={`text-xs font-bold ${
-                            daysDev > 2 ? 'text-amber-700' : daysDev < -1 ? 'text-green-700' : 'text-gray-600'
-                          }`}>
-                            {daysDev > 0 ? '+' : ''}{daysDev} d
-                          </span>
-                        ) : actualDays !== null ? (
-                          <span className="text-xs font-bold text-green-600">= plan</span>
-                        ) : (
-                          <span className="text-xs text-gray-300">—</span>
-                        )}
-                      </td>
-                      {/* Comentarios */}
-                      <td className="px-4 py-3.5 max-w-[200px]">
-                        {plan.exit_notes ? (
-                          <span className="text-xs text-gray-600 italic leading-tight line-clamp-2">{plan.exit_notes}</span>
-                        ) : (
-                          <span className="text-xs text-gray-300">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-                {filteredPlans.length === 0 && (
-                  <tr>
-                    <td colSpan={14} className="px-5 py-10 text-center text-sm text-gray-400 font-medium">
-                      No hay registros históricos que coincidan con la búsqueda
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        </div>
+        /* History View — Componente Presentacional */
+        <HistoryView
+          filteredPlans={filteredPlans}
+          accordionGroups={accordionGroups}
+          herds={herds}
+          paddocks={paddocks}
+          seasonPlans={seasonPlans}
+          search={search}
+          filterStatus={filterStatus}
+          dateFrom={dateRangeFrom}
+          dateTo={dateRangeTo}
+          hasActiveFilters={hasActiveFilters}
+          historyTab={historyTab}
+          seasonPlanColorMap={seasonPlanColorMap}
+          herdColorMap={herdColorMap}
+          onSearchChange={setSearch}
+          onFilterStatusChange={(v) => setFilterStatus(v as any)}
+          onDateRangeChange={setDateRange}
+          onClearFilters={clearFilters}
+          onHistoryTabChange={setHistoryTab}
+          onPlanClick={(plan) => {
+            if (plan.status === 'COMPLETED') {
+              setCloseForm({
+                actual_entry_date: plan.actual_entry_date || plan.entry_date || new Date().toISOString().split('T')[0],
+                actual_exit_date: plan.actual_exit_date || plan.exit_date || new Date().toISOString().split('T')[0],
+                exit_dry_matter_kg_ha: plan.exit_dry_matter_kg_ha?.toString() || '',
+                exit_notes: plan.exit_notes || '',
+                closing_stock: herds
+                  .filter((h: any) => (plan.herd_ids?.length ? plan.herd_ids : plan.herd_id ? [plan.herd_id] : []).includes(h.id))
+                  .map((h: any) => ({
+                    herd_id: h.id,
+                    name: h.name,
+                    initial: Number(h.animal_count || h.head_count) || 0,
+                    final: plan.ai_analysis?.closing_stock?.find((s: any) => s.herd_id === h.id)?.final
+                      ?? Number(h.animal_count || h.head_count) ?? 0,
+                  })),
+              })
+              setClosePlanModal({ plan })
+            } else {
+              handleOpenModal(plan)
+            }
+          }}
+          onSeasonPlanViewInGantt={handleViewInGantt}
+          onSeasonPlanExport={handleExportSeasonPlan}
+          onSeasonPlanDelete={(sp) => handleDeleteSeasonPlan(sp.id, sp.name)}
+        />
       )}
 
       {/* ─── MINI POPOVER: Info del bloque planificado ────────────────────── */}

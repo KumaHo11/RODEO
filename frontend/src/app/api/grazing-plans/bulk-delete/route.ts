@@ -1,7 +1,15 @@
 /**
  * DELETE /api/grazing-plans/bulk-delete
- * Elimina planificaciones según status y opcionalmente plan_type.
- * Acepta ?status=PLANNED&plan_type=suggested para "nueva hoja" de planificación.
+ * Elimina planificaciones en masa con soporte para tres modos:
+ *
+ *  1. Por season_plan_id  → borra TODOS los bloques de esa temporada
+ *     (excepto COMPLETED, que son registros históricos inamovibles)
+ *     Uso: ?season_plan_id=<uuid>
+ *
+ *  2. Por status + plan_type  → borrado masivo por tipo/estado
+ *     Uso: ?status=PLANNED&plan_type=suggested
+ *
+ * Nunca borra bloques con status COMPLETED.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
@@ -13,20 +21,32 @@ export async function DELETE(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
     const url = new URL(req.url)
+    const seasonPlanId = url.searchParams.get('season_plan_id')
+
+    // ── Modo 1: Borrar todos los bloques de un season_plan ────────────────────
+    if (seasonPlanId) {
+      const result = await serviceMutate(
+        `DELETE FROM grazing_plans
+         WHERE season_plan_id = $1
+           AND paddock_id IN (SELECT id FROM paddocks WHERE org_id = $2)
+           AND status != 'COMPLETED'
+         RETURNING id`,
+        [seasonPlanId, auth.orgId]
+      )
+      return NextResponse.json({ deleted: result.rowCount ?? 0 })
+    }
+
+    // ── Modo 2: Borrar por status ─────────────────────────────────────────────
     const statusParam = url.searchParams.get('status') || 'PLANNED'
     const statuses = statusParam.split(',').map(s => s.trim().toUpperCase())
-    
-    // Only allow deleting PLANNED and/or ACTIVE — never COMPLETED (historical records)
+
     const allowed = ['PLANNED', 'ACTIVE']
     const toDelete = statuses.filter(s => allowed.includes(s))
     if (toDelete.length === 0) {
       return NextResponse.json({ error: 'Estado no permitido para borrado masivo' }, { status: 400 })
     }
 
-    // Optional plan_type filter (e.g. 'suggested') — si se pasa, solo borra esos bloques
     const planType = url.searchParams.get('plan_type') || null
-
-    // Build parameterized query
     const placeholders = toDelete.map((_, i) => `$${i + 2}`).join(', ')
     const params: any[] = [auth.orgId, ...toDelete]
 
