@@ -67,11 +67,11 @@ export function PlanToolbar({
   const dateToId = useId()
 
   return (
-    <div className="px-5 py-3.5 border-b border-gray-100 bg-gray-50/60 flex flex-col gap-3">
+    <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex flex-col gap-3">
       {/* Fila superior: búsqueda + estado + export */}
-      <div className="flex items-center gap-2.5 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
         {/* Buscador */}
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
+        <div className="relative flex-1 min-w-[140px] max-w-xs">
           <Search
             className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
             aria-hidden
@@ -149,51 +149,54 @@ export function PlanToolbar({
       </div>
 
       {/* Fila inferior: rango de fechas + contador */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Spec 3.1: flex-col en mobile, flex-row en sm+ */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <CalendarRange className="w-3.5 h-3.5 text-gray-400 shrink-0" aria-hidden />
           <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap">Período:</span>
         </div>
 
-        {/* Date From */}
-        <div className="flex items-center gap-1.5">
-          <label htmlFor={dateFromId} className="text-[10px] font-bold text-gray-500 sr-only">
-            Desde
-          </label>
-          <input
-            id={dateFromId}
-            type="date"
-            value={dateFrom ?? ''}
-            onChange={(e) => onDateRangeChange(e.target.value || null, dateTo)}
-            className="px-2.5 py-1.5 text-[10px] font-medium border border-gray-200 rounded-lg bg-white
-                       text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-400
-                       transition-all"
-            aria-label="Desde"
-          />
-        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Date From */}
+          <div className="flex items-center gap-1.5">
+            <label htmlFor={dateFromId} className="text-[10px] font-bold text-gray-500 sr-only">
+              Desde
+            </label>
+            <input
+              id={dateFromId}
+              type="date"
+              value={dateFrom ?? ''}
+              onChange={(e) => onDateRangeChange(e.target.value || null, dateTo)}
+              className="px-2.5 py-1.5 text-[10px] font-medium border border-gray-200 rounded-lg bg-white
+                         text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-400
+                         transition-all"
+              aria-label="Desde"
+            />
+          </div>
 
-        <span className="text-gray-300 text-xs font-bold">→</span>
+          <span className="text-gray-300 text-xs font-bold">→</span>
 
-        {/* Date To */}
-        <div className="flex items-center gap-1.5">
-          <label htmlFor={dateToId} className="text-[10px] font-bold text-gray-500 sr-only">
-            Hasta
-          </label>
-          <input
-            id={dateToId}
-            type="date"
-            value={dateTo ?? ''}
-            min={dateFrom ?? undefined}
-            onChange={(e) => onDateRangeChange(dateFrom, e.target.value || null)}
-            className="px-2.5 py-1.5 text-[10px] font-medium border border-gray-200 rounded-lg bg-white
-                       text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-400
-                       transition-all"
-            aria-label="Hasta"
-          />
+          {/* Date To */}
+          <div className="flex items-center gap-1.5">
+            <label htmlFor={dateToId} className="text-[10px] font-bold text-gray-500 sr-only">
+              Hasta
+            </label>
+            <input
+              id={dateToId}
+              type="date"
+              value={dateTo ?? ''}
+              min={dateFrom ?? undefined}
+              onChange={(e) => onDateRangeChange(dateFrom, e.target.value || null)}
+              className="px-2.5 py-1.5 text-[10px] font-medium border border-gray-200 rounded-lg bg-white
+                         text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-400
+                         transition-all"
+              aria-label="Hasta"
+            />
+          </div>
         </div>
 
         {/* Contador de resultados */}
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="sm:ml-auto flex items-center gap-1.5">
           <Filter className="w-3 h-3 text-gray-400" aria-hidden />
           <span className="text-[10px] font-bold text-gray-500">
             {totalCount} {totalCount === 1 ? 'resultado' : 'resultados'}

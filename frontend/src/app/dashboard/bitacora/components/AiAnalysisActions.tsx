@@ -1,15 +1,16 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import {
-  Sparkles, Loader2, X, MapPin, Beef, ChevronDown, ChevronUp,
-  CheckCircle2, Leaf, Save, Trash2,
+  Sparkles, Loader2, X, MapPin, ChevronDown, ChevronUp,
+  CheckCircle2, Leaf, Save, Trash2, Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AICameraModal } from '@/components/AICameraModal'
 import { apiFetch } from '@/lib/apiFetch'
 import type { BitacoraEntry, BitacoraAiResult, PastureAIResult } from '@/types/bitacora'
 import { AiPhotoSelectionModal } from './AiPhotoSelectionModal'
+import { IconoRodeos } from '@/components/icons/IconoRodeos'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -90,11 +91,11 @@ function AnalysisModeToggle({
         onClick={() => onChange('body-condition')}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black transition-all ${
           mode === 'body-condition'
-            ? 'bg-white shadow-sm text-amber-700 ring-1 ring-amber-200'
+            ? 'bg-white shadow-sm text-purple-700 ring-1 ring-purple-200'
             : 'text-gray-500 hover:text-gray-700'
         }`}
       >
-        <Beef className="w-3 h-3" />
+        <IconoRodeos className="w-3 h-3" />
         Ganado
       </button>
     </div>
@@ -276,27 +277,30 @@ function BodyConditionResult({ data }: { data: any }) {
   )
 }
 
-// ─── Quick Assignment Picker ──────────────────────────────────────────────────
+// ─── Quick Assignment Picker (Agóstico: Potrero + Rodeo) — Spec 2.2 ─────────────────
 function QuickAssignPicker({
-  type,
-  options,
-  onSelect,
+  paddocks,
+  herds,
+  onSelectPaddock,
+  onSelectHerd,
   onCancel,
 }: {
-  type: 'paddock' | 'herd'
-  options: { id: string; name: string }[]
-  onSelect: (id: string) => void
+  paddocks: { id: string; name: string }[]
+  herds:    { id: string; name: string }[]
+  onSelectPaddock: (id: string) => void
+  onSelectHerd:    (id: string) => void
   onCancel: () => void
 }) {
-  const label = type === 'paddock' ? 'potrero' : 'rodeo'
-  const Icon = type === 'paddock' ? MapPin : Beef
+  const hasPaddocks = paddocks.length > 0
+  const hasHerds    = herds.length > 0
 
   return (
-    <div className="mt-2 bg-purple-50 border border-purple-200 rounded-2xl p-3 space-y-2 animate-in slide-in-from-top-1 duration-150">
+    <div className="mt-2 bg-purple-50 border border-purple-200 rounded-2xl p-3 space-y-3 animate-in slide-in-from-top-1 duration-150">
       <div className="flex items-center justify-between">
+        {/* Spec 2.2: texto actualizado para reflejar dualidad */}
         <p className="text-[10px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-1.5">
-          <Icon className="w-3 h-3" />
-          Asigná el {label} para analizar
+          <MapPin className="w-3 h-3" />
+          Asigná el potrero o rodeo para analizar
         </p>
         <button
           onClick={onCancel}
@@ -306,22 +310,51 @@ function QuickAssignPicker({
           <X className="w-3 h-3" />
         </button>
       </div>
-      {options.length === 0 ? (
-        <p className="text-[10px] text-purple-500 italic">
-          No hay {label}s disponibles. Creá uno primero en el panel.
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-          {options.map(opt => (
-            <button
-              key={opt.id}
-              onClick={() => onSelect(opt.id)}
-              className="px-2.5 py-1 bg-white border border-purple-200 hover:border-purple-400 hover:bg-purple-50 text-purple-800 text-[10px] font-bold rounded-full transition-all hover:scale-[1.03]"
-            >
-              {opt.name}
-            </button>
-          ))}
+
+      {/* Potreros */}
+      {hasPaddocks && (
+        <div>
+          <p className="text-[9px] font-black text-purple-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+            <MapPin className="w-2.5 h-2.5" /> Potreros
+          </p>
+          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+            {paddocks.map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => onSelectPaddock(opt.id)}
+                className="px-2.5 py-1 bg-white border border-purple-200 hover:border-green-400 hover:bg-green-50 text-purple-800 hover:text-green-800 text-[10px] font-bold rounded-full transition-all hover:scale-[1.03]"
+              >
+                {opt.name}
+              </button>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* Rodeos */}
+      {hasHerds && (
+        <div>
+          <p className="text-[9px] font-black text-purple-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+            <IconoRodeos className="w-2.5 h-2.5" /> Rodeos
+          </p>
+          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+            {herds.map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => onSelectHerd(opt.id)}
+                className="px-2.5 py-1 bg-white border border-purple-200 hover:border-purple-400 hover:bg-purple-50 text-purple-800 text-[10px] font-bold rounded-full transition-all hover:scale-[1.03]"
+              >
+                {opt.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hasPaddocks && !hasHerds && (
+        <p className="text-[10px] text-purple-500 italic">
+          No hay potreros ni rodeos disponibles. Creá uno primero en el panel.
+        </p>
       )}
     </div>
   )
@@ -412,10 +445,9 @@ export function AiAnalysisActions({
   const [inlineResult, setInlineResult] = useState<any | null>(null)
   const [inlineMode, setInlineMode]     = useState<AnalysisMode>('biomass')
 
-  // Picker de asignación rápida
-  const [showPicker, setShowPicker]   = useState(false)
-  const [pickerType, setPickerType]   = useState<'paddock' | 'herd'>('paddock')
-  const [assigning, setAssigning]     = useState(false)
+  // Picker de asignación rápida (agóstico — muestra potreros Y rodeos)
+  const [showPicker, setShowPicker] = useState(false)
+  const [assigning, setAssigning]   = useState(false)
 
   // aiResult local (para "ya analizado")
   const [localResult, setLocalResult] = useState<BitacoraAiResult | null>(
@@ -431,6 +463,17 @@ export function AiAnalysisActions({
   // Toggle de modo: default basado en qué ID está seleccionado
   const defaultMode: AnalysisMode = activeHerdId ? 'body-condition' : 'biomass'
   const [selectedMode, setSelectedMode] = useState<AnalysisMode>(defaultMode)
+
+  // Sincroniza el modo con la selección actual del usuario.
+  // Sin este efecto, selectedMode queda "congelado" en el valor del primer render
+  // y fotos de animales se envían al endpoint de biomasa (bug de estado).
+  useEffect(() => {
+    if (activeHerdId && !activePaddockId) {
+      setSelectedMode('body-condition')
+    } else if (activePaddockId && !activeHerdId) {
+      setSelectedMode('biomass')
+    }
+  }, [activeHerdId, activePaddockId])
 
   // Nombres para el mensaje de confirmación
   const activePaddockName = paddocks.find(p => p.id === activePaddockId)?.name
@@ -448,9 +491,11 @@ export function AiAnalysisActions({
   const hasTarget  = hasPotrero || hasRodeo
   const showToggle = hasPotrero && hasRodeo  // mostrar toggle solo cuando hay ambos
 
-  // Label del botón principal
+  // Label del botón principal — Spec: siempre claro y orientado a la acción
   const buttonLabel = hasTarget
-    ? selectedMode === 'body-condition' ? '✦ Evaluar CC (IA)' : '✦ Estimar MS (IA)'
+    ? selectedMode === 'body-condition'
+      ? '✦ Analizar Condición Corporal'
+      : '✦ Analizar Pastura (IA)'
     : '✦ Analizar con IA'
 
   // ── FASE 1: Llamar a Gemini (NO persiste en potrero/rodeo) ───────────────
@@ -644,36 +689,6 @@ export function AiAnalysisActions({
   }, [note.id])
 
   // ── Picker: asignar potrero/rodeo antes de analizar ──────────────────────
-  const handlePickerSelect = async (id: string) => {
-    setShowPicker(false)
-    setAssigning(true)
-    let newPaddockId = activePaddockId
-    let newHerdId    = activeHerdId
-    try {
-      if (pickerType === 'paddock') {
-        // IMPORTANTE: NO hacemos PATCH paddock_id en la field_note.
-        // Si asignáramos paddock_id, la nota quedaría excluida del filtro
-        // bitacora_only=1 (WHERE paddock_id IS NULL) y desaparecería del feed
-        // tras recargar. El potrero seleccionado solo dirige el análisis IA.
-        setLocalPaddockId(id)
-        newPaddockId = id
-        onAssignPaddock?.(note.id, id)
-        setSelectedMode('biomass') // potrero → biomasa por defecto
-      } else {
-        // Idem: NO persistimos rodeo_id en la field_note para no sacarla de Bitácora.
-        setLocalHerdId(id)
-        newHerdId = id
-        onAssignHerd?.(note.id, id)
-        setSelectedMode('body-condition') // rodeo → CC por defecto
-      }
-    } catch {
-      toast.error('Error al asignar. Intentalo de nuevo.')
-    } finally {
-      setAssigning(false)
-    }
-    handleDirectAnalyze(newPaddockId, newHerdId, selectedMode)
-  }
-
 
   // ── Click del botón principal ─────────────────────────────────────────────
   const handleButtonClick = () => {
@@ -686,8 +701,7 @@ export function AiAnalysisActions({
       handleDirectAnalyze(activePaddockId, activeHerdId, selectedMode)
       return
     }
-    // Sin target → mostrar picker
-    setPickerType('paddock')
+    // Sin target → mostrar picker agóstico (Spec 2.2)
     setShowPicker(true)
   }
 
@@ -775,11 +789,24 @@ export function AiAnalysisActions({
               {analysisState === 'COMMITTED' ? '✦ Re-analizar' : buttonLabel}
             </button>
 
-            {!hasTarget && analysisState === 'IDLE' && (
-              <span className="text-[9px] text-gray-400 italic">
-                Seleccioná potrero o rodeo
-              </span>
-            )}
+          {/* Spec: Entidad asignada — visible y anclada */}
+          {hasTarget && analysisState === 'IDLE' && (
+            <span className="text-[9px] text-gray-500 font-semibold flex items-center gap-1">
+              {activePaddockName && (
+                <><MapPin className="w-2.5 h-2.5 text-green-500" /> {activePaddockName}</>
+              )}
+              {activePaddockName && activeHerdName && <span className="text-gray-300">·</span>}
+              {activeHerdName && (
+                <><IconoRodeos className="w-2.5 h-2.5 text-purple-400" /> {activeHerdName}</>
+              )}
+            </span>
+          )}
+
+          {!hasTarget && analysisState === 'IDLE' && (
+            <span className="text-[9px] text-gray-400 italic">
+              Seleccioná potrero o rodeo
+            </span>
+          )}
 
             {analysisState === 'DISCARDED' && (
               <span className="text-[9px] text-gray-400 italic">Análisis descartado</span>
@@ -828,12 +855,29 @@ export function AiAnalysisActions({
           </>
         )}
 
-        {/* ── Picker de asignación rápida ── */}
+        {/* ── Picker de asignación rápida agóstico (Spec 2.2) ── */}
         {showPicker && !assigning && (
           <QuickAssignPicker
-            type={pickerType}
-            options={pickerType === 'paddock' ? paddocks : herds}
-            onSelect={handlePickerSelect}
+            paddocks={paddocks}
+            herds={herds}
+            onSelectPaddock={(id) => {
+              setShowPicker(false)
+              setAssigning(true)
+              setLocalPaddockId(id)
+              onAssignPaddock?.(note.id, id)
+              setSelectedMode('biomass')
+              setAssigning(false)
+              handleDirectAnalyze(id, activeHerdId, 'biomass')
+            }}
+            onSelectHerd={(id) => {
+              setShowPicker(false)
+              setAssigning(true)
+              setLocalHerdId(id)
+              onAssignHerd?.(note.id, id)
+              setSelectedMode('body-condition')
+              setAssigning(false)
+              handleDirectAnalyze(activePaddockId, id, 'body-condition')
+            }}
             onCancel={() => setShowPicker(false)}
           />
         )}

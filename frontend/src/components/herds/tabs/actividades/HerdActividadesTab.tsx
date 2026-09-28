@@ -89,16 +89,16 @@ function getAvailableActivities(catKey: CategoriaComercial | null, physio: strin
 
 // ── Colores por actividad ─────────────────────────────────────────────────────
 
-const ACTIVITY_COLORS: Record<string, string> = {
-  compra:    'border-blue-200  data-[sel=true]:border-blue-400  data-[sel=true]:bg-blue-50',
-  mortandad: 'border-gray-200  data-[sel=true]:border-gray-400  data-[sel=true]:bg-gray-50',
-  venta:     'border-red-200   data-[sel=true]:border-red-400   data-[sel=true]:bg-red-50',
-  paricion:  'border-green-200 data-[sel=true]:border-green-500 data-[sel=true]:bg-green-50',
-  destete:   'border-teal-200  data-[sel=true]:border-teal-400  data-[sel=true]:bg-teal-50',
-  servicio:  'border-indigo-200 data-[sel=true]:border-indigo-400 data-[sel=true]:bg-indigo-50',
+// Spec 1.2: Verde = entradas (interactivas). Gris = salidas.
+const ACTIVITY_COLORS: Record<string, { sel: string; icon: string }> = {
+  compra:    { sel: 'border-green-500 bg-green-50',  icon: 'bg-green-100 text-green-600' },
+  paricion:  { sel: 'border-green-500 bg-green-50',  icon: 'bg-green-100 text-green-600' },
+  servicio:  { sel: 'border-green-500 bg-green-50',  icon: 'bg-green-100 text-green-600' },
+  mortandad: { sel: 'border-gray-300  bg-gray-50',   icon: 'bg-gray-100  text-gray-500'  },
+  venta:     { sel: 'border-gray-300  bg-gray-50',   icon: 'bg-gray-100  text-gray-500'  },
+  destete:   { sel: 'border-gray-300  bg-gray-50',   icon: 'bg-gray-100  text-gray-500'  },
 }
-
-const DEFAULT_COLOR = 'border-gray-200 data-[sel=true]:border-gray-400 data-[sel=true]:bg-gray-50'
+const DEFAULT_ACT_COLOR = { sel: 'border-gray-300 bg-gray-50', icon: 'bg-gray-100 text-gray-500' }
 
 const FIELD = 'w-full border-2 border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all bg-white'
 const LABEL = 'text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block'
@@ -205,35 +205,38 @@ export default function HerdActividadesTab({ herd, onRefresh }: Props) {
     }
   }
 
-  const renderGroup = (label: string, group: ActivityDef[], colorClass: string) => {
+  const renderGroup = (label: string, group: ActivityDef[]) => {
     if (group.length === 0) return null
     return (
       <div>
         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">{label}</p>
+        {/* Spec 1.1: grid uniforme + gap consistente */}
         <div className={clsx('grid gap-2', group.length <= 2 ? 'grid-cols-2' : 'grid-cols-3')}>
           {group.map(act => {
-            const Icon = act.icon
-            const sel  = actId === act.id
+            const Icon   = act.icon
+            const sel    = actId === act.id
+            const colors = ACTIVITY_COLORS[act.id] ?? DEFAULT_ACT_COLOR
             return (
               <button
                 key={act.id}
-                data-sel={sel}
                 onClick={() => setActId(sel ? null : act.id)}
                 className={clsx(
-                  'flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all text-center bg-white',
-                  ACTIVITY_COLORS[act.id] ?? DEFAULT_COLOR,
-                  sel ? 'shadow-sm' : 'hover:border-gray-300'
+                  // Spec 1.1: altura y padding unificados — h-[72px] fuerza consistencia
+                  'flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 transition-all text-center bg-white',
+                  'h-[76px]', // Altura fija para todos los cards
+                  sel
+                    ? colors.sel + ' shadow-sm'
+                    : 'border-gray-200 hover:border-gray-300'
                 )}
               >
                 <div className={clsx(
-                  'w-8 h-8 rounded-xl flex items-center justify-center',
-                  act.type === 'entrada' ? 'bg-green-100' : 'bg-red-100'
+                  'w-7 h-7 rounded-xl flex items-center justify-center shrink-0',
+                  sel ? colors.icon : 'bg-gray-100 text-gray-500'
                 )}>
-                  <Icon className={clsx('w-4 h-4', act.type === 'entrada' ? 'text-green-600' : 'text-red-500')} />
+                  <Icon className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <p className="text-xs font-black text-gray-800">{act.label}</p>
-                  <p className="text-[9px] text-gray-400 leading-tight mt-0.5">{act.desc}</p>
+                  <p className="text-xs font-black text-gray-800 leading-tight">{act.label}</p>
                 </div>
               </button>
             )
@@ -261,8 +264,8 @@ export default function HerdActividadesTab({ herd, onRefresh }: Props) {
         <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest">
           ¿Qué movimiento querés registrar?
         </h3>
-        {renderGroup('Entradas', entradas, 'green')}
-        {renderGroup('Salidas',  salidas,  'red')}
+        {renderGroup('Entradas', entradas)}
+        {renderGroup('Salidas',  salidas)}
       </div>
 
       {/* ── Formulario ──────────────────────────────────────────────────── */}

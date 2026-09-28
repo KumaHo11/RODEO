@@ -97,34 +97,34 @@ export function HerdWeatherPanel({ msDay }: HerdWeatherPanelProps) {
   return (
     <div className="space-y-3">
 
-      {/* ── Condiciones actuales ─────────────────────────────────────────── */}
+      {/* ── Condiciones actuales — íconos grises ─── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Thermometer className="w-3.5 h-3.5 text-orange-500" />
+          <Thermometer className="w-3.5 h-3.5 text-gray-400" />
           Condiciones actuales
         </p>
 
         {current ? (
           <div className="grid grid-cols-3 gap-3">
-            {/* Temperatura */}
-            <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 text-center">
-              <Thermometer className="w-4 h-4 text-orange-500 mx-auto mb-1" />
-              <p className="text-xl font-black text-orange-900 tabular-nums">{current.tempC.toFixed(1)}°</p>
-              <p className="text-[9px] font-bold text-orange-600 uppercase">Temperatura</p>
+            {/* Temperatura — gris neutro */}
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
+              <Thermometer className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+              <p className="text-xl font-black text-gray-900 tabular-nums">{current.tempC.toFixed(1)}°</p>
+              <p className="text-[9px] font-bold text-gray-400 uppercase">Temp.</p>
             </div>
-            {/* Humedad */}
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
-              <Droplets className="w-4 h-4 text-blue-500 mx-auto mb-1" />
-              <p className="text-xl font-black text-blue-900 tabular-nums">{current.humidityPct}%</p>
-              <p className="text-[9px] font-bold text-blue-600 uppercase">Humedad</p>
+            {/* Humedad — gris neutro */}
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
+              <Droplets className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+              <p className="text-xl font-black text-gray-900 tabular-nums">{current.humidityPct}%</p>
+              <p className="text-[9px] font-bold text-gray-400 uppercase">Humedad</p>
             </div>
             {/* Viento */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
               <Wind className="w-4 h-4 text-gray-400 mx-auto mb-1" />
               <p className="text-xl font-black text-gray-700 tabular-nums">
                 {current.windSpeedKmh !== undefined ? `${Math.round(current.windSpeedKmh)}` : '—'}
               </p>
-              <p className="text-[9px] font-bold text-gray-500 uppercase">km/h viento</p>
+              <p className="text-[9px] font-bold text-gray-400 uppercase">km/h viento</p>
             </div>
           </div>
         ) : (
@@ -194,7 +194,7 @@ export function HerdWeatherPanel({ msDay }: HerdWeatherPanelProps) {
       {forecast && forecast.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-            <CloudSun className="w-3.5 h-3.5 text-blue-400" />
+            <CloudSun className="w-3.5 h-3.5 text-gray-400" />
             Pronóstico 3 días
           </p>
           <div className="grid grid-cols-3 gap-2">
@@ -208,7 +208,7 @@ export function HerdWeatherPanel({ msDay }: HerdWeatherPanelProps) {
                   <p className="text-[9px] font-black text-gray-400 uppercase mb-1.5">
                     {i === 0 ? 'Mañana' : i === 1 ? 'Pasado' : `Día ${i + 1}`}
                   </p>
-                  <FIcon className="w-5 h-5 text-blue-400 mx-auto mb-1.5" />
+                  <FIcon className="w-5 h-5 text-gray-400 mx-auto mb-1.5" />
                   <p className="text-sm font-black text-gray-800 tabular-nums">
                     {day.maxTempC !== undefined ? `${Math.round(day.maxTempC)}°` : '—'}
                   </p>
@@ -216,7 +216,7 @@ export function HerdWeatherPanel({ msDay }: HerdWeatherPanelProps) {
                     <p className="text-[9px] font-bold text-gray-400 tabular-nums">{Math.round(day.minTempC)}°</p>
                   )}
                   {dayTHI && dayTHI.status !== 'sin_datos' && (
-                    <div className={clsx('mt-1.5 px-1.5 py-0.5 rounded-full text-[8px] font-black border', dayTHI.bgColor, dayTHI.color)}>
+                    <div className="mt-1.5 px-1.5 py-0.5 rounded-full text-[8px] font-black border bg-gray-100 border-gray-200 text-gray-600">
                       THI {dayTHI.thi.toFixed(0)}
                     </div>
                   )}

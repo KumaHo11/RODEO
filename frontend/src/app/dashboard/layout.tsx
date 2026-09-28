@@ -279,10 +279,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const unreadCount = notifications.filter(n => !n.is_read).length
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+  // "Full-screen" pages: use own layout, no px/py padding from shell.
+  // Sandbox (Mesa de Arena) must be included — its 3-column layout manages its own height.
   const isMiCampo = pathname === '/dashboard/mi-campo'
     || pathname === '/dashboard/herds'
     || pathname.startsWith('/dashboard/herds/')
     || pathname.startsWith('/dashboard/mi-campo/')
+    || pathname === '/dashboard/grazing/sandbox'
+    || pathname.startsWith('/dashboard/grazing/sandbox/')
+
   const currentPageName = Object.entries(PAGE_NAMES).find(
     ([path]) => pathname === path || (path !== '/dashboard' && pathname.startsWith(path))
   )?.[1] ?? 'Rodeo'

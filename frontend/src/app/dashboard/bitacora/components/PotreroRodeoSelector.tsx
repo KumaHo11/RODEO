@@ -1,7 +1,9 @@
 'use client'
 
 import React, { useState, useCallback, useEffect, useRef } from 'react'
-import { ChevronDown, MapPin } from 'lucide-react'
+import { ChevronDown, MapPin, Save, Check } from 'lucide-react'
+import { IconoRodeos } from '@/components/icons/IconoRodeos'
+import { apiFetch } from '@/lib/apiFetch'
 
 
 interface SelectorOption {
@@ -108,23 +110,50 @@ export function PotreroRodeoSelector({
 }: PotreroRodeoSelectorProps) {
   const [localPotreroId, setLocalPotreroId] = useState(potreroId)
   const [localRodeoId, setLocalRodeoId] = useState(rodeoId)
+  // Track whether the user made a change that hasn't been saved yet
+  const [unsaved, setUnsaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   const handlePotreroChange = useCallback((id: string) => {
-    // Solo actualiza estado local.
-    // NO hacemos PATCH paddock_id en la field_note: si lo hiciéramos, la nota
-    // quedaría excluida del filtro bitacora_only=1 (WHERE paddock_id IS NULL)
-    // y desaparecería del feed de Bitácora tras recargar.
-    // El selector es puramente UI: enriquece la card y dirige el análisis IA.
     setLocalPotreroId(id)
+    setUnsaved(true)
+    setSaved(false)
     onPotreroChange?.(id || null)
   }, [onPotreroChange])
 
   const handleRodeoChange = useCallback((id: string) => {
-    // Idem: solo estado local, sin PATCH en DB.
     setLocalRodeoId(id)
+    setUnsaved(true)
+    setSaved(false)
     onRodeoChange?.(id || null)
   }, [onRodeoChange])
 
+  // Explicit save: persists paddock/herd assignment in the field_note
+  // This is needed ONLY when the user assigns without running AI analysis.
+  // Note: We deliberately save paddock_id/herd_id here because the user
+  // explicitly requested it via "Guardar". This is distinct from the AI flow
+  // which avoids persisting to prevent note disappearance from the bitacora feed.
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    try {
+      const patch: Record<string, string | null> = {}
+      if (localPotreroId) patch.paddock_id = localPotreroId
+      if (localRodeoId)  patch.herd_id    = localRodeoId
+      if (Object.keys(patch).length === 0) return
+      await apiFetch(`/api/field-notes/${noteId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      })
+      setUnsaved(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      // Silently fail — note it in UI
+    } finally {
+      setSaving(false)
+    }
+  }, [noteId, localPotreroId, localRodeoId])
 
   if (paddocks.length === 0 && herds.length === 0) return null
 
@@ -148,9 +177,29 @@ export function PotreroRodeoSelector({
           valueName={herds.find(h => h.id === localRodeoId)?.name}
           options={herds}
           onChange={handleRodeoChange}
-          icon={MapPin}
-          colorClass="bg-blue-50 border-blue-200 text-blue-700"
+          icon={IconoRodeos}
+          colorClass="bg-purple-50 border-purple-200 text-purple-700"
         />
+      )}
+
+      {/* Guardar explícito — solo cuando hay cambio sin análisis IA */}
+      {unsaved && !saving && (
+        <button
+          onClick={handleSave}
+          className="flex items-center gap-1 px-2 py-1 rounded-full border border-gray-200 bg-white text-[10px] font-bold text-gray-500 hover:border-green-300 hover:text-green-700 hover:bg-green-50 transition-all"
+          title="Guardar asignación"
+        >
+          <Save className="w-2.5 h-2.5" />
+          Guardar
+        </button>
+      )}
+      {saving && (
+        <span className="text-[10px] text-gray-400 font-medium">Guardando…</span>
+      )}
+      {saved && !unsaved && (
+        <span className="flex items-center gap-0.5 text-[10px] text-green-600 font-bold">
+          <Check className="w-2.5 h-2.5" /> Guardado
+        </span>
       )}
     </div>
   )

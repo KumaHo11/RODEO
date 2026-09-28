@@ -45,14 +45,16 @@ function OperatorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string 
 }
 
 // ─── WhatsApp AI Banner ───────────────────────────────────────────────────────
+// Spec: Íconos de timeline en tonos grises neutros — eliminar rojos, azules.
+// El botón IA (violeta) se mantiene. Nacimiento conserva verde como señal positiva.
 const INTENT_META: Record<string, { label: string; color: string; bg: string }> = {
-  HERD_MOVE:   { label: 'Movimiento',  color: 'text-blue-700',   bg: 'bg-blue-50' },
+  HERD_MOVE:   { label: 'Movimiento',  color: 'text-gray-700',   bg: 'bg-gray-100' },
   BIRTH:       { label: 'Nacimiento',  color: 'text-green-700',  bg: 'bg-green-50' },
-  DEATH:       { label: 'Mortandad',   color: 'text-red-700',    bg: 'bg-red-50' },
-  RAINFALL:    { label: 'Lluvia',      color: 'text-sky-700',    bg: 'bg-sky-50' },
-  OBSERVATION: { label: 'Observación', color: 'text-gray-700',   bg: 'bg-gray-100' },
-  TASK:        { label: 'Tarea',       color: 'text-amber-700',  bg: 'bg-amber-50' },
-  UNKNOWN:     { label: 'Sin intent',  color: 'text-gray-500',   bg: 'bg-gray-50' },
+  DEATH:       { label: 'Mortandad',   color: 'text-gray-600',   bg: 'bg-gray-100' },
+  RAINFALL:    { label: 'Lluvia',      color: 'text-gray-600',   bg: 'bg-gray-100' },
+  OBSERVATION: { label: 'Observación', color: 'text-gray-600',   bg: 'bg-gray-50'  },
+  TASK:        { label: 'Tarea',       color: 'text-gray-700',   bg: 'bg-gray-100' },
+  UNKNOWN:     { label: 'Sin intent',  color: 'text-gray-400',   bg: 'bg-gray-50'  },
 }
 
 function WhatsAppBanner({

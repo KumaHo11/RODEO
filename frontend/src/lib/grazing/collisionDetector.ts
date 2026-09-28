@@ -47,6 +47,17 @@ function overlapDays(a1: string, a2: string, b1: string, b2: string): number {
 }
 
 /**
+ * Normaliza un id de potrero a string para que la comparación sea type-safe.
+ * PostgreSQL devuelve integers; el store maneja strings.
+ * Sin esta normalización, `"123" !== 123` siempre es true y el guard
+ * `if (paddockId !== block.paddock_id) continue` nunca se ejecuta,
+ * reportando colisiones en TODOS los potreros.
+ */
+function normId(id: string | number | undefined | null): string {
+  return String(id ?? '')
+}
+
+/**
  * Detecta colisiones entre un conjunto de nuevas entradas y los planes existentes.
  *
  * @param newEntries   — Bloques que se quieren crear
@@ -80,9 +91,21 @@ export function detectPaddockCollisions(
       (excludeSeasonPlanId ? b.season_plan_id !== excludeSeasonPlanId : true),
   )
 
+  // Conjunto de colisiones ya vistas para evitar duplicados
+  // Clave: "paddockId|newEntry|newExit|existingEntry|existingExit"
+  const seen = new Set<string>()
+
   for (const entry of newEntries) {
+    // ─── FIX: normalizar a String() antes de comparar.
+    // La API de PostgreSQL retorna paddock_id como integer; si entry.paddockId
+    // es string y block.paddock_id es number, la comparación estricta `!==`
+    // siempre resulta true → el guard `continue` nunca se ejecuta →
+    // TODOS los bloques de TODOS los potreros se detectan como colisión.
+    const normEntry = normId(entry.paddockId)
+
     for (const block of activeExisting) {
-      if (entry.paddockId !== block.paddock_id) continue
+      // REGLA DE NEGOCIO: solo hay colisión si es el MISMO potrero.
+      if (normEntry !== normId(block.paddock_id)) continue
 
       const days = overlapDays(
         entry.entryDate,
@@ -92,9 +115,15 @@ export function detectPaddockCollisions(
       )
 
       if (days > 0) {
+        // Deduplicar: el mismo par (entrada nueva + bloque existente) puede
+        // aparecer varias veces si hay múltiples newEntries para el mismo potrero.
+        const key = `${normEntry}|${entry.entryDate}|${entry.exitDate}|${block.entry_date}|${block.exit_date}`
+        if (seen.has(key)) continue
+        seen.add(key)
+
         collisions.push({
           paddockId: entry.paddockId,
-          paddockName: paddockNames[entry.paddockId] || entry.paddockId,
+          paddockName: paddockNames[entry.paddockId] ?? paddockNames[normEntry] ?? entry.paddockId,
           newEntry: entry.entryDate,
           newExit: entry.exitDate,
           existingEntry: block.entry_date,

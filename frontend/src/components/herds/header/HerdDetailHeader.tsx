@@ -7,17 +7,18 @@
  *     Modal de eliminación con createPortal (cubre TODO: nav + sidebar).
  */
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import clsx from 'clsx'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ArrowLeft, Trash2, Thermometer } from 'lucide-react'
+import { Trash2, Thermometer, ChevronDown } from 'lucide-react'
 import { CATEGORIA_COLORS, CATEGORIA_LABEL_RAE, type CategoriaComercial } from '@/lib/categorias'
 import { PHYSIO_LABEL, calculateBaseEV } from '@/lib/grazing/evProjection'
 import { HERD_TABS, HERD_TAB_LABELS, type HerdTab } from '@/types/herds'
 import type { HerdData } from '@/components/HerdModal'
 import { HerdDeleteDialog } from '@/components/herds/HerdDeleteDialog'
 import { useWeather } from '@/lib/context/WeatherContext'
+import { useHerds } from '@/lib/context/HerdsContext'
 
 interface HerdDetailHeaderProps {
   herd: HerdData
@@ -54,13 +55,8 @@ export function HerdDetailHeader({ herd, activeTab }: HerdDetailHeaderProps) {
       {/* ── Fila de título + chips + trash ────────────────────────────── */}
       <div className="px-8 pt-6 pb-0 flex items-center gap-4 min-w-0">
 
-        {/* Back mobile */}
-        <Link
-          href="/dashboard/herds"
-          className="md:hidden inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-green-600 transition-colors shrink-0"
-        >
-          <ArrowLeft className="w-3 h-3" />
-        </Link>
+        {/* Spec: Mobile Rodeo Switcher — visible solo en mobile */}
+        <MobileRodeoSwitcher currentHerdId={herd.id ?? null} currentHerdName={herd.name} />
 
         {/* ── Nombre + categoría ─────────────────────────────────────── */}
         <div className="flex-1 min-w-0 flex items-center gap-2.5 overflow-hidden">
@@ -88,22 +84,24 @@ export function HerdDetailHeader({ herd, activeTab }: HerdDetailHeaderProps) {
           </div>
         </div>
 
-        {/* ── KPI chips ──────────────────────────────────────────────── */}
-        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-          <KpiChip value={herd.head_count.toLocaleString('es-AR')} label="Cab"  color="blue"  />
-          <KpiChip value={herd.avg_weight_kg ? `${Math.round(Number(herd.avg_weight_kg))} kg` : '—'} label="Peso" color="gray"  />
-          <KpiChip value={Math.round(ev).toLocaleString('es-AR')}  label="EV"   color="green" />
-          <KpiChip value={msDay.toLocaleString('es-AR')}           label="MS/d" color="amber" />
-          {/* THI bienestar chip */}
-          {thiChip && (
-            <div className={clsx(
-              'flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[10px] font-black whitespace-nowrap',
-              thiChip.color
-            )}>
-              <Thermometer className="w-3 h-3" />
-              {thiChip.label}
-            </div>
-          )}
+        {/* ── KPI chips — scroll horizontal en mobile ──────────────── */}
+        <div className="overflow-x-auto scrollbar-none -mx-1 px-1 shrink min-w-0">
+          <div className="flex items-center gap-1.5 min-w-max">
+            <KpiChip value={herd.head_count.toLocaleString('es-AR')} label="Cab"  />
+            <KpiChip value={herd.avg_weight_kg ? `${Math.round(Number(herd.avg_weight_kg))} kg` : '—'} label="Peso" />
+            <KpiChip value={Math.round(ev).toLocaleString('es-AR')}  label="EV"   />
+            <KpiChip value={msDay.toLocaleString('es-AR')}           label="MS/d" />
+            {/* THI bienestar chip */}
+            {thiChip && (
+              <div className={clsx(
+                'flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[10px] font-black whitespace-nowrap',
+                thiChip.color
+              )}>
+                <Thermometer className="w-3 h-3" />
+                {thiChip.label}
+              </div>
+            )}
+          </div>
         </div>
 
         {/*
@@ -160,26 +158,121 @@ export function HerdDetailHeader({ herd, activeTab }: HerdDetailHeaderProps) {
 }
 
 // ── KPI Chip ─────────────────────────────────────────────────────────────────
+// Spec 3.3: Formato limpio sin fondos de color — escala de grises + bold numérico
 
-const CHIP_COLORS = {
-  blue:  'bg-blue-50  text-blue-700  border-blue-100',
-  gray:  'bg-gray-50  text-gray-600  border-gray-200',
-  green: 'bg-green-50 text-green-700 border-green-100',
-  amber: 'bg-amber-50 text-amber-700 border-amber-200',
-} as const
-
-function KpiChip({ value, label, color }: {
+function KpiChip({ value, label }: {
   value: string
   label: string
-  color: keyof typeof CHIP_COLORS
+  color?: string
 }) {
   return (
-    <div className={clsx(
-      'flex items-baseline gap-1 px-2.5 py-1.5 rounded-xl border whitespace-nowrap',
-      CHIP_COLORS[color]
-    )}>
-      <span className="text-sm font-black tabular-nums leading-none">{value}</span>
-      <span className="text-[9px] font-bold uppercase tracking-wide opacity-50">{label}</span>
+    <div className="flex items-baseline gap-1 px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white whitespace-nowrap">
+      <span className="text-sm font-black tabular-nums leading-none text-gray-900">{value}</span>
+      <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400">{label}</span>
+    </div>
+  )
+}
+
+// ── Mobile Rodeo Switcher ─────────────────────────────────────────────────────
+// Spec 3.2: Selector de rodeos accesible en mobile — dropdown en la cabecera.
+// Solo visible en pantallas pequeñas (md:hidden). Permite cambiar de rodeo
+// sin necesidad de usar el menú hamburguesa principal.
+
+function MobileRodeoSwitcher({
+  currentHerdId,
+  currentHerdName,
+}: {
+  currentHerdId: string | null
+  currentHerdName: string
+}) {
+  const { herds } = useHerds()
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  // Only show if there are multiple herds
+  if (!herds || herds.length <= 1) return null
+
+  const handleSelect = (herdId: string) => {
+    setOpen(false)
+    router.push(`/dashboard/herds/${herdId}/datos`)
+  }
+
+  return (
+    <div className="relative md:hidden" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={clsx(
+          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-colors',
+          currentHerdId
+            ? 'bg-green-50 border-green-200 hover:bg-green-100'
+            : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+        )}
+        aria-label="Cambiar rodeo"
+        aria-expanded={open}
+      >
+        <span className={clsx(
+          'text-xs font-black max-w-[100px] truncate',
+          currentHerdId ? 'text-green-800' : 'text-gray-700'
+        )}>
+          {currentHerdName}
+        </span>
+        <ChevronDown className={clsx(
+          'w-3.5 h-3.5 transition-transform shrink-0',
+          open ? 'rotate-180' : '',
+          currentHerdId ? 'text-green-500' : 'text-gray-400'
+        )} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full mt-1.5 left-0 z-[9999] w-56 bg-white rounded-2xl border border-gray-100 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="px-3 pt-3 pb-1">
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+              Cambiar rodeo
+            </p>
+          </div>
+          <div className="py-1 max-h-64 overflow-y-auto">
+            {herds.map(h => (
+              <button
+                key={h.id}
+                type="button"
+                onClick={() => handleSelect(h.id!)}
+                className={clsx(
+                  'w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors',
+                  h.id === currentHerdId
+                    ? 'bg-green-50 text-green-800'
+                    : 'text-gray-700 hover:bg-gray-50'
+                )}
+              >
+                <div className={clsx(
+                  'w-2 h-2 rounded-full shrink-0',
+                  h.id === currentHerdId ? 'bg-green-500' : 'bg-gray-300'
+                )} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold truncate">{h.name}</p>
+                  <p className="text-[10px] text-gray-400 font-medium">
+                    {h.head_count?.toLocaleString('es-AR')} cab
+                  </p>
+                </div>
+                {h.id === currentHerdId && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

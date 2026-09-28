@@ -265,7 +265,10 @@ body {
 .sandbox-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* Use dvh (dynamic viewport height) so mobile browser chrome is accounted for.
+     Falls back to 100vh on browsers that don't support dvh. */
+  height: 100dvh;
+  height: 100vh; /* fallback */
   overflow: hidden;
   background: #f8fafc;
   font-family: 'Inter', system-ui, sans-serif;
@@ -1232,41 +1235,57 @@ body {
 }
 @media (max-width: 768px) {
   .sandbox-body {
-    display: block;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
   }
-  .sandbox-col { border-right: none; display: none; min-height: calc(100vh - 180px); }
-  .sandbox-col--map { height: calc(100vh - 180px); }
+  /* En mobile, todas las columnas ocultas por defecto */
+  .sandbox-col {
+    border-right: none;
+    display: none;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain; /* evita scroll chain al llegar al borde */
+  }
+  /* La columna del mapa ocupa todo el alto disponible */
+  .sandbox-col--map {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
   .sandbox-col--mobile-hidden { display: none !important; }
-  .sandbox-col:not(.sandbox-col--mobile-hidden) { display: block; }
+  /* Columna activa: ocupa todo el espacio restante */
+  .sandbox-col:not(.sandbox-col--mobile-hidden) { display: flex; flex-direction: column; }
 
   .sandbox-mobile-tabs {
     display: flex;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 2px solid #f3f4f6;
     background: white;
     flex-shrink: 0;
-  }
-  .sandbox-mobile-tabs {
-    display: flex;
-    border-bottom: 1px solid #e5e7eb;
-    background: white;
-    flex-shrink: 0;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
   }
   .sandbox-mobile-tab {
     flex: 1;
-    padding: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #6b7280;
+    padding: 12px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #9ca3af;
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
     cursor: pointer;
     transition: all 0.15s;
+    letter-spacing: 0.01em;
   }
   .sandbox-mobile-tab--active {
-    color: #10B981;
-    border-bottom-color: #10B981;
+    color: #008234;
+    border-bottom-color: #008234;
+    font-weight: 900;
   }
 
   /* Params bottom sheet */
@@ -1282,6 +1301,9 @@ body {
     z-index: 500;
     transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 -8px 32px rgba(0,0,0,0.12);
+    /* Max height prevents bottom sheet from covering tabs */
+    max-height: 80dvh;
+    overflow-y: auto;
   }
   .sandbox-params-bar--open { bottom: 0; }
   .sandbox-params-overlay {
@@ -1297,6 +1319,24 @@ body {
     cursor: pointer; color: #6b7280;
   }
   .sandbox-balance-desktop { display: none; }
+
+  /* Header en mobile: wrap y font más pequeño */
+  .sandbox-header {
+    padding: 8px 12px;
+    min-height: auto;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sandbox-title-group {
+    flex: 1;
+    min-width: 0;
+  }
+  /* Ocultar título largo en mobile — solo mostrar botones de acción */
+  .sandbox-header-left .sandbox-title--planificacion {
+    font-size: 14px;
+    min-width: 0;
+    width: 100%;
+  }
 }
 @media (min-width: 769px) {
   .sandbox-params-bar { display: block; }

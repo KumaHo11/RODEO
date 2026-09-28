@@ -17,7 +17,7 @@ import {
   PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { TrendingUp, Zap, Leaf, RotateCcw, Loader2, Camera, Sparkles } from 'lucide-react'
+import { TrendingUp, Zap, Leaf, RotateCcw, Loader2, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
 import { calculateBaseEV } from '@/lib/grazing/evProjection'
 import { useHerds } from '@/lib/context/HerdsContext'
@@ -426,21 +426,21 @@ export default function HerdMetricasTab({ herd }: Props) {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-4">
           <p className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 flex-1">
-            <Camera className="w-3.5 h-3.5 text-pink-500" />
+            <Sparkles className="w-3.5 h-3.5 text-purple-500" />
             Evolución de Condición Corporal
           </p>
           {ccHistory.length > 0 && (
-            <span className="text-[10px] font-bold text-pink-600 bg-pink-50 border border-pink-100 px-2 py-0.5 rounded-full">
+            <span className="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full">
               Escala 1–5
             </span>
           )}
         </div>
 
         {ccHistory.length === 0 ? (
-          /* Empty state CC */
+          /* Empty state CC — Spec Task 4: solo icono IA (Sparkles violeta), sin cámara */
           <div className="flex flex-col items-center justify-center py-10 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
-            <div className="w-10 h-10 rounded-2xl bg-pink-50 flex items-center justify-center mb-3">
-              <Sparkles className="w-5 h-5 text-pink-300" />
+            <div className="w-10 h-10 rounded-2xl bg-purple-50 flex items-center justify-center mb-3">
+              <Sparkles className="w-5 h-5 text-purple-400" />
             </div>
             <p className="text-sm font-bold text-gray-500 mb-1">Sin historial de CC</p>
             <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
