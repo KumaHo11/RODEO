@@ -42,6 +42,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard':              'Panel principal',
   '/dashboard/mi-campo':     'Potreros',
   '/dashboard/herds':        'Rodeos',
+  '/dashboard/herds/_empty/datos': 'Rodeos',
   '/dashboard/agenda':       'Agenda',
   '/dashboard/clima':        'Clima',
   '/dashboard/grazing':              'Planificador',
@@ -279,6 +280,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const isMiCampo = pathname === '/dashboard/mi-campo'
+    || pathname === '/dashboard/herds'
+    || pathname.startsWith('/dashboard/herds/')
+    || pathname.startsWith('/dashboard/mi-campo/')
   const currentPageName = Object.entries(PAGE_NAMES).find(
     ([path]) => pathname === path || (path !== '/dashboard' && pathname.startsWith(path))
   )?.[1] ?? 'Rodeo'
@@ -592,7 +596,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
 
         {/* ── Top header ──────────────────────────────────────────────────── */}
-        <header className="h-14 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 z-[2000]">
+        <header className="h-16 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-4 sm:px-8 z-[2000]">
           {/* Left: mobile hamburger */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button

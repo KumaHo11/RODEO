@@ -1,4 +1,5 @@
 /**
+ * GET    /api/herds/[id]  — Obtiene un rodeo por ID
  * PATCH  /api/herds/[id]  — Actualiza un rodeo
  * DELETE /api/herds/[id]  — Elimina un rodeo
  *
@@ -22,6 +23,39 @@ async function getOrgId(req: NextRequest) {
   )
   if (!profile?.organization_id) return null
   return { orgId: profile.organization_id, uid: decoded.uid }
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await getOrgId(req)
+    if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+    const herdId = (await params).id
+    const herd = await serviceQueryOne(
+      `SELECT
+        id, org_id, name, species, categoria, breed,
+        head_count, avg_weight_kg, total_ev, bcs_score,
+        admission_date, exit_date, parent_herd_id,
+        physiological_category, last_weigh_date, daily_gain_kg,
+        lactancia_range, estadio_gestacion, custom_racion_kg,
+        grupo_manejo_id, grupo_manejo_nombre,
+        age_years, age_months, herd_notes,
+        created_at, updated_at
+      FROM herds
+      WHERE id = $1 AND org_id = $2`,
+      [herdId, auth.orgId]
+    )
+
+    if (!herd) return NextResponse.json({ error: 'Rodeo no encontrado' }, { status: 404 })
+
+    return NextResponse.json({ herd })
+  } catch (err: any) {
+    console.error('GET /api/herds/[id] error:', err)
+    return NextResponse.json({ error: 'Error del servidor: ' + err.message }, { status: 500 })
+  }
 }
 
 export async function PATCH(
