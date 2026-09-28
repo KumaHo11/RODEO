@@ -40,10 +40,13 @@ interface AICameraModalProps {
   onApply: (data: any, uploadedUrls?: string[]) => void
   /** URLs to preload as initial photos (e.g. from the card's photo_url / groupedPhotos) */
   initialPhotoUrls?: string[]
+  /** Polygon centroid for regional AI context */
+  lat?: number
+  lng?: number
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function AICameraModal({ isOpen, onClose, title, mode, onApply, initialPhotoUrls }: AICameraModalProps) {
+export function AICameraModal({ isOpen, onClose, title, mode, onApply, initialPhotoUrls, lat, lng }: AICameraModalProps) {
   const [photos, setPhotos]         = useState<{ url: string; base64: string; mimeType: string; preloaded?: boolean }[]>([])
   const [analyzing, setAnalyzing]   = useState(false)
   const [result, setResult]         = useState<any>(null)
@@ -163,7 +166,11 @@ export function AICameraModal({ isOpen, onClose, title, mode, onApply, initialPh
 
       const analyzePromise = apiFetch(endpoint, {
         method: 'POST',
-        body: JSON.stringify({ imagesBase64 }),
+        body: JSON.stringify({
+          imagesBase64,
+          // Pass centroid if available for regional context
+          ...(lat != null && lng != null ? { lat, lng } : {}),
+        }),
         timeout: 60000,
       })
 
