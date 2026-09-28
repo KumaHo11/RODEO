@@ -17,17 +17,19 @@ import {
   PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { TrendingUp, Zap, Leaf, RotateCcw, Loader2 } from 'lucide-react'
+import { TrendingUp, Zap, Leaf, RotateCcw, Loader2, Camera, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
 import { calculateBaseEV } from '@/lib/grazing/evProjection'
 import { useHerds } from '@/lib/context/HerdsContext'
 import type { HerdData } from '@/components/HerdModal'
 import type { CategoriaComercial } from '@/lib/categorias'
+import { HerdWeatherPanel } from '@/components/herds/HerdWeatherPanel'
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
 
-interface EVPoint { date: string; ev: number; label?: string }
-interface Rotacion { id: string; occurred_at: string; from_paddock?: string; to_paddock: string; head_count: number; dias?: number }
+interface EVPoint  { date: string; ev: number;        label?: string }
+interface CCPoint  { date: string; score: number;     label?: string }
+interface Rotacion { id: string;  occurred_at: string; from_paddock?: string; to_paddock: string; head_count: number; dias?: number }
 
 type Horizonte = '7d' | '30d' | '90d' | '365d'
 const HORIZONTES: { key: Horizonte; label: string; dias: number }[] = [
@@ -64,6 +66,7 @@ export default function HerdMetricasTab({ herd }: Props) {
   const msDay  = Math.round(ev * 11)
 
   const [evHistory,   setEvHistory]   = useState<EVPoint[]>([])
+  const [ccHistory,   setCcHistory]   = useState<CCPoint[]>([])
   const [rotaciones,  setRotaciones]  = useState<Rotacion[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [horizonte,   setHorizonte]   = useState<Horizonte>('30d')
@@ -78,10 +81,23 @@ export default function HerdMetricasTab({ herd }: Props) {
           apiFetch(`/api/farm-events?herd_id=${herdId}&event_type=movement&limit=20`),
         ])
 
-        // EV history — desde historial-rodeo (bcs con peso estimado → EV)
+        // EV history + CC history desde historial-rodeo
         if (bcsRes.status === 'fulfilled' && bcsRes.value.ok) {
           const data = await bcsRes.value.json()
           const rows = data.historial ?? data ?? []
+
+          // CC history
+          const ccPoints: CCPoint[] = rows
+            .filter((r: any) => r.bcs_score != null && (r.recorded_at || r.created_at))
+            .map((r: any) => ({
+              date:  new Date(r.recorded_at || r.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }),
+              score: Number(r.bcs_score),
+              label: r.bcs_label ?? undefined,
+            }))
+            .slice(-12)
+          setCcHistory(ccPoints)
+
+          // EV history
           const points: EVPoint[] = rows
             .filter((r: any) => r.recorded_at || r.created_at)
             .map((r: any) => ({
@@ -91,14 +107,9 @@ export default function HerdMetricasTab({ herd }: Props) {
                        : ev,
               label: r.bcs_score ? `CC ${r.bcs_score}/5` : undefined,
             }))
-          // Agregar punto actual al final
-          points.push({
-            date: 'Hoy',
-            ev:   Math.round(ev),
-          })
-          setEvHistory(points.slice(-12)) // máx 12 puntos
+          points.push({ date: 'Hoy', ev: Math.round(ev) })
+          setEvHistory(points.slice(-12))
         } else {
-          // Si no hay historial, simulamos un punto inicial vs actual
           setEvHistory([
             { date: 'Ingreso', ev: Math.round(ev * 0.92) },
             { date: 'Hoy',     ev: Math.round(ev) },
@@ -375,18 +386,7 @@ export default function HerdMetricasTab({ herd }: Props) {
         </ResponsiveContainer>
       </div>
 
-      {/* ── Row 3: Historial de Rotaciones ─────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <RotateCcw className="w-3.5 h-3.5 text-blue-500" />
-          Historial de rotaciones
-        </p>
-        {rotaciones.length === 0 && !loadingData ? (
-          <p className="text-xs text-gray-400 italic text-center py-4">
-            Sin rotaciones registradas para este rodeo.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
+      {/* ── Row 3: Hist           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-100">
@@ -420,6 +420,63 @@ export default function HerdMetricasTab({ herd }: Props) {
             </table>
           </div>
         )}
+      </div>
+
+      {/* ── Gráfico Evolución Condición Corporal (CC) ────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <p className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 flex-1">
+            <Camera className="w-3.5 h-3.5 text-pink-500" />
+            Evolución de Condición Corporal
+          </p>
+          {ccHistory.length > 0 && (
+            <span className="text-[10px] font-bold text-pink-600 bg-pink-50 border border-pink-100 px-2 py-0.5 rounded-full">
+              Escala 1–5
+            </span>
+          )}
+        </div>
+
+        {ccHistory.length === 0 ? (
+          /* Empty state CC */
+          <div className="flex flex-col items-center justify-center py-10 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
+            <div className="w-10 h-10 rounded-2xl bg-pink-50 flex items-center justify-center mb-3">
+              <Sparkles className="w-5 h-5 text-pink-300" />
+            </div>
+            <p className="text-sm font-bold text-gray-500 mb-1">Sin historial de CC</p>
+            <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
+              Analizá una foto de este rodeo desde la <strong className="text-gray-600">Bitácora</strong> para generar este gráfico automáticamente.
+            </p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={ccHistory} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+              <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+              {/* Líneas de referencia de estados */}
+              <ReferenceLine y={2} stroke="#fbbf24" strokeDasharray="4 2" label={{ value: 'Bajo', fontSize: 9, fill: '#fbbf24', position: 'insideLeft' }} />
+              <ReferenceLine y={4} stroke="#16a34a" strokeDasharray="4 2" label={{ value: 'Óptimo', fontSize: 9, fill: '#16a34a', position: 'insideLeft' }} />
+              <Tooltip
+                contentStyle={{ fontSize: 11, borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                formatter={(v: any) => [`${Number(v).toFixed(1)}/5`, 'CC']}
+              />
+              <Line
+                type="monotone" dataKey="score"
+                stroke="#ec4899" strokeWidth={2.5} dot={{ r: 4, fill: '#ec4899', strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6, fill: '#ec4899', stroke: '#fff', strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* ── Clima y Bienestar THI ────────────────────────────────────────── */}
+      <div>
+        <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+          <RotateCcw className="w-3.5 h-3.5 text-blue-400" />
+          Clima y bienestar del rodeo
+        </p>
+        <HerdWeatherPanel msDay={msDay} />
       </div>
 
     </div>

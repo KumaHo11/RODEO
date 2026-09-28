@@ -7,16 +7,17 @@
  *     Modal de eliminación con createPortal (cubre TODO: nav + sidebar).
  */
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import clsx from 'clsx'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ArrowLeft, Trash2 } from 'lucide-react'
+import { ArrowLeft, Trash2, Thermometer } from 'lucide-react'
 import { CATEGORIA_COLORS, CATEGORIA_LABEL_RAE, type CategoriaComercial } from '@/lib/categorias'
 import { PHYSIO_LABEL, calculateBaseEV } from '@/lib/grazing/evProjection'
 import { HERD_TABS, HERD_TAB_LABELS, type HerdTab } from '@/types/herds'
 import type { HerdData } from '@/components/HerdModal'
 import { HerdDeleteDialog } from '@/components/herds/HerdDeleteDialog'
+import { useWeather } from '@/lib/context/WeatherContext'
 
 interface HerdDetailHeaderProps {
   herd: HerdData
@@ -27,12 +28,23 @@ export function HerdDetailHeader({ herd, activeTab }: HerdDetailHeaderProps) {
   const pathname = usePathname()
   const router   = useRouter()
   const [showDelete, setShowDelete] = useState(false)
+  const { current } = useWeather()
 
   const catKey   = herd.categoria as CategoriaComercial | null
   const colors   = catKey ? CATEGORIA_COLORS[catKey] : null
   const catLabel = catKey ? (CATEGORIA_LABEL_RAE[catKey] ?? catKey) : herd.species
   const ev       = Number(herd.total_ev) || calculateBaseEV(catKey, Number(herd.avg_weight_kg), herd.head_count)
   const msDay    = Math.round(ev * 11)
+
+  // ── Chip de bienestar THI ────────────────────────────────────────────
+  const thiChip = useMemo(() => {
+    if (!current) return null
+    const Td  = current.tempC - ((100 - current.humidityPct) / 5)
+    const thi = current.tempC + 0.36 * Td + 41.5
+    if (thi < 68) return { label: 'Confort',  color: 'text-green-700 bg-green-50 border-green-200', Icon: Thermometer }
+    if (thi < 72) return { label: 'Alerta',   color: 'text-amber-700 bg-amber-50 border-amber-200', Icon: Thermometer }
+    return              { label: 'Peligro',   color: 'text-red-700   bg-red-50   border-red-200',   Icon: Thermometer }
+  }, [current])
 
   const herdSlug = pathname.match(/\/herds\/([^/]+)\//)?.[1] ?? ''
 
@@ -77,11 +89,21 @@ export function HerdDetailHeader({ herd, activeTab }: HerdDetailHeaderProps) {
         </div>
 
         {/* ── KPI chips ──────────────────────────────────────────────── */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
           <KpiChip value={herd.head_count.toLocaleString('es-AR')} label="Cab"  color="blue"  />
           <KpiChip value={herd.avg_weight_kg ? `${Math.round(Number(herd.avg_weight_kg))} kg` : '—'} label="Peso" color="gray"  />
           <KpiChip value={Math.round(ev).toLocaleString('es-AR')}  label="EV"   color="green" />
           <KpiChip value={msDay.toLocaleString('es-AR')}           label="MS/d" color="amber" />
+          {/* THI bienestar chip */}
+          {thiChip && (
+            <div className={clsx(
+              'flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[10px] font-black whitespace-nowrap',
+              thiChip.color
+            )}>
+              <Thermometer className="w-3 h-3" />
+              {thiChip.label}
+            </div>
+          )}
         </div>
 
         {/*
