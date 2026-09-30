@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import {
   LogOut, ChevronLeft, ChevronRight, Menu,
-  Bell, X, Check, AlertCircle, ClipboardList, WifiOff,
+  Bell, X, Check, AlertCircle, ClipboardList,
   CalendarDays, Users, Trash2, Sparkles
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -20,7 +20,6 @@ import { WelcomeScreen } from '@/components/WelcomeScreen'
 import { WeatherProvider } from '@/lib/context/WeatherContext'
 import { ClimateAnalyticsProvider } from '@/lib/context/ClimateAnalyticsContext'
 import { InstallPWAButton } from '@/components/InstallPWAButton'
-import { useOfflineStatus } from '@/components/OfflineManager'
 
 const NOTIF_ICONS: Record<string, React.ComponentType<any>> = {
   EVENTO:    CalendarDays,
@@ -69,36 +68,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [notifications, setNotifications]   = useState<any[]>([])
   const [notifOpen, setNotifOpen]           = useState(false)
   const [pendingTasks, setPendingTasks]     = useState(0)
-  const { isOffline }                       = useOfflineStatus()
   const [showWelcome, setShowWelcome]       = useState(false)
   const [menuConfig, setMenuConfig]         = useState<Record<string, boolean>>({})
   const notifRef = useRef<HTMLDivElement>(null)
-
-  // ── Proactive Offline Prefetch (Sync Inicial Silenciosa) ───────────────
-  // Si estamos online, precargamos datos críticos para que IDB/SW cache 
-  // los tenga disponibles inmediatamente si el usuario se queda sin red
-  // en el campo, sin necesidad de haber visitado cada sección.
-  useEffect(() => {
-    if (!user || isOffline) return
-    const prefetchData = async () => {
-      try {
-        const idToken = await user.getIdToken()
-        const headers = { Authorization: `Bearer ${idToken}` }
-        // Fetch paddocks, herds, and farm-events silently
-        await Promise.allSettled([
-          fetch('/api/paddocks', { headers }),
-          fetch('/api/herds', { headers }),
-          fetch('/api/farm-events', { headers })
-        ])
-        console.log('[Offline] Proactive data prefetch completed.')
-      } catch (err) {
-        console.warn('[Offline] Proactive data prefetch failed:', err)
-      }
-    }
-    // Retrasar 5 segundos para no bloquear la carga inicial de UI/chunks
-    const timer = setTimeout(prefetchData, 5000)
-    return () => clearTimeout(timer)
-  }, [user, isOffline])
 
   useEffect(() => {
     fetch('/api/config/menu')
@@ -299,27 +271,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Mientras el perfil sigue cargando, mostrar spinner (nunca redirigir)
   // Esto evita la pantalla en blanco + falsa redirección cuando el perfil aún no fue consultado
   if (authProfile === null && !isLoading) {
-    // Si estamos offline, intentar leer el perfil cacheado del localStorage
-    if (isOffline) {
-      try {
-        const cached = localStorage.getItem('rodeo_cached_profile')
-        if (!cached) {
-          // Sin caché y sin conexión → mostrar aviso
-          return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col gap-4 px-6 text-center">
-              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
-                <WifiOff className="w-6 h-6 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-gray-800 font-black text-sm">Sin conexión</p>
-                <p className="text-gray-400 text-xs mt-1">No se pudo cargar tu perfil. Conectate a internet para continuar.</p>
-              </div>
-            </div>
-          )
-        }
-        // Si hay caché, AuthProvider ya debería haberlo restaurado. Mostrar spinner breve.
-      } catch { /* ignore */ }
-    }
     // Profile fetch finalizó pero retornó null (caso edge) — No redirigir aquí
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
@@ -632,12 +583,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               );
             })())}
 
-            {/* Offline indicator */}
-            {isOffline && (
-              <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full border border-amber-200">
-                <WifiOff className="w-3 h-3" /> Sin conexión
-              </span>
-            )}
+            {/* (offline indicator removed — app is online-only) */}
 
             {/* Install PWA compact */}
             <InstallPWAButton variant="compact" />

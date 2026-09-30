@@ -1,4 +1,5 @@
 'use client'
+import { dbGetAll } from '@/lib/offline/db'
 
 /**
  * app/dashboard/herds/page.tsx — Index de Rodeos.
@@ -12,7 +13,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
-import { dbGetAll } from '@/lib/offline/db'
 import { apiFetch } from '@/lib/apiFetch'
 import { useAuth } from '@/components/AuthProvider'
 import type { HerdData } from '@/components/HerdModal'

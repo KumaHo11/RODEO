@@ -3,8 +3,6 @@ import { Inter, Montserrat } from 'next/font/google'
 import Script from 'next/script'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
-import { OfflineManager } from '@/components/OfflineManager'
-import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
 import { Toaster } from 'sonner'
 
 const inter = Inter({ 
@@ -82,15 +80,20 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="RODEO" />
-        {/* Anti-ServiceWorker para desarrollo: Muerte súbita a cachés corruptas */}
+        {/* SW Cleanup: desregistra cualquier Service Worker previo instalado en el navegador del usuario */}
         <Script
-          id="sw-unregister"
+          id="sw-cleanup"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
-              if (location.hostname === 'localhost' && 'serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(rs) {
-                  rs.forEach(function(r) { r.unregister() })
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  registrations.forEach(function(r) { r.unregister(); });
+                });
+              }
+              if ('caches' in window) {
+                caches.keys().then(function(names) {
+                  names.forEach(function(name) { caches.delete(name); });
                 });
               }
             `,
@@ -120,52 +123,8 @@ export default function RootLayout({
         )}
       </head>
       <body className={`${inter.variable} ${montserrat.variable} ${inter.className} font-sans overflow-x-hidden`}>
-        {/* Global Native Splash Screen (Immediately visible, removed by AuthProvider) */}
-        <div 
-          id="global-native-splash" 
-          suppressHydrationWarning
-          style={{ 
-            position: 'fixed', inset: 0, backgroundColor: '#16a34a', zIndex: 999999, 
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
-            transition: 'opacity 0.5s ease-out', color: 'white'
-          }}
-        >
-          <img src="/LogoLoginBlanco.svg" alt="RODEO" style={{ width: '220px', height: 'auto', marginBottom: '32px' }} />
-          <div style={{ width: '40px', height: '40px', border: '3px solid rgba(255,255,255,0.2)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          <p style={{ marginTop: '24px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.15em', opacity: 0.9 }}>PREPARANDO ENTORNO...</p>
-        </div>
-        <script dangerouslySetInnerHTML={{
-          __html: `
-            (function() {
-              try {
-                var isPwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-                var path = window.location.pathname;
-                if (!isPwa || path === '/landing' || path === '/login' || path === '/') {
-                  document.getElementById('global-native-splash').style.display = 'none';
-                }
-
-                // iOS PWA Watchdog: If the splash screen is still visible after 4 seconds (React failed to mount),
-                // it's likely a chunk loading error from a stale service worker cache. Force a hard reload.
-                window.addEventListener('load', function() {
-                  setTimeout(function() {
-                    var splash = document.getElementById('global-native-splash');
-                    if (splash && splash.style.display !== 'none' && isPwa) {
-                      console.error('Watchdog triggered: React failed to mount. Forcing reload.');
-                      window.location.reload(true);
-                    }
-                  }, 4000);
-                });
-              } catch(e) {}
-            })();
-          `
-        }} />
-
         <AuthProvider>
-          <OfflineManager>
-            {children}
-          </OfflineManager>
-          <ServiceWorkerRegistrar />
+          {children}
         </AuthProvider>
         <Toaster
           position="bottom-right"

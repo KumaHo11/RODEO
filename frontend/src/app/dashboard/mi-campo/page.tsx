@@ -18,7 +18,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
 import { getPaddockNDVI, type SatelliteData } from '@/lib/services/satellite'
-import { dbGetAll, dbUpsertMany, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 import { toast } from 'sonner'
 import {
   X, Check, Plus, Building2, MapPin, Loader2, Search, AlertTriangle, Link2,
@@ -85,7 +84,6 @@ function MiCampoPageInner() {
   const [org,        setOrg]        = useState<any>(null)
   const [fieldBoundary, setFieldBoundary] = useState<any>(null)
   const [loading,    setLoading]    = useState(true)
-  const [isOffline,  setIsOffline]  = useState(false)
   const [ndviData,   setNdviData]   = useState<Record<string, SatelliteData>>({})
   const [ndviLoading, setNdviLoading] = useState(false)
   const [activeGrazingPlans, setActiveGrazingPlans] = useState<{paddock_id:string;herd_name:string;head_count:number}[]>([])
@@ -136,18 +134,6 @@ function MiCampoPageInner() {
   const loadData = useCallback(async () => {
     if (!user) return
     setLoading(true)
-
-    // 1. IDB primero
-    try {
-      const [local, localOrg] = await Promise.all([dbGetAll('paddocks'), dbGetOrg()])
-      if (local.length > 0) {
-        setPaddocks(local)
-        if (localOrg) { setOrg(localOrg); if (localOrg.boundaries) setFieldBoundary(localOrg.boundaries) }
-        setLoading(false)
-      }
-    } catch {}
-
-    // 2. API
     try {
       const [pRes, oRes, plRes, hRes] = await Promise.all([
         apiFetch('/api/paddocks'),
@@ -160,16 +146,10 @@ function MiCampoPageInner() {
       const plData = plRes.ok ? (await plRes.json()).plans || []    : []
       const hData  = hRes.ok  ? (await hRes.json()).herds || []     : []
 
-      if (!pRes.ok && !oRes.ok) throw new Error('offline')
-
-      if (pRes.ok) await dbUpsertMany('paddocks', pData).catch(() => {})
-      if (oRes.ok && oData) await dbUpsertOrg(oData).catch(() => {})
-
       setOrg(oData)
       if (oData?.boundaries) setFieldBoundary(oData.boundaries)
       setHerds(hData)
 
-      // Active grazing plans
       const today = new Date().toISOString().split('T')[0]
       const active = plData.filter((p: any) => {
         const s = (p.status ?? '').toUpperCase()
@@ -184,11 +164,9 @@ function MiCampoPageInner() {
       })
       setActiveGrazingPlans(active)
       setPaddocks(pData)
-      setIsOffline(false)
       setLoading(false)
       loadNdvi(pData)
     } catch {
-      setIsOffline(true)
       setLoading(false)
     }
   }, [user])
@@ -357,13 +335,7 @@ function MiCampoPageInner() {
         shadow-[1px_0_6px_0_rgba(0,0,0,0.04)]
         overflow-hidden
       ">
-        {/* Offline banner */}
-        {isOffline && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border-b border-amber-100 shrink-0">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            <p className="text-[10px] font-bold text-amber-700">Datos sin conexión</p>
-          </div>
-        )}
+        {/* (offline banner removed) */}
 
         <PaddockSidePanel
           paddocks={paddocks}

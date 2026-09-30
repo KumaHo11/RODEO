@@ -1,7 +1,7 @@
 'use client'
 import { enqueue } from '@/lib/offline/outbox'
 import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
-
+import { useOfflineStatus } from '@/components/OfflineManager'
 /**
  * HerdModal — Modal unificado Alta y Edición de Rodeos.
  * Tabs: Datos operativos · Actividades · Registros y agenda.
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '@/lib/apiFetch'
-import { useOfflineStatus } from '@/components/OfflineManager'
 import { CatCombobox, BreedCombobox } from '@/components/HerdComboboxes'
 import { CustomSelect } from '@/components/CustomSelect'
 import { Tooltip } from '@/design-system/atoms/Tooltip'

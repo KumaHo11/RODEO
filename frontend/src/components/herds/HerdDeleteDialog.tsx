@@ -1,4 +1,5 @@
 'use client'
+import { dbDelete } from '@/lib/offline/db'
 
 /**
  * HerdDeleteDialog — Modal de confirmación full-screen para eliminar un rodeo.
@@ -18,7 +19,6 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Trash2, Loader2, AlertTriangle } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
-import { dbDelete } from '@/lib/offline/db'
 
 interface HerdDeleteDialogProps {
   herdId:    string

@@ -1,15 +1,10 @@
 'use client'
-import { enqueue } from '@/lib/offline/outbox'
-import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
-import { dbGetAll, dbUpsertMany, outboxGetAll, metaGet, metaSet, dbGetOrg, dbUpsertOrg } from '@/lib/offline/db'
 
 import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import { isOffline } from '@/lib/connectivity'
-import { addToOfflineQueue } from '@/components/OfflineManager'
-import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify, Loader2, WifiOff } from 'lucide-react'
+import { Plus, X, Check, Calendar, Trash2, Edit2, ChevronLeft, ChevronRight, AlignJustify, Loader2 } from 'lucide-react'
 import { FeatureGate } from '@/components/FeatureGate'
 import OnboardingTour from '@/components/OnboardingTour'
 
@@ -80,28 +75,6 @@ export default function AgendaPage() {
   const loadData = async () => {
     if (!user) return
     setLoading(true)
-
-    // ── Paso 1: IndexedDB inmediata ────────────────────────────────────────
-    try {
-      
-      const [localEvents, localHerds, localPlans] = await Promise.all([
-        dbGetAll('farm_events'),
-        dbGetAll('herds'),
-        dbGetAll('grazing_plans'),
-      ])
-      const validTypes = EVENT_TYPES.map(t => t.id)
-      const agendaLocal = localEvents.filter((e: any) =>
-        validTypes.includes(e.event_type) && e.source !== 'rodeo'
-      )
-      if (agendaLocal.length > 0 || localHerds.length > 0) {
-        setEvents(agendaLocal)
-        setHerds(localHerds)
-        setGrazingPlans(localPlans)
-        setLoading(false)
-      }
-    } catch { /* ignore */ }
-
-    // ── Paso 2: API en background ──────────────────────────────────────────
     try {
       const [eventsRes, herdsRes, plansRes] = await Promise.all([
         apiFetch('/api/farm-events'),
@@ -111,67 +84,22 @@ export default function AgendaPage() {
       if (eventsRes.ok) {
         const allEvents = (await eventsRes.json()).events || []
         const validTypes = EVENT_TYPES.map(t => t.id)
-        // Solo mostrar eventos creados desde Agenda (source='agenda' o sin source para compatibilidad historial)
-        // Excluir eventos creados desde Rodeos (source='rodeo')
         const serverEvents = allEvents.filter((e: any) =>
-          validTypes.includes(e.event_type) &&
-          e.source !== 'rodeo'
+          validTypes.includes(e.event_type) && e.source !== 'rodeo'
         )
-        // Mantener eventos pendientes offline que aún no llegaron del servidor
-        setEvents(prev => {
-          const pendingOffline = prev.filter((e: any) => e._offline_pending)
-          const merged = [
-            ...serverEvents,
-            // Solo agregar pendientes que no existan en el servidor
-            ...pendingOffline.filter((p: any) => !serverEvents.find((s: any) => s.id === p.id)),
-          ]
-          return merged
-        })
-        // Guardar en IndexedDB
-        
-        await dbUpsertMany('farm_events', allEvents).catch(() => {})
-      } else {
-        // Si la API falla (offline o error), conservar el estado actual
-        // Los datos cacheados por el SW se devuelven automáticamente
+        setEvents(serverEvents)
       }
       const herdsData = herdsRes.ok ? (await herdsRes.json()).herds || [] : []
       const plansData = plansRes.ok ? (await plansRes.json()).plans || [] : []
       setHerds(herdsData)
       setGrazingPlans(plansData)
-      // Guardar en IndexedDB
-      if (herdsData.length > 0) {
-        
-        await dbUpsertMany('herds', herdsData).catch(() => {})
-        await dbUpsertMany('grazing_plans', plansData).catch(() => {})
-      }
     } catch (err) {
-      console.warn('[Agenda] loadData failed (possibly offline):', err)
+      console.warn('[Agenda] loadData failed:', err)
     }
     setLoading(false)
   }
 
   useEffect(() => { loadData() }, [user])
-
-  // Escuchar cuando el sync offline completa para recargar datos frescos
-  // Debounce de 3s para evitar que múltiples eventos de sync disparen loadData en ráfaga
-  useEffect(() => {
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null
-    let isLoadingRef = false
-
-    const handleSyncCompleted = () => {
-      if (isLoadingRef) return // ya estamos cargando, ignorar
-      if (debounceTimer) clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(() => {
-        isLoadingRef = true
-        loadData().finally(() => { isLoadingRef = false })
-      }, 3000) // 3s debounce
-    }
-    window.addEventListener('rodeo_sync_completed', handleSyncCompleted)
-    return () => {
-      window.removeEventListener('rodeo_sync_completed', handleSyncCompleted)
-      if (debounceTimer) clearTimeout(debounceTimer)
-    }
-  }, [user])
 
   const openCreate = () => {
     setEditingEvent(null)
@@ -226,82 +154,43 @@ export default function AgendaPage() {
     }
 
     if (!skipConflictCheck) {
-      const isConflict = grazingPlans.some(p => 
+      const isConflict = grazingPlans.some(p =>
         p.status !== 'COMPLETED' &&
         p.herd_ids?.some((hid: string) => payload.herd_ids.includes(hid)) &&
         payload.event_date <= (p.exit_date || p.entry_date) &&
         (payload.end_date || payload.event_date) >= p.entry_date
-      );
+      )
       if (isConflict) {
-        setPendingPayload(payload);
-        setConflictModalOpen(true);
-        setSaving(false);
-        return;
+        setPendingPayload(payload)
+        setConflictModalOpen(true)
+        setSaving(false)
+        return
       }
     }
 
-    await savePayload(payload);
+    await savePayload(payload)
   }
 
   const savePayload = async (payload: any, adjustPlans = false) => {
     setSaving(true)
     try {
-      // ── Verificar conectividad real antes de enviar ────────────────────────
-      const offline = await isOffline()
-
-      if (offline) {
-        // Guardar en cola offline para sincronizar cuando haya conexión
-        addToOfflineQueue({
-          type: 'farm_event',
-          data: payload as Record<string, unknown>,
-          timestamp: Date.now(),
-        })
-
-        // Mostrar evento optimistamente en la UI (con badge "Pendiente")
-        const optimisticEvent = {
-          ...payload,
-          id: `pending-${Date.now()}`,
-          status: 'pendiente',
-          created_at: new Date().toISOString(),
-          _offline_pending: true, // marca interna para distinguirlo
-        }
-        setEvents(prev => [optimisticEvent, ...prev])
-
-        setSaving(false)
-        setConflictModalOpen(false)
-        setModalOpen(false)
-        setForm(EMPTY_FORM)
-        setEditingEvent(null)
-        return
-      }
-
-      // ── Online: comportamiento normal ────────────────────────────────────
       if (editingEvent) {
         await apiFetch(`/api/farm-events/${editingEvent.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
 
-        // Al editar un evento de servicio, sincronizar el rodeo temporal de toros
         if (payload.event_type === 'servicio' && payload.bulls_count && payload.bulls_count > 0) {
           const bullWeightKg = payload.bulls_weight || 600
           const bullCount    = payload.bulls_count
           const evPerAnimal  = parseFloat((Math.pow(bullWeightKg / 450, 0.75) * 1.25).toFixed(3))
           const totalEv      = parseFloat((evPerAnimal * bullCount).toFixed(1))
-
-          // Buscar el rodeo temporal creado por este evento (por nombre del título anterior)
           const bullsHerd = herds.find((h: any) =>
-            h.is_temporary &&
-            (h.name === editingEvent.title || h.name === payload.title)
+            h.is_temporary && (h.name === editingEvent.title || h.name === payload.title)
           )
-
           if (bullsHerd) {
             await apiFetch(`/api/herds/${bullsHerd.id}`, {
               method: 'PATCH',
               body: JSON.stringify({
-                name:          payload.title,
-                head_count:    bullCount,
-                avg_weight_kg: bullWeightKg,
-                total_ev:      totalEv,
-                admission_date: payload.event_date,
-                exit_date:     payload.end_date || payload.event_date,
+                name: payload.title, head_count: bullCount, avg_weight_kg: bullWeightKg,
+                total_ev: totalEv, admission_date: payload.event_date, exit_date: payload.end_date || payload.event_date,
               }),
             }).catch(e => console.warn('No se pudo actualizar rodeo temporal:', e))
           }
@@ -310,37 +199,24 @@ export default function AgendaPage() {
         const res = await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify(payload) })
         const { id: savedEventId } = res.ok ? await res.json() : {}
 
-        // Auto-crear rodeo temporal de toros en el Gantt cuando es servicio con toros
         if (payload.event_type === 'servicio' && payload.bulls_count && payload.bulls_count > 0) {
           const startDate    = payload.event_date
           const endDate      = payload.end_date || payload.event_date
           const bullWeightKg = payload.bulls_weight || 600
           const bullCount    = payload.bulls_count
-
           const evPerAnimal = parseFloat((Math.pow(bullWeightKg / 450, 0.75) * 1.25).toFixed(3))
           const totalEv     = parseFloat((evPerAnimal * bullCount).toFixed(1))
           const herdName = payload.title
-
           await apiFetch('/api/herds', {
             method: 'POST',
             body: JSON.stringify({
-              name:           herdName,
-              categoria:      'TOROS',
-              head_count:     bullCount,
-              avg_weight_kg:  bullWeightKg,
-              weight:         bullWeightKg,
-              total_ev:       totalEv,
-              is_temporary:   true,
-              admission_date: startDate,
-              exit_date:      endDate,
+              name: herdName, categoria: 'TOROS', head_count: bullCount,
+              avg_weight_kg: bullWeightKg, weight: bullWeightKg, total_ev: totalEv,
+              is_temporary: true, admission_date: startDate, exit_date: endDate,
               notes: `Agenda — Servicio. farm_event_id:${savedEventId ?? ''}. Peso: ${bullWeightKg} kg/animal. EV: ${evPerAnimal} × ${bullCount} = ${totalEv} EV.`,
             }),
           }).catch(e => console.warn('No se pudo crear rodeo temporal:', e))
         }
-      }
-
-      if (adjustPlans) {
-        // En un caso real, aquí iría la lógica para ajustar las planificaciones automáticamente
       }
     } catch(e) {
       console.error(e)
@@ -678,14 +554,11 @@ export default function AgendaPage() {
                     {(groupEvents as any[]).map((event: any) => {
                       const et = getEventType(event.event_type)
                       const d = safeDate(event.event_date)
-                      const isPending = !!event._offline_pending
 
                       return (
                         <div
                           key={event.id}
-                          className={`bg-white rounded-xl border p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-all group ${
-                            isPending ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'
-                          }`}
+                          className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-all group"
                         >
                           {/* Date badge */}
                           <div className="shrink-0 w-10 text-center">
@@ -706,30 +579,23 @@ export default function AgendaPage() {
                             {event.description && (
                               <p className="text-xs text-gray-400 mt-0.5 leading-snug">{event.description}</p>
                             )}
-                            {isPending && (
-                              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[9px] font-black">
-                                <WifiOff className="w-2.5 h-2.5" /> Pendiente — se sincroniza al reconectar
-                              </span>
-                            )}
                           </div>
 
-                          {/* Actions — disabled for pending events */}
-                          {!isPending && (
-                            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
-                              <button
-                                onClick={() => openEdit(event)}
-                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setEventToDelete(event)}
-                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
+                          {/* Actions */}
+                          <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
+                            <button
+                              onClick={() => openEdit(event)}
+                              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setEventToDelete(event)}
+                              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )
                     })}

@@ -1,17 +1,12 @@
 'use client'
 import { enqueue } from '@/lib/offline/outbox'
-import { dbGetAll, dbUpsertMany, dbUpsert, metaSet, outboxGetAll, dbGetOrg } from '@/lib/offline/db'
-
+import { dbGetAll, dbUpsertMany, dbUpsert, metaSet, outboxGetAll, dbGetOrg, countPendingItems } from '@/lib/offline/db'
+import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio, type PendingAudio } from '@/lib/audioOfflineStore'
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/AuthProvider'
 import { apiFetch } from '@/lib/apiFetch'
-import {
-  savePendingAudio, getAllPendingAudios, deletePendingAudio, PendingAudio,
-  savePendingPhoto, getAllPendingPhotos, deletePendingPhoto,
-  countPendingItems, getPendingPhoto, getPendingAudio,
-} from '@/lib/audioOfflineStore'
 import {
   Mic, Camera, Loader2, Image as ImageIcon,
   CheckCircle2, Mic2, Search, WifiOff, ChevronDown, ChevronUp,

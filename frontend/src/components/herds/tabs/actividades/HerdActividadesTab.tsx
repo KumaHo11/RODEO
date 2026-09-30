@@ -16,8 +16,6 @@ import {
   Plus, Minus, Loader2, CheckCircle2, AlertTriangle, Scale, Calendar, Baby, Scissors, ClipboardList,
 } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
-import { enqueue } from '@/lib/offline/outbox'
-import { useOfflineStatus } from '@/components/OfflineManager'
 import { calculateBaseEV } from '@/lib/grazing/evProjection'
 import { todayISO } from '@/lib/utils/dates'
 import type { HerdData } from '@/components/HerdModal'
@@ -108,7 +106,6 @@ interface Props { herd: HerdData; onRefresh: () => void }
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function HerdActividadesTab({ herd, onRefresh }: Props) {
-  const { isOffline } = useOfflineStatus()
   const herdId = herd.id!
   const catKey = herd.categoria as CategoriaComercial | null
   const physio = herd.physiological_category ?? null
@@ -184,15 +181,9 @@ export default function HerdActividadesTab({ herd, onRefresh }: Props) {
     ].filter(Boolean).join(' · ')
 
     try {
-      if (isOffline) {
-        await enqueue({ type: 'herd_update', url: `/api/herds/${herdId}`, method: 'PATCH', body: patchPayload, idempotency_key: `herd-activity-${actId}-${herdId}-${Date.now()}`, localData: { store: 'herds', data: { ...(herd as any), ...patchPayload, id: herdId } } })
-        await enqueue({ type: 'farm_event', url: '/api/farm-events', method: 'POST', body: { title: evTitle, event_type: actId, event_date: actDate, herd_id: herdId, herd_ids: [herdId], description: evDesc, status: 'completado', source: 'rodeo' }, idempotency_key: `farm-event-${actId}-${herdId}-${Date.now()}` })
-        import('sonner').then(({ toast }) => toast.success('Guardado offline. Se sincronizará al reconectar.'))
-      } else {
-        const patchRes = await apiFetch(`/api/herds/${herdId}`, { method: 'PATCH', body: JSON.stringify(patchPayload) })
-        if (!patchRes.ok) throw new Error('No se pudo actualizar el stock')
-        await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify({ title: evTitle, event_type: actId, event_date: actDate, herd_id: herdId, herd_ids: [herdId], description: evDesc, status: 'completado', source: 'rodeo' }) })
-      }
+      const patchRes = await apiFetch(`/api/herds/${herdId}`, { method: 'PATCH', body: JSON.stringify(patchPayload) })
+      if (!patchRes.ok) throw new Error('No se pudo actualizar el stock')
+      await apiFetch('/api/farm-events', { method: 'POST', body: JSON.stringify({ title: evTitle, event_type: actId, event_date: actDate, herd_id: herdId, herd_ids: [herdId], description: evDesc, status: 'completado', source: 'rodeo' }) })
 
       setSuccess(`✓ ${evTitle}`)
       setActId(null); setActCount(1); setActWeight(''); setActNote(''); setActDate(todayISO())

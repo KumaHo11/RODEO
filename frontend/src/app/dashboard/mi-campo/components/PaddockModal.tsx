@@ -2,7 +2,8 @@
 import { enqueue } from '@/lib/offline/outbox'
 import { outboxGetAll } from '@/lib/offline/db'
 import { savePendingPhoto, savePendingAudio, getPendingPhoto, getPendingAudio, deletePendingPhoto, deletePendingAudio } from '@/lib/audioOfflineStore'
-
+import { isOffline } from '@/lib/connectivity'
+import { useOfflineStatus } from '@/components/OfflineManager'
 /**
  * PaddockModal — Modal de gestión de potrero (3 tabs)
  * Tipografía y campos unificados con el modal de Rebaños.
@@ -12,7 +13,6 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Check, Loader2, Trash2, ChevronDown, ChevronUp, Mic, MicOff, Plus, BookOpen, MapPin, Wrench, Leaf, AlertTriangle, BarChart3, Droplets, Camera, Paperclip, Lock, Search, FileText, Image as ImageIcon, Filter, Sparkles, Download } from 'lucide-react'
 import { apiFetch } from '@/lib/apiFetch'
-import { isOffline } from '@/lib/connectivity'
 import { SatelliteData } from '@/lib/services/satellite'
 import { SimpleNumberInput } from '@/design-system/atoms/SimpleNumberInput'
 import RecordEditor, { RecordEditorRef } from '@/components/shared/RecordEditor'
@@ -22,8 +22,6 @@ import { useConfirm } from '@/components/ui/ConfirmModal'
 import { CustomSelect } from '@/components/CustomSelect'
 import { usePlan } from '@/hooks/usePlan'
 import { useClimateAnalytics } from '@/lib/context/ClimateAnalyticsContext'
-import { useOfflineStatus } from '@/components/OfflineManager'
-
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface Paddock {
