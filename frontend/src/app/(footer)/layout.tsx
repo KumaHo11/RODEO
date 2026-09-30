@@ -43,8 +43,8 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
         scrolled ? 'bg-white/95 backdrop-blur-xl shadow-sm border-b border-gray-100' : 'bg-white border-b border-gray-100'
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-            <Image src="/RODEO.LogoHeader.svg" alt="RODEO" width={259} height={56} className="h-[80%] w-[80%] object-contain object-left" priority />
+          <Link href="/landing" className="flex items-center h-[56px] justify-start px-2">
+            <img src="/RODEO.LogoHeader.svg" alt="RODEO" className="h-[80%] w-auto object-contain object-left" />
           </Link>
 
           <div className="hidden lg:flex items-center gap-8">

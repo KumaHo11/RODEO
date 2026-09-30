@@ -302,8 +302,8 @@ export default function LandingPage() {
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-xl shadow-sm border-b border-gray-100' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-            <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-              <Image src={scrolled ? "/RODEO.LogoHeader.svg" : "/RODEO.LogoHeaderBlanco.svg"} alt="RODEO" width={259} height={56} className="h-[80%] w-[80%] object-contain object-left" priority />
+            <Link href="/landing" className="flex items-center h-[56px] justify-start px-2">
+              <img src={scrolled ? "/RODEO.LogoHeader.svg" : "/RODEO.LogoHeaderBlanco.svg"} alt="RODEO" className="h-[80%] w-auto object-contain object-left" />
             </Link>
             <span className={`hidden sm:block text-[10px] font-bold px-2 py-0.5 rounded-full tracking-widest border ${
               scrolled
