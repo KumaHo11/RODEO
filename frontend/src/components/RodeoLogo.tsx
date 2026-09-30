@@ -11,11 +11,11 @@ interface RodeoLogoProps {
 }
 
 const SIZES: Record<string, { name: number; tagline: number }> = {
-  xs: { name: 13, tagline: 8  },
-  sm: { name: 16, tagline: 9  },
-  md: { name: 20, tagline: 10 },
-  lg: { name: 28, tagline: 12 },
-  xl: { name: 40, tagline: 14 },
+  xs: { name: 16, tagline: 8  },
+  sm: { name: 22, tagline: 9  },
+  md: { name: 28, tagline: 10 },
+  lg: { name: 38, tagline: 12 },
+  xl: { name: 56, tagline: 14 },
 }
 
 export default function RodeoLogo({
@@ -27,9 +27,8 @@ export default function RodeoLogo({
 }: RodeoLogoProps) {
   const isDark   = variant === 'dark'
   const nameColor    = isDark ? '#ffffff' : '#16a34a'   // white on dark bg, green-600 on light
-  const taglineColor = isDark ? 'rgba(255,255,255,0.75)' : '#4b7c59'
 
-  const { name: namePx, tagline: taglinePx } = SIZES[size] ?? SIZES.md
+  const { name: namePx } = SIZES[size] ?? SIZES.md
 
   const font = "'Nunito', 'Poppins', 'Google Sans', system-ui, sans-serif"
 
@@ -56,7 +55,7 @@ export default function RodeoLogo({
       className={`inline-flex flex-col ${className}`}
       style={{ lineHeight: 1 }}
       role="img"
-      aria-label="RODEO – Ganadería Regenerativa"
+      aria-label="RODEO"
     >
       {/* ── Brand name ─────────────────────────────── */}
       <img
@@ -64,28 +63,6 @@ export default function RodeoLogo({
         alt="RODEO"
         style={{ height: namePx, width: 'auto', display: 'block' }}
       />
-
-      {/* ── Tagline ─────────────────────────────────── */}
-      {showTagline && (
-        <span
-          style={{
-            fontFamily: font,
-            fontWeight: 300,
-            fontSize: taglinePx,
-            letterSpacing: '0.06em',
-            color: taglineColor,
-            marginTop: 15,
-            lineHeight: 1,
-            textTransform: 'uppercase',
-            whiteSpace: 'nowrap',
-            maxWidth: '100%',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          Ganadería regenerativa
-        </span>
-      )}
     </div>
   )
 }

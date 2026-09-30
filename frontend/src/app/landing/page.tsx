@@ -303,7 +303,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
             <Link href="/landing" className="flex items-center w-[259px] h-[56px] justify-start">
-              <Image src={scrolled ? "/RODEO.LogoHeader.svg" : "/RODEO.LogoHeaderBlanco.svg"} alt="RODEO" width={259} height={56} className="h-full w-full object-contain object-left" priority />
+              <Image src={scrolled ? "/RODEO.LogoHeader.svg" : "/RODEO.LogoHeaderBlanco.svg"} alt="RODEO" width={259} height={56} className="h-[80%] w-[80%] object-contain object-left" priority />
             </Link>
             <span className={`hidden sm:block text-[10px] font-bold px-2 py-0.5 rounded-full tracking-widest border ${
               scrolled
