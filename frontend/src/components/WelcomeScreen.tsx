@@ -92,7 +92,8 @@ export function WelcomeScreen({ orgName, onDismiss }: WelcomeScreenProps) {
 
           {/* Logo */}
           <div className="flex justify-center mb-6">
-            <RodeoLogo variant="dark" size="xl" />
+            {/* Logo blanco: pantalla verde oscura de bienvenida · regla del 80% interna */}
+            <RodeoLogo variant="white" size="xl" />
           </div>
 
           {/* Role badge */}

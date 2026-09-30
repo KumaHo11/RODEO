@@ -382,7 +382,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-gray-100">
             {sidebarOpen && (
               <Link href="/landing" className="flex items-center h-full justify-start px-2">
-                <RodeoLogo size="lg" className="mt-1" showTagline={false} />
+              {/* Logo verde: sidebar tiene fondo blanco · regla del 80% — RodeoLogo aplica px-[10%] internamente */}
+              <RodeoLogo variant="green" size="lg" className="mt-1" showTagline={false} />
               </Link>
             )}
             <button
@@ -449,7 +450,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="absolute left-0 top-0 bottom-0 w-72 bg-white flex flex-col shadow-2xl">
             <div className="flex h-14 items-center justify-between px-4 border-b border-gray-100">
               <Link href="/landing" className="flex items-center h-full justify-start px-2">
-                <RodeoLogo size="lg" className="mt-1" showTagline={false} />
+              {/* Logo verde en mobile drawer (fondo blanco) */}
+              <RodeoLogo variant="green" size="lg" className="mt-1" showTagline={false} />
               </Link>
               <button onClick={() => setMobileMenuOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500">
                 <X className="w-4 h-4" />

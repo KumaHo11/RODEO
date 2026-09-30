@@ -134,11 +134,12 @@ function ActionContent() {
       {/* Visual side */}
       <div className="hidden lg:flex w-1/2 bg-green-700 items-center justify-center relative overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)]">
         <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
-        <div className="relative z-10 w-[80%] flex items-center justify-center">
-          <img 
-            src="/RODEO.LogoHeaderBlanco.svg" 
-            alt="RODEO" 
-            className="w-full h-auto object-contain" 
+        {/* Logo blanco · regla del 80%: px-[10%] da 20% de espacio negativo total */}
+        <div className="relative z-10 w-4/5 flex items-center justify-center px-[10%]">
+          <img
+            src="/logos/logo-blanco.svg"
+            alt="RODEO"
+            className="w-full h-auto object-contain"
           />
         </div>
       </div>

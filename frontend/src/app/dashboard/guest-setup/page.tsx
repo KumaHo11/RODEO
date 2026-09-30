@@ -123,7 +123,8 @@ export default function GuestSetupPage() {
       {/* Visual side */}
       <div className="hidden lg:flex lg:w-1/2 bg-green-700 items-center justify-center p-12 relative overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)]">
         <div className="relative z-10 flex flex-col items-center gap-4">
-          <RodeoLogo variant="dark" size="xl" showTagline={true} />
+          {/* Logo blanco sobre fondo verde · regla del 80% interna */}
+          <RodeoLogo variant="white" size="xl" />
           <span className={`inline-flex items-center gap-1.5 text-[10px] font-black px-3 py-1.5 rounded-full ${roleColor.badge}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${roleColor.dot}`} />
             {roleLabel}
@@ -138,7 +139,8 @@ export default function GuestSetupPage() {
 
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
-            <RodeoLogo variant="light" size="lg" />
+            {/* Logo verde en mobile (fondo blanco) */}
+            <RodeoLogo variant="green" size="lg" />
             <div className="mt-3">
               <span className={`inline-flex items-center gap-1.5 text-[10px] font-black px-3 py-1.5 rounded-full ${roleColor.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${roleColor.dot}`} />

@@ -45,7 +45,8 @@ export default function ForgotPasswordPage() {
       {/* Visual Side */}
       <div className="hidden lg:flex lg:w-1/2 bg-green-700 items-center justify-center p-12 overflow-hidden shadow-[inset_-20px_0_40px_rgba(0,0,0,0.05)] relative">
         <div className="relative z-10 flex flex-col items-center gap-4">
-          <RodeoLogo variant="dark" size="xl" showTagline={true} />
+          {/* Logo blanco sobre fondo verde · regla del 80% aplicada por px-[10%] del componente */}
+          <RodeoLogo variant="white" size="xl" />
           <p className="text-green-200 font-medium text-sm tracking-wide text-center">La plataforma de ganadería de precisión</p>
         </div>
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />

@@ -303,7 +303,8 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
             <Link href="/landing" className="flex items-center h-[56px] justify-start px-2">
-              <img src={scrolled ? "/RODEO.LogoHeader.svg" : "/RODEO.LogoHeaderBlanco.svg"} alt="RODEO" className="h-[80%] w-auto object-contain object-left" />
+              {/* Logo: blanco sobre hero oscuro, verde cuando navbar scrolled — regla del 80%: h-[80%] max-w con objeto centrado */}
+              <img src={scrolled ? "/logos/logo-verde.svg" : "/logos/logo-blanco.svg"} alt="RODEO" className="h-[80%] w-auto object-contain object-left" />
             </Link>
             <span className={`hidden sm:block text-[10px] font-bold px-2 py-0.5 rounded-full tracking-widest border ${
               scrolled
@@ -948,7 +949,8 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-10 mb-12">
             <div>
               <div className="mb-6">
-                <img src="/RODEO.LogoHeaderBlanco.svg" alt="Rodeo" className="h-6 w-auto" />
+                {/* Logo blanco en footer oscuro */}
+                <img src="/logos/logo-blanco.svg" alt="Rodeo" className="h-6 w-auto" />
               </div>
               <p className="text-sm leading-relaxed text-gray-400">
                 Plataforma de gestión ganadera con IA y pastoreo holístico para el productor latinoamericano.

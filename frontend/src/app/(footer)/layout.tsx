@@ -44,7 +44,8 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/landing" className="flex items-center h-[56px] justify-start px-2">
-            <img src="/RODEO.LogoHeader.svg" alt="RODEO" className="h-[80%] w-auto object-contain object-left" />
+            {/* Logo verde — navbar siempre blanco en estas páginas */}
+            <img src="/logos/logo-verde.svg" alt="RODEO" className="h-[80%] w-auto object-contain object-left" />
           </Link>
 
           <div className="hidden lg:flex items-center gap-8">
@@ -136,7 +137,8 @@ function FooterLayout({ children }: { children: React.ReactNode }) {
           <div className="grid md:grid-cols-4 gap-10 mb-12">
             <div>
               <div className="mb-6">
-                <img src="/RODEO.LogoHeaderBlanco.svg" alt="Rodeo" className="h-6 w-auto" />
+                {/* Logo blanco en footer oscuro */}
+                <img src="/logos/logo-blanco.svg" alt="Rodeo" className="h-6 w-auto" />
               </div>
               <p className="text-sm leading-relaxed text-gray-600">
                 Plataforma de gestión ganadera con IA y pastoreo holístico para el productor latinoamericano.

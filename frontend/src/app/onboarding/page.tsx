@@ -220,7 +220,8 @@ function OnboardingWizard() {
       {/* -- Header -- */}
       {!isCompleting && (
       <header className="bg-white border-b border-gray-100 px-4 md:px-6 py-2.5 md:py-4 shadow-sm z-30 flex items-center justify-between shrink-0">
-        <RodeoLogo size="lg" className="mb-1" />
+        {/* Logo verde: header sobre fondo blanco · regla del 80% interna */}
+        <RodeoLogo variant="green" size="lg" className="mb-1" />
         <div className="hidden sm:block">
           <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Configuración inicial</p>
         </div>

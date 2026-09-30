@@ -246,7 +246,8 @@ function JoinContent() {
       {/* Visual panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-green-700 items-center justify-center p-12 relative overflow-hidden">
         <div className="relative z-10 flex flex-col items-center gap-6 text-center">
-          <RodeoLogo variant="dark" size="xl" showTagline />
+          {/* Logo blanco sobre fondo verde · regla del 80% interna */}
+          <RodeoLogo variant="white" size="xl" />
           <div className="mt-2 space-y-2">
             <p className="text-green-100 text-sm font-medium">Fuiste invitado a colaborar en</p>
             <p className="text-white text-2xl font-black">{orgName}</p>
@@ -273,7 +274,8 @@ function JoinContent() {
         <div className="w-full max-w-sm">
           {/* Mobile header */}
           <div className="lg:hidden text-center mb-8">
-            <RodeoLogo variant="light" size="lg" />
+            {/* Logo verde sobre fondo blanco (mobile) */}
+            <RodeoLogo variant="green" size="lg" />
             <p className="text-sm text-gray-500 mt-3">Invitación de <strong>{orgName}</strong></p>
             <span className={`inline-flex items-center gap-1.5 text-[10px] font-black px-3 py-1.5 rounded-full mt-2 ${roleColors.badge}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${roleColors.dot}`} />{roleLabel}
