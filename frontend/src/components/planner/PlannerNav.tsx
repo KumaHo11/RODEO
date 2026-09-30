@@ -71,13 +71,13 @@ export function PlannerNav({
       <div
         role="navigation"
         aria-label="Navegación del Planificador"
-        className="flex items-center gap-1"
+        className="flex items-center"
       >
         {/* Segmented control — [ Gantt | Lista | Historial ] */}
         <div
           role="tablist"
           aria-label="Vistas del planificador"
-          className="flex items-center bg-white border border-gray-200 rounded-xl p-1 shadow-sm gap-0.5"
+          className="flex items-center bg-white border border-gray-200 rounded-xl p-0.5 shadow-sm"
         >
           {VIEW_TABS.map(({ id, Icon, label }) => {
             const isDisabled = !hasPlans
@@ -95,7 +95,7 @@ export function PlannerNav({
                     ? 'Generá un plan primero para acceder a esta vista'
                     : `Ver ${label}`
                 }
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                   isDisabled
                     ? 'text-gray-300 cursor-not-allowed pointer-events-none'
                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'

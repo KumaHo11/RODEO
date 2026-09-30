@@ -159,17 +159,8 @@ export default function SandboxPage() {
           }))
           setSavedPlans(planOptions)
 
-          // BUG FIX: Auto-seleccionar Y auto-hidratar el plan activo más reciente.
-          // Antes solo se hacía setSelectedSavedPlanIds() sin llamar a hydratePlan(),
-          // lo que dejaba el dropdown marcado pero el store vacío.
-          const activeSp = spList.find(sp => sp.status !== 'COMPLETED')
-          if (activeSp) {
-            const activePlanName = activeSp.name || `Plan ${activeSp.year || ''}`
-            setSelectedSavedPlanIds([activeSp.id])
-            // hydratePlan() aplica el patch atómico al store y llama recalculate(),
-            // poblando el Resumen para temporada abierta y cerrada.
-            await hydratePlan(activeSp.id, activePlanName)
-          }
+          // BLANK STATE: No auto-select. The user must explicitly choose a plan
+          // from the dropdown. Initial state is always a clean "new plan".
         }
       } catch {
         toast.error('Error al cargar datos del campo')
@@ -271,7 +262,7 @@ export default function SandboxPage() {
               // BUG 4 FIX: autoFocus para que el cursor aterrice en el nombre inmediatamente
               autoFocus={sandboxMode.type === 'create' && planName === ''}
               className="text-[20px] font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-green-600 focus:outline-none px-1 py-0.5 rounded transition-colors min-w-[350px] md:min-w-[400px]"
-              placeholder="Dar nombre al plan..."
+              placeholder="Dar nombre al nuevo plan..."
               title="Haz clic para editar el nombre del plan"
             />
           </div>
@@ -352,9 +343,8 @@ export default function SandboxPage() {
             className={`sandbox-confirm-btn ${isSaving ? 'sandbox-confirm-btn--loading' : ''} bg-[#008234] hover:bg-[#006026] disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             {isSaving
-              ? <><Loader2 size={15} className="animate-spin" /><span>Guardando…</span></>
-              // BUG 4 FIX: wording diferente según modo edición vs. creación
-              : <span>{sandboxMode.type === 'edit' ? 'Guardar Plan' : 'Generar Plan'}</span>
+              ? <><Loader2 size={15} className="animate-spin" /><span className="whitespace-nowrap">Guardando…</span></>
+              : <span className="whitespace-nowrap">{sandboxMode.type === 'edit' ? 'Guardar Plan' : 'Generar Plan'}</span>
             }
           </button>
         </div>
