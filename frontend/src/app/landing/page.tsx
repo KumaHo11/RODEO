@@ -316,7 +316,6 @@ export default function LandingPage() {
           <div className="hidden lg:flex items-center gap-8">
             {[
               { label: 'Producto', href: '#producto' },
-              { label: 'Precios', href: '#precios' },
               { label: 'Cómo Funciona', href: '#como-funciona' },
               { label: 'Testimonios', href: '#testimonios' },
             ].map(item => (
@@ -336,9 +335,9 @@ export default function LandingPage() {
               }`}>
               Iniciar sesión
             </Link>
-            <Link href="/register" onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'header' })} className="text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-green-900/20">
-              Empezar gratis
-            </Link>
+            <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20interesa%20crear%20una%20cuenta%20en%20RODEO.%20Mi%20establecimiento%20tiene%20___%20hect%C3%A1reas." className="text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-green-900/20">
+              Solicitar cuenta
+            </a>
           </div>
 
           <button onClick={() => setMenuOpen(!menuOpen)} className="lg:hidden p-2" aria-label="Abrir menú">
@@ -352,7 +351,6 @@ export default function LandingPage() {
           <div className="lg:hidden bg-white border-t border-gray-100 px-6 py-4 space-y-1">
             {[
               { label: 'Producto', href: '#producto' },
-              { label: 'Precios', href: '#precios' },
               { label: 'Cómo Funciona', href: '#como-funciona' },
               { label: 'Testimonios', href: '#testimonios' },
             ].map(item => (
@@ -363,7 +361,7 @@ export default function LandingPage() {
             ))}
             <div className="pt-3 flex flex-col gap-2">
               <Link href="/login" className="block text-center text-sm font-medium text-gray-600 py-2.5">Iniciar sesión</Link>
-              <Link href="/register" onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'mobile_menu' })} className="block text-center text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-xl">Empezar gratis</Link>
+              <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20interesa%20crear%20una%20cuenta%20en%20RODEO.%20Mi%20establecimiento%20tiene%20___%20hect%C3%A1reas." className="block text-center text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-xl">Solicitar cuenta</a>
             </div>
           </div>
         )}
@@ -413,12 +411,11 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 mb-12">
-              <Link href="/register"
-                onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'hero' })}
+              <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20interesa%20crear%20una%20cuenta%20en%20RODEO.%20Mi%20establecimiento%20tiene%20___%20hect%C3%A1reas."
                 className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-green-600/30">
-                Regístrate gratis
+                Solicitar cuenta
                 <ArrowRight className="w-4 h-4" />
-              </Link>
+              </a>
               <a href="#producto"
                 className="inline-flex items-center justify-center gap-2 bg-white/8 hover:bg-white/15 border border-white/15 text-white font-medium px-7 py-3.5 rounded-xl text-sm transition-all">
                 Ver cómo funciona
@@ -715,167 +712,21 @@ export default function LandingPage() {
           </div>
 
           <div className="text-center mt-12">
-            <Link href="/register" onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'como_funciona' })} className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-3.5 rounded-xl text-sm transition-all">
-              Empezar gratis ahora
+            <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20interesa%20crear%20una%20cuenta%20en%20RODEO.%20Mi%20establecimiento%20tiene%20___%20hect%C3%A1reas." className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-3.5 rounded-xl text-sm transition-all">
+              Contactar a ventas
               <ArrowRight className="w-4 h-4" />
-            </Link>
+            </a>
           </div>
         </div>
       </TrackedSection>
 
 
-      {/* ── PRICING ── */}
-      <TrackedSection sectionName="problema" id="precios" className="py-24 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <SectionLabel>PRECIOS</SectionLabel>
-            <h2 className="text-4xl lg:text-5xl font-black text-gray-950 mb-4">
-              Simple. Justo. Escalable.
-            </h2>
-            <p className="text-base text-gray-500 mb-2 max-w-xl mx-auto">
-              Cuatro planes diseñados para cada escala de operación ganadera. Empezá gratis y crecé cuando tu campo lo pida.
-            </p>
-            <p className="text-sm text-green-600 font-semibold mb-6">El valor que Rodeo entrega es siempre mayor al costo.</p>
+      {/* ── PRICING — OCULTO (MODO VENTA CONSULTIVA) ── */}
+      {/* Precios ocultados temporalmente. Restaurar cuando se reactive el self-service. */}
+      <div id="precios" className="hidden" aria-hidden="true" />
 
-            {/* Trial Banner */}
-            <div className="inline-flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-8">
-              <span className="text-2xl">⏱️</span>
-              <div className="text-left">
-                <div className="text-sm font-black text-amber-900">Trial gratuito de 45 días — acceso completo al plan Holístico</div>
-                <div className="text-xs text-amber-700 mt-0.5">45 días = el tiempo mínimo de descanso de un potrero. Verás los resultados antes de decidir.</div>
-              </div>
-            </div>
 
-            <div className="inline-flex items-center gap-1 bg-gray-200 rounded-full p-1">
-              {(['monthly', 'annual'] as const).map((period) => (
-                <button key={period} onClick={() => {
-                  setActivePlan(period)
-                  event({ action: 'pricing_click', category: 'pricing', plan_name: 'toggle', billing_cycle: period })
-                }}
-                  className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${activePlan === period ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                  {period === 'monthly' ? 'Mensual' : 'Anual'}
-                  {period === 'annual' && <span className="ml-1.5 text-green-600 text-xs font-bold">−18%</span>}
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {plansLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-6 h-6 text-green-600 animate-spin mr-2" />
-              <span className="text-gray-400 text-sm">Cargando planes…</span>
-            </div>
-          ) : plans.length === 0 ? (
-            <div className="text-center py-12 text-gray-400 text-sm">
-              Próximamente — contactá a ventas para más información.
-            </div>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
-              {plans.map((plan) => {
-                const price = activePlan === 'annual' ? Number(plan.price_yearly) : Number(plan.price)
-                const hasPrice = price > 0
-                const isPopular = plan.is_popular
-                const isEnterprise = plan.slug === 'latifundio'
-                const trialDays = (plan as any).trial_days ?? 0
-                const hasTrial = trialDays > 0 && plan.slug !== 'brote' && plan.slug !== 'latifundio'
-                return (
-                  <div key={plan.id}
-                    className={`relative rounded-2xl p-6 flex flex-col transition-all ${
-                      isEnterprise
-                        ? 'bg-gray-950 text-white ring-1 ring-white/10'
-                        : isPopular
-                          ? 'bg-gray-950 text-white shadow-xl ring-2 ring-green-500'
-                          : 'bg-white border border-gray-200'
-                    }`}>
-
-                    {isPopular && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full tracking-widest whitespace-nowrap">
-                        MEJOR VALOR
-                      </div>
-                    )}
-
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <h3 className={`text-base font-black ${isPopular || isEnterprise ? 'text-white' : 'text-gray-950'}`}>
-                          {plan.name}
-                        </h3>
-                        {hasTrial && (
-                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">
-                            {trialDays}d gratis
-                          </span>
-                        )}
-                      </div>
-                      <p className={`text-xs leading-relaxed ${isPopular || isEnterprise ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {plan.description}
-                      </p>
-                    </div>
-
-                    <div className="mb-5 min-h-[72px] flex flex-col justify-center">
-                      {plan.slug === 'brote' ? (
-                        <>
-                          <div className={`text-3xl font-black ${isPopular || isEnterprise ? 'text-white' : 'text-gray-950'}`}>Gratis</div>
-                          <div className={`text-xs mt-0.5 ${isPopular || isEnterprise ? 'text-gray-500' : 'text-gray-400'}`}>Sin tarjeta de crédito</div>
-                          <div className="text-xs text-gray-400 mt-0.5">Para siempre</div>
-                        </>
-                      ) : plan.slug === 'latifundio' ? (
-                        <>
-                          <div className="text-base font-black text-white">Precio a consultar</div>
-                          <div className="text-xs text-gray-500 mt-0.5">Cotización personalizada</div>
-                        </>
-                      ) : hasPrice ? (
-                        <>
-                          <div className={`font-black ${isPopular ? 'text-white' : 'text-gray-950'}`}>
-                            <span className="text-3xl">USD {price}</span>
-                            <span className={`text-xs font-medium ml-1 ${isPopular ? 'text-gray-400' : 'text-gray-500'}`}>/mes</span>
-                          </div>
-                          <div className={`text-sm font-bold mt-1 ${isPopular ? 'text-green-300' : 'text-green-700'}`}>
-                            ARS {(price * exchangeRate).toLocaleString('es-AR')}
-                            <span className={`text-[10px] font-normal ml-1 ${isPopular ? 'text-white/60' : 'text-gray-400'}`}>(T.C. BNA: ${exchangeRate})</span>
-                          </div>
-                          {activePlan === 'annual' ? (
-                            <div className="text-xs text-green-400 font-semibold mt-1.5">Facturación anual · Ahorrás 18%</div>
-                          ) : (
-                            hasTrial && <div className={`text-xs mt-1.5 ${isPopular ? 'text-amber-300' : 'text-amber-600'}`}>Incluye {trialDays} días de prueba gratis</div>
-                          )}
-                        </>
-                      ) : (
-                        <div className={`text-sm font-medium ${isPopular || isEnterprise ? 'text-gray-400' : 'text-gray-400'}`}>Precio a consultar</div>
-                      )}
-                    </div>
-
-                    {plan.slug === 'latifundio' ? (
-                      <Link href="/soporte/contacto?asunto=ventas-corporativas"
-                        className={`w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all mb-5 block ${(plan as any).ctaStyle}`}>
-                        {(plan as any).cta}
-                      </Link>
-                    ) : (
-                      <Link href="/register"
-                        onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: `pricing_${plan.slug}` })}
-                        className={`w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all mb-5 block ${(plan as any).ctaStyle}`}>
-                        {(plan as any).cta}
-                      </Link>
-                    )}
-
-                    <div className="space-y-2 flex-1">
-                      {plan.features.map((feat: string, j: number) => (
-                        <div key={j} className={`flex items-start gap-2 text-xs ${isPopular || isEnterprise ? 'text-gray-300' : 'text-gray-600'}`}>
-                          <Check className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
-                          {feat}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Nota inferior */}
-          <p className="text-center text-xs text-gray-400 mt-6">
-            Todos los planes incluyen actualizaciones automáticas · Sin contratos de permanencia · Cancelá cuando quieras
-          </p>
-        </div>
-      </TrackedSection>
 
 
       {/* ── TESTIMONIALS ── */}
@@ -923,21 +774,20 @@ export default function LandingPage() {
 
         <div className="max-w-3xl mx-auto px-6 text-center relative z-10">
           <h2 className="text-4xl lg:text-5xl font-black text-white leading-tight mb-5">
-            Regístrate gratis y probá<br />el Planificador Holístico.
+            ¿Listo para digitalizar<br />tu campo con IA?
           </h2>
           <p className="text-green-100 text-base mb-10 max-w-md mx-auto">
-            Sumáte a más de 800 productores que ya digitalizaron su campo con Rodeo. Gratis para empezar, sin tarjeta de crédito.
+            Sumáte a más de 800 productores que ya digitalizaron su campo con Rodeo. Escribinos y te configuramos la cuenta en 24 hs.
           </p>
 
-          <Link href="/register"
-            onClick={() => event({ action: 'cta_register_click', category: 'acquisition', button_location: 'bottom_banner' })}
+          <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20interesa%20crear%20una%20cuenta%20en%20RODEO.%20Mi%20establecimiento%20tiene%20___%20hect%C3%A1reas."
             className="inline-flex items-center gap-2 bg-white text-green-700 font-black px-9 py-4 rounded-xl text-base transition-all hover:bg-green-50 shadow-xl">
-            Empezar gratis
+            Contactar a ventas
             <ArrowRight className="w-4 h-4" />
-          </Link>
+          </a>
 
           <p className="mt-5 text-green-200/60 text-xs font-medium">
-            Sin tarjeta de crédito · Configuración en 10 min · Cancelá cuando quieras
+            Te respondemos en menos de 24 hs · Sin compromiso · Configuración asistida incluida
           </p>
         </div>
       </TrackedSection>
