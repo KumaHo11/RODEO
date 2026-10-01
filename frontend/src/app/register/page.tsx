@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { ArrowRight, Mail, MessageSquare } from 'lucide-react'
 
-const MAILTO = "mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20interesa%20crear%20una%20cuenta%20en%20RODEO.%20Mi%20establecimiento%20tiene%20___%20hect%C3%A1reas."
+const MAILTO = "mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20gustar%C3%ADa%20hacer%20la%20configuraci%C3%B3n%20de%20mi%20cuenta%20para%20empezar%20a%20pastorear%20de%20manera%20hol%C3%ADstica."
 
 export default function RegisterPage() {
   return (
