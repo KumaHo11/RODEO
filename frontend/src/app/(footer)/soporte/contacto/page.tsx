@@ -8,14 +8,24 @@ import { ArrowRight, Mail, Send, CheckCircle, Loader2 } from 'lucide-react'
 export default function Contacto() {
   const [form, setForm] = useState({ nombre: '', email: '', asunto: '', mensaje: '' })
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [formTitle, setFormTitle] = useState('Envianos un mensaje')
   const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const initialAsunto = params.get('asunto')
+      const initialMensaje = params.get('mensaje')
+      const modo = params.get('modo')
+      
       if (initialAsunto) {
         setForm(prev => ({ ...prev, asunto: initialAsunto }))
+      }
+      if (initialMensaje) {
+        setForm(prev => ({ ...prev, mensaje: initialMensaje }))
+      }
+      if (modo === 'cuenta') {
+        setFormTitle('Quiero una cuenta')
       }
     }
   }, [])
@@ -78,7 +88,7 @@ export default function Contacto() {
 
             {/* FORMULARIO */}
             <div>
-              <h2 className="text-2xl font-black text-gray-950 mb-8">Envianos un mensaje</h2>
+              <h2 className="text-2xl font-black text-gray-950 mb-8">{formTitle}</h2>
 
               {status === 'success' ? (
                 <div className="bg-green-50 border border-green-100 rounded-2xl p-8 text-center">

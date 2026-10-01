@@ -335,7 +335,7 @@ export default function LandingPage() {
               }`}>
               Iniciar sesión
             </Link>
-            <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20gustar%C3%ADa%20hacer%20la%20configuraci%C3%B3n%20de%20mi%20cuenta%20para%20empezar%20a%20pastorear%20de%20manera%20hol%C3%ADstica." className="text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-green-900/20">
+            <a href="/soporte/contacto?asunto=otro&modo=cuenta&mensaje=Hola%2C%20me%20gustar%C3%ADa%20darme%20de%20alta%20para%20tener%20mi%20cuenta%20gratuita%20dentro%20de%20Rodeo." className="text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-green-900/20">
               Solicitar cuenta
             </a>
           </div>
@@ -361,7 +361,7 @@ export default function LandingPage() {
             ))}
             <div className="pt-3 flex flex-col gap-2">
               <Link href="/login" className="block text-center text-sm font-medium text-gray-600 py-2.5">Iniciar sesión</Link>
-              <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20gustar%C3%ADa%20hacer%20la%20configuraci%C3%B3n%20de%20mi%20cuenta%20para%20empezar%20a%20pastorear%20de%20manera%20hol%C3%ADstica." className="block text-center text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-xl">Solicitar cuenta</a>
+              <a href="/soporte/contacto?asunto=otro&modo=cuenta&mensaje=Hola%2C%20me%20gustar%C3%ADa%20darme%20de%20alta%20para%20tener%20mi%20cuenta%20gratuita%20dentro%20de%20Rodeo." className="block text-center text-sm font-bold bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-xl">Solicitar cuenta</a>
             </div>
           </div>
         )}
@@ -411,7 +411,7 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 mb-12">
-              <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20gustar%C3%ADa%20hacer%20la%20configuraci%C3%B3n%20de%20mi%20cuenta%20para%20empezar%20a%20pastorear%20de%20manera%20hol%C3%ADstica."
+              <a href="/soporte/contacto?asunto=otro&modo=cuenta&mensaje=Hola%2C%20me%20gustar%C3%ADa%20darme%20de%20alta%20para%20tener%20mi%20cuenta%20gratuita%20dentro%20de%20Rodeo."
                 className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-green-600/30">
                 Solicitar cuenta
                 <ArrowRight className="w-4 h-4" />
@@ -712,7 +712,7 @@ export default function LandingPage() {
           </div>
 
           <div className="text-center mt-12">
-            <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20gustar%C3%ADa%20hacer%20la%20configuraci%C3%B3n%20de%20mi%20cuenta%20para%20empezar%20a%20pastorear%20de%20manera%20hol%C3%ADstica." className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-3.5 rounded-xl text-sm transition-all">
+            <a href="/soporte/contacto?asunto=otro&modo=cuenta&mensaje=Hola%2C%20me%20gustar%C3%ADa%20darme%20de%20alta%20para%20tener%20mi%20cuenta%20gratuita%20dentro%20de%20Rodeo." className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-7 py-3.5 rounded-xl text-sm transition-all">
               Contactar a ventas
               <ArrowRight className="w-4 h-4" />
             </a>
@@ -780,7 +780,7 @@ export default function LandingPage() {
             Sumáte a más de 800 productores que ya digitalizaron su campo con Rodeo. Escribinos y te configuramos la cuenta en 24 hs.
           </p>
 
-          <a href="mailto:josorio@rodeoagtech.com?subject=Solicitud%20de%20cuenta%20RODEO&body=Hola%20Javier%2C%20me%20gustar%C3%ADa%20hacer%20la%20configuraci%C3%B3n%20de%20mi%20cuenta%20para%20empezar%20a%20pastorear%20de%20manera%20hol%C3%ADstica."
+          <a href="/soporte/contacto?asunto=otro&modo=cuenta&mensaje=Hola%2C%20me%20gustar%C3%ADa%20darme%20de%20alta%20para%20tener%20mi%20cuenta%20gratuita%20dentro%20de%20Rodeo."
             className="inline-flex items-center gap-2 bg-white text-green-700 font-black px-9 py-4 rounded-xl text-base transition-all hover:bg-green-50 shadow-xl">
             Contactar a ventas
             <ArrowRight className="w-4 h-4" />
